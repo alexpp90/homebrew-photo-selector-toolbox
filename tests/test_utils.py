@@ -152,6 +152,7 @@ class TestLoadImagePreview(unittest.TestCase):
     def test_standard_image(self, mock_open):
         """Test loading a standard image (e.g., JPEG)."""
         mock_img = MagicMock()
+        mock_img.convert.return_value = mock_img
         mock_open.return_value = mock_img
 
         path = Path('test.jpg')
@@ -187,6 +188,7 @@ class TestLoadImagePreview(unittest.TestCase):
     def test_full_res(self, mock_open):
         """Test loading a standard image at full resolution."""
         mock_img = MagicMock()
+        mock_img.convert.return_value = mock_img
         mock_open.return_value = mock_img
 
         path = Path('test.jpg')
@@ -203,6 +205,7 @@ class TestLoadImagePreview(unittest.TestCase):
         mock_imread.side_effect = rawpy.LibRawError("rawpy failed")
 
         mock_img = MagicMock()
+        mock_img.convert.return_value = mock_img
         mock_open.return_value = mock_img
 
         path = Path('test.arw')

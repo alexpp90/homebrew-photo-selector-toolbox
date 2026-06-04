@@ -1,0 +1,20 @@
+{
+  "agents": {
+    "backend_agent": {
+      "model": "claude-sonnet-4-20250514",
+      "description": "Backend logic specialist for core Python modules (reader, analyzer, sharpness, duplicates, utils, formatting, models, cli, visualizer). No GUI/Tkinter code."
+    },
+    "gui_agent": {
+      "model": "claude-sonnet-4-20250514",
+      "description": "GUI/Tkinter specialist for gui.py, sharpness_gui.py, and controllers.py. Handles layout, threading, event handling, and ImageTk constraints."
+    },
+    "test_agent": {
+      "model": "claude-sonnet-4-20250514",
+      "description": "Testing specialist for the tests/ directory. Writes, organizes, and runs pytest tests with proper mocking patterns."
+    },
+    "build_agent": {
+      "model": "claude-sonnet-4-20250514",
+      "description": "Build/CI specialist for scripts/, .github/workflows/, and pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing."
+    }
+  }
+}

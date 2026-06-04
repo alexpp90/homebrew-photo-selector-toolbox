@@ -17,7 +17,7 @@ The Image Metadata Analyzer is a cross-platform desktop application designed to 
 *   **Sharpness Algorithm:** The sharpness analysis algorithm crops the center 50% of the image, divides it into a configurable grid (default 8x8), and uses the maximum block variance score to determine overall sharpness.
 *   **Noise Algorithm:** A noise analysis tool estimates image noise using the Median Absolute Deviation (MAD) of the image's Laplacian filter.
 *   **Synchronous Pre-loading:** The application must synchronously pre-load all supported images from a selected folder for immediate side-by-side review prior to scanning, displaying metadata alongside 'N/A' placeholder scores initially.
-*   **Score Labeling:** The evaluation metric must be explicitly labeled as "Sharpness Score" and "Noise Level" (or "Noise") in the GUI (rather than just "Score").
+*   **Score Labeling:** The evaluation metric must be explicitly labeled as "Sharpness Score" and "Noise Level" (or "Noise") in the GUI (rather than just "Score"). Noise Level and Sharpness score labels must harmonize and use the standard theme/system default text foreground color rather than hardcoded foreground colors to ensure readability on varying background themes.
 
 ### 2.3 Path Resolution Utility
 *   **SMB URL Support:** The application must support resolving `smb://` URLs to local mount points.
@@ -45,11 +45,17 @@ The Image Metadata Analyzer is a cross-platform desktop application designed to 
 *   **Focus Mode Layout:** Hides the sidebar. Uses a grid layout where the top row is split evenly (weight=1 for both columns) between the current image and controls panel. The bottom row splits the previous and next images evenly, ensuring all three displayed images share the exact same dimensions.
 *   **Image Reloading:** Switching views (Standard vs. Focus) triggers a reload of the image triplet to ensure the correct resolution is generated for the specific layout.
 *   **Navigation Interactions:** In Focus Mode, clicking a non-central image (Previous/Next) must open it in a fullscreen viewer (via `tk.Toplevel`) instead of making it the new current image.
+*   **Fullscreen Viewer:**
+    *   **Delete Option:** The fullscreen viewer must include a visible "Delete (Delete)" button and bind the `<Delete>` and `<BackSpace>` keys to prompt a delete confirmation dialog (transient to the fullscreen window). A second press of `<Delete>` or `<BackSpace>` confirms deletion. On confirmation, the image is moved to the trash (or permanently deleted if moving to trash fails), removed from list structures, and the viewer advances to the next image (or closes if no images remain).
+    *   **Move to Selection:** The fullscreen viewer must include a "Move to Selection (M)" button and bind `<m>` and `<M>` to move the current image and related files to the "Selection" subfolder.
+    *   **Parent Synchronization:** Navigating or deleting images in Fullscreen Viewer must update and synchronize the parent window's active selection.
+    *   **Focus Mode Persistence:** If entering Fullscreen from Focus Mode, exiting the viewer (via Escape or Close button) must return the application to Focus Mode.
 *   **Keyboard Controls (Review & Focus Modes):**
+    *   **Shortcut Collision Avoidance:** Key event handlers (Escape, Left, Right, Delete, BackSpace) in the main window must ignore events occurring within other Toplevel windows (like `FullscreenViewer` or confirmation dialogs) to prevent unexpected layout transitions and shortcut interference.
     *   **Escape (`<Escape>`):** Exits Focus mode. Does nothing in Standard mode.
     *   **Left Arrow (`<Left>`):** Navigates to the previous image.
     *   **Right Arrow (`<Right>`):** Navigates to the next image.
-    *   **Delete (`<Delete>`):** Triggers moving the current image to the trash, prompting a confirmation dialogue. A second press of `<Delete>` confirms the deletion (acts as an alternative to clicking "Yes" or pressing Enter).
+    *   **Delete (`<Delete>` and `<BackSpace>`):** Triggers moving the current image to the trash, prompting a confirmation dialogue. A second press of `<Delete>` or `<BackSpace>` confirms the deletion (acts as an alternative to clicking "Yes" or pressing Enter).
 
 ### 3.3 State and Interaction Management
 *   **Thread Safety:** PIL Image objects must be loaded in background threads. Unscaled PIL images are returned and dynamically converted to `ImageTk.PhotoImage` in the main thread during `<Configure>` events.
@@ -70,6 +76,13 @@ The Image Metadata Analyzer is a cross-platform desktop application designed to 
 *   **Splash Screen:** The application startup includes a splash screen (`assets/logo.png`) configured via the PyInstaller `--splash` argument. The `MainApp` class must close the splash screen via `pyi_splash.close()` inside a `try/except` block, scheduled via `after()` to run after GUI initialization.
 *   **ExifTool Bundling:** The build script (`scripts/build.py`) relies on a hardcoded ExifTool version (e.g., 13.51) downloaded from SourceForge. This requires manual updates if SourceForge removes older releases. Windows builds must utilize the `_64` suffixed ExifTool binary.
 *   **macOS Security:** The build script must apply ad-hoc code signing (`codesign -s -`) to the macOS `.app` bundle to prevent Gatekeeper from flagging it as damaged on Apple Silicon.
+
+### 4.3 Architectural Patterns
+*   **Typed EXIF Data Models:** Raw `dict` formats for metadata are deprecated. All code must utilize the typed `ExifData` dataclass (defined in `models.py`) to access EXIF values.
+*   **Analysis Tool Registry:** Adding new analysis tools must use the dynamic `ToolRegistry` pattern defined in `tools.py`. Tools must inherit from `AnalysisTool` and register themselves.
+*   **EXIF Reader Strategy Pattern:** Metadata extraction is organized into strategies (`ExifReader` implementations in the `readers/` subpackage). The main entry point `reader.get_exif_data` delegates extraction to these strategies sequentially.
+*   **GUI Decomposition:** High-responsibility GUI classes are decoupled: `FullscreenViewer` is separated into `fullscreen_viewer.py`, and panel-resize / background-loading mixin logic resides in `image_panels.py` to keep GUI layout classes clean.
+*   **Unified Logging:** Debug and execution printing must go through the standard `logging` library. The GUI redirects log messages using a custom `QueueHandler` registered to the root logger during scanning sessions.
 
 ## 5. Build & Deployment (CI/CD)
 

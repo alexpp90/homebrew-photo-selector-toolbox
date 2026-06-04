@@ -37,8 +37,9 @@ def test_get_exif_data_with_exif(image_dir):
     assert result is None
 
 
-def test_get_exif_data_exiftool_import_error(image_dir, capsys):
+def test_get_exif_data_exiftool_import_error(image_dir, caplog):
     import builtins
+    import logging
     from unittest.mock import patch
 
     p = image_dir / "test.dng"
@@ -52,17 +53,18 @@ def test_get_exif_data_exiftool_import_error(image_dir, capsys):
             raise ImportError("Mocked ImportError for exiftool")
         return real_import(name, *args, **kwargs)
 
+    caplog.set_level(logging.DEBUG)
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    captured = capsys.readouterr()
-    assert "PyExifTool not installed or found." in captured.out
+    assert any("PyExifTool not installed or found." in record.message for record in caplog.records)
     # It should fall back to Pillow and return None for our dummy image
     assert result is None
 
 
-def test_get_exif_data_exifread_import_error(image_dir, capsys):
+def test_get_exif_data_exifread_import_error(image_dir, caplog):
     import builtins
+    import logging
     from unittest.mock import patch
 
     p = image_dir / "test.dng"
@@ -79,18 +81,19 @@ def test_get_exif_data_exifread_import_error(image_dir, capsys):
             raise ImportError("Mocked ImportError for exifread")
         return real_import(name, *args, **kwargs)
 
+    caplog.set_level(logging.DEBUG)
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    captured = capsys.readouterr()
-    assert "PyExifTool not installed or found." in captured.out
-    assert "`exifread` library not found." in captured.out
+    assert any("PyExifTool not installed or found." in record.message for record in caplog.records)
+    assert any("`exifread` library not found." in record.message for record in caplog.records)
     # It should fall back to Pillow and return None for our dummy image
     assert result is None
 
 
-def test_get_exif_data_exiftool_general_error(image_dir, capsys):
+def test_get_exif_data_exiftool_general_error(image_dir, caplog):
     import builtins
+    import logging
     from unittest.mock import patch
 
     p = image_dir / "test.dng"
@@ -104,16 +107,17 @@ def test_get_exif_data_exiftool_general_error(image_dir, capsys):
             raise OSError("Mocked general error for exiftool")
         return real_import(name, *args, **kwargs)
 
+    caplog.set_level(logging.DEBUG)
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    captured = capsys.readouterr()
-    assert "exiftool failed on test.dng: Mocked general error for exiftool" in captured.out
+    assert any("exiftool failed on test.dng: Mocked general error for exiftool" in record.message for record in caplog.records)
     assert result is None
 
 
-def test_get_exif_data_exifread_general_error(image_dir, capsys):
+def test_get_exif_data_exifread_general_error(image_dir, caplog):
     import builtins
+    import logging
     from unittest.mock import patch
 
     p = image_dir / "test.dng"
@@ -129,9 +133,9 @@ def test_get_exif_data_exifread_general_error(image_dir, capsys):
             raise OSError("Mocked general error for exifread")
         return real_import(name, *args, **kwargs)
 
+    caplog.set_level(logging.DEBUG)
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    captured = capsys.readouterr()
-    assert "exifread failed on test.dng: Mocked general error for exifread" in captured.out
+    assert any("exifread failed on test.dng: Mocked general error for exifread" in record.message for record in caplog.records)
     assert result is None
