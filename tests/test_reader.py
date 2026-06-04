@@ -139,3 +139,22 @@ def test_get_exif_data_exifread_general_error(image_dir, caplog):
 
     assert any("exifread failed on test.dng: Mocked general error for exifread" in record.message for record in caplog.records)
     assert result is None
+
+
+def test_get_exif_data_pillow_exception(image_dir, caplog):
+    import logging
+    from unittest.mock import patch, MagicMock
+
+    p = image_dir / "test.jpg"
+    p.write_text("dummy")
+
+    with patch('image_metadata_analyzer.readers.pillow.Image.open') as mock_open:
+        mock_img = MagicMock()
+        mock_img.getexif.side_effect = ValueError("Mocked Pillow Error")
+        mock_open.return_value = mock_img
+
+        caplog.set_level(logging.DEBUG)
+        result = get_exif_data(p, debug=True)
+
+    assert any("Mocked Pillow Error" in record.message for record in caplog.records)
+    assert result is None
