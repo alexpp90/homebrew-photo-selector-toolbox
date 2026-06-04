@@ -58,7 +58,8 @@ def test_main_success(capsys, tmp_path):
     img_path1.touch()
     img_path2.touch()
 
-    fake_metadata = {"Aperture": 2.8, "Shutter Speed": 0.01}
+    from image_metadata_analyzer.models import ExifData
+    fake_metadata = ExifData(aperture=2.8, shutter_speed=0.01)
     out_dir = tmp_path / "out"
 
     args = [

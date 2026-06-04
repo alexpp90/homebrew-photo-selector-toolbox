@@ -2,15 +2,33 @@ import pytest
 from unittest.mock import patch, MagicMock
 import sys
 
-# Aggressively mock all internal modules to prevent hangs on Python 3.14
-sys.modules["rawpy"] = MagicMock()
-sys.modules["image_metadata_analyzer.controllers"] = MagicMock()
-sys.modules["image_metadata_analyzer.models"] = MagicMock()
-sys.modules["image_metadata_analyzer.sharpness"] = MagicMock()
-sys.modules["image_metadata_analyzer.reader"] = MagicMock()
-sys.modules["image_metadata_analyzer.utils"] = MagicMock()
-sys.modules["image_metadata_analyzer.formatting"] = MagicMock()
-sys.modules["send2trash"] = MagicMock()
+# Save original modules to prevent test pollution
+original_modules = {}
+
+@pytest.fixture(scope="module", autouse=True)
+def mock_sys_modules():
+    modules_to_mock = [
+        "rawpy",
+        "image_metadata_analyzer.controllers",
+        "image_metadata_analyzer.models",
+        "image_metadata_analyzer.sharpness",
+        "image_metadata_analyzer.reader",
+        "image_metadata_analyzer.utils",
+        "image_metadata_analyzer.formatting",
+        "send2trash",
+    ]
+    for name in modules_to_mock:
+        original_modules[name] = sys.modules.get(name)
+        sys.modules[name] = MagicMock()
+        
+    yield
+    
+    for name in modules_to_mock:
+        orig = original_modules[name]
+        if orig is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = orig
 
 
 @pytest.fixture(autouse=True)
@@ -57,8 +75,9 @@ def test_sharpness_tool_init():
         patch("image_metadata_analyzer.sharpness_gui.tk.Toplevel"),
         patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.setup_ui"),
         patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.setup_focus_ui"),
+        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.bind_all"),
     ):
         tool = SharpnessTool(parent)
         assert not tool.is_scanning
-        assert tool.images_list == []
-        assert tool.current_index == -1
+        assert tool.candidates == []
+        assert tool.sorted_files == []

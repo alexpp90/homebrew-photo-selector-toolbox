@@ -11,6 +11,9 @@ from matplotlib.figure import Figure
 from image_metadata_analyzer.utils import aggregate_focal_lengths
 
 
+from image_metadata_analyzer.models import ExifData
+
+
 def _open_file_for_user(filepath: Path):
     """Opens a file in the default application in a cross-platform way."""
     try:
@@ -26,8 +29,8 @@ def _open_file_for_user(filepath: Path):
         print(f"Error: {e}")
 
 
-def get_shutter_speed_plot(data: List[Dict]) -> Optional[Figure]:
-    values = [d["Shutter Speed"] for d in data if d.get("Shutter Speed") is not None]
+def get_shutter_speed_plot(data: List[ExifData]) -> Optional[Figure]:
+    values = [d.shutter_speed for d in data if d.shutter_speed is not None]
     if not values:
         return None
 
@@ -64,8 +67,9 @@ def get_shutter_speed_plot(data: List[Dict]) -> Optional[Figure]:
     return fig
 
 
-def _get_distribution_plot(data: List[Dict], key: str, title: str, xlabel: str) -> Optional[Figure]:
-    values = [d[key] for d in data if d.get(key) is not None]
+def _get_distribution_plot(data: List[ExifData], key: str, title: str, xlabel: str) -> Optional[Figure]:
+    attr_name = "aperture" if key == "Aperture" else "iso"
+    values = [getattr(d, attr_name) for d in data if getattr(d, attr_name) is not None]
     if not values:
         return None
 
@@ -85,7 +89,7 @@ def _get_distribution_plot(data: List[Dict], key: str, title: str, xlabel: str) 
     return fig
 
 
-def get_aperture_plot(data: List[Dict]) -> Optional[Figure]:
+def get_aperture_plot(data: List[ExifData]) -> Optional[Figure]:
     return _get_distribution_plot(
         data=data,
         key="Aperture",
@@ -94,7 +98,7 @@ def get_aperture_plot(data: List[Dict]) -> Optional[Figure]:
     )
 
 
-def get_iso_plot(data: List[Dict]) -> Optional[Figure]:
+def get_iso_plot(data: List[ExifData]) -> Optional[Figure]:
     return _get_distribution_plot(
         data=data,
         key="ISO",
@@ -103,8 +107,8 @@ def get_iso_plot(data: List[Dict]) -> Optional[Figure]:
     )
 
 
-def get_focal_length_plot(data: List[Dict]) -> Optional[Figure]:
-    values = [d["Focal Length"] for d in data if d.get("Focal Length") is not None]
+def get_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
+    values = [d.focal_length for d in data if d.focal_length is not None]
     if not values:
         return None
 
@@ -150,11 +154,11 @@ def _create_equivalent_focal_length_plot(values: List[float], title: str) -> Fig
     return fig
 
 
-def get_equivalent_focal_length_plot(data: List[Dict]) -> Optional[Figure]:
+def get_equivalent_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
     values = [
-        d["Focal Length (35mm)"]
+        d.focal_length_35mm
         for d in data
-        if d.get("Focal Length (35mm)") is not None
+        if d.focal_length_35mm is not None
     ]
     if not values:
         return None
@@ -164,11 +168,11 @@ def get_equivalent_focal_length_plot(data: List[Dict]) -> Optional[Figure]:
     )
 
 
-def get_apsc_equivalent_focal_length_plot(data: List[Dict]) -> Optional[Figure]:
+def get_apsc_equivalent_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
     # Calculate APS-C equivalent: 35mm_eq / 1.5
     values = []
     for d in data:
-        val_35 = d.get("Focal Length (35mm)")
+        val_35 = d.focal_length_35mm
         if val_35 is not None:
             values.append(val_35 / 1.5)
 
@@ -180,8 +184,8 @@ def get_apsc_equivalent_focal_length_plot(data: List[Dict]) -> Optional[Figure]:
     )
 
 
-def get_lens_plot(data: List[Dict]) -> Optional[Figure]:
-    values = [d["Lens"] for d in data if d.get("Lens") is not None]
+def get_lens_plot(data: List[ExifData]) -> Optional[Figure]:
+    values = [d.lens for d in data if d.lens is not None]
     if not values:
         return None
 
@@ -201,11 +205,11 @@ def get_lens_plot(data: List[Dict]) -> Optional[Figure]:
     return fig
 
 
-def get_combination_plot(data: List[Dict]) -> Optional[Figure]:
+def get_combination_plot(data: List[ExifData]) -> Optional[Figure]:
     values = []
     for d in data:
-        if d.get("Aperture") is not None and d.get("Focal Length") is not None:
-            values.append((d["Aperture"], d["Focal Length"]))
+        if d.aperture is not None and d.focal_length is not None:
+            values.append((d.aperture, d.focal_length))
 
     if not values:
         return None
@@ -228,7 +232,7 @@ def get_combination_plot(data: List[Dict]) -> Optional[Figure]:
     return fig
 
 
-def create_plots(data: List[Dict], output_dir: Path, show_plots: bool = False):
+def create_plots(data: List[ExifData], output_dir: Path, show_plots: bool = False):
     """Generates and saves plots for the analyzed data, optionally opening them."""
     print(f"\nGenerating plots in '{output_dir}'...")
     output_dir.mkdir(parents=True, exist_ok=True)

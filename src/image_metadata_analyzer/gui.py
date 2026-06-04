@@ -4,9 +4,12 @@ import threading
 import queue
 import sys
 import traceback
+import logging
 from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import ImageTk
+
+logger = logging.getLogger(__name__)
 
 # Use a relative import or absolute based on package structure
 # Assuming this runs as a module
@@ -27,17 +30,19 @@ from image_metadata_analyzer.duplicates import find_duplicates, move_to_trash
 from image_metadata_analyzer.sharpness_gui import SharpnessTool
 
 
-class RedirectText(object):
-    """Redirects stdout to a tkinter text widget via a queue."""
+class QueueHandler(logging.Handler):
+    """Redirects logging to a queue for the Tkinter text widget."""
 
-    def __init__(self, text_queue):
-        self.text_queue = text_queue
+    def __init__(self, log_queue):
+        super().__init__()
+        self.log_queue = log_queue
 
-    def write(self, string):
-        self.text_queue.put(string)
-
-    def flush(self):
-        pass
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.log_queue.put(msg + "\n")
+        except Exception:
+            self.handleError(record)
 
 
 class ImageLibraryStatistics(ttk.Frame):
@@ -152,7 +157,7 @@ class ImageLibraryStatistics(ttk.Frame):
 
     def cancel_analysis(self):
         if self.is_analyzing:
-            print("Stopping analysis...")
+            logger.info("Stopping analysis...")
             self.stop_event.set()
             self.cancel_btn.config(state="disabled")
 
@@ -189,25 +194,30 @@ class ImageLibraryStatistics(ttk.Frame):
         self.progress_var.set(value)
 
     def run_analysis(self, root_folder):
-        # Redirect stdout
-        old_stdout = sys.stdout
-        sys.stdout = RedirectText(self.log_queue)
+        # Setup logging handler for this run
+        handler = QueueHandler(self.log_queue)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        root_logger = logging.getLogger()
+        root_logger.addHandler(handler)
+        old_level = root_logger.level
+        if root_logger.level > logging.INFO:
+            root_logger.setLevel(logging.INFO)
 
         try:
             # Resolve potential network paths (smb://) to local paths
             root_path = resolve_path(root_folder)
 
             if not root_path.is_dir():
-                print(f"Error: Folder not found at '{root_path}'")
+                logger.error(f"Error: Folder not found at '{root_path}'")
                 if root_folder.startswith("smb://"):
                     msg = (
                         "Tip: For network locations, ensure "
                         "the share is mounted in your file manager first."
                     )
-                    print(msg)
+                    logger.info(msg)
                 return
 
-            print(f"Scanning for images in '{root_path}'...")
+            logger.info(f"Scanning for images in '{root_path}'...")
 
             image_files = [
                 f
@@ -216,11 +226,11 @@ class ImageLibraryStatistics(ttk.Frame):
             ]
 
             if not image_files:
-                print("No supported image files found.")
+                logger.info("No supported image files found.")
                 return
 
             total_files = len(image_files)
-            print(f"Found {total_files} image files. Extracting metadata...")
+            logger.info(f"Found {total_files} image files. Extracting metadata...")
 
             all_metadata = []
             import concurrent.futures
@@ -231,7 +241,7 @@ class ImageLibraryStatistics(ttk.Frame):
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 for i, data in enumerate(executor.map(get_exif_data, image_files)):
                     if self.stop_event.is_set():
-                        print("Analysis cancelled by user.")
+                        logger.info("Analysis cancelled by user.")
                         # Need to cancel running futures if possible, but map will just let them finish
                         break
 
@@ -243,7 +253,7 @@ class ImageLibraryStatistics(ttk.Frame):
                     self.parent.after(0, self.update_progress, progress)
 
             if not all_metadata:
-                print(
+                logger.info(
                     "Could not extract any valid EXIF metadata from the found images."
                 )
                 return
@@ -251,7 +261,7 @@ class ImageLibraryStatistics(ttk.Frame):
             analyze_data(all_metadata)
 
             # Generate Plots for GUI
-            print("Generating plots...")
+            logger.info("Generating plots...")
             plots = {
                 "Shutter Speed": get_shutter_speed_plot(all_metadata),
                 "Aperture": get_aperture_plot(all_metadata),
@@ -270,13 +280,13 @@ class ImageLibraryStatistics(ttk.Frame):
             # Schedule GUI update to show plots
             self.parent.after(0, lambda: self.display_results(plots))
 
-            print("Analysis complete.")
+            logger.info("Analysis complete.")
 
         except Exception as e:
-            print(f"An error occurred: {e}")
-            traceback.print_exc()
+            logger.exception(f"An error occurred: {e}")
         finally:
-            sys.stdout = old_stdout
+            root_logger.removeHandler(handler)
+            root_logger.setLevel(old_level)
             self.parent.after(0, self.analysis_finished)
 
     def display_results(self, plots):
@@ -449,8 +459,7 @@ class DuplicateFinder(ttk.Frame):
 
             self.parent.after(0, lambda: self.display_results(results, thumbnails))
         except Exception as e:
-            print(f"Error scanning: {e}")
-            traceback.print_exc()
+            logger.exception("Error scanning")
             self.parent.after(0, lambda err=e: messagebox.showerror("Error", str(err)))
         finally:
             self.parent.after(0, self.scan_finished)
@@ -556,7 +565,7 @@ class DuplicateFinder(ttk.Frame):
                         fpath.unlink()
                         deleted_count += 1
                     except Exception as e:
-                        print(f"Failed to permanently delete {fpath}: {e}")
+                        logger.error(f"Failed to permanently delete {fpath}: {e}")
 
         if deleted_count > 0:
             messagebox.showinfo("Success", f"Deleted/Trashed {deleted_count} files.")
@@ -619,7 +628,7 @@ class MainApp(tk.Tk):
                 icon_image = tk.PhotoImage(file=str(icon_path))
                 self.iconphoto(True, icon_image)
         except Exception as e:
-            print(f"Failed to load icon: {e}")
+            logger.warning(f"Failed to load icon: {e}")
 
         # Maximize window
         try:
@@ -678,6 +687,10 @@ class MainApp(tk.Tk):
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     app = MainApp()
     app.mainloop()
 

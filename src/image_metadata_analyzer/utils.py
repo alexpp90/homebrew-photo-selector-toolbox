@@ -8,7 +8,6 @@ from pathlib import Path
 from collections import Counter
 from typing import List, Tuple, Optional
 from PIL import Image
-
 logger = logging.getLogger(__name__)
 
 try:
@@ -235,17 +234,12 @@ def load_image_preview(
         PIL Image object or None if loading fails.
     """
     try:
+        from image_metadata_analyzer.reader import RAW_EXTENSIONS
         ext = path.suffix.lower()
-        raw_exts = {
-            ".arw", ".nef", ".cr2", ".dng", ".raw", ".cr3",
-            ".raf", ".orf", ".rw2", ".pef", ".srw", ".sr2",
-            ".tif", ".tiff"
-        }
-
         img = None
 
         # Try rawpy for known RAW extensions
-        if ext in raw_exts and rawpy is not None:
+        if (ext in RAW_EXTENSIONS or ext in {".tif", ".tiff"}) and rawpy is not None:
             try:
                 with rawpy.imread(str(path)) as raw:
                     # Fast processing for preview: half size, auto bright
@@ -261,6 +255,7 @@ def load_image_preview(
         # Fallback to Pillow if not RAW or rawpy failed
         if img is None:
             img = Image.open(path)
+            img = img.convert("RGB")  # REQUIRED — prevents I;16 crashes in ImageTk
 
         # Resize (thumbnail modifies in-place)
         if not full_res:
@@ -269,5 +264,5 @@ def load_image_preview(
 
     except (Image.UnidentifiedImageError, OSError, ValueError) as e:
         # Catch common image loading/processing errors
-        print(f"Failed to load image preview for {path}: {e}")
+        logger.warning(f"Failed to load image preview for {path}: {e}")
         return None

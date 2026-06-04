@@ -8,8 +8,8 @@ from PIL import Image
 
 from image_metadata_analyzer.utils import load_image_preview
 from image_metadata_analyzer.models import ScanResult
-from image_metadata_analyzer.sharpness import calculate_sharpness, calculate_noise
 from image_metadata_analyzer.reader import get_exif_data
+from image_metadata_analyzer.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -150,21 +150,28 @@ class ImageCacheManager:
 
 def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> ScanResult:
     """Helper module function to process a single image for parallel execution."""
-    score: Union[float, str] = "N/A"
-    if tools.get("sharpness", False):
-        score = calculate_sharpness(f, grid_size=grid_size)
-
-    noise_score: Union[float, str] = "N/A"
-    if tools.get("noise", False):
-        noise_score = calculate_noise(f)
+    scores = {}
+    for tool_name, enabled in tools.items():
+        if enabled:
+            try:
+                tool_class = ToolRegistry.get(tool_name)
+                tool_instance = tool_class()
+                scores[tool_name] = tool_instance.analyze(f, grid_size=grid_size)
+            except KeyError:
+                logger.warning(f"Tool {tool_name} not registered in ToolRegistry.")
+                scores[tool_name] = "N/A"
+            except Exception as e:
+                logger.error(f"Error executing tool {tool_name}: {e}")
+                scores[tool_name] = "N/A"
+        else:
+            scores[tool_name] = "N/A"
 
     # Fetch EXIF
-    exif = get_exif_data(f) or {}
+    exif = get_exif_data(f)
 
     return ScanResult(
         path=f,
-        score=score,
-        noise_score=noise_score,
+        scores=scores,
         exif=exif,
     )
 

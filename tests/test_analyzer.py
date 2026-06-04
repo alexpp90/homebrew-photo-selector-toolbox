@@ -1,44 +1,47 @@
-def test_analyzer_no_data(capsys):
+def test_analyzer_no_data(caplog):
+    import logging
     from image_metadata_analyzer.analyzer import analyze_data
 
+    caplog.set_level(logging.INFO)
     analyze_data([])
-    captured = capsys.readouterr()
-    assert "No data to analyze" in captured.out
+    assert "No data to analyze" in caplog.text
 
 
-def test_analyzer_basic_stats(capsys):
+def test_analyzer_basic_stats(caplog):
+    import logging
     from image_metadata_analyzer.analyzer import analyze_data
+    from image_metadata_analyzer.models import ExifData
 
     data = [
-        {
-            "Shutter Speed": 0.01,
-            "Aperture": 2.8,
-            "Focal Length": 50,
-            "ISO": 100,
-            "Lens": "Lens A",
-        },
-        {
-            "Shutter Speed": 0.02,
-            "Aperture": 4.0,
-            "Focal Length": 50,
-            "ISO": 200,
-            "Lens": "Lens A",
-        },
-        {
-            "Shutter Speed": 0.01,
-            "Aperture": 2.8,
-            "Focal Length": 85,
-            "ISO": 100,
-            "Lens": "Lens B",
-        },
+        ExifData(
+            shutter_speed=0.01,
+            aperture=2.8,
+            focal_length=50.0,
+            iso=100.0,
+            lens="Lens A",
+        ),
+        ExifData(
+            shutter_speed=0.02,
+            aperture=4.0,
+            focal_length=50.0,
+            iso=200.0,
+            lens="Lens A",
+        ),
+        ExifData(
+            shutter_speed=0.01,
+            aperture=2.8,
+            focal_length=85.0,
+            iso=100.0,
+            lens="Lens B",
+        ),
     ]
+    caplog.set_level(logging.INFO)
     analyze_data(data)
-    captured = capsys.readouterr()
-    assert "Total images with EXIF data analyzed: 3" in captured.out
-    assert "Top 5 Lenses:" in captured.out
-    assert "Lens A: 2" in captured.out
-    assert "Lens B: 1" in captured.out
-    assert "Top 5 ISOs:" in captured.out
-    assert "100: 2" in captured.out
-    assert "200: 1" in captured.out
-    assert "f/2.8 @ 50mm: 1" in captured.out
+    assert "Total images with EXIF data analyzed: 3" in caplog.text
+    assert "Top 5 Lenses:" in caplog.text
+    assert "Lens A: 2" in caplog.text
+    assert "Lens B: 1" in caplog.text
+    assert "Top 5 ISOs:" in caplog.text
+    assert "100: 2" in caplog.text
+    assert "200: 1" in caplog.text
+    assert "f/2.8 @ 50mm: 1" in caplog.text

@@ -21,9 +21,11 @@ except ImportError:
     rawpy = None
 from pathlib import Path
 import glob
-from typing import List, Optional
+from typing import List, Optional, Any
 import logging
 from PIL import Image
+from image_metadata_analyzer.reader import RAW_EXTENSIONS
+from image_metadata_analyzer.tools import AnalysisTool, ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +66,7 @@ def get_image_data(filepath: Path) -> Optional[np.ndarray]:
 
     try:
         # 1. Try rawpy for known RAW formats
-        raw_exts = {
-            ".arw", ".nef", ".cr2", ".dng", ".raw", ".cr3", 
-            ".raf", ".orf", ".rw2", ".pef", ".srw", ".sr2"
-        }
-
-        if ext in raw_exts and rawpy is not None:
+        if ext in RAW_EXTENSIONS and rawpy is not None:
             try:
                 with rawpy.imread(path_str) as raw:
                     rgb = raw.postprocess(
@@ -261,3 +258,22 @@ def find_related_files(filepath: Path) -> List[Path]:
             related.append(filepath)
 
     return related
+
+
+@ToolRegistry.register
+class SharpnessTool(AnalysisTool):
+    name = "sharpness"
+    display_name = "Sharpness Analysis"
+
+    def analyze(self, filepath: Path, **kwargs: Any) -> float:
+        grid_size = kwargs.get("grid_size", 1)
+        return calculate_sharpness(filepath, grid_size=grid_size)
+
+
+@ToolRegistry.register
+class NoiseTool(AnalysisTool):
+    name = "noise"
+    display_name = "Noise Analysis"
+
+    def analyze(self, filepath: Path, **kwargs: Any) -> float:
+        return calculate_noise(filepath)
