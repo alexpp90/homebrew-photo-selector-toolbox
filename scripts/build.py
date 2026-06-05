@@ -129,7 +129,7 @@ def run_pyinstaller(target):
 
     name_map = {
         "analyzer": "photo-selector-toolbox",
-        "gui": "photo-selector-gui"
+        "gui": "Photo Selector Toolbox"
     }
     app_name = name_map.get(target, f"photo-selector-{target}")
 
@@ -164,11 +164,7 @@ def run_pyinstaller(target):
         if platform.system() == "Windows":
              cmd.extend(["--icon", "assets/logo.ico"])
         elif platform.system() == "Darwin":
-             # If we had .icns, we would use it. PyInstaller often accepts .png on some platforms or ignores it.
-             # For now, let's try using the ico or png if supported, but typically .icns is best for Mac.
-             # Given we only generated .ico and .png:
-             # cmd.extend(["--icon", "assets/logo.png"]) # Warning: might not work as expected on Mac without .icns
-             pass
+             cmd.extend(["--icon", "assets/logo.icns"])
         else:
              # Linux .desktop files handle icons, but we can set window icon in code.
              pass
@@ -185,7 +181,7 @@ def run_pyinstaller(target):
 
     # Add ad-hoc signing for macOS .app bundles
     if platform.system() == "Darwin" and target == "gui":
-        app_path = Path("dist") / "photo-selector-gui.app"
+        app_path = Path("dist") / "Photo Selector Toolbox.app"
         if app_path.exists():
             print(f"Signing {app_path} with ad-hoc signature...")
             subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app_path)], check=True)

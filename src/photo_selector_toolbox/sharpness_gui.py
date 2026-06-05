@@ -7,12 +7,11 @@ from typing import List, Dict
 from tkinter import filedialog, messagebox, ttk
 
 import send2trash
-from PIL import Image, ImageTk
+from PIL import ImageTk  # noqa: F401
 
 from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
-from photo_selector_toolbox.utils import load_image_preview
 from photo_selector_toolbox.formatting import format_score, format_meta
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
 from photo_selector_toolbox.models import ScanResult
@@ -20,9 +19,6 @@ from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
 from photo_selector_toolbox.image_panels import ImagePanelsMixin
 
 logger = logging.getLogger(__name__)
-
-
-
 
 
 class SharpnessTool(ttk.Frame, ImagePanelsMixin):
@@ -102,95 +98,25 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.delete_current_candidate()
 
     def setup_ui(self):
-        # Notebook for switching between Setup, Scanning, and Review
+        # Scan Config variables
+        self.tool_sharpness_var = tk.BooleanVar(value=True)
+        self.grid_size_var = tk.StringVar(value=self.default_grid_size)
+        self.tool_noise_var = tk.BooleanVar(value=False)
+        self.tool_dummy2_var = tk.BooleanVar(value=False)
+
+        # Notebook for switching between Photo Selector and Analysis Logs
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True)
 
-        # --- Tab 1: Configuration ---
-        self.config_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.config_frame, text="Configuration")
-        self.setup_config_ui()
-
-        # --- Tab 2: Scanning ---
-        self.scan_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.scan_frame, text="Scanning")
-        self.setup_scan_ui()
-
-        # --- Tab 3: Review ---
+        # --- Tab 1: Photo Selector ---
         self.review_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.review_frame, text="Review")
+        self.notebook.add(self.review_frame, text="Photo Selector")
         self.setup_review_ui()
 
-        # Initially disable other tabs
-        self.notebook.tab(1, state="disabled")
-        self.notebook.tab(2, state="disabled")
-
-    def setup_config_ui(self):
-        # Controls container
-        container = ttk.Frame(self.config_frame, padding=20)
-        container.pack(fill="x")
-
-        # Folder Selection
-        ttk.Label(container, text="Images Folder:").grid(
-            row=0, column=0, sticky="w", pady=5
-        )
-        self.folder_var = tk.StringVar()
-        ttk.Entry(container, textvariable=self.folder_var, width=50).grid(
-            row=0, column=1, padx=5, pady=5
-        )
-        ttk.Button(container, text="Browse...", command=self.browse_folder).grid(
-            row=0, column=2, pady=5
-        )
-
-        # Tool Selection
-        tools_frame = ttk.LabelFrame(container, text="Analysis Tools", padding=10)
-        tools_frame.grid(row=1, column=0, columnspan=3, pady=10, sticky="ew")
-
-        # Create rows for each tool inside tools_frame for better alignment
-        sharpness_row = ttk.Frame(tools_frame)
-        sharpness_row.pack(fill="x", pady=5)
-
-        self.tool_sharpness_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            sharpness_row, text="Sharpness Analysis", variable=self.tool_sharpness_var
-        ).pack(side="left", padx=5)
-
-        ttk.Label(sharpness_row, text="Grid Analysis Size:").pack(
-            side="left", padx=(20, 5)
-        )
-        self.grid_size_var = tk.StringVar(value=self.default_grid_size)
-        grid_combo = ttk.Combobox(
-            sharpness_row,
-            textvariable=self.grid_size_var,
-            values=["1x1 (Global)", "2x2", "3x3", "4x4", "5x5", "8x8"],
-            state="readonly",
-            width=12,
-        )
-        grid_combo.pack(side="left", padx=5)
-        ttk.Label(
-            sharpness_row,
-            text="(Higher grid size helps find small sharp subjects in blurry backgrounds)",
-        ).pack(side="left", padx=5)
-
-        dummy1_row = ttk.Frame(tools_frame)
-        dummy1_row.pack(fill="x", pady=5)
-        self.tool_noise_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            dummy1_row, text="Noise Analysis", variable=self.tool_noise_var
-        ).pack(side="left", padx=5)
-
-        dummy2_row = ttk.Frame(tools_frame)
-        dummy2_row.pack(fill="x", pady=5)
-        self.tool_dummy2_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            dummy2_row, text="Dummy Tool 2", variable=self.tool_dummy2_var
-        ).pack(side="left", padx=5)
-
-        # Start Button
-        self.start_btn = ttk.Button(
-            container, text="Start Scan", command=self.start_scan
-        )
-        self.start_btn.grid(row=2, column=0, columnspan=3, pady=20)
+        # --- Tab 2: Analysis Logs ---
+        self.scan_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.scan_frame, text="Analysis Logs")
+        self.setup_scan_ui()
 
     def setup_scan_ui(self):
         container = ttk.Frame(self.scan_frame, padding=20)
@@ -215,6 +141,31 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.cancel_btn.pack(pady=10)
 
     def setup_review_ui(self):
+        # Folder selection at the top of review_frame
+        folder_frame = ttk.Frame(self.review_frame, padding=10)
+        folder_frame.pack(fill="x")
+
+        ttk.Label(folder_frame, text="Images Folder:").pack(side="left", padx=5)
+        self.folder_var = tk.StringVar()
+        ttk.Entry(folder_frame, textvariable=self.folder_var, width=50).pack(
+            side="left", fill="x", expand=True, padx=5
+        )
+        ttk.Button(folder_frame, text="Browse...", command=self.browse_folder).pack(
+            side="left", padx=5
+        )
+
+        ttk.Label(folder_frame, text="File Type:").pack(side="left", padx=(15, 5))
+        self.file_type_var = tk.StringVar(value="All Supported")
+        self.file_type_combo = ttk.Combobox(
+            folder_frame,
+            textvariable=self.file_type_var,
+            values=["All Supported"],
+            state="readonly",
+            width=15,
+        )
+        self.file_type_combo.pack(side="left", padx=5)
+        self.file_type_combo.bind("<<ComboboxSelected>>", self.on_file_type_change)
+
         # Layout: Left Sidebar (List), Right Main (Preview)
         self.paned = ttk.PanedWindow(self.review_frame, orient="horizontal")
         self.paned.pack(fill="both", expand=True)
@@ -224,6 +175,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.paned.add(self.sidebar, weight=1)
 
         ttk.Label(self.sidebar, text="Images").pack(pady=5)
+
+        # Scan button
+        self.scan_options_btn = ttk.Button(self.sidebar, text="Scan for Sharpness/Noise...")
+        self.scan_options_btn.pack(fill="x", pady=5)
 
         # Scan Progress (Visible during review)
         self.scan_progress_frame = ttk.Frame(self.sidebar)
@@ -240,6 +195,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.review_progress_bar.pack(fill="x")
 
+        self.update_scan_button_state()
+
         # Scrollbar and Listbox
         sb = ttk.Scrollbar(self.sidebar)
         sb.pack(side="right", fill="y")
@@ -251,6 +208,87 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         sb.config(command=self.candidate_listbox.yview)
 
         self.candidate_listbox.bind("<<ListboxSelect>>", self.on_candidate_select)
+
+    def show_scan_dialog(self):
+        # Ensure a folder is selected first
+        folder = self.folder_var.get()
+        if not folder or not Path(folder).exists():
+            messagebox.showerror("Error", "Please select a valid folder first.")
+            return
+
+        dialog = tk.Toplevel(self)
+        dialog.title("Scan Settings")
+        dialog.geometry("500x300")
+        dialog.resizable(False, False)
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+
+        # Center on parent
+        parent = self.winfo_toplevel()
+        x = parent.winfo_x() + (parent.winfo_width() - 500) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - 300) // 2
+        dialog.geometry(f"+{x}+{y}")
+
+        # Label
+        ttk.Label(
+            dialog,
+            text="Configure Sharpness & Noise Analysis",
+            font=("Helvetica", 12, "bold")
+        ).pack(pady=15)
+
+        # Container
+        container = ttk.Frame(dialog, padding=10)
+        container.pack(fill="both", expand=True)
+
+        # Sharpness row
+        sharpness_row = ttk.Frame(container)
+        sharpness_row.pack(fill="x", pady=5)
+        ttk.Checkbutton(
+            sharpness_row, text="Sharpness Analysis", variable=self.tool_sharpness_var
+        ).pack(side="left", padx=5)
+
+        ttk.Label(sharpness_row, text="Grid Analysis Size:").pack(
+            side="left", padx=(20, 5)
+        )
+        grid_combo = ttk.Combobox(
+            sharpness_row,
+            textvariable=self.grid_size_var,
+            values=["1x1 (Global)", "2x2", "3x3", "4x4", "5x5", "8x8"],
+            state="readonly",
+            width=12,
+        )
+        grid_combo.pack(side="left", padx=5)
+
+        # Noise row
+        noise_row = ttk.Frame(container)
+        noise_row.pack(fill="x", pady=5)
+        ttk.Checkbutton(
+            noise_row, text="Noise Analysis", variable=self.tool_noise_var
+        ).pack(side="left", padx=5)
+
+        # Dummy tool row
+        dummy_row = ttk.Frame(container)
+        dummy_row.pack(fill="x", pady=5)
+        ttk.Checkbutton(
+            dummy_row, text="Dummy Tool 2", variable=self.tool_dummy2_var
+        ).pack(side="left", padx=5)
+
+        # Buttons
+        btn_frame = ttk.Frame(dialog, padding=10)
+        btn_frame.pack(fill="x")
+
+        def start_and_close():
+            dialog.destroy()
+            self.start_scan()
+
+        ttk.Button(btn_frame, text="Start Scan", command=start_and_close).pack(side="left", expand=True, padx=5)
+        ttk.Button(btn_frame, text="Cancel", command=dialog.destroy).pack(side="right", expand=True, padx=5)
+
+    def update_scan_button_state(self):
+        if self.is_scanning:
+            self.scan_options_btn.config(text="Cancel Scan", command=self.cancel_scan)
+        else:
+            self.scan_options_btn.config(text="Scan for Sharpness/Noise...", command=self.show_scan_dialog)
 
         # Main Preview Area
         self.preview_area = ttk.Frame(self.paned, padding=10)
@@ -577,13 +615,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             else:
                 self.refresh_active_view()
 
-
-
     def open_fullscreen(self, path, mode, focus=(0.5, 0.5)):
         # Check if file exists
         if path and path.exists():
-            # Pass sorted_files so FullscreenViewer can navigate via N/P keys
-            file_list = getattr(self, "sorted_files", [])
+            # Pass candidates so FullscreenViewer can navigate via N/P keys
+            file_list = getattr(self, "candidates", [])
             FullscreenViewer(
                 self, path, initial_mode=mode, focus_point=focus, file_list=file_list
             )
@@ -612,9 +648,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.scan_results = []
         self.files_map = {}
 
+        # Update unique file types combobox
+        unique_exts = sorted(list({f.suffix.upper() for f in files}))
+        self.file_type_combo["values"] = ["All Supported"] + unique_exts
+        self.file_type_var.set("All Supported")
+
         self.candidate_listbox.delete(0, "end")
 
-        for f in self.sorted_files:
+        for f in self.candidates:
             # Initialize with N/A score and empty EXIF (fetch EXIF asynchronously if needed later)
             res = ScanResult(path=f)
             self.files_map[f] = res
@@ -637,6 +678,68 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         # Restore UI cursor
         self.config(cursor="")
         self.update()
+
+    def on_file_type_change(self, event=None):
+        selected = self.file_type_var.get()
+        
+        # Get currently selected path
+        selected_path = None
+        sel = self.candidate_listbox.curselection()
+        if sel and self.candidates:
+            selected_path = self.candidates[sel[0]]
+
+        if selected == "All Supported" or not selected:
+            self.candidates = self.sorted_files.copy()
+        else:
+            self.candidates = [f for f in self.sorted_files if f.suffix.upper() == selected]
+
+        # Update the listbox
+        self.candidate_listbox.delete(0, "end")
+        for f in self.candidates:
+            res = self.files_map.get(f)
+            score_text = format_score(res.score) if res else "N/A"
+            noise_text = format_score(res.noise_score) if res else "N/A"
+            listbox_text = f"{f.name} (Sharpness: {score_text}, Noise: {noise_text})"
+            self.candidate_listbox.insert("end", listbox_text)
+
+        if self.candidates:
+            # If the previously selected path is still in candidates, select it
+            if selected_path in self.candidates:
+                new_idx = self.candidates.index(selected_path)
+            else:
+                new_idx = 0
+            self.candidate_listbox.selection_clear(0, "end")
+            self.candidate_listbox.selection_set(new_idx)
+            self.on_candidate_select(None)
+            self.candidate_listbox.see(new_idx)
+        else:
+            # Clear triplet view
+            self.panel_curr.img_lbl.config(image="", text="No Candidates")
+            self.panel_prev.img_lbl.config(image="", text="")
+            self.panel_next.img_lbl.config(image="", text="")
+
+            self.panel_curr.path = None
+            self.panel_prev.path = None
+            self.panel_next.path = None
+
+            # Update labels to blank
+            self.meta_lbl.config(text="")
+            if hasattr(self, "focus_score_lbl"):
+                self.focus_score_lbl.config(text="Sharpness Score: --")
+            if hasattr(self, "focus_noise_lbl"):
+                self.focus_noise_lbl.config(text="Noise Level: --")
+            if hasattr(self, "focus_cat_lbl"):
+                self.focus_cat_lbl.config(text="")
+                self.focus_meta_lbl.config(text="")
+                self.focus_filename_lbl.config(text="")
+
+            # Hide overlays
+            if hasattr(self, "focus_prev_overlay"):
+                self.focus_prev_overlay.place_forget()
+            if hasattr(self, "focus_next_overlay"):
+                self.focus_next_overlay.place_forget()
+
+            self.update_button_states()
 
     def log(self, msg):
         self.log_queue.put(msg)
@@ -664,12 +767,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.is_scanning = True
         self.stop_event.clear()
 
-        # Switch to Review Tab (as requested)
-        self.notebook.tab(2, state="normal")
-        self.notebook.select(2)
-        # We also enable Scan Tab so the user can look at the raw logs if they want to
-        self.notebook.tab(1, state="normal")
-        self.notebook.tab(0, state="disabled")
+        self.update_scan_button_state()
 
         self.log_text.config(state="normal")
         self.log_text.delete(1.0, "end")
@@ -678,11 +776,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.progress_var.set(0)
         self.review_progress_var.set(0)
         self.review_status_lbl.config(text="Scan Progress: 0%")
-        # We don't reset these because they were populated during _load_folder_contents
-        # self.scan_results = []
-        # self.files_map = {}
-        # self.candidates = []
-        # self.candidate_listbox.delete(0, "end")
         self.has_switched_to_review = False
 
         # Reset cache
@@ -801,18 +894,18 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
     def switch_to_review_mode(self):
         self.has_switched_to_review = True
-        self.notebook.tab(2, state="normal")
-        self.notebook.select(2)
+        self.notebook.select(0)
         self.log("Auto-switching to Review mode.")
 
         # Select the first one if nothing selected
         if not self.candidate_listbox.curselection():
-            self.candidate_listbox.selection_set(0)
-            self.on_candidate_select(None)
+            if self.candidate_listbox.size() > 0:
+                self.candidate_listbox.selection_set(0)
+                self.on_candidate_select(None)
 
     def scan_finished(self):
         self.is_scanning = False
-        self.notebook.tab(0, state="normal")
+        self.update_scan_button_state()
 
         self.review_status_lbl.config(text="Scan Complete.")
 
@@ -852,18 +945,18 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.queue_full_res_candidate(c_path)
 
             # Find neighbors for full res queue
-            if c_path in self.sorted_files:
-                f_idx = self.sorted_files.index(c_path)
+            if c_path in self.candidates:
+                f_idx = self.candidates.index(c_path)
 
                 # Next 3 images
                 for offset in range(1, 4):
-                    if f_idx + offset < len(self.sorted_files):
-                        self.queue_full_res_candidate(self.sorted_files[f_idx + offset])
+                    if f_idx + offset < len(self.candidates):
+                        self.queue_full_res_candidate(self.candidates[f_idx + offset])
 
                 # Previous 2 images
                 for offset in range(1, 3):
                     if f_idx - offset >= 0:
-                        self.queue_full_res_candidate(self.sorted_files[f_idx - offset])
+                        self.queue_full_res_candidate(self.candidates[f_idx - offset])
         except IndexError:
             pass
 
@@ -879,17 +972,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         try:
             c_path = self.candidates[idx]
             # Find neighbors
-            if c_path in self.sorted_files:
-                f_idx = self.sorted_files.index(c_path)
+            if c_path in self.candidates:
+                f_idx = self.candidates.index(c_path)
 
                 # Prioritize: Candidate -> Next -> Prev
                 self.cache_manager.queue_preview(c_path)
 
-                if f_idx < len(self.sorted_files) - 1:
-                    self.cache_manager.queue_preview(self.sorted_files[f_idx + 1])
+                if f_idx < len(self.candidates) - 1:
+                    self.cache_manager.queue_preview(self.candidates[f_idx + 1])
 
                 if f_idx > 0:
-                    self.cache_manager.queue_preview(self.sorted_files[f_idx - 1])
+                    self.cache_manager.queue_preview(self.candidates[f_idx - 1])
         except IndexError:
             pass
 
@@ -944,16 +1037,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     pass
 
     def load_triplet_view(self, current_path):
-        # Find index in full sorted list
-        if current_path not in self.sorted_files:
+        # Find index in candidates list
+        if current_path not in self.candidates:
             return
 
-        full_idx = self.sorted_files.index(current_path)
+        idx = self.candidates.index(current_path)
 
-        prev_path = self.sorted_files[full_idx - 1] if full_idx > 0 else None
+        prev_path = self.candidates[idx - 1] if idx > 0 else None
         next_path = (
-            self.sorted_files[full_idx + 1]
-            if full_idx < len(self.sorted_files) - 1
+            self.candidates[idx + 1]
+            if idx < len(self.candidates) - 1
             else None
         )
 
@@ -1014,8 +1107,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             daemon=True,
         ).start()
 
-
-
     def update_metadata_label(self, current_path):
         res = self.files_map.get(current_path)
         if res:
@@ -1068,9 +1159,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     p_focal = format_meta(prev_exif.focal_length if prev_exif else None, "mm")
                     p_meta = f"{p_iso} | {p_shutter} | {p_aperture} | {p_focal}"
 
-                    self.focus_prev_overlay.config(
-                        text=f"Previous\n{prev_path.name}\nSharpness: {prev_score_str}\nNoise: {prev_noise_str}\n{p_meta}"
+                    prev_text = (
+                        f"Previous\n{prev_path.name}\n"
+                        f"Sharpness: {prev_score_str}\n"
+                        f"Noise: {prev_noise_str}\n{p_meta}"
                     )
+                    self.focus_prev_overlay.config(text=prev_text)
                     self.focus_prev_overlay.place(relx=0.0, rely=0.0, anchor="nw")
             else:
                 self.focus_prev_overlay.place_forget()
@@ -1089,14 +1183,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     n_focal = format_meta(next_exif.focal_length if next_exif else None, "mm")
                     n_meta = f"{n_iso} | {n_shutter} | {n_aperture} | {n_focal}"
 
-                    self.focus_next_overlay.config(
-                        text=f"Next\n{next_path.name}\nSharpness: {next_score_str}\nNoise: {next_noise_str}\n{n_meta}"
+                    next_text = (
+                        f"Next\n{next_path.name}\n"
+                        f"Sharpness: {next_score_str}\n"
+                        f"Noise: {next_noise_str}\n{n_meta}"
                     )
+                    self.focus_next_overlay.config(text=next_text)
                     self.focus_next_overlay.place(relx=0.0, rely=0.0, anchor="nw")
             else:
                 self.focus_next_overlay.place_forget()
-
-
 
     def prev_candidate(self):
         sel = self.candidate_listbox.curselection()
@@ -1147,7 +1242,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         y = parent.winfo_y() + (parent.winfo_height() - 150) // 2
         dialog.geometry(f"+{x}+{y}")
 
-        msg = f"Are you sure you want to move '{path.name}' and related files to trash?\n\n(Press Delete again to confirm)"
+        msg = (
+            f"Are you sure you want to move '{path.name}' and related files to trash?\n\n"
+            "(Press Delete again to confirm)"
+        )
         ttk.Label(dialog, text=msg, justify="center", wraplength=350).pack(
             pady=20, padx=20
         )
@@ -1304,4 +1402,3 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.panel_curr.path = None
             self.panel_prev.path = None
             self.panel_next.path = None
-
