@@ -1,6 +1,6 @@
 import time
 from pathlib import Path
-from image_metadata_analyzer.reader import get_exif_data
+from photo_selector_toolbox.reader import get_exif_data
 import concurrent.futures
 
 def create_dummy_images(num_images=100):

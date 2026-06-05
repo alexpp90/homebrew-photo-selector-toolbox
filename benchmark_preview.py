@@ -11,7 +11,7 @@ def setup_benchmark_images(folder, num_images=100):
         img.save(os.path.join(folder, f"img_{i}.jpg"))
 
 def benchmark():
-    from image_metadata_analyzer.utils import load_image_preview
+    from photo_selector_toolbox.utils import load_image_preview
     import concurrent.futures
 
     test_dir = "test_benchmark_images"

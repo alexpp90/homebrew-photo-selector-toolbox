@@ -12,13 +12,13 @@ sys.modules["numpy"] = mock_np
 sys.modules["rawpy"] = mock_rawpy
 
 # Now import the code to test
-from image_metadata_analyzer.sharpness import calculate_sharpness, calculate_noise
+from photo_selector_toolbox.sharpness import calculate_sharpness, calculate_noise
 
 import unittest
 from unittest.mock import patch
 
 class TestErrorPaths(unittest.TestCase):
-    @patch("image_metadata_analyzer.sharpness.get_image_data")
+    @patch("photo_selector_toolbox.sharpness.get_image_data")
     def test_calculate_sharpness_exception(self, mock_get_data):
         # Setup mock to return a valid dummy image
         mock_get_data.return_value = MagicMock() # Representing a numpy array
@@ -31,7 +31,7 @@ class TestErrorPaths(unittest.TestCase):
         # Reset side effect for other tests
         mock_cv2.cvtColor.side_effect = None
 
-    @patch("image_metadata_analyzer.sharpness.get_image_data")
+    @patch("photo_selector_toolbox.sharpness.get_image_data")
     def test_calculate_noise_exception(self, mock_get_data):
         # Setup mock to return a valid dummy image
         mock_get_data.return_value = MagicMock() # Representing a numpy array

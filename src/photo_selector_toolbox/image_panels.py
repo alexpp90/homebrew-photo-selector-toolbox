@@ -6,8 +6,8 @@ import tkinter as tk
 from tkinter import ttk
 
 # Local imports
-from image_metadata_analyzer.utils import load_image_preview
-from image_metadata_analyzer.formatting import format_score, format_meta
+from photo_selector_toolbox.utils import load_image_preview
+from photo_selector_toolbox.formatting import format_score, format_meta
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 import numpy as np
 import cv2
-from image_metadata_analyzer.sharpness import calculate_noise
+from photo_selector_toolbox.sharpness import calculate_noise
 
 
 def test_noise_calc(tmp_path):
@@ -16,8 +16,8 @@ def test_noise_calc(tmp_path):
     assert score > 0
 
 
-@patch("image_metadata_analyzer.sharpness.get_image_data")
-@patch("image_metadata_analyzer.sharpness.cv2")
+@patch("photo_selector_toolbox.sharpness.get_image_data")
+@patch("photo_selector_toolbox.sharpness.cv2")
 def test_calculate_noise_exception(mock_cv2, mock_get_data):
     # Setup mock to return a valid dummy image
     mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)

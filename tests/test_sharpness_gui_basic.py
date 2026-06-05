@@ -9,12 +9,12 @@ original_modules = {}
 def mock_sys_modules():
     modules_to_mock = [
         "rawpy",
-        "image_metadata_analyzer.controllers",
-        "image_metadata_analyzer.models",
-        "image_metadata_analyzer.sharpness",
-        "image_metadata_analyzer.reader",
-        "image_metadata_analyzer.utils",
-        "image_metadata_analyzer.formatting",
+        "photo_selector_toolbox.controllers",
+        "photo_selector_toolbox.models",
+        "photo_selector_toolbox.sharpness",
+        "photo_selector_toolbox.reader",
+        "photo_selector_toolbox.utils",
+        "photo_selector_toolbox.formatting",
         "send2trash",
     ]
     for name in modules_to_mock:
@@ -34,37 +34,37 @@ def mock_sys_modules():
 @pytest.fixture(autouse=True)
 def mock_sharpness_gui_deps():
     with (
-        patch("image_metadata_analyzer.sharpness_gui.tk.Tk"),
+        patch("photo_selector_toolbox.sharpness_gui.tk.Tk"),
         patch(
-            "image_metadata_analyzer.sharpness_gui.tk.StringVar",
+            "photo_selector_toolbox.sharpness_gui.tk.StringVar",
             return_value=MagicMock(),
         ),
         patch(
-            "image_metadata_analyzer.sharpness_gui.tk.IntVar", return_value=MagicMock()
+            "photo_selector_toolbox.sharpness_gui.tk.IntVar", return_value=MagicMock()
         ),
         patch(
-            "image_metadata_analyzer.sharpness_gui.tk.DoubleVar",
+            "photo_selector_toolbox.sharpness_gui.tk.DoubleVar",
             return_value=MagicMock(),
         ),
         patch(
-            "image_metadata_analyzer.sharpness_gui.tk.BooleanVar",
+            "photo_selector_toolbox.sharpness_gui.tk.BooleanVar",
             return_value=MagicMock(),
         ),
-        patch("image_metadata_analyzer.sharpness_gui.ttk.Frame"),
-        patch("image_metadata_analyzer.sharpness_gui.ttk.LabelFrame"),
-        patch("image_metadata_analyzer.sharpness_gui.ttk.Label"),
-        patch("image_metadata_analyzer.sharpness_gui.ttk.Button"),
-        patch("image_metadata_analyzer.sharpness_gui.ttk.Notebook"),
-        patch("image_metadata_analyzer.sharpness_gui.ttk.Treeview"),
-        patch("image_metadata_analyzer.sharpness_gui.ttk.Scrollbar"),
-        patch("image_metadata_analyzer.sharpness_gui.ImageTk.PhotoImage"),
-        patch("image_metadata_analyzer.controllers.ImageCacheManager"),
+        patch("photo_selector_toolbox.sharpness_gui.ttk.Frame"),
+        patch("photo_selector_toolbox.sharpness_gui.ttk.LabelFrame"),
+        patch("photo_selector_toolbox.sharpness_gui.ttk.Label"),
+        patch("photo_selector_toolbox.sharpness_gui.ttk.Button"),
+        patch("photo_selector_toolbox.sharpness_gui.ttk.Notebook"),
+        patch("photo_selector_toolbox.sharpness_gui.ttk.Treeview"),
+        patch("photo_selector_toolbox.sharpness_gui.ttk.Scrollbar"),
+        patch("photo_selector_toolbox.sharpness_gui.ImageTk.PhotoImage"),
+        patch("photo_selector_toolbox.controllers.ImageCacheManager"),
     ):
         yield
 
 
 def test_sharpness_tool_init():
-    from image_metadata_analyzer.sharpness_gui import SharpnessTool
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
     parent = MagicMock()
 
@@ -72,10 +72,10 @@ def test_sharpness_tool_init():
     parent.register = MagicMock()
 
     with (
-        patch("image_metadata_analyzer.sharpness_gui.tk.Toplevel"),
-        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.setup_ui"),
-        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.setup_focus_ui"),
-        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.bind_all"),
+        patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
     ):
         tool = SharpnessTool(parent)
         assert not tool.is_scanning

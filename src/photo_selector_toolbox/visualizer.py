@@ -8,10 +8,10 @@ from collections import Counter
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from image_metadata_analyzer.utils import aggregate_focal_lengths
+from photo_selector_toolbox.utils import aggregate_focal_lengths
 
 
-from image_metadata_analyzer.models import ExifData
+from photo_selector_toolbox.models import ExifData
 
 
 def _open_file_for_user(filepath: Path):

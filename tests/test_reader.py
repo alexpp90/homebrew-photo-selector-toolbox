@@ -1,7 +1,7 @@
 import pytest
 from PIL import Image
 
-from image_metadata_analyzer.reader import get_exif_data
+from photo_selector_toolbox.reader import get_exif_data
 
 
 @pytest.fixture
@@ -148,7 +148,7 @@ def test_get_exif_data_pillow_exception(image_dir, caplog):
     p = image_dir / "test.jpg"
     p.write_text("dummy")
 
-    with patch('image_metadata_analyzer.readers.pillow.Image.open') as mock_open:
+    with patch('photo_selector_toolbox.readers.pillow.Image.open') as mock_open:
         mock_img = MagicMock()
         mock_img.getexif.side_effect = ValueError("Mocked Pillow Error")
         mock_open.return_value = mock_img

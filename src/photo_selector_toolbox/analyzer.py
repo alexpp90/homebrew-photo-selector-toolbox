@@ -1,8 +1,8 @@
 import logging
 from collections import Counter
 import statistics
-from image_metadata_analyzer.utils import aggregate_focal_lengths
-from image_metadata_analyzer.models import ExifData
+from photo_selector_toolbox.utils import aggregate_focal_lengths
+from photo_selector_toolbox.models import ExifData
 
 logger = logging.getLogger(__name__)
 

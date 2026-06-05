@@ -243,7 +243,7 @@ def load_image_preview(
         PIL Image object or None if loading fails.
     """
     try:
-        from image_metadata_analyzer.reader import RAW_EXTENSIONS
+        from photo_selector_toolbox.reader import RAW_EXTENSIONS
         ext = path.suffix.lower()
         img = None
 

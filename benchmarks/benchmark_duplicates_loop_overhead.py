@@ -18,7 +18,7 @@ import shutil
 from pathlib import Path
 # We need to make sure src is in sys.path
 sys.path.insert(0, os.path.abspath("src"))
-from image_metadata_analyzer.duplicates import find_duplicates
+from photo_selector_toolbox.duplicates import find_duplicates
 
 def setup_test_files(base_dir, num_groups, files_per_group, size_bytes):
     base_path = Path(base_dir)

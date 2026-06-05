@@ -1,5 +1,5 @@
 import unittest
-from image_metadata_analyzer.utils import aggregate_focal_lengths
+from photo_selector_toolbox.utils import aggregate_focal_lengths
 
 
 class TestAggregation(unittest.TestCase):

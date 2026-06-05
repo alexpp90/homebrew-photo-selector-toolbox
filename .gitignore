@@ -18,7 +18,7 @@ analysis_results/
 build/
 dist/
 *.spec
-src/image_metadata_analyzer/bin/
+src/photo_selector_toolbox/bin/
 
 # OS files
 .DS_Store
