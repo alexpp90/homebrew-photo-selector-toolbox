@@ -7,7 +7,7 @@ cask "photo-selector-toolbox" do
   desc "Desktop app to analyze image EXIF metadata, find duplicates, and detect blur"
   homepage "https://github.com/alexpp90/homebrew-photo-selector-toolbox"
 
-  app "photo-selector-gui.app"
+  app "Photo Selector Toolbox.app"
   binary "photo-selector-toolbox/photo-selector-toolbox"
 
   zap trash: [

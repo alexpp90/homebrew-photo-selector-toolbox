@@ -583,14 +583,14 @@ class Sidebar(ttk.Frame):
 
         ttk.Button(
             self,
-            text="Image Library Statistics",
-            command=lambda: controller.show_frame("ImageLibraryStatistics"),
+            text="Photo Selector",
+            command=lambda: controller.show_frame("SharpnessTool"),
         ).pack(fill="x", pady=5)
 
         ttk.Button(
             self,
-            text="Image Comparator",
-            command=lambda: controller.show_frame("SharpnessTool"),
+            text="Image Library Statistics",
+            command=lambda: controller.show_frame("ImageLibraryStatistics"),
         ).pack(fill="x", pady=5)
 
         ttk.Button(
@@ -661,7 +661,7 @@ class MainApp(tk.Tk):
         self.content_area.grid_rowconfigure(0, weight=1)
         self.content_area.grid_columnconfigure(0, weight=1)
 
-        self.show_frame("ImageLibraryStatistics")
+        self.show_frame("SharpnessTool")
 
         # Close splash screen if it exists (after GUI is ready)
         self.after(100, self.close_splash)

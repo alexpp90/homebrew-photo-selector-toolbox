@@ -81,3 +81,49 @@ def test_sharpness_tool_init():
         assert not tool.is_scanning
         assert tool.candidates == []
         assert tool.sorted_files == []
+
+
+def test_sharpness_tool_filtering():
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+    from pathlib import Path
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
+    ):
+        tool = SharpnessTool(parent)
+        tool.config = MagicMock()
+        tool.update = MagicMock()
+        tool.folder_var.get.return_value = "/mock/folder"
+        
+        test_files = [
+            Path("/mock/folder/img1.jpg"),
+            Path("/mock/folder/img2.arw"),
+            Path("/mock/folder/img3.jpg"),
+            Path("/mock/folder/img4.png"),
+        ]
+        
+        with patch("photo_selector_toolbox.sharpness_gui.Path.rglob", return_value=test_files):
+            with patch("photo_selector_toolbox.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}):
+                tool._load_folder_contents("/mock/folder")
+                
+                # Check sorted_files and candidates initially contain everything
+                assert len(tool.sorted_files) == 4
+                assert len(tool.candidates) == 4
+                
+                # Mock file_type_var.get to return ".JPG"
+                tool.file_type_var.get.return_value = ".JPG"
+                tool.on_file_type_change()
+                
+                assert len(tool.candidates) == 2
+                assert all(f.suffix.upper() == ".JPG" for f in tool.candidates)
+                
+                # Test resetting to All
+                tool.file_type_var.get.return_value = "All Supported"
+                tool.on_file_type_change()
+                
+                assert len(tool.candidates) == 4
+

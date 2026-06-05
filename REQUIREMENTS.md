@@ -3,7 +3,7 @@
 This document serves as the central source of truth for the functional, architectural, and business requirements of the Photo Selector Toolbox project. It must be kept up-to-date as new features are added or existing features are modified.
 
 ## 1. Introduction
-The Photo Selector Toolbox is a cross-platform desktop application designed to process folders of images. It extracts and analyzes EXIF metadata (Shutter Speed, Aperture, ISO, Focal Length, Lens Model), generates statistical distributions, and provides advanced tools such as an Image Comparator (for detecting sharpness and blur) and a Duplicate Finder.
+The Photo Selector Toolbox is a cross-platform desktop application designed to process folders of images. It extracts and analyzes EXIF metadata (Shutter Speed, Aperture, ISO, Focal Length, Lens Model), generates statistical distributions, and provides advanced tools such as a Photo Selector (for selecting and deleting images, with optional sharpness and noise analysis) and a Duplicate Finder.
 
 ## 2. Core Features & Business Logic
 
@@ -13,11 +13,12 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Shutter Speed Formatting:** In the GUI, shutter speed values less than `1.0` and greater than `0` must be formatted as fractions (e.g., `1/200s`). Values `1.0` or greater must be appended with `s` (e.g., `1.5s`).
 *   **Supported File Types:** Supported file extensions are defined centrally in `src/photo_selector_toolbox/reader.py` as `SUPPORTED_EXTENSIONS`. Other tools (like `duplicates.py`) must import this list and may extend it locally (e.g., appending `.bmp` and `.gif`).
 
-### 2.2 Image Comparator (Sharpness Tool)
+### 2.2 Photo Selector (Sharpness & Noise Tool)
 *   **Sharpness Algorithm:** The sharpness analysis algorithm crops the center 50% of the image, divides it into a configurable grid (default 8x8), and uses the maximum block variance score to determine overall sharpness.
 *   **Noise Algorithm:** A noise analysis tool estimates image noise using the Median Absolute Deviation (MAD) of the image's Laplacian filter.
-*   **Synchronous Pre-loading:** The application must synchronously pre-load all supported images from a selected folder for immediate side-by-side review prior to scanning, displaying metadata alongside 'N/A' placeholder scores initially.
+*   **Synchronous Pre-loading:** The application must synchronously pre-load all supported images from a selected folder for immediate side-by-side review on folder selection (without requiring a scan), displaying metadata alongside 'N/A' placeholder scores initially.
 *   **Score Labeling:** The evaluation metric must be explicitly labeled as "Sharpness Score" and "Noise Level" (or "Noise") in the GUI (rather than just "Score"). Noise Level and Sharpness score labels must harmonize and use the standard theme/system default text foreground color rather than hardcoded foreground colors to ensure readability on varying background themes.
+*   **Dynamic File Type Filtering:** The application must dynamically extract all unique supported file extensions present in the selected folder, populate a "File Type" dropdown, and allow the user to select which file type to view and scroll through (with the default option "All Supported"). All navigation (Previous/Next buttons, Left/Right arrow shortcuts, neighbor previews, and fullscreen viewer navigation) must strictly respect this active filter.
 
 ### 2.3 Path Resolution Utility
 *   **SMB URL Support:** The application must support resolving `smb://` URLs to local mount points.
@@ -61,7 +62,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Thread Safety:** PIL Image objects must be loaded in background threads. Unscaled PIL images are returned and dynamically converted to `ImageTk.PhotoImage` in the main thread during `<Configure>` events.
 *   **Tkinter Variable Access:** Access to Tkinter variables (`StringVar`, `IntVar`) must occur only in the main thread. Values must be passed as arguments to worker threads.
 *   **Data Formatting Safety:** UI elements processing dynamically loaded scores must utilize explicit type checks (e.g., `isinstance(score_val, float)`) to safely format numerical data and prevent errors from 'N/A' string defaults.
-*   **State Transitions:** The Sharpness Tool auto-switches to the Review tab *only* when an analysis scan is explicitly started. It must remain on the Configuration tab immediately after the initial folder selection.
+*   **State Transitions:** The Photo Selector starts directly on the main preview and review screen. Selecting a folder loads the images immediately without scanning. An optional sharpness/noise analysis scan is offered via a modal configuration dialog, and progress is logged in a separate tab without locking the main photo review interface.
 *   **Error Reporting:** Analysis errors in the GUI must be displayed via a popup alert, and the progress bar state must reflect the failure (it must not auto-complete).
 *   **Image RAW Loading:** The utility function `utils.load_image_preview` must explicitly convert images to `RGB` mode to handle 16-bit RAW data (`I;16`) that otherwise causes `ImageTk` crashes.
 
@@ -74,6 +75,8 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 
 ### 4.2 Build Scripts
 *   **Splash Screen:** The application startup includes a splash screen (`assets/logo.png`) configured via the PyInstaller `--splash` argument. The `MainApp` class must close the splash screen via `pyi_splash.close()` inside a `try/except` block, scheduled via `after()` to run after GUI initialization.
+*   **Application Naming:** The built GUI desktop application must be named exactly `Photo Selector Toolbox` (yielding `Photo Selector Toolbox.app` on macOS).
+*   **macOS Icon:** The build script must generate and bundle a macOS-compatible `logo.icns` file from primary assets and configure PyInstaller to apply it to the macOS application bundle.
 *   **ExifTool Bundling:** The build script (`scripts/build.py`) relies on a hardcoded ExifTool version (e.g., 13.51) downloaded from SourceForge. This requires manual updates if SourceForge removes older releases. Windows builds must utilize the `_64` suffixed ExifTool binary.
 *   **macOS Security:** The build script must apply ad-hoc code signing (`codesign -s -`) to the macOS `.app` bundle to prevent Gatekeeper from flagging it as damaged on Apple Silicon.
 
@@ -102,7 +105,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 ### 5.3 Homebrew Distribution (macOS)
 *   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing a Cask definition for the macOS nightly build.
 *   **Auto-Update:** The CI workflow automatically updates the Cask's SHA256 hash after every nightly release publish, enabling `brew upgrade --cask --greedy` to pick up new builds.
-*   **Install Artifacts:** The Cask installs the `.app` bundle to `/Applications` and symlinks the CLI binary into Homebrew's bin directory.
+*   **Install Artifacts:** The Cask installs the `Photo Selector Toolbox.app` bundle to `/Applications` and symlinks the CLI binary into Homebrew's bin directory.
 
 ## 6. Testing Requirements
 
