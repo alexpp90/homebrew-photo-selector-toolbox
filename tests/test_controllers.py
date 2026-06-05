@@ -2,8 +2,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 import time
-from image_metadata_analyzer.controllers import ImageCacheManager
-import image_metadata_analyzer.controllers as ctrl
+from photo_selector_toolbox.controllers import ImageCacheManager
+import photo_selector_toolbox.controllers as ctrl
 
 
 @pytest.fixture

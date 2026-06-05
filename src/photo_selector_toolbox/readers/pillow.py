@@ -2,8 +2,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 from PIL import Image, ExifTags
-from image_metadata_analyzer.models import ExifData
-from image_metadata_analyzer.readers.base import ExifReader
+from photo_selector_toolbox.models import ExifData
+from photo_selector_toolbox.readers.base import ExifReader
 
 logger = logging.getLogger(__name__)
 

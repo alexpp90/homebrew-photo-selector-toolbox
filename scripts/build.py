@@ -14,7 +14,7 @@ EXIFTOOL_VERSION = "13.59"
 SF_BASE_URL = "https://sourceforge.net/projects/exiftool/files"
 
 PROJECT_ROOT = Path(__file__).parent.parent
-BIN_DIR = PROJECT_ROOT / "src" / "image_metadata_analyzer" / "bin"
+BIN_DIR = PROJECT_ROOT / "src" / "photo_selector_toolbox" / "bin"
 
 def download_file(url, dest_path):
     print(f"Downloading {url}...")
@@ -123,13 +123,19 @@ def setup_exiftool():
 
 def run_pyinstaller(target):
     sep = ";" if platform.system() == "Windows" else ":"
-    src_data = "src/image_metadata_analyzer/bin"
+    src_data = "src/photo_selector_toolbox/bin"
     dst_data = "."
     add_data_arg = f"{src_data}{sep}{dst_data}"
 
+    name_map = {
+        "analyzer": "photo-selector-toolbox",
+        "gui": "photo-selector-gui"
+    }
+    app_name = name_map.get(target, f"photo-selector-{target}")
+
     cmd = [
         "poetry", "run", "pyinstaller",
-        "--name", f"image-metadata-{target}",
+        "--name", app_name,
         "--paths", "src",
         "--distpath", "dist",
         "--add-data", add_data_arg,
@@ -169,17 +175,17 @@ def run_pyinstaller(target):
 
         cmd.extend([
             "--windowed",
-            "src/image_metadata_analyzer/gui.py"
+            "src/photo_selector_toolbox/gui.py"
         ])
     else:
-        cmd.append("src/image_metadata_analyzer/cli.py")
+        cmd.append("src/photo_selector_toolbox/cli.py")
 
     print(f"Running: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
 
     # Add ad-hoc signing for macOS .app bundles
     if platform.system() == "Darwin" and target == "gui":
-        app_path = Path("dist") / "image-metadata-gui.app"
+        app_path = Path("dist") / "photo-selector-gui.app"
         if app_path.exists():
             print(f"Signing {app_path} with ad-hoc signature...")
             subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app_path)], check=True)

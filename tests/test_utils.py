@@ -29,7 +29,7 @@ except ImportError:
 import unittest
 from unittest.mock import patch
 from pathlib import Path
-from image_metadata_analyzer.utils import resolve_path, get_exiftool_path, load_image_preview
+from photo_selector_toolbox.utils import resolve_path, get_exiftool_path, load_image_preview
 
 class TestGetExiftoolPath(unittest.TestCase):
 
@@ -148,7 +148,7 @@ class TestResolvePath(unittest.TestCase):
 
 
 class TestLoadImagePreview(unittest.TestCase):
-    @patch('image_metadata_analyzer.utils.Image.open')
+    @patch('photo_selector_toolbox.utils.Image.open')
     def test_standard_image(self, mock_open):
         """Test loading a standard image (e.g., JPEG)."""
         mock_img = MagicMock()
@@ -162,8 +162,8 @@ class TestLoadImagePreview(unittest.TestCase):
         mock_img.thumbnail.assert_called_once_with((150, 150))
         self.assertEqual(result, mock_img)
 
-    @patch('image_metadata_analyzer.utils.Image.fromarray')
-    @patch('image_metadata_analyzer.utils.rawpy.imread')
+    @patch('photo_selector_toolbox.utils.Image.fromarray')
+    @patch('photo_selector_toolbox.utils.rawpy.imread')
     def test_raw_image(self, mock_imread, mock_fromarray):
         """Test loading a RAW image."""
         mock_raw = MagicMock()
@@ -184,7 +184,7 @@ class TestLoadImagePreview(unittest.TestCase):
         mock_img.thumbnail.assert_called_once_with((150, 150))
         self.assertEqual(result, mock_img)
 
-    @patch('image_metadata_analyzer.utils.Image.open')
+    @patch('photo_selector_toolbox.utils.Image.open')
     def test_full_res(self, mock_open):
         """Test loading a standard image at full resolution."""
         mock_img = MagicMock()
@@ -198,8 +198,8 @@ class TestLoadImagePreview(unittest.TestCase):
         mock_img.thumbnail.assert_not_called()
         self.assertEqual(result, mock_img)
 
-    @patch('image_metadata_analyzer.utils.Image.open')
-    @patch('image_metadata_analyzer.utils.rawpy.imread')
+    @patch('photo_selector_toolbox.utils.Image.open')
+    @patch('photo_selector_toolbox.utils.rawpy.imread')
     def test_raw_fallback_to_pillow(self, mock_imread, mock_open):
         """Test that Pillow is used if rawpy fails."""
         mock_imread.side_effect = rawpy.LibRawError("rawpy failed")
@@ -216,7 +216,7 @@ class TestLoadImagePreview(unittest.TestCase):
         mock_img.thumbnail.assert_called_once_with((150, 150))
         self.assertEqual(result, mock_img)
 
-    @patch('image_metadata_analyzer.utils.Image.open')
+    @patch('photo_selector_toolbox.utils.Image.open')
     def test_exception_handling(self, mock_open):
         """Test that None is returned on common image loading exceptions."""
         mock_open.side_effect = OSError("File not found or access denied")
@@ -226,7 +226,7 @@ class TestLoadImagePreview(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch('image_metadata_analyzer.utils.Image.open')
+    @patch('photo_selector_toolbox.utils.Image.open')
     def test_unidentified_image_error(self, mock_open):
         """Test that None is returned when Pillow cannot identify the image."""
         mock_open.side_effect = PIL.Image.UnidentifiedImageError("Cannot identify image file")

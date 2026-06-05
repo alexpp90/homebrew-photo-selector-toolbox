@@ -1,7 +1,7 @@
 import warnings
 from pathlib import Path
-from image_metadata_analyzer.models import ExifData
-from image_metadata_analyzer.readers import read_exif
+from photo_selector_toolbox.models import ExifData
+from photo_selector_toolbox.readers import read_exif
 
 # Suppress specific warnings from Pillow about potentially corrupt EXIF data
 # which it often handles gracefully anyway.

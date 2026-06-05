@@ -1,9 +1,9 @@
 import logging
 from pathlib import Path
 from typing import Optional, Any
-from image_metadata_analyzer.models import ExifData
-from image_metadata_analyzer.readers.base import ExifReader
-from image_metadata_analyzer.utils import get_exiftool_path
+from photo_selector_toolbox.models import ExifData
+from photo_selector_toolbox.readers.base import ExifReader
+from photo_selector_toolbox.utils import get_exiftool_path
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ class ExifToolReader(ExifReader):
     
     def can_handle(self, path: Path) -> bool:
         # Avoid top-level import to prevent circular dependency
-        from image_metadata_analyzer.reader import FORCE_EXIFTOOL_EXTENSIONS
+        from photo_selector_toolbox.reader import FORCE_EXIFTOOL_EXTENSIONS
         return path.suffix.lower() in FORCE_EXIFTOOL_EXTENSIONS
 
     def read(self, path: Path, debug: bool = False) -> Optional[ExifData]:

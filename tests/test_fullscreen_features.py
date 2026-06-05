@@ -7,12 +7,12 @@ import pytest
 def mock_sys_modules():
     modules_to_mock = [
         "rawpy",
-        "image_metadata_analyzer.controllers",
-        "image_metadata_analyzer.models",
-        "image_metadata_analyzer.sharpness",
-        "image_metadata_analyzer.reader",
-        "image_metadata_analyzer.utils",
-        "image_metadata_analyzer.formatting",
+        "photo_selector_toolbox.controllers",
+        "photo_selector_toolbox.models",
+        "photo_selector_toolbox.sharpness",
+        "photo_selector_toolbox.reader",
+        "photo_selector_toolbox.utils",
+        "photo_selector_toolbox.formatting",
         "send2trash",
         "PIL",
         "PIL.Image",
@@ -161,15 +161,15 @@ def mock_tkinter_and_ttk():
 
 
 def test_sharpness_tool_key_event_filtering():
-    from image_metadata_analyzer.sharpness_gui import SharpnessTool
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
     parent = MagicMock()
     parent.register = MagicMock()
 
     with (
-        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.setup_ui"),
-        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.setup_focus_ui"),
-        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.bind_all"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
     ):
         tool = SharpnessTool(parent)
         # Mock winfo_toplevel
@@ -200,14 +200,14 @@ def test_sharpness_tool_key_event_filtering():
 
 
 def test_fullscreen_viewer_init_and_delete():
-    from image_metadata_analyzer.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
 
     parent = MagicMock()
     path = Path("test_image.jpg")
     file_list = [path]
 
     with (
-        patch("image_metadata_analyzer.fullscreen_viewer.FullscreenViewer.load_image"),
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
     ):
         viewer = FullscreenViewer(parent, path, file_list=file_list)
         
@@ -220,7 +220,7 @@ def test_fullscreen_viewer_init_and_delete():
         
         # Test confirm_delete_image creates dialog
         with (
-            patch("image_metadata_analyzer.fullscreen_viewer.tk.Toplevel") as mock_toplevel,
+            patch("photo_selector_toolbox.fullscreen_viewer.tk.Toplevel") as mock_toplevel,
         ):
             # mock_toplevel will return a mock dialog
             mock_dialog = MagicMock()
@@ -231,14 +231,14 @@ def test_fullscreen_viewer_init_and_delete():
 
 
 def test_move_to_selection():
-    from image_metadata_analyzer.sharpness_gui import SharpnessTool
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
     parent = MagicMock()
     parent.register = MagicMock()
 
     with (
-        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.setup_ui"),
-        patch("image_metadata_analyzer.sharpness_gui.SharpnessTool.setup_focus_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
     ):
         tool = SharpnessTool(parent)
         tool.folder_var = MagicMock()
@@ -257,8 +257,8 @@ def test_move_to_selection():
         tool.panel_next = MagicMock()
         
         with (
-            patch("image_metadata_analyzer.sharpness_gui.Path") as mock_path_cls,
-            patch("image_metadata_analyzer.sharpness_gui.find_related_files", return_value=[mock_path]),
+            patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
+            patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_path]),
         ):
             mock_selection_dir = MagicMock()
             mock_path_cls.return_value = MagicMock()

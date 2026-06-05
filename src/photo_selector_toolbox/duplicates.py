@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from send2trash import send2trash
 
-from image_metadata_analyzer.reader import SUPPORTED_EXTENSIONS
+from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS
 
 # Extend supported extensions for duplicates to include basic formats
 # not necessarily supported by the metadata analyzer (like GIF/BMP)

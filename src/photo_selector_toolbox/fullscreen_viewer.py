@@ -7,7 +7,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 
 # Local imports
-from image_metadata_analyzer.utils import load_image_preview
+from photo_selector_toolbox.utils import load_image_preview
 
 logger = logging.getLogger(__name__)
 

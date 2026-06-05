@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
-from image_metadata_analyzer.models import ExifData
-from image_metadata_analyzer.visualizer import (
+from photo_selector_toolbox.models import ExifData
+from photo_selector_toolbox.visualizer import (
     get_shutter_speed_plot,
     get_aperture_plot,
     get_iso_plot,
@@ -87,7 +87,7 @@ def test_get_combination_plot():
     assert fig is not None
 
 
-@patch("image_metadata_analyzer.visualizer._open_file_for_user")
+@patch("photo_selector_toolbox.visualizer._open_file_for_user")
 def test_create_plots(mock_open, tmp_path):
     data = [
         ExifData(
@@ -127,7 +127,7 @@ def test_create_plots(mock_open, tmp_path):
         assert mock_open.called
 
 
-@patch("image_metadata_analyzer.visualizer._open_file_for_user")
+@patch("photo_selector_toolbox.visualizer._open_file_for_user")
 def test_create_plots_empty_data(mock_open, tmp_path):
     data = []
 
@@ -141,15 +141,15 @@ def test_create_plots_empty_data(mock_open, tmp_path):
         assert not mock_open.called
 
 
-@patch("image_metadata_analyzer.visualizer.subprocess.run")
-@patch("image_metadata_analyzer.visualizer.os.startfile", create=True)
+@patch("photo_selector_toolbox.visualizer.subprocess.run")
+@patch("photo_selector_toolbox.visualizer.os.startfile", create=True)
 def test_open_file_for_user_absolute_path(mock_startfile, mock_run):
     """Test that _open_file_for_user always resolves paths to absolute before calling system commands."""
     test_path = Path("-test_file.png")
     absolute_test_path = test_path.absolute()
 
     # Test Windows
-    with patch("image_metadata_analyzer.visualizer.sys.platform", "win32"):
+    with patch("photo_selector_toolbox.visualizer.sys.platform", "win32"):
         _open_file_for_user(test_path)
         mock_startfile.assert_called_once_with(absolute_test_path)
         mock_run.assert_not_called()
@@ -158,7 +158,7 @@ def test_open_file_for_user_absolute_path(mock_startfile, mock_run):
     mock_run.reset_mock()
 
     # Test Darwin
-    with patch("image_metadata_analyzer.visualizer.sys.platform", "darwin"):
+    with patch("photo_selector_toolbox.visualizer.sys.platform", "darwin"):
         _open_file_for_user(test_path)
         mock_run.assert_called_once_with(["open", str(absolute_test_path)], check=True)
         mock_startfile.assert_not_called()
@@ -167,7 +167,7 @@ def test_open_file_for_user_absolute_path(mock_startfile, mock_run):
     mock_run.reset_mock()
 
     # Test Linux/Other
-    with patch("image_metadata_analyzer.visualizer.sys.platform", "linux"):
+    with patch("photo_selector_toolbox.visualizer.sys.platform", "linux"):
         _open_file_for_user(test_path)
         mock_run.assert_called_once_with(["xdg-open", str(absolute_test_path)], check=True)
         mock_startfile.assert_not_called()

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from image_metadata_analyzer.duplicates import (
+from photo_selector_toolbox.duplicates import (
     find_duplicates,
     move_to_trash,
     get_file_hash,
@@ -86,7 +86,7 @@ def test_find_duplicates_progress_callback(temp_image_folder):
     mock_callback.assert_called_with(4, 4)
 
 
-@patch("image_metadata_analyzer.duplicates.send2trash")
+@patch("photo_selector_toolbox.duplicates.send2trash")
 def test_move_to_trash(mock_send2trash, tmp_path):
     f = tmp_path / "delete_me.txt"
     f.touch()
@@ -95,7 +95,7 @@ def test_move_to_trash(mock_send2trash, tmp_path):
     mock_send2trash.assert_called_once_with(str(f))
 
 
-@patch("image_metadata_analyzer.duplicates.send2trash")
+@patch("photo_selector_toolbox.duplicates.send2trash")
 def test_move_to_trash_failure(mock_send2trash, tmp_path):
     mock_send2trash.side_effect = OSError("Access denied")
     f = tmp_path / "delete_me.txt"

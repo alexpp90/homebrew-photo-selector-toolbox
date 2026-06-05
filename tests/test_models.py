@@ -1,5 +1,5 @@
 from pathlib import Path
-from image_metadata_analyzer.models import ScanResult, ExifData
+from photo_selector_toolbox.models import ScanResult, ExifData
 
 
 def test_scan_result_initialization():

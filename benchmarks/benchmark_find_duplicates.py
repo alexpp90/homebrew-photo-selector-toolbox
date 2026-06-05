@@ -2,7 +2,7 @@ import time
 import os
 import shutil
 from pathlib import Path
-from image_metadata_analyzer.duplicates import find_duplicates
+from photo_selector_toolbox.duplicates import find_duplicates
 
 def setup_test_files(base_dir, num_files, size_bytes):
     base_path = Path(base_dir)

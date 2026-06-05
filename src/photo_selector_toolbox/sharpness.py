@@ -24,8 +24,8 @@ import glob
 from typing import List, Optional, Any
 import logging
 from PIL import Image
-from image_metadata_analyzer.reader import RAW_EXTENSIONS
-from image_metadata_analyzer.tools import AnalysisTool, ToolRegistry
+from photo_selector_toolbox.reader import RAW_EXTENSIONS
+from photo_selector_toolbox.tools import AnalysisTool, ToolRegistry
 
 logger = logging.getLogger(__name__)
 

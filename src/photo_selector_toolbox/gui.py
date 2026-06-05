@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 # Use a relative import or absolute based on package structure
 # Assuming this runs as a module
-from image_metadata_analyzer.reader import get_exif_data, SUPPORTED_EXTENSIONS
-from image_metadata_analyzer.analyzer import analyze_data
-from image_metadata_analyzer.utils import resolve_path, load_image_preview
-from image_metadata_analyzer.visualizer import (
+from photo_selector_toolbox.reader import get_exif_data, SUPPORTED_EXTENSIONS
+from photo_selector_toolbox.analyzer import analyze_data
+from photo_selector_toolbox.utils import resolve_path, load_image_preview
+from photo_selector_toolbox.visualizer import (
     get_shutter_speed_plot,
     get_aperture_plot,
     get_iso_plot,
@@ -26,8 +26,8 @@ from image_metadata_analyzer.visualizer import (
     get_equivalent_focal_length_plot,
     get_apsc_equivalent_focal_length_plot,
 )
-from image_metadata_analyzer.duplicates import find_duplicates, move_to_trash
-from image_metadata_analyzer.sharpness_gui import SharpnessTool
+from photo_selector_toolbox.duplicates import find_duplicates, move_to_trash
+from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
 
 class QueueHandler(logging.Handler):

@@ -1,9 +1,9 @@
-# Image Metadata Analyzer - Requirements Documentation
+# Photo Selector Toolbox - Requirements Documentation
 
-This document serves as the central source of truth for the functional, architectural, and business requirements of the Image Metadata Analyzer project. It must be kept up-to-date as new features are added or existing features are modified.
+This document serves as the central source of truth for the functional, architectural, and business requirements of the Photo Selector Toolbox project. It must be kept up-to-date as new features are added or existing features are modified.
 
 ## 1. Introduction
-The Image Metadata Analyzer is a cross-platform desktop application designed to process folders of images. It extracts and analyzes EXIF metadata (Shutter Speed, Aperture, ISO, Focal Length, Lens Model), generates statistical distributions, and provides advanced tools such as an Image Comparator (for detecting sharpness and blur) and a Duplicate Finder.
+The Photo Selector Toolbox is a cross-platform desktop application designed to process folders of images. It extracts and analyzes EXIF metadata (Shutter Speed, Aperture, ISO, Focal Length, Lens Model), generates statistical distributions, and provides advanced tools such as an Image Comparator (for detecting sharpness and blur) and a Duplicate Finder.
 
 ## 2. Core Features & Business Logic
 
@@ -11,7 +11,7 @@ The Image Metadata Analyzer is a cross-platform desktop application designed to 
 *   **EXIF Data Standardization:** Extracted EXIF data must standardize on explicit keys: `Aperture` and `Shutter Speed`. Downstream consumers (e.g., the GUI) must rely on these standardized keys, avoiding raw tags like `FNumber` or `ExposureTime`.
 *   **Focal Length Exclusions:** Statistical aggregations and plotting for Focal Length must explicitly exclude values less than or equal to `0.0 mm` to prevent division-by-zero errors.
 *   **Shutter Speed Formatting:** In the GUI, shutter speed values less than `1.0` and greater than `0` must be formatted as fractions (e.g., `1/200s`). Values `1.0` or greater must be appended with `s` (e.g., `1.5s`).
-*   **Supported File Types:** Supported file extensions are defined centrally in `src/image_metadata_analyzer/reader.py` as `SUPPORTED_EXTENSIONS`. Other tools (like `duplicates.py`) must import this list and may extend it locally (e.g., appending `.bmp` and `.gif`).
+*   **Supported File Types:** Supported file extensions are defined centrally in `src/photo_selector_toolbox/reader.py` as `SUPPORTED_EXTENSIONS`. Other tools (like `duplicates.py`) must import this list and may extend it locally (e.g., appending `.bmp` and `.gif`).
 
 ### 2.2 Image Comparator (Sharpness Tool)
 *   **Sharpness Algorithm:** The sharpness analysis algorithm crops the center 50% of the image, divides it into a configurable grid (default 8x8), and uses the maximum block variance score to determine overall sharpness.
@@ -91,17 +91,22 @@ The Image Metadata Analyzer is a cross-platform desktop application designed to 
 *   **Runner Requirements:** Windows builds target the `windows-latest` runner (x64). MacOS builds must strictly target `macos-latest` (Apple Silicon/ARM64); legacy Intel and macOS v15+ specific builds are deprecated.
 *   **Archive Creation:** The build workflow must use `zip -r -y` on Unix systems (to preserve symlinks) and `shutil.make_archive` on Windows for creating release archives.
 *   **Artifact Naming:** Artifacts must be named exactly as follows:
-    *   `image-metadata-analyzer-linux-x64`
-    *   `image-metadata-analyzer-windows-x64`
-    *   `image-metadata-analyzer-macos-apple-silicon`
+    *   `photo-selector-toolbox-linux-x64`
+    *   `photo-selector-toolbox-windows-x64`
+    *   `photo-selector-toolbox-macos-apple-silicon`
 
 ### 5.2 Release Management
 *   **Permissions:** GitHub Actions require `permissions: contents: write` to allow the workflow to create and update releases.
 *   **Publishing Strategy:** The project utilizes `softprops/action-gh-release` to automatically publish artifacts to the `nightly` tag on every push to the `main` branch.
 
+### 5.3 Homebrew Distribution (macOS)
+*   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing a Cask definition for the macOS nightly build.
+*   **Auto-Update:** The CI workflow automatically updates the Cask's SHA256 hash after every nightly release publish, enabling `brew upgrade --cask --greedy` to pick up new builds.
+*   **Install Artifacts:** The Cask installs the `.app` bundle to `/Applications` and symlinks the CLI binary into Homebrew's bin directory.
+
 ## 6. Testing Requirements
 
 *   **Path Resolution Tests:** The `resolve_path` utility must be tested across simulated platforms (Linux, macOS, Windows) using mocking for `sys.platform` and `os.getuid`.
-*   **GUI Unit Tests:** Tests validating GUI components (e.g., `tests/test_sharpness_gui_basic.py`) require extensive mocking of `tkinter`, `PIL`, and `image_metadata_analyzer` dependencies due to the lack of a display environment in CI runners.
+*   **GUI Unit Tests:** Tests validating GUI components (e.g., `tests/test_sharpness_gui_basic.py`) require extensive mocking of `tkinter`, `PIL`, and `photo_selector_toolbox` dependencies due to the lack of a display environment in CI runners.
 *   **Headless Execution:** To run or test standalone Tkinter GUI scripts headlessly in the development environment, developers must use `xvfb-run` (e.g., `poetry run xvfb-run python3 script.py`) to avoid `_tkinter.TclError` exceptions.
 *   **Execution Command:** Tests should be executed using `poetry run pytest tests/` after ensuring dependencies are installed via `poetry install`.

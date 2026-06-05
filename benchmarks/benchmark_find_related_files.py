@@ -1,7 +1,7 @@
 import timeit
 import tempfile
 from pathlib import Path
-from image_metadata_analyzer.sharpness import find_related_files
+from photo_selector_toolbox.sharpness import find_related_files
 
 def setup_test_env(num_files=10000):
     temp_dir = tempfile.TemporaryDirectory()

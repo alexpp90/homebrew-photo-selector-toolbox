@@ -1,5 +1,5 @@
 [project]
-name = "image-metadata-analyzer"
+name = "photo-selector-toolbox"
 version = "0.1.0"
 description = "A tool to analyze image metadata and provide statistics."
 authors = [
@@ -20,8 +20,8 @@ dependencies = [
 ]
 
 [project.scripts]
-image-metadata-analyzer = "image_metadata_analyzer.cli:main"
-image-metadata-gui = "image_metadata_analyzer.gui:main"
+photo-selector-toolbox = "photo_selector_toolbox.cli:main"
+photo-selector-gui = "photo_selector_toolbox.gui:main"
 
 [dependency-groups]
 dev = [

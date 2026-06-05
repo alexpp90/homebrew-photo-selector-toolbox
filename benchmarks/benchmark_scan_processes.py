@@ -1,8 +1,8 @@
 import time
 import os
 from pathlib import Path
-from image_metadata_analyzer.controllers import ScanController
-from image_metadata_analyzer.models import ScanResult
+from photo_selector_toolbox.controllers import ScanController
+from photo_selector_toolbox.models import ScanResult
 from concurrent.futures import ProcessPoolExecutor
 
 def dummy_progress(res, i, total):
@@ -31,8 +31,8 @@ def setup_test_images():
     return files
 
 def process_file(f, grid_size, tools):
-    from image_metadata_analyzer.sharpness import calculate_sharpness, calculate_noise
-    from image_metadata_analyzer.reader import get_exif_data
+    from photo_selector_toolbox.sharpness import calculate_sharpness, calculate_noise
+    from photo_selector_toolbox.reader import get_exif_data
 
     score = "N/A"
     if tools.get("sharpness", False):

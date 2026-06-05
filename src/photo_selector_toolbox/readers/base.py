@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional, List
-from image_metadata_analyzer.models import ExifData
+from photo_selector_toolbox.models import ExifData
 
 logger = logging.getLogger(__name__)
 

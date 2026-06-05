@@ -6,10 +6,10 @@ from typing import Dict, Optional, Callable, List, Union
 from pathlib import Path
 from PIL import Image
 
-from image_metadata_analyzer.utils import load_image_preview
-from image_metadata_analyzer.models import ScanResult
-from image_metadata_analyzer.reader import get_exif_data
-from image_metadata_analyzer.tools import ToolRegistry
+from photo_selector_toolbox.utils import load_image_preview
+from photo_selector_toolbox.models import ScanResult
+from photo_selector_toolbox.reader import get_exif_data
+from photo_selector_toolbox.tools import ToolRegistry
 
 logger = logging.getLogger(__name__)
 

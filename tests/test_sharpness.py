@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 import numpy as np
 from unittest.mock import patch, MagicMock
-from image_metadata_analyzer.sharpness import (
+from photo_selector_toolbox.sharpness import (
     calculate_sharpness,
     calculate_noise,
     categorize_sharpness,
@@ -11,7 +11,7 @@ from image_metadata_analyzer.sharpness import (
     get_image_data,
     rawpy,
 )
-import image_metadata_analyzer.sharpness as shp
+import photo_selector_toolbox.sharpness as shp
 
 
 # Mock data for testing

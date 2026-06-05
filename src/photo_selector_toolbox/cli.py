@@ -5,9 +5,9 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from image_metadata_analyzer.reader import get_exif_data, SUPPORTED_EXTENSIONS
-from image_metadata_analyzer.analyzer import analyze_data
-from image_metadata_analyzer.visualizer import create_plots
+from photo_selector_toolbox.reader import get_exif_data, SUPPORTED_EXTENSIONS
+from photo_selector_toolbox.analyzer import analyze_data
+from photo_selector_toolbox.visualizer import create_plots
 
 
 def main():

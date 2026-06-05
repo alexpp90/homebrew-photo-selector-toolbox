@@ -1,8 +1,8 @@
 import time
 import os
 from pathlib import Path
-from image_metadata_analyzer.controllers import ScanController
-from image_metadata_analyzer.models import ScanResult
+from photo_selector_toolbox.controllers import ScanController
+from photo_selector_toolbox.models import ScanResult
 
 def dummy_progress(res, i, total):
     pass

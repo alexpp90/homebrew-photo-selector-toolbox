@@ -9,15 +9,15 @@ from tkinter import filedialog, messagebox, ttk
 import send2trash
 from PIL import Image, ImageTk
 
-from image_metadata_analyzer.sharpness import (
+from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
-from image_metadata_analyzer.utils import load_image_preview
-from image_metadata_analyzer.formatting import format_score, format_meta
-from image_metadata_analyzer.controllers import ImageCacheManager, ScanController
-from image_metadata_analyzer.models import ScanResult
-from image_metadata_analyzer.fullscreen_viewer import FullscreenViewer
-from image_metadata_analyzer.image_panels import ImagePanelsMixin
+from photo_selector_toolbox.utils import load_image_preview
+from photo_selector_toolbox.formatting import format_score, format_meta
+from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
+from photo_selector_toolbox.models import ScanResult
+from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+from photo_selector_toolbox.image_panels import ImagePanelsMixin
 
 logger = logging.getLogger(__name__)
 
@@ -601,7 +601,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.update()
 
         p = Path(folder_path)
-        from image_metadata_analyzer.reader import SUPPORTED_EXTENSIONS
+        from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS
 
         extensions = SUPPORTED_EXTENSIONS
         files = [f for f in p.rglob("*") if f.suffix.lower() in extensions]
