@@ -178,23 +178,17 @@ class FullscreenViewer(tk.Toplevel):
 
         dialog = tk.Toplevel(self)
         dialog.title("Confirm Delete")
-        dialog.geometry("400x150")
         dialog.resizable(False, False)
         dialog.transient(self)
         dialog.grab_set()
 
-        # Center on FullscreenViewer
-        x = self.winfo_x() + (self.winfo_width() - 400) // 2
-        y = self.winfo_y() + (self.winfo_height() - 150) // 2
-        dialog.geometry(f"+{x}+{y}")
-
         msg = f"Are you sure you want to move '{self.path.name}' and related files to trash?\n\n(Press Delete again to confirm)"
         ttk.Label(dialog, text=msg, justify="center", wraplength=350).pack(
-            pady=20, padx=20
+            pady=(20, 10), padx=20
         )
 
         btn_frame = ttk.Frame(dialog)
-        btn_frame.pack(fill="x", padx=20, pady=10)
+        btn_frame.pack(fill="x", padx=20, pady=(10, 20))
 
         def on_confirm(*args):
             dialog.destroy()
@@ -207,6 +201,20 @@ class FullscreenViewer(tk.Toplevel):
         yes_btn.pack(side="left", expand=True, padx=5)
         no_btn = ttk.Button(btn_frame, text="No", command=on_cancel)
         no_btn.pack(side="right", expand=True, padx=5)
+
+        # Let Tkinter calculate the required size, setting a minimum geometry
+        dialog.update_idletasks()
+        try:
+            width = max(400, int(dialog.winfo_reqwidth()))
+            height = max(180, int(dialog.winfo_reqheight()))
+        except (TypeError, ValueError):
+            width = 400
+            height = 180
+
+        # Center on FullscreenViewer
+        x = self.winfo_x() + (self.winfo_width() - width) // 2
+        y = self.winfo_y() + (self.winfo_height() - height) // 2
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
 
         dialog.bind("<Delete>", on_confirm)
         dialog.bind("<BackSpace>", on_confirm)

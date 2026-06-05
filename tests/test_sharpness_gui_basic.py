@@ -127,3 +127,32 @@ def test_sharpness_tool_filtering():
                 
                 assert len(tool.candidates) == 4
 
+
+def test_update_scan_button_state_no_recreation():
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
+    ):
+        tool = SharpnessTool(parent)
+        # Verify that setup_review_ui created preview_area
+        assert hasattr(tool, "preview_area")
+        
+        # Save reference of preview_area
+        initial_preview_area = tool.preview_area
+        
+        # Call update_scan_button_state multiple times
+        tool.update_scan_button_state()
+        tool.is_scanning = True
+        tool.update_scan_button_state()
+        tool.is_scanning = False
+        tool.update_scan_button_state()
+        
+        # Verify preview_area is still the same object and not recreated
+        assert tool.preview_area is initial_preview_area
+
+

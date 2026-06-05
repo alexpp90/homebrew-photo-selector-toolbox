@@ -15,6 +15,10 @@
     "build_agent": {
       "model": "claude-sonnet-4-20250514",
       "description": "Build/CI specialist for scripts/, .github/workflows/, and pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing."
+    },
+    "photo_researcher_agent": {
+      "model": "claude-sonnet-4-20250514",
+      "description": "Photo technical and artistic research specialist. Consulted when requirements are vague, requiring deep domain knowledge in photography, metadata standards, image quality metrics, or color science."
     }
   }
 }

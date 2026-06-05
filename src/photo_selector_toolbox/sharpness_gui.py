@@ -56,8 +56,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.bind_all("<Delete>", self.on_delete_key)
         self.bind_all("<BackSpace>", self.on_delete_key)
 
+    def _resolve_widget(self, widget_val):
+        if isinstance(widget_val, str):
+            try:
+                return self.nametowidget(widget_val)
+            except Exception:
+                return None
+        return widget_val
+
     def on_escape_key(self, event):
-        if event.widget.winfo_toplevel() != self.winfo_toplevel():
+        widget = self._resolve_widget(event.widget)
+        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
             return
         # We only want to process this if we are in the SharpnessTool (specifically Review tab)
         # Note: Event binding on toplevel can be global, but FullscreenViewer intercepts Escape as well
@@ -68,30 +77,33 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.toggle_focus_mode()
 
     def on_left_key(self, event):
-        if event.widget.winfo_toplevel() != self.winfo_toplevel():
+        widget = self._resolve_widget(event.widget)
+        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
             return
         # Don't trigger if user is typing in a text entry
-        if isinstance(event.widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
             return
         if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
             return
         self.prev_candidate()
 
     def on_right_key(self, event):
-        if event.widget.winfo_toplevel() != self.winfo_toplevel():
+        widget = self._resolve_widget(event.widget)
+        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
             return
         # Don't trigger if user is typing in a text entry
-        if isinstance(event.widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
             return
         if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
             return
         self.next_candidate()
 
     def on_delete_key(self, event):
-        if event.widget.winfo_toplevel() != self.winfo_toplevel():
+        widget = self._resolve_widget(event.widget)
+        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
             return
         # Don't trigger if user is typing in a text entry
-        if isinstance(event.widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
             return
         if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
             return
@@ -102,7 +114,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.tool_sharpness_var = tk.BooleanVar(value=True)
         self.grid_size_var = tk.StringVar(value=self.default_grid_size)
         self.tool_noise_var = tk.BooleanVar(value=False)
-        self.tool_dummy2_var = tk.BooleanVar(value=False)
+        self.tool_highlight_var = tk.BooleanVar(value=False)
+        self.tool_shadow_var = tk.BooleanVar(value=False)
 
         # Notebook for switching between Photo Selector and Analysis Logs
         self.notebook = ttk.Notebook(self)
@@ -209,87 +222,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.candidate_listbox.bind("<<ListboxSelect>>", self.on_candidate_select)
 
-    def show_scan_dialog(self):
-        # Ensure a folder is selected first
-        folder = self.folder_var.get()
-        if not folder or not Path(folder).exists():
-            messagebox.showerror("Error", "Please select a valid folder first.")
-            return
-
-        dialog = tk.Toplevel(self)
-        dialog.title("Scan Settings")
-        dialog.geometry("500x300")
-        dialog.resizable(False, False)
-        dialog.transient(self.winfo_toplevel())
-        dialog.grab_set()
-
-        # Center on parent
-        parent = self.winfo_toplevel()
-        x = parent.winfo_x() + (parent.winfo_width() - 500) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - 300) // 2
-        dialog.geometry(f"+{x}+{y}")
-
-        # Label
-        ttk.Label(
-            dialog,
-            text="Configure Sharpness & Noise Analysis",
-            font=("Helvetica", 12, "bold")
-        ).pack(pady=15)
-
-        # Container
-        container = ttk.Frame(dialog, padding=10)
-        container.pack(fill="both", expand=True)
-
-        # Sharpness row
-        sharpness_row = ttk.Frame(container)
-        sharpness_row.pack(fill="x", pady=5)
-        ttk.Checkbutton(
-            sharpness_row, text="Sharpness Analysis", variable=self.tool_sharpness_var
-        ).pack(side="left", padx=5)
-
-        ttk.Label(sharpness_row, text="Grid Analysis Size:").pack(
-            side="left", padx=(20, 5)
-        )
-        grid_combo = ttk.Combobox(
-            sharpness_row,
-            textvariable=self.grid_size_var,
-            values=["1x1 (Global)", "2x2", "3x3", "4x4", "5x5", "8x8"],
-            state="readonly",
-            width=12,
-        )
-        grid_combo.pack(side="left", padx=5)
-
-        # Noise row
-        noise_row = ttk.Frame(container)
-        noise_row.pack(fill="x", pady=5)
-        ttk.Checkbutton(
-            noise_row, text="Noise Analysis", variable=self.tool_noise_var
-        ).pack(side="left", padx=5)
-
-        # Dummy tool row
-        dummy_row = ttk.Frame(container)
-        dummy_row.pack(fill="x", pady=5)
-        ttk.Checkbutton(
-            dummy_row, text="Dummy Tool 2", variable=self.tool_dummy2_var
-        ).pack(side="left", padx=5)
-
-        # Buttons
-        btn_frame = ttk.Frame(dialog, padding=10)
-        btn_frame.pack(fill="x")
-
-        def start_and_close():
-            dialog.destroy()
-            self.start_scan()
-
-        ttk.Button(btn_frame, text="Start Scan", command=start_and_close).pack(side="left", expand=True, padx=5)
-        ttk.Button(btn_frame, text="Cancel", command=dialog.destroy).pack(side="right", expand=True, padx=5)
-
-    def update_scan_button_state(self):
-        if self.is_scanning:
-            self.scan_options_btn.config(text="Cancel Scan", command=self.cancel_scan)
-        else:
-            self.scan_options_btn.config(text="Scan for Sharpness/Noise...", command=self.show_scan_dialog)
-
         # Main Preview Area
         self.preview_area = ttk.Frame(self.paned, padding=10)
         self.paned.add(self.preview_area, weight=4)
@@ -371,6 +303,96 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.panel_next = self.create_image_panel(self.bottom_container, "Next Image")
         self.panel_next.pack(side="right", fill="both", expand=True, padx=2)
 
+
+    def show_scan_dialog(self):
+        # Ensure a folder is selected first
+        folder = self.folder_var.get()
+        if not folder or not Path(folder).exists():
+            messagebox.showerror("Error", "Please select a valid folder first.")
+            return
+
+        dialog = tk.Toplevel(self)
+        dialog.title("Scan Settings")
+        dialog.geometry("500x300")
+        dialog.resizable(False, False)
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+
+        # Center on parent
+        parent = self.winfo_toplevel()
+        x = parent.winfo_x() + (parent.winfo_width() - 500) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - 300) // 2
+        dialog.geometry(f"+{x}+{y}")
+
+        # Label
+        ttk.Label(
+            dialog,
+            text="Configure Sharpness & Noise Analysis",
+            font=("Helvetica", 12, "bold")
+        ).pack(pady=15)
+
+        # Container
+        container = ttk.Frame(dialog, padding=10)
+        container.pack(fill="both", expand=True)
+
+        # Sharpness row
+        sharpness_row = ttk.Frame(container)
+        sharpness_row.pack(fill="x", pady=5)
+        ttk.Checkbutton(
+            sharpness_row, text="Sharpness Analysis", variable=self.tool_sharpness_var
+        ).pack(side="left", padx=5)
+
+        ttk.Label(sharpness_row, text="Grid Analysis Size:").pack(
+            side="left", padx=(20, 5)
+        )
+        grid_combo = ttk.Combobox(
+            sharpness_row,
+            textvariable=self.grid_size_var,
+            values=["1x1 (Global)", "2x2", "3x3", "4x4", "5x5", "8x8"],
+            state="readonly",
+            width=12,
+        )
+        grid_combo.pack(side="left", padx=5)
+
+        # Noise row
+        noise_row = ttk.Frame(container)
+        noise_row.pack(fill="x", pady=5)
+        ttk.Checkbutton(
+            noise_row, text="Noise Analysis", variable=self.tool_noise_var
+        ).pack(side="left", padx=5)
+
+        # Highlight clipping row
+        hl_row = ttk.Frame(container)
+        hl_row.pack(fill="x", pady=5)
+        ttk.Checkbutton(
+            hl_row, text="Highlight Clipping Analysis", variable=self.tool_highlight_var
+        ).pack(side="left", padx=5)
+
+        # Shadow clipping row
+        sd_row = ttk.Frame(container)
+        sd_row.pack(fill="x", pady=5)
+        ttk.Checkbutton(
+            sd_row, text="Shadow Clipping Analysis", variable=self.tool_shadow_var
+        ).pack(side="left", padx=5)
+
+        # Buttons
+        btn_frame = ttk.Frame(dialog, padding=10)
+        btn_frame.pack(fill="x")
+
+        def start_and_close():
+            dialog.destroy()
+            self.start_scan()
+
+        ttk.Button(btn_frame, text="Start Scan", command=start_and_close).pack(side="left", expand=True, padx=5)
+        ttk.Button(btn_frame, text="Cancel", command=dialog.destroy).pack(side="right", expand=True, padx=5)
+
+    def update_scan_button_state(self):
+        if self.is_scanning:
+            self.scan_options_btn.config(text="Cancel Scan", command=self.cancel_scan)
+        else:
+            self.scan_options_btn.config(text="Scan for Sharpness/Noise...", command=self.show_scan_dialog)
+
+
     def setup_focus_ui(self):
         """Builds the fullscreen-optimized focus layout."""
         self.focus_frame = ttk.Frame(self)
@@ -420,6 +442,20 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             font=("Helvetica", 12, "bold"),
         )
         self.focus_noise_lbl.pack(side="top", pady=(0, 5), anchor="w")
+
+        self.focus_hl_lbl = ttk.Label(
+            self.focus_left_panel,
+            text="Highlight Clipping: --",
+            font=("Helvetica", 12, "bold"),
+        )
+        self.focus_hl_lbl.pack(side="top", pady=(0, 5), anchor="w")
+
+        self.focus_sd_lbl = ttk.Label(
+            self.focus_left_panel,
+            text="Shadow Clipping: --",
+            font=("Helvetica", 12, "bold"),
+        )
+        self.focus_sd_lbl.pack(side="top", pady=(0, 5), anchor="w")
 
         self.focus_cat_lbl = ttk.Label(
             self.focus_left_panel, text="", font=("Helvetica", 10)
@@ -662,14 +698,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.candidate_listbox.insert("end", f"{f.name} (Sharpness: N/A)")
 
         if self.candidates:
-            self.notebook.tab(2, state="normal")
             self.log(f"Loaded {len(self.candidates)} images. Ready for review.")
 
             # Select first item
             self.candidate_listbox.selection_set(0)
             self.on_candidate_select(None)
         else:
-            self.notebook.tab(2, state="disabled")
             self.log("No supported images found in the selected folder.")
             messagebox.showinfo(
                 "Folder Load", "No supported images found in the selected folder."
@@ -699,7 +733,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             res = self.files_map.get(f)
             score_text = format_score(res.score) if res else "N/A"
             noise_text = format_score(res.noise_score) if res else "N/A"
-            listbox_text = f"{f.name} (Sharpness: {score_text}, Noise: {noise_text})"
+            hl_score = res.scores.get("highlight_clipping", "N/A") if res else "N/A"
+            sd_score = res.scores.get("shadow_clipping", "N/A") if res else "N/A"
+            hl_text = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
+            sd_text = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
+            listbox_text = f"{f.name} (Sharpness: {score_text}, Noise: {noise_text}, HL: {hl_text}, SD: {sd_text})"
             self.candidate_listbox.insert("end", listbox_text)
 
         if self.candidates:
@@ -728,6 +766,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 self.focus_score_lbl.config(text="Sharpness Score: --")
             if hasattr(self, "focus_noise_lbl"):
                 self.focus_noise_lbl.config(text="Noise Level: --")
+            if hasattr(self, "focus_hl_lbl"):
+                self.focus_hl_lbl.config(text="Highlight Clipping: --")
+            if hasattr(self, "focus_sd_lbl"):
+                self.focus_sd_lbl.config(text="Shadow Clipping: --")
             if hasattr(self, "focus_cat_lbl"):
                 self.focus_cat_lbl.config(text="")
                 self.focus_meta_lbl.config(text="")
@@ -797,6 +839,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         tools = {
             "sharpness": self.tool_sharpness_var.get(),
             "noise": self.tool_noise_var.get(),
+            "highlight_clipping": self.tool_highlight_var.get(),
+            "shadow_clipping": self.tool_shadow_var.get(),
         }
 
         self.scan_controller.run_scan(
@@ -866,13 +910,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             idx = self.candidates.index(path)
             score_text = format_score(result.score)
             noise_text = format_score(result.noise_score)
+            hl_score = result.scores.get("highlight_clipping", "N/A")
+            sd_score = result.scores.get("shadow_clipping", "N/A")
+            hl_text = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
+            sd_text = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
 
             # Delete and reinsert to update text, but maintain selection if it was selected
             is_selected = self.candidate_listbox.curselection() == (idx,)
             self.candidate_listbox.delete(idx)
 
             # Construct display string
-            listbox_text = f"{path.name} (Sharpness: {score_text}, Noise: {noise_text})"
+            listbox_text = f"{path.name} (Sharpness: {score_text}, Noise: {noise_text}, HL: {hl_text}, SD: {sd_text})"
             self.candidate_listbox.insert(idx, listbox_text)
 
             if is_selected:
@@ -1113,6 +1161,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             exif = res.exif
             score_str = format_score(res.score)
             noise_str = format_score(res.noise_score)
+            hl_score = res.scores.get("highlight_clipping", "N/A")
+            sd_score = res.scores.get("shadow_clipping", "N/A")
+            hl_str = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
+            sd_str = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
 
             iso = format_meta(exif.iso if exif else None, "")
             shutter = format_meta(exif.shutter_speed if exif else None, "s")
@@ -1126,6 +1178,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 f"File: {current_path.name}\n"
                 f"Sharpness Score: {score_str}\n"
                 f"Noise Level: {noise_str}\n"
+                f"Highlight Clipping: {hl_str}\n"
+                f"Shadow Clipping: {sd_str}\n"
                 f"{meta_str}"
             )
             self.meta_lbl.config(text=txt)
@@ -1138,6 +1192,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if hasattr(self, "focus_noise_lbl"):
                 self.focus_noise_lbl.config(
                     text=f"Noise Level: {noise_str}"
+                )
+            if hasattr(self, "focus_hl_lbl"):
+                self.focus_hl_lbl.config(
+                    text=f"Highlight Clipping: {hl_str}"
+                )
+            if hasattr(self, "focus_sd_lbl"):
+                self.focus_sd_lbl.config(
+                    text=f"Shadow Clipping: {sd_str}"
                 )
             if hasattr(self, "focus_cat_lbl"):
                 self.focus_cat_lbl.config(text="")
@@ -1152,6 +1214,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 if prev_res:
                     prev_score_str = format_score(prev_res.score)
                     prev_noise_str = format_score(prev_res.noise_score)
+                    prev_hl_score = prev_res.scores.get("highlight_clipping", "N/A")
+                    prev_sd_score = prev_res.scores.get("shadow_clipping", "N/A")
+                    prev_hl_str = format_score(prev_hl_score) + ("%" if isinstance(prev_hl_score, float) else "")
+                    prev_sd_str = format_score(prev_sd_score) + ("%" if isinstance(prev_sd_score, float) else "")
                     prev_exif = prev_res.exif
                     p_iso = format_meta(prev_exif.iso if prev_exif else None, "")
                     p_shutter = format_meta(prev_exif.shutter_speed if prev_exif else None, "s")
@@ -1162,7 +1228,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     prev_text = (
                         f"Previous\n{prev_path.name}\n"
                         f"Sharpness: {prev_score_str}\n"
-                        f"Noise: {prev_noise_str}\n{p_meta}"
+                        f"Noise: {prev_noise_str}\n"
+                        f"HL: {prev_hl_str} | SD: {prev_sd_str}\n{p_meta}"
                     )
                     self.focus_prev_overlay.config(text=prev_text)
                     self.focus_prev_overlay.place(relx=0.0, rely=0.0, anchor="nw")
@@ -1176,6 +1243,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 if next_res:
                     next_score_str = format_score(next_res.score)
                     next_noise_str = format_score(next_res.noise_score)
+                    next_hl_score = next_res.scores.get("highlight_clipping", "N/A")
+                    next_sd_score = next_res.scores.get("shadow_clipping", "N/A")
+                    next_hl_str = format_score(next_hl_score) + ("%" if isinstance(next_hl_score, float) else "")
+                    next_sd_str = format_score(next_sd_score) + ("%" if isinstance(next_sd_score, float) else "")
                     next_exif = next_res.exif
                     n_iso = format_meta(next_exif.iso if next_exif else None, "")
                     n_shutter = format_meta(next_exif.shutter_speed if next_exif else None, "s")
@@ -1186,7 +1257,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     next_text = (
                         f"Next\n{next_path.name}\n"
                         f"Sharpness: {next_score_str}\n"
-                        f"Noise: {next_noise_str}\n{n_meta}"
+                        f"Noise: {next_noise_str}\n"
+                        f"HL: {next_hl_str} | SD: {next_sd_str}\n{n_meta}"
                     )
                     self.focus_next_overlay.config(text=next_text)
                     self.focus_next_overlay.place(relx=0.0, rely=0.0, anchor="nw")
@@ -1231,27 +1303,20 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         dialog = tk.Toplevel(self)
         dialog.title("Confirm Delete")
-        dialog.geometry("400x150")
         dialog.resizable(False, False)
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
-
-        # Center on parent
-        parent = self.winfo_toplevel()
-        x = parent.winfo_x() + (parent.winfo_width() - 400) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - 150) // 2
-        dialog.geometry(f"+{x}+{y}")
 
         msg = (
             f"Are you sure you want to move '{path.name}' and related files to trash?\n\n"
             "(Press Delete again to confirm)"
         )
         ttk.Label(dialog, text=msg, justify="center", wraplength=350).pack(
-            pady=20, padx=20
+            pady=(20, 10), padx=20
         )
 
         btn_frame = ttk.Frame(dialog)
-        btn_frame.pack(fill="x", padx=20, pady=10)
+        btn_frame.pack(fill="x", padx=20, pady=(10, 20))
 
         def on_confirm(*args):
             dialog.destroy()
@@ -1264,6 +1329,21 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         yes_btn.pack(side="left", expand=True, padx=5)
         no_btn = ttk.Button(btn_frame, text="No", command=on_cancel)
         no_btn.pack(side="right", expand=True, padx=5)
+
+        # Let Tkinter calculate the required size, setting a minimum geometry
+        dialog.update_idletasks()
+        try:
+            width = max(400, int(dialog.winfo_reqwidth()))
+            height = max(180, int(dialog.winfo_reqheight()))
+        except (TypeError, ValueError):
+            width = 400
+            height = 180
+
+        # Center on parent
+        parent = self.winfo_toplevel()
+        x = parent.winfo_x() + (parent.winfo_width() - width) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - height) // 2
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
 
         # Bind Delete key to confirm
         dialog.bind("<Delete>", on_confirm)

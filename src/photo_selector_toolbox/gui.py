@@ -687,10 +687,19 @@ class MainApp(tk.Tk):
 
 
 def main():
+    log_level = logging.INFO
+    if "--debug" in sys.argv or "-d" in sys.argv:
+        log_level = logging.DEBUG
+        
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+    if log_level == logging.DEBUG:
+        logger.setLevel(logging.DEBUG)
+        logging.getLogger("photo_selector_toolbox").setLevel(logging.DEBUG)
+        logger.debug("Debug logging enabled.")
+        
     app = MainApp()
     app.mainloop()
 
