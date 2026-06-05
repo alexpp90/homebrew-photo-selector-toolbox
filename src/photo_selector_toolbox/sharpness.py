@@ -267,3 +267,65 @@ class NoiseTool(AnalysisTool):
 
     def analyze(self, filepath: Path, **kwargs: Any) -> float:
         return calculate_noise(filepath)
+
+
+def calculate_highlight_clipping(filepath: Path) -> float:
+    """
+    Estimates the percentage of blown highlights in the image.
+    Converts to grayscale, counts pixels >= 254, and returns the percentage.
+    """
+    img = get_image_data(filepath)
+    if img is None:
+        return 0.0
+
+    try:
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        total = gray.size
+        if total == 0:
+            return 0.0
+        clipped = np.sum(gray >= 254)
+        return float((clipped / total) * 100.0)
+    except Exception as e:
+        logger.error(f"Error calculating highlight clipping for {filepath}: {e}")
+        return 0.0
+
+
+def calculate_shadow_clipping(filepath: Path) -> float:
+    """
+    Estimates the percentage of crushed shadows in the image.
+    Converts to grayscale, counts pixels <= 2, and returns the percentage.
+    """
+    img = get_image_data(filepath)
+    if img is None:
+        return 0.0
+
+    try:
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        total = gray.size
+        if total == 0:
+            return 0.0
+        clipped = np.sum(gray <= 2)
+        return float((clipped / total) * 100.0)
+    except Exception as e:
+        logger.error(f"Error calculating shadow clipping for {filepath}: {e}")
+        return 0.0
+
+
+@ToolRegistry.register
+class HighlightClippingTool(AnalysisTool):
+    name = "highlight_clipping"
+    display_name = "Highlight Clipping"
+
+    def analyze(self, filepath: Path, **kwargs: Any) -> float:
+        return calculate_highlight_clipping(filepath)
+
+
+@ToolRegistry.register
+class ShadowClippingTool(AnalysisTool):
+    name = "shadow_clipping"
+    display_name = "Shadow Clipping"
+
+    def analyze(self, filepath: Path, **kwargs: Any) -> float:
+        return calculate_shadow_clipping(filepath)

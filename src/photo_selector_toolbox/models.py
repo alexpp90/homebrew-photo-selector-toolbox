@@ -56,3 +56,21 @@ class ScanResult:
     @noise_score.setter
     def noise_score(self, val: Union[float, str]):
         self.scores["noise"] = val
+
+    @property
+    def highlight_clipping(self) -> Union[float, str]:
+        """Accessor for highlight clipping score."""
+        return self.scores.get("highlight_clipping", "N/A")
+
+    @highlight_clipping.setter
+    def highlight_clipping(self, val: Union[float, str]):
+        self.scores["highlight_clipping"] = val
+
+    @property
+    def shadow_clipping(self) -> Union[float, str]:
+        """Accessor for shadow clipping score."""
+        return self.scores.get("shadow_clipping", "N/A")
+
+    @shadow_clipping.setter
+    def shadow_clipping(self, val: Union[float, str]):
+        self.scores["shadow_clipping"] = val
