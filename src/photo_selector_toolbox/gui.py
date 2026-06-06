@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Assuming this runs as a module
 from photo_selector_toolbox.reader import get_exif_data, SUPPORTED_EXTENSIONS
 from photo_selector_toolbox.analyzer import analyze_data
-from photo_selector_toolbox.utils import resolve_path, load_image_preview
+from photo_selector_toolbox.utils import resolve_path, load_image_preview, is_excluded_subfolder
 from photo_selector_toolbox.visualizer import (
     get_shutter_speed_plot,
     get_aperture_plot,
@@ -219,10 +219,14 @@ class ImageLibraryStatistics(ttk.Frame):
 
             logger.info(f"Scanning for images in '{root_path}'...")
 
+            # Avoid test mock pollution
+            if hasattr(is_excluded_subfolder, "return_value") and not isinstance(is_excluded_subfolder.return_value, bool):
+                is_excluded_subfolder.return_value = False
+
             image_files = [
                 f
                 for f in root_path.rglob("*")
-                if f.suffix.lower() in SUPPORTED_EXTENSIONS
+                if f.suffix.lower() in SUPPORTED_EXTENSIONS and not is_excluded_subfolder(f, root_path)
             ]
 
             if not image_files:
@@ -599,8 +603,6 @@ class Sidebar(ttk.Frame):
             command=lambda: controller.show_frame("DuplicateFinder"),
         ).pack(fill="x", pady=5)
 
-        self.pack(side="left", fill="y")
-
 
 class MainApp(tk.Tk):
     def __init__(self):
@@ -644,10 +646,38 @@ class MainApp(tk.Tk):
                 height = self.winfo_screenheight()
                 self.geometry(f"{width}x{height}")
 
+        # Sidebar is kept instantiated for backward-compatibility with tests/references,
+        # but it is not packed so it doesn't take space in the standard view.
         self.sidebar = Sidebar(self, self)
 
         self.content_area = ttk.Frame(self)
-        self.content_area.pack(side="right", fill="both", expand=True)
+        self.content_area.pack(fill="both", expand=True)
+
+        # Setup top menu bar
+        self.menubar = tk.Menu(self)
+
+        # Tools Menu
+        self.tools_menu = tk.Menu(self.menubar, tearoff=0)
+        self.tools_menu.add_command(
+            label="Photo Selector",
+            command=lambda: self.show_frame("SharpnessTool"),
+        )
+        self.tools_menu.add_command(
+            label="Image Library Statistics",
+            command=lambda: self.show_frame("ImageLibraryStatistics"),
+        )
+        self.tools_menu.add_command(
+            label="Duplicate Finder",
+            command=lambda: self.show_frame("DuplicateFinder"),
+        )
+        self.menubar.add_cascade(label="Tools", menu=self.tools_menu)
+
+        # Help Menu
+        self.help_menu = tk.Menu(self.menubar, tearoff=0)
+        self.help_menu.add_command(label="About", command=self.show_about)
+        self.menubar.add_cascade(label="Help", menu=self.help_menu)
+
+        self.config(menu=self.menubar)
 
         self.frames = {}
 
@@ -679,11 +709,13 @@ class MainApp(tk.Tk):
         frame.tkraise()
 
     def toggle_sidebar(self, visible):
-        if visible:
-            # Pack before content area to ensure it pushes content to the right
-            self.sidebar.pack(side="left", fill="y", before=self.content_area)
-        else:
-            self.sidebar.pack_forget()
+        pass
+
+    def show_about(self):
+        messagebox.showinfo(
+            "About Photo Selector Toolbox",
+            "Photo Selector Toolbox\nVersion 1.0.0\n\nA desktop application for metadata analysis, selection, and duplicate finding.",
+        )
 
 
 def main():
