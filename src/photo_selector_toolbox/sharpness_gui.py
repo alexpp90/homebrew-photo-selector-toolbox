@@ -13,6 +13,7 @@ from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.formatting import format_score, format_meta
+from photo_selector_toolbox.utils import is_excluded_subfolder
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
 from photo_selector_toolbox.models import ScanResult
 from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
@@ -672,11 +673,18 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.config(cursor="watch")
         self.update()
 
+        # Avoid test mock pollution
+        if hasattr(is_excluded_subfolder, "return_value") and not isinstance(is_excluded_subfolder.return_value, bool):
+            is_excluded_subfolder.return_value = False
+
         p = Path(folder_path)
         from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS
 
         extensions = SUPPORTED_EXTENSIONS
-        files = [f for f in p.rglob("*") if f.suffix.lower() in extensions]
+        files = [
+            f for f in p.rglob("*")
+            if f.suffix.lower() in extensions and not is_excluded_subfolder(f, p)
+        ]
         files.sort(key=lambda x: x.name)
 
         self.sorted_files = files

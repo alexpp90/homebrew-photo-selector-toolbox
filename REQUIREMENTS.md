@@ -12,6 +12,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Focal Length Exclusions:** Statistical aggregations and plotting for Focal Length must explicitly exclude values less than or equal to `0.0 mm` to prevent division-by-zero errors.
 *   **Shutter Speed Formatting:** In the GUI, shutter speed values less than `1.0` and greater than `0` must be formatted as fractions (e.g., `1/200s`). Values `1.0` or greater must be appended with `s` (e.g., `1.5s`).
 *   **Supported File Types:** Supported file extensions are defined centrally in `src/photo_selector_toolbox/reader.py` as `SUPPORTED_EXTENSIONS`. Other tools (like `duplicates.py`) must import this list and may extend it locally (e.g., appending `.bmp` and `.gif`).
+*   **Subfolder Scanning Exclusions:** Recursive directory scanning in all tools (Metadata Analyzer, Photo Selector, and Duplicate Finder) must automatically exclude subfolders named `Selection` or `Selected` (case-insensitively), preventing previously selected images from being re-scanned, unless the `Selection` or `Selected` directory is specifically selected as the root scan folder.
 
 ### 2.2 Photo Selector (Sharpness & Noise Tool)
 *   **Sharpness Algorithm:** The sharpness analysis algorithm crops the center 50% of the image, divides it into a configurable grid (default 8x8), and uses the maximum block variance score to determine overall sharpness.
@@ -42,10 +43,11 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Resize Optimization:** Image resizing via `<Configure>` events must be optimized by caching `_last_width` and `_last_height` to prevent redundant processing, and the events must be debounced to stop continuous loops.
 *   **Unscaled References:** The application must explicitly store the raw, unscaled `pil_image` to support high-quality responsive resizing when window adjustments occur.
 *   **Preloader Cache:** The background image preloader cache size (`CACHE_SIZE`) must be strictly set to 1200x900 to guarantee high-resolution images for responsive UI scaling.
+*   **Menu Bar Navigation:** To ensure the tools do not take up space in standard view, the sidebar is removed. Navigation between the tools (Photo Selector, Image Library Statistics, and Duplicate Finder) is handled via the top menu bar's "Tools" menu, next to a "Help" menu.
 
 ### 3.2 Display Modes (Sharpness Tool)
 *   **Standard Mode Layout:** The current image is centered in the top row, with previous/next images side-by-side in the bottom row.
-*   **Focus Mode Layout:** Hides the sidebar. Uses a grid layout where the top row is split evenly (weight=1 for both columns) between the current image and controls panel. The bottom row splits the previous and next images evenly, ensuring all three displayed images share the exact same dimensions.
+*   **Focus Mode Layout:** Uses a grid layout where the top row is split evenly (weight=1 for both columns) between the current image and controls panel. The bottom row splits the previous and next images evenly, ensuring all three displayed images share the exact same dimensions.
 *   **Image Reloading:** Switching views (Standard vs. Focus) triggers a reload of the image triplet to ensure the correct resolution is generated for the specific layout.
 *   **Navigation Interactions:** In Focus Mode, clicking a non-central image (Previous/Next) must open it in a fullscreen viewer (via `tk.Toplevel`) instead of making it the new current image.
 *   **Fullscreen Viewer:**

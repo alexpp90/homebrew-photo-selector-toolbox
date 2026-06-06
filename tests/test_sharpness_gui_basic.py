@@ -19,7 +19,10 @@ def mock_sys_modules():
     ]
     for name in modules_to_mock:
         original_modules[name] = sys.modules.get(name)
-        sys.modules[name] = MagicMock()
+        mock_mod = MagicMock()
+        if name == "photo_selector_toolbox.utils":
+            mock_mod.is_excluded_subfolder.return_value = False
+        sys.modules[name] = mock_mod
         
     yield
     

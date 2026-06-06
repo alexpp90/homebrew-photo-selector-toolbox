@@ -275,3 +275,22 @@ def load_image_preview(
         # Catch common image loading/processing errors
         logger.warning(f"Failed to load image preview for {path}: {e}")
         return None
+
+
+def is_excluded_subfolder(file_path: Path, root_path: Path) -> bool:
+    """
+    Checks if a file_path is located inside a subfolder named 'Selection' or 'Selected'
+    under root_path, to exclude it from scanning.
+    But if the root_path itself is named 'Selection' or 'Selected' (e.g. specifically selected),
+    it is not excluded.
+    """
+    try:
+        relative = file_path.relative_to(root_path)
+        # Check all parts of the relative path except the last one (the filename)
+        for part in relative.parts[:-1]:
+            if part.lower() in ("selection", "selected"):
+                return True
+    except ValueError:
+        pass
+    return False
+

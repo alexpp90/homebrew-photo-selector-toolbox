@@ -67,7 +67,8 @@ def find_duplicates(root_folder, callback=None):
                             except OSError:
                                 pass
                     elif entry.is_dir(follow_symlinks=False):
-                        _scan(entry.path)
+                        if entry.name.lower() not in ("selection", "selected"):
+                            _scan(entry.path)
         except OSError:
             pass
 

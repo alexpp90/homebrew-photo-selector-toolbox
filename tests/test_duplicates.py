@@ -102,3 +102,32 @@ def test_move_to_trash_failure(mock_send2trash, tmp_path):
 
     with pytest.raises(OSError):
         move_to_trash(f)
+
+
+def test_find_duplicates_excludes_subfolders(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+
+    selection_dir = root / "Selection"
+    selection_dir.mkdir()
+
+    (root / "a.jpg").write_bytes(b"content_X")
+    (root / "b.jpg").write_bytes(b"content_X")
+
+    (selection_dir / "c.jpg").write_bytes(b"content_X")
+    (selection_dir / "d.jpg").write_bytes(b"content_X")
+
+    # 1. Scanning from root: should find only a.jpg and b.jpg (since Selection folder is skipped)
+    duplicates = find_duplicates(root)
+    assert len(duplicates) == 1
+    group = duplicates[0]
+    filenames = {p.name for p in group["files"]}
+    assert filenames == {"a.jpg", "b.jpg"}
+
+    # 2. Scanning from specifically selected Selection folder: should scan inside it
+    duplicates_selection = find_duplicates(selection_dir)
+    assert len(duplicates_selection) == 1
+    group_sel = duplicates_selection[0]
+    filenames_sel = {p.name for p in group_sel["files"]}
+    assert filenames_sel == {"c.jpg", "d.jpg"}
+

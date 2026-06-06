@@ -29,7 +29,7 @@ except ImportError:
 import unittest
 from unittest.mock import patch
 from pathlib import Path
-from photo_selector_toolbox.utils import resolve_path, get_exiftool_path, load_image_preview
+from photo_selector_toolbox.utils import resolve_path, get_exiftool_path, load_image_preview, is_excluded_subfolder
 
 class TestGetExiftoolPath(unittest.TestCase):
 
@@ -237,5 +237,35 @@ class TestLoadImagePreview(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class TestIsExcludedSubfolder(unittest.TestCase):
+    def test_excluded_subfolders(self):
+        root = Path("/Users/alex/Photos")
+        # Subfolder named 'Selection'
+        self.assertTrue(is_excluded_subfolder(root / "Selection" / "img.jpg", root))
+        # Subfolder named 'Selected'
+        self.assertTrue(is_excluded_subfolder(root / "Selected" / "img.jpg", root))
+        # Case insensitive
+        self.assertTrue(is_excluded_subfolder(root / "selection" / "img.jpg", root))
+        self.assertTrue(is_excluded_subfolder(root / "selected" / "img.jpg", root))
+        self.assertTrue(is_excluded_subfolder(root / "SELECTION" / "sub" / "img.jpg", root))
+
+    def test_not_excluded_when_root(self):
+        # Specifically selected root
+        root = Path("/Users/alex/Photos/Selection")
+        self.assertFalse(is_excluded_subfolder(root / "img.jpg", root))
+        
+        root2 = Path("/Users/alex/Photos/Selected")
+        self.assertFalse(is_excluded_subfolder(root2 / "img.jpg", root2))
+
+    def test_not_excluded_normal_path(self):
+        root = Path("/Users/alex/Photos")
+        self.assertFalse(is_excluded_subfolder(root / "img.jpg", root))
+        self.assertFalse(is_excluded_subfolder(root / "Vacation" / "img.jpg", root))
+        
+        # Filename is 'Selection' but it's not a folder name in path
+        self.assertFalse(is_excluded_subfolder(root / "Selection.jpg", root))
+
+
 if __name__ == "__main__":
     unittest.main()
+
