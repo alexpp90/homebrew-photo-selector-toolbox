@@ -159,3 +159,143 @@ def test_update_scan_button_state_no_recreation():
         assert tool.preview_area is initial_preview_area
 
 
+def test_get_candidate_listbox_text():
+    import sys
+    from unittest.mock import patch, MagicMock
+    from pathlib import Path
+
+    # Temporarily restore real models module to construct ScanResult properly
+    orig_models = original_modules.get("photo_selector_toolbox.models")
+    mock_models = sys.modules.get("photo_selector_toolbox.models")
+    
+    if orig_models:
+        sys.modules["photo_selector_toolbox.models"] = orig_models
+        
+    try:
+        import photo_selector_toolbox.sharpness_gui as sg
+        from photo_selector_toolbox.sharpness_gui import SharpnessTool
+        from photo_selector_toolbox.models import ScanResult
+
+        # Override format_score in the sharpness_gui module namespace
+        original_format_score = sg.format_score
+        sg.format_score = lambda val, **kwargs: (
+            "N/A" if val is None or val == "N/A" else (f"{val:.1f}" if isinstance(val, float) else str(val))
+        )
+
+        parent = MagicMock()
+        parent.register = MagicMock()
+
+        try:
+            with (
+                patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
+                patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
+            ):
+                tool = SharpnessTool(parent)
+                path = Path("/mock/folder/img1.jpg")
+                
+                # Test case 1: No scan result (or all scores are N/A)
+                tool.files_map[path] = ScanResult(path=path)
+                assert tool._get_candidate_listbox_text(path) == "img1.jpg"
+                
+                # Test case 2: Sharpness calculated, others not
+                tool.files_map[path] = ScanResult(path=path, score=42.5)
+                assert tool._get_candidate_listbox_text(path) == "img1.jpg (Sharpness: 42.5)"
+                
+                # Test case 3: Sharpness and Noise calculated
+                tool.files_map[path] = ScanResult(path=path, score=42.5, noise_score=1.2)
+                assert tool._get_candidate_listbox_text(path) == "img1.jpg (Sharpness: 42.5, Noise: 1.2)"
+                
+                # Test case 4: Sharpness, Noise, and Highlight/Shadow clipping calculated
+                res = ScanResult(path=path, score=42.5, noise_score=1.2)
+                res.scores["highlight_clipping"] = 0.5
+                res.scores["shadow_clipping"] = 1.0
+                tool.files_map[path] = res
+                assert tool._get_candidate_listbox_text(path) == "img1.jpg (Sharpness: 42.5, Noise: 1.2, HL: 0.5%, SD: 1.0%)"
+        finally:
+            sg.format_score = original_format_score
+    finally:
+        # Re-mock models
+        if mock_models:
+            sys.modules["photo_selector_toolbox.models"] = mock_models
+
+
+def test_update_metadata_label_loads_exif():
+    import sys
+    from unittest.mock import patch, MagicMock
+    from pathlib import Path
+
+    # Temporarily restore real models, reader, and formatting modules to test properly
+    orig_models = original_modules.get("photo_selector_toolbox.models")
+    mock_models = sys.modules.get("photo_selector_toolbox.models")
+    orig_reader = original_modules.get("photo_selector_toolbox.reader")
+    mock_reader = sys.modules.get("photo_selector_toolbox.reader")
+    orig_formatting = original_modules.get("photo_selector_toolbox.formatting")
+    mock_formatting = sys.modules.get("photo_selector_toolbox.formatting")
+    
+    if orig_models:
+        sys.modules["photo_selector_toolbox.models"] = orig_models
+    if orig_reader:
+        sys.modules["photo_selector_toolbox.reader"] = orig_reader
+    if orig_formatting:
+        sys.modules["photo_selector_toolbox.formatting"] = orig_formatting
+        
+    try:
+        from photo_selector_toolbox.formatting import format_score, format_meta
+        import photo_selector_toolbox.sharpness_gui as sg
+        from photo_selector_toolbox.sharpness_gui import SharpnessTool
+        from photo_selector_toolbox.models import ScanResult, ExifData
+
+        # Save original formatters and inject real ones
+        orig_sg_format_score = sg.format_score
+        orig_sg_format_meta = sg.format_meta
+        sg.format_score = format_score
+        sg.format_meta = format_meta
+
+        parent = MagicMock()
+        parent.register = MagicMock()
+
+        try:
+            with (
+                patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
+                patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
+                patch("photo_selector_toolbox.sharpness_gui.get_exif_data") as mock_get_exif,
+            ):
+                tool = SharpnessTool(parent)
+                tool.meta_lbl = MagicMock()
+                
+                path = Path("/mock/folder/img1.jpg")
+                res = ScanResult(path=path)
+                tool.files_map[path] = res
+                
+                # Mock get_exif_data to return a valid ExifData
+                mock_exif = ExifData(iso=100.0, shutter_speed=0.005, aperture=2.8, focal_length=50.0)
+                mock_get_exif.return_value = mock_exif
+                
+                tool.update_metadata_label(path)
+                
+                # Verify get_exif_data was called and res.exif was populated
+                mock_get_exif.assert_called_once_with(path)
+                assert res.exif == mock_exif
+                
+                # Verify meta_lbl.config was called with formatted string
+                tool.meta_lbl.config.assert_called_once()
+                call_args = tool.meta_lbl.config.call_args[1]
+                assert "ISO: 100" in call_args["text"]
+                assert "1/200s" in call_args["text"]
+                assert "f/2.8" in call_args["text"]
+                assert "50mm" in call_args["text"]
+        finally:
+            sg.format_score = orig_sg_format_score
+            sg.format_meta = orig_sg_format_meta
+    finally:
+        if mock_models:
+            sys.modules["photo_selector_toolbox.models"] = mock_models
+        if mock_reader:
+            sys.modules["photo_selector_toolbox.reader"] = mock_reader
+        if mock_formatting:
+            sys.modules["photo_selector_toolbox.formatting"] = mock_formatting
+
+
+
+
+

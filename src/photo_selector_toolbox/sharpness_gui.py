@@ -15,7 +15,8 @@ from photo_selector_toolbox.sharpness import (
 from photo_selector_toolbox.formatting import format_score, format_meta
 from photo_selector_toolbox.utils import is_excluded_subfolder
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
-from photo_selector_toolbox.models import ScanResult
+from photo_selector_toolbox.models import ScanResult, ExifData
+from photo_selector_toolbox.reader import get_exif_data
 from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
 from photo_selector_toolbox.image_panels import ImagePanelsMixin
 
@@ -703,7 +704,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             # Initialize with N/A score and empty EXIF (fetch EXIF asynchronously if needed later)
             res = ScanResult(path=f)
             self.files_map[f] = res
-            self.candidate_listbox.insert("end", f"{f.name} (Sharpness: N/A)")
+            self.candidate_listbox.insert("end", self._get_candidate_listbox_text(f))
 
         if self.candidates:
             self.log(f"Loaded {len(self.candidates)} images. Ready for review.")
@@ -720,6 +721,32 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         # Restore UI cursor
         self.config(cursor="")
         self.update()
+
+        # Start background preloading of EXIF data for loaded folder contents
+        if self.candidates:
+            threading.Thread(
+                target=self._preload_all_exif,
+                args=(self.candidates.copy(),),
+                daemon=True,
+            ).start()
+
+    def _preload_all_exif(self, paths):
+        for path in paths:
+            if self.stop_event.is_set():
+                break
+            # Check if this thread's path list is still relevant (i.e. still in the active candidates)
+            if path not in self.candidates:
+                continue
+            res = self.files_map.get(path)
+            if res and res.exif is None:
+                try:
+                    exif = get_exif_data(path)
+                    if exif and type(exif).__name__ == "ExifData":
+                        res.exif = exif
+                    else:
+                        res.exif = ExifData()
+                except Exception:
+                    res.exif = ExifData()
 
     def on_file_type_change(self, event=None):
         selected = self.file_type_var.get()
@@ -738,15 +765,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         # Update the listbox
         self.candidate_listbox.delete(0, "end")
         for f in self.candidates:
-            res = self.files_map.get(f)
-            score_text = format_score(res.score) if res else "N/A"
-            noise_text = format_score(res.noise_score) if res else "N/A"
-            hl_score = res.scores.get("highlight_clipping", "N/A") if res else "N/A"
-            sd_score = res.scores.get("shadow_clipping", "N/A") if res else "N/A"
-            hl_text = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
-            sd_text = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
-            listbox_text = f"{f.name} (Sharpness: {score_text}, Noise: {noise_text}, HL: {hl_text}, SD: {sd_text})"
-            self.candidate_listbox.insert("end", listbox_text)
+            self.candidate_listbox.insert("end", self._get_candidate_listbox_text(f))
 
         if self.candidates:
             # If the previously selected path is still in candidates, select it
@@ -772,16 +791,23 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.meta_lbl.config(text="")
             if hasattr(self, "focus_score_lbl"):
                 self.focus_score_lbl.config(text="Sharpness Score: --")
+                self.focus_score_lbl.pack_forget()
             if hasattr(self, "focus_noise_lbl"):
                 self.focus_noise_lbl.config(text="Noise Level: --")
+                self.focus_noise_lbl.pack_forget()
             if hasattr(self, "focus_hl_lbl"):
                 self.focus_hl_lbl.config(text="Highlight Clipping: --")
+                self.focus_hl_lbl.pack_forget()
             if hasattr(self, "focus_sd_lbl"):
                 self.focus_sd_lbl.config(text="Shadow Clipping: --")
+                self.focus_sd_lbl.pack_forget()
             if hasattr(self, "focus_cat_lbl"):
                 self.focus_cat_lbl.config(text="")
+                self.focus_cat_lbl.pack_forget()
                 self.focus_meta_lbl.config(text="")
+                self.focus_meta_lbl.pack_forget()
                 self.focus_filename_lbl.config(text="")
+                self.focus_filename_lbl.pack_forget()
 
             # Hide overlays
             if hasattr(self, "focus_prev_overlay"):
@@ -916,19 +942,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         path = result.path
         if path in self.candidates:
             idx = self.candidates.index(path)
-            score_text = format_score(result.score)
-            noise_text = format_score(result.noise_score)
-            hl_score = result.scores.get("highlight_clipping", "N/A")
-            sd_score = result.scores.get("shadow_clipping", "N/A")
-            hl_text = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
-            sd_text = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
 
             # Delete and reinsert to update text, but maintain selection if it was selected
             is_selected = self.candidate_listbox.curselection() == (idx,)
             self.candidate_listbox.delete(idx)
 
-            # Construct display string
-            listbox_text = f"{path.name} (Sharpness: {score_text}, Noise: {noise_text}, HL: {hl_text}, SD: {sd_text})"
+            listbox_text = self._get_candidate_listbox_text(path)
             self.candidate_listbox.insert(idx, listbox_text)
 
             if is_selected:
@@ -1163,9 +1182,45 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             daemon=True,
         ).start()
 
+    def _get_candidate_listbox_text(self, path):
+        res = self.files_map.get(path)
+        if not res:
+            return path.name
+
+        parts = []
+        if res.score != "N/A":
+            parts.append(f"Sharpness: {format_score(res.score)}")
+        if res.noise_score != "N/A":
+            parts.append(f"Noise: {format_score(res.noise_score)}")
+
+        hl_score = res.scores.get("highlight_clipping", "N/A")
+        if hl_score != "N/A":
+            hl_text = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
+            parts.append(f"HL: {hl_text}")
+
+        sd_score = res.scores.get("shadow_clipping", "N/A")
+        if sd_score != "N/A":
+            sd_text = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
+            parts.append(f"SD: {sd_text}")
+
+        if parts:
+            return f"{path.name} ({', '.join(parts)})"
+        else:
+            return path.name
+
     def update_metadata_label(self, current_path):
         res = self.files_map.get(current_path)
         if res:
+            if res.exif is None:
+                try:
+                    exif = get_exif_data(current_path)
+                    if exif and type(exif).__name__ == "ExifData":
+                        res.exif = exif
+                    else:
+                        res.exif = ExifData()
+                except Exception as e:
+                    logger.debug(f"Failed to load EXIF data dynamically: {e}")
+                    res.exif = ExifData()
             exif = res.exif
             score_str = format_score(res.score)
             noise_str = format_score(res.noise_score)
@@ -1182,37 +1237,58 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             # ISO: 100 | 1/200s | f/2.8 | 50mm
             meta_str = f"ISO: {iso} | {shutter} | {aperture} | {focal}"
 
-            txt = (
-                f"File: {current_path.name}\n"
-                f"Sharpness Score: {score_str}\n"
-                f"Noise Level: {noise_str}\n"
-                f"Highlight Clipping: {hl_str}\n"
-                f"Shadow Clipping: {sd_str}\n"
-                f"{meta_str}"
-            )
+            lines = [f"File: {current_path.name}"]
+            if res.score != "N/A":
+                lines.append(f"Sharpness Score: {score_str}")
+            if res.noise_score != "N/A":
+                lines.append(f"Noise Level: {noise_str}")
+            if hl_score != "N/A":
+                lines.append(f"Highlight Clipping: {hl_str}")
+            if sd_score != "N/A":
+                lines.append(f"Shadow Clipping: {sd_str}")
+            lines.append(meta_str)
+            txt = "\n".join(lines)
             self.meta_lbl.config(text=txt)
 
             # Update Focus Mode labels if they exist
             if hasattr(self, "focus_score_lbl"):
-                self.focus_score_lbl.config(
-                    text=f"Sharpness Score: {score_str}"
-                )
-            if hasattr(self, "focus_noise_lbl"):
-                self.focus_noise_lbl.config(
-                    text=f"Noise Level: {noise_str}"
-                )
-            if hasattr(self, "focus_hl_lbl"):
-                self.focus_hl_lbl.config(
-                    text=f"Highlight Clipping: {hl_str}"
-                )
-            if hasattr(self, "focus_sd_lbl"):
-                self.focus_sd_lbl.config(
-                    text=f"Shadow Clipping: {sd_str}"
-                )
-            if hasattr(self, "focus_cat_lbl"):
+                # Hide all potential dynamic pack elements first
+                self.focus_score_lbl.pack_forget()
+                self.focus_noise_lbl.pack_forget()
+                self.focus_hl_lbl.pack_forget()
+                self.focus_sd_lbl.pack_forget()
+                self.focus_cat_lbl.pack_forget()
+                self.focus_filename_lbl.pack_forget()
+                self.focus_meta_lbl.pack_forget()
+
+                # Pack in correct order if not N/A
+                if res.score != "N/A":
+                    self.focus_score_lbl.config(
+                        text=f"Sharpness Score: {score_str}"
+                    )
+                    self.focus_score_lbl.pack(side="top", pady=(5, 0), anchor="w")
+                if res.noise_score != "N/A":
+                    self.focus_noise_lbl.config(
+                        text=f"Noise Level: {noise_str}"
+                    )
+                    self.focus_noise_lbl.pack(side="top", pady=(0, 5), anchor="w")
+                if hl_score != "N/A":
+                    self.focus_hl_lbl.config(
+                        text=f"Highlight Clipping: {hl_str}"
+                    )
+                    self.focus_hl_lbl.pack(side="top", pady=(0, 5), anchor="w")
+                if sd_score != "N/A":
+                    self.focus_sd_lbl.config(
+                        text=f"Shadow Clipping: {sd_str}"
+                    )
+                    self.focus_sd_lbl.pack(side="top", pady=(0, 5), anchor="w")
+
                 self.focus_cat_lbl.config(text="")
-                self.focus_meta_lbl.config(text=meta_str)
+                self.focus_cat_lbl.pack(side="top", pady=5, anchor="w")
                 self.focus_filename_lbl.config(text=current_path.name)
+                self.focus_filename_lbl.pack(side="top", pady=5, anchor="w")
+                self.focus_meta_lbl.config(text=meta_str)
+                self.focus_meta_lbl.pack(side="top", pady=5, anchor="w")
 
         # Update previous and next overlay labels
         if hasattr(self, "focus_prev_overlay"):
@@ -1220,25 +1296,45 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if prev_path:
                 prev_res = self.files_map.get(prev_path)
                 if prev_res:
+                    if prev_res.exif is None:
+                        try:
+                            exif = get_exif_data(prev_path)
+                            if exif and type(exif).__name__ == "ExifData":
+                                prev_res.exif = exif
+                            else:
+                                prev_res.exif = ExifData()
+                        except Exception as e:
+                            logger.debug(f"Failed to load EXIF data dynamically: {e}")
+                            prev_res.exif = ExifData()
+                    prev_exif = prev_res.exif
                     prev_score_str = format_score(prev_res.score)
                     prev_noise_str = format_score(prev_res.noise_score)
                     prev_hl_score = prev_res.scores.get("highlight_clipping", "N/A")
                     prev_sd_score = prev_res.scores.get("shadow_clipping", "N/A")
                     prev_hl_str = format_score(prev_hl_score) + ("%" if isinstance(prev_hl_score, float) else "")
                     prev_sd_str = format_score(prev_sd_score) + ("%" if isinstance(prev_sd_score, float) else "")
-                    prev_exif = prev_res.exif
                     p_iso = format_meta(prev_exif.iso if prev_exif else None, "")
                     p_shutter = format_meta(prev_exif.shutter_speed if prev_exif else None, "s")
                     p_aperture = format_meta(prev_exif.aperture if prev_exif else None, "f/")
                     p_focal = format_meta(prev_exif.focal_length if prev_exif else None, "mm")
                     p_meta = f"{p_iso} | {p_shutter} | {p_aperture} | {p_focal}"
 
-                    prev_text = (
-                        f"Previous\n{prev_path.name}\n"
-                        f"Sharpness: {prev_score_str}\n"
-                        f"Noise: {prev_noise_str}\n"
-                        f"HL: {prev_hl_str} | SD: {prev_sd_str}\n{p_meta}"
-                    )
+                    prev_lines = [f"Previous", prev_path.name]
+                    if prev_res.score != "N/A":
+                        prev_lines.append(f"Sharpness: {prev_score_str}")
+                    if prev_res.noise_score != "N/A":
+                        prev_lines.append(f"Noise: {prev_noise_str}")
+
+                    hl_sd_parts = []
+                    if prev_hl_score != "N/A":
+                        hl_sd_parts.append(f"HL: {prev_hl_str}")
+                    if prev_sd_score != "N/A":
+                        hl_sd_parts.append(f"SD: {prev_sd_str}")
+                    if hl_sd_parts:
+                        prev_lines.append(" | ".join(hl_sd_parts))
+                    prev_lines.append(p_meta)
+
+                    prev_text = "\n".join(prev_lines)
                     self.focus_prev_overlay.config(text=prev_text)
                     self.focus_prev_overlay.place(relx=0.0, rely=0.0, anchor="nw")
             else:
@@ -1249,25 +1345,45 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if next_path:
                 next_res = self.files_map.get(next_path)
                 if next_res:
+                    if next_res.exif is None:
+                        try:
+                            exif = get_exif_data(next_path)
+                            if exif and type(exif).__name__ == "ExifData":
+                                next_res.exif = exif
+                            else:
+                                next_res.exif = ExifData()
+                        except Exception as e:
+                            logger.debug(f"Failed to load EXIF data dynamically: {e}")
+                            next_res.exif = ExifData()
+                    next_exif = next_res.exif
                     next_score_str = format_score(next_res.score)
                     next_noise_str = format_score(next_res.noise_score)
                     next_hl_score = next_res.scores.get("highlight_clipping", "N/A")
                     next_sd_score = next_res.scores.get("shadow_clipping", "N/A")
                     next_hl_str = format_score(next_hl_score) + ("%" if isinstance(next_hl_score, float) else "")
                     next_sd_str = format_score(next_sd_score) + ("%" if isinstance(next_sd_score, float) else "")
-                    next_exif = next_res.exif
                     n_iso = format_meta(next_exif.iso if next_exif else None, "")
                     n_shutter = format_meta(next_exif.shutter_speed if next_exif else None, "s")
                     n_aperture = format_meta(next_exif.aperture if next_exif else None, "f/")
                     n_focal = format_meta(next_exif.focal_length if next_exif else None, "mm")
                     n_meta = f"{n_iso} | {n_shutter} | {n_aperture} | {n_focal}"
 
-                    next_text = (
-                        f"Next\n{next_path.name}\n"
-                        f"Sharpness: {next_score_str}\n"
-                        f"Noise: {next_noise_str}\n"
-                        f"HL: {next_hl_str} | SD: {next_sd_str}\n{n_meta}"
-                    )
+                    next_lines = [f"Next", next_path.name]
+                    if next_res.score != "N/A":
+                        next_lines.append(f"Sharpness: {next_score_str}")
+                    if next_res.noise_score != "N/A":
+                        next_lines.append(f"Noise: {next_noise_str}")
+
+                    hl_sd_parts = []
+                    if next_hl_score != "N/A":
+                        hl_sd_parts.append(f"HL: {next_hl_str}")
+                    if next_sd_score != "N/A":
+                        hl_sd_parts.append(f"SD: {next_sd_str}")
+                    if hl_sd_parts:
+                        next_lines.append(" | ".join(hl_sd_parts))
+                    next_lines.append(n_meta)
+
+                    next_text = "\n".join(next_lines)
                     self.focus_next_overlay.config(text=next_text)
                     self.focus_next_overlay.place(relx=0.0, rely=0.0, anchor="nw")
             else:

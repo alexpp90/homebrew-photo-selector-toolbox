@@ -63,3 +63,51 @@ def test_image_cache_manager_clear(mock_load_image):
     assert p1 in manager.preview_cache
     manager.clear()
     assert len(manager.preview_cache) == 0
+
+
+def test_scan_controller_run(tmp_path):
+    from photo_selector_toolbox.controllers import ScanController
+    from PIL import Image
+    import numpy as np
+
+    img_path = tmp_path / "test_img.jpg"
+    data = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+    img = Image.fromarray(data)
+    img.save(img_path)
+
+    controller = ScanController()
+    tools = {
+        "sharpness": True,
+        "noise": True,
+        "highlight_clipping": True,
+        "shadow_clipping": True
+    }
+
+    progress_results = []
+    def progress_cb(result, current, total):
+        progress_results.append(result)
+
+    finished_flag = False
+    def finished_cb():
+        nonlocal finished_flag
+        finished_flag = True
+
+    controller.run_scan(
+        files=[img_path],
+        grid_size=8,
+        tools=tools,
+        progress_callback=progress_cb,
+        finished_callback=finished_cb
+    )
+
+    for _ in range(50):
+        if finished_flag:
+            break
+        time.sleep(0.05)
+
+    assert finished_flag
+    assert len(progress_results) == 1
+    assert progress_results[0].path == img_path
+    assert "sharpness" in progress_results[0].scores
+    assert "noise" in progress_results[0].scores
+
