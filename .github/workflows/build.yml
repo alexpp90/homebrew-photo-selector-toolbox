@@ -3,6 +3,7 @@ name: Build Executables
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -78,9 +79,9 @@ jobs:
         if-no-files-found: error
 
   release:
-    name: Update Nightly Release
+    name: Update Release
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Download Artifacts
@@ -92,19 +93,19 @@ jobs:
       - name: Display Downloaded Artifacts
         run: ls -R artifacts
 
-      - name: Update Nightly Release
+      - name: Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Nightly Build
-          tag_name: nightly
-          prerelease: true
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           files: artifacts/*.zip
-          make_latest: true
+          make_latest: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
 
   update-homebrew-cask:
     name: Update Homebrew Cask
     needs: release
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -116,18 +117,36 @@ jobs:
 
       - name: Download macOS artifact
         run: |
-          curl -L -o macos.zip \
-            "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/nightly/photo-selector-toolbox-macos-apple-silicon.zip"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            curl -L -o macos.zip \
+              "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/nightly/photo-selector-toolbox-macos-apple-silicon.zip"
+          else
+            curl -L -o macos.zip \
+              "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/${{ github.ref_name }}/photo-selector-toolbox-macos-apple-silicon.zip"
+          fi
       
       - name: Compute SHA256
         id: sha
         run: echo "sha256=$(shasum -a 256 macos.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
-      - name: Update Cask SHA256
+      - name: Update Cask File
         run: |
-          sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox.rb
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # Nightly Cask Update
+            sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox@nightly.rb
+            git add Casks/photo-selector-toolbox@nightly.rb
+            COMMIT_MSG="Update nightly Cask SHA256"
+          else
+            # Stable Cask Update
+            TAG_NAME="${{ github.ref_name }}"
+            VERSION="${TAG_NAME#v}"
+            sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/photo-selector-toolbox.rb
+            sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox.rb
+            git add Casks/photo-selector-toolbox.rb
+            COMMIT_MSG="Update stable Cask to version ${VERSION}"
+          fi
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/photo-selector-toolbox.rb
-          git diff --cached --quiet || git commit -m "Update Cask SHA256 for nightly release"
+          git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
           git push
