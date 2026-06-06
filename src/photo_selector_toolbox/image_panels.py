@@ -218,17 +218,21 @@ class ImagePanelsMixin:
             return
 
         res = self.files_map.get(path)
-        score_txt = "N/A"
-        noise_txt = "N/A"
+        lines = [path.name]
 
         if res:
             score_txt = format_score(res.score)
             noise_txt = format_score(res.noise_score)
+            if score_txt != "N/A":
+                lines.append(f"Sharpness: {score_txt}")
+            if noise_txt != "N/A":
+                lines.append(f"Noise: {noise_txt}")
 
         details.config(
-            text=f"{path.name}\nSharpness: {score_txt}\nNoise: {noise_txt}",
+            text="\n".join(lines),
         )
         lbl.config(image="", text="Loading...")
+
 
     def load_images_background(
         self, prev_path, curr_path, next_path, size_curr, size_prev, size_next

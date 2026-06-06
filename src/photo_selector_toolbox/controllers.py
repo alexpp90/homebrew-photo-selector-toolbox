@@ -1,7 +1,7 @@
 import logging
 import queue
 import threading
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Optional, Callable, List, Union
 from pathlib import Path
 from PIL import Image
@@ -238,7 +238,9 @@ class ScanController:
 
             log(f"Scanning {total} images. Starting analysis...")
 
-            with ProcessPoolExecutor() as executor:
+            import os
+            max_workers = min(8, (os.cpu_count() or 1) + 4)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
                 futures = {
                     executor.submit(_process_single_file, f, grid_size, tools): f
