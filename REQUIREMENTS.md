@@ -52,7 +52,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Navigation Interactions:** In Focus Mode, clicking a non-central image (Previous/Next) must open it in a fullscreen viewer (via `tk.Toplevel`) instead of making it the new current image.
 *   **Fullscreen Viewer:**
     *   **Delete Option:** The fullscreen viewer must include a visible "Delete (Delete)" button and bind the `<Delete>` and `<BackSpace>` keys to prompt a delete confirmation dialog (transient to the fullscreen window). A second press of `<Delete>` or `<BackSpace>` confirms deletion. On confirmation, the image is moved to the trash (or permanently deleted if moving to trash fails), removed from list structures, and the viewer advances to the next image (or closes if no images remain).
-    *   **Move to Selection:** The fullscreen viewer must include a "Move to Selection (M)" button and bind `<m>` and `<M>` to move the current image and related files to the "Selection" subfolder.
+    *   **Move to Selection:** The fullscreen viewer must include a "Move to Selection (M)" button and bind `<m>` and `<M>` to move the current image and related files to the "Selection" subfolder. Within the Selection directory, RAW files must be sorted into a `RAW` subfolder, JPEG/JPG files into a `JPEG` subfolder, `.xmp` sidecar files into the same subfolder as their corresponding image file, and other files into the root of the Selection folder.
     *   **Parent Synchronization:** Navigating or deleting images in Fullscreen Viewer must update and synchronize the parent window's active selection.
     *   **Focus Mode Persistence:** If entering Fullscreen from Focus Mode, exiting the viewer (via Escape or Close button) must return the application to Focus Mode.
 *   **Keyboard Controls (Review & Focus Modes):**
@@ -107,8 +107,11 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Publishing Strategy:** The project utilizes `softprops/action-gh-release` to automatically publish artifacts to the `nightly` tag on every push to the `main` branch.
 
 ### 5.3 Homebrew Distribution (macOS)
-*   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing a Cask definition for the macOS nightly build.
-*   **Auto-Update:** The CI workflow automatically updates the Cask's SHA256 hash after every nightly release publish, enabling `brew upgrade --cask --greedy` to pick up new builds.
+*   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing Cask definitions for both stable releases and nightly builds.
+*   **Release Selection:** Users can choose to install the stable release (`brew install --cask photo-selector-toolbox`) or the latest nightly build (`brew install --cask photo-selector-toolbox@nightly`).
+*   **Auto-Update:** The CI workflow automatically updates the Cask configurations:
+    *   For nightly builds (on pushes to `main`), the `photo-selector-toolbox@nightly` Cask's SHA256 is updated.
+    *   For stable releases (on tag pushes matching `v*`), the stable `photo-selector-toolbox` Cask's `version` and `sha256` are updated.
 *   **Install Artifacts:** The Cask installs the `Photo Selector Toolbox.app` bundle to `/Applications` and symlinks the CLI binary into Homebrew's bin directory.
 
 ## 6. Testing Requirements

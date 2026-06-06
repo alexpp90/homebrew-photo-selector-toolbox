@@ -607,7 +607,7 @@ class Sidebar(ttk.Frame):
 class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Image Metadata Analyzer")
+        self.title("Photo Selector Toolbox")
 
         # Attempt to improve DPI awareness on Windows/Linux
         try:

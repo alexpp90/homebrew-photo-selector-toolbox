@@ -244,13 +244,19 @@ def test_move_to_selection():
         tool.folder_var = MagicMock()
         tool.folder_var.get.return_value = "/mock/dir"
         
-        mock_path = MagicMock(spec=Path)
-        mock_path.name = "test.jpg"
-        mock_path.exists.return_value = True
+        mock_jpg = MagicMock(spec=Path)
+        mock_jpg.name = "test.jpg"
+        mock_jpg.suffix = ".jpg"
+        mock_jpg.exists.return_value = True
+
+        mock_raw = MagicMock(spec=Path)
+        mock_raw.name = "test.arw"
+        mock_raw.suffix = ".arw"
+        mock_raw.exists.return_value = True
         
-        tool.candidates = [mock_path]
-        tool.sorted_files = [mock_path]
-        tool.files_map = {mock_path: MagicMock()}
+        tool.candidates = [mock_jpg]
+        tool.sorted_files = [mock_jpg]
+        tool.files_map = {mock_jpg: MagicMock()}
         tool.candidate_listbox = MagicMock()
         tool.panel_curr = MagicMock()
         tool.panel_prev = MagicMock()
@@ -258,13 +264,23 @@ def test_move_to_selection():
         
         with (
             patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
-            patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_path]),
+            patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_jpg, mock_raw]),
+            patch("photo_selector_toolbox.sharpness_gui.RAW_EXTENSIONS", {".arw", ".nef", ".cr2", ".dng", ".raw"}),
         ):
             mock_selection_dir = MagicMock()
             mock_path_cls.return_value = MagicMock()
             mock_path_cls.return_value.__truediv__.return_value = mock_selection_dir
             
-            tool.execute_move_to_selection(mock_path, 0)
+            mock_dirs = {}
+            def get_subfolder_mock(subfolder):
+                if subfolder not in mock_dirs:
+                    mock_dirs[subfolder] = MagicMock()
+                return mock_dirs[subfolder]
+            mock_selection_dir.__truediv__.side_effect = get_subfolder_mock
+
+            tool.execute_move_to_selection(mock_jpg, 0)
             
-            mock_selection_dir.mkdir.assert_called_once_with(parents=True, exist_ok=True)
-            mock_path.rename.assert_called_once()
+            mock_dirs["JPEG"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            mock_dirs["RAW"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            mock_jpg.rename.assert_called_once_with(mock_dirs["JPEG"].__truediv__.return_value)
+            mock_raw.rename.assert_called_once_with(mock_dirs["RAW"].__truediv__.return_value)

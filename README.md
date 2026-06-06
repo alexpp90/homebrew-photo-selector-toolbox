@@ -17,20 +17,33 @@ It also includes advanced utilities for culling photos:
 
 ### Option 1: Homebrew (macOS — Recommended)
 
-Install with one command and get automatic updates:
+You can choose between the stable release (recommended for general use) and the nightly build (for the absolute latest features).
 
+#### Stable Release
 ```bash
-# Tap and install the Cask
+# Tap the repository
 brew tap alexpp90/photo-selector-toolbox
+
+# Install the stable Cask
 brew install --cask photo-selector-toolbox
+
+# To upgrade the stable release later:
+brew upgrade --cask photo-selector-toolbox
 ```
 
-To update to the latest nightly build:
+#### Nightly Build (Latest Features)
 ```bash
-brew upgrade --cask --greedy photo-selector-toolbox
+# Tap the repository
+brew tap alexpp90/photo-selector-toolbox
+
+# Install the nightly Cask
+brew install --cask photo-selector-toolbox@nightly
+
+# To upgrade the nightly build later (requires --greedy because it is unversioned):
+brew upgrade --cask --greedy photo-selector-toolbox@nightly
 ```
 
-Alternatively, run the interactive installer script:
+Alternatively, run the interactive installer script (installs the stable release by default):
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/alexpp90/homebrew-photo-selector-toolbox/main/scripts/install-mac.sh)"
 ```

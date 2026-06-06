@@ -16,7 +16,7 @@ from photo_selector_toolbox.formatting import format_score, format_meta
 from photo_selector_toolbox.utils import is_excluded_subfolder
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
 from photo_selector_toolbox.models import ScanResult, ExifData
-from photo_selector_toolbox.reader import get_exif_data
+from photo_selector_toolbox.reader import get_exif_data, RAW_EXTENSIONS
 from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
 from photo_selector_toolbox.image_panels import ImagePanelsMixin
 
@@ -1557,14 +1557,43 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         moved_files = []
         failed_files = []
 
+        # Determine if RAW or JPEG files are present in the related group to sort sidecars
+        has_raw = any(f.suffix.lower() in RAW_EXTENSIONS for f in related)
+        has_jpeg = any(f.suffix.lower() in {".jpg", ".jpeg"} for f in related)
+
         for f in list(related):
-            dest = selection_dir / f.name
+            suffix = f.suffix.lower()
+            if suffix in RAW_EXTENSIONS:
+                subfolder = "RAW"
+            elif suffix in {".jpg", ".jpeg"}:
+                subfolder = "JPEG"
+            elif suffix == ".xmp":
+                if has_raw:
+                    subfolder = "RAW"
+                elif has_jpeg:
+                    subfolder = "JPEG"
+                else:
+                    subfolder = ""
+            else:
+                subfolder = ""
+
+            dest_dir = selection_dir / subfolder if subfolder else selection_dir
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                failed_files.append((f, e))
+                msg = f"Failed to create subfolder directory {dest_dir}: {e}"
+                self.log(msg)
+                continue
+
+            dest = dest_dir / f.name
             try:
                 if dest.exists():
                     dest.unlink()
                 f.rename(dest)
                 moved_files.append(f)
-                self.log(f"Moved to Selection: {f.name}")
+                log_path = f"Selection/{subfolder}" if subfolder else "Selection"
+                self.log(f"Moved to {log_path}: {f.name}")
             except Exception as e:
                 failed_files.append((f, e))
                 msg = f"Move failed for {f}: {e}"
