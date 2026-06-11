@@ -1,0 +1,215 @@
+import json
+import logging
+import sqlite3
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Union
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_DB_PATH: Optional[Path] = None
+
+
+def set_default_db_path(path: Optional[Path]) -> None:
+    """Sets a global default DB path, useful for redirecting to temporary files in tests."""
+    global _DEFAULT_DB_PATH
+    _DEFAULT_DB_PATH = path
+
+
+class ScoreCache:
+    """
+    Manages persistent caching of image analysis scores in a SQLite database.
+    Retains only the 10,000 most recently used records.
+    """
+
+    def __init__(self, db_path: Optional[Path] = None):
+        if db_path is None:
+            if _DEFAULT_DB_PATH is not None:
+                db_path = _DEFAULT_DB_PATH
+            else:
+                from photo_selector_toolbox.ollama_tool import CONFIG_DIR
+                CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                db_path = CONFIG_DIR / "scores_cache.db"
+        self.db_path = db_path
+        self._init_db()
+
+    def _init_db(self) -> None:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS image_cache (
+                        filepath TEXT PRIMARY KEY,
+                        last_used INTEGER,
+                        scores TEXT
+                    )
+                    """
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Failed to initialize score cache database: {e}")
+
+    def get_scores(self, filepath: Path) -> Dict[str, Union[float, str]]:
+        """Retrieves cached scores for a single image, updating its last_used timestamp."""
+        try:
+            filepath_str = str(filepath.resolve())
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT scores FROM image_cache WHERE filepath = ?",
+                    (filepath_str,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    now = int(time.time())
+                    conn.execute(
+                        "UPDATE image_cache SET last_used = ? WHERE filepath = ?",
+                        (now, filepath_str),
+                    )
+                    conn.commit()
+                    return json.loads(row[0])
+        except Exception as e:
+            logger.warning(f"Error reading from score cache: {e}")
+        return {}
+
+    def set_scores(self, filepath: Path, scores: Dict[str, Union[float, str]]) -> None:
+        """Stores or updates scores for a single image, updating its last_used timestamp and pruning if necessary."""
+        try:
+            filepath_str = str(filepath.resolve())
+            now = int(time.time())
+            with sqlite3.connect(self.db_path) as conn:
+                # Load existing scores to merge
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT scores FROM image_cache WHERE filepath = ?",
+                    (filepath_str,),
+                )
+                row = cursor.fetchone()
+                existing = json.loads(row[0]) if row else {}
+
+                # Merge
+                existing.update(scores)
+
+                conn.execute(
+                    """
+                    INSERT INTO image_cache (filepath, last_used, scores)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(filepath) DO UPDATE SET
+                        last_used = excluded.last_used,
+                        scores = excluded.scores
+                    """,
+                    (filepath_str, now, json.dumps(existing)),
+                )
+                conn.commit()
+                self._prune(conn)
+        except Exception as e:
+            logger.warning(f"Error writing to score cache: {e}")
+
+    def get_multiple_scores(self, filepaths: List[Path]) -> Dict[Path, Dict[str, Union[float, str]]]:
+        """Retrieves cached scores for multiple images in a batch, updating their timestamps."""
+        results: Dict[Path, Dict[str, Union[float, str]]] = {}
+        if not filepaths:
+            return results
+
+        try:
+            now = int(time.time())
+            # Map resolved string path to the original Path object
+            path_map = {str(p.resolve()): p for p in filepaths}
+            path_list = list(path_map.keys())
+
+            chunk_size = 500
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                for i in range(0, len(path_list), chunk_size):
+                    chunk = path_list[i : i + chunk_size]
+                    placeholders = ",".join("?" for _ in chunk)
+                    cursor.execute(
+                        f"SELECT filepath, scores FROM image_cache WHERE filepath IN ({placeholders})",
+                        chunk,
+                    )
+                    rows = cursor.fetchall()
+                    for fp, score_str in rows:
+                        orig_path = path_map.get(fp)
+                        if orig_path:
+                            results[orig_path] = json.loads(score_str)
+
+                # Bulk update last_used for matches
+                if results:
+                    matched_fps = [str(p.resolve()) for p in results.keys()]
+                    for i in range(0, len(matched_fps), chunk_size):
+                        chunk = matched_fps[i : i + chunk_size]
+                        placeholders = ",".join("?" for _ in chunk)
+                        conn.execute(
+                            f"UPDATE image_cache SET last_used = ? WHERE filepath IN ({placeholders})",
+                            [now] + chunk,
+                        )
+                    conn.commit()
+        except Exception as e:
+            logger.warning(f"Error bulk reading from score cache: {e}")
+        return results
+
+    def set_multiple_scores(self, scores_dict: Dict[Path, Dict[str, Union[float, str]]]) -> None:
+        """Stores or updates scores for multiple images in a batch, pruning the database to 10,000 items afterwards."""
+        if not scores_dict:
+            return
+
+        try:
+            now = int(time.time())
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                path_map = {str(p.resolve()): p for p in scores_dict.keys()}
+                path_list = list(path_map.keys())
+
+                # Fetch existing entries to merge
+                chunk_size = 500
+                existing_entries = {}
+                for i in range(0, len(path_list), chunk_size):
+                    chunk = path_list[i : i + chunk_size]
+                    placeholders = ",".join("?" for _ in chunk)
+                    cursor.execute(
+                        f"SELECT filepath, scores FROM image_cache WHERE filepath IN ({placeholders})",
+                        chunk,
+                    )
+                    rows = cursor.fetchall()
+                    for fp, score_str in rows:
+                        existing_entries[fp] = json.loads(score_str)
+
+                # Prepare insert batch
+                insert_data = []
+                for fp, orig_path in path_map.items():
+                    new_scores = scores_dict[orig_path]
+                    merged = existing_entries.get(fp, {})
+                    merged.update(new_scores)
+                    insert_data.append((fp, now, json.dumps(merged)))
+
+                cursor.executemany(
+                    """
+                    INSERT INTO image_cache (filepath, last_used, scores)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(filepath) DO UPDATE SET
+                        last_used = excluded.last_used,
+                        scores = excluded.scores
+                    """,
+                    insert_data,
+                )
+                conn.commit()
+                self._prune(conn)
+        except Exception as e:
+            logger.warning(f"Error bulk writing to score cache: {e}")
+
+    def _prune(self, conn: sqlite3.Connection) -> None:
+        """Limits database records to the 10,000 most recently used ones."""
+        try:
+            conn.execute(
+                """
+                DELETE FROM image_cache
+                WHERE filepath NOT IN (
+                    SELECT filepath FROM image_cache
+                    ORDER BY last_used DESC
+                    LIMIT 10000
+                )
+                """
+            )
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Error pruning score cache database: {e}")

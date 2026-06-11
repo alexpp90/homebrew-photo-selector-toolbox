@@ -53,7 +53,7 @@ def main():
 
     image_files = [
         f for f in root_path.rglob("*")
-        if f.suffix.lower() in SUPPORTED_EXTENSIONS and not is_excluded_subfolder(f, root_path)
+        if f.suffix.lower() in SUPPORTED_EXTENSIONS and not is_excluded_subfolder(f, root_path) and not f.name.startswith("._")
     ]
 
     if not image_files:

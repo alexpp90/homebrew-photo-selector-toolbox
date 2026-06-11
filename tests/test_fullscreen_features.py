@@ -5,6 +5,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def mock_sys_modules():
+    existing_modules = set(sys.modules.keys())
     modules_to_mock = [
         "rawpy",
         "photo_selector_toolbox.controllers",
@@ -22,15 +23,33 @@ def mock_sys_modules():
     for name in modules_to_mock:
         original_modules[name] = sys.modules.get(name)
         sys.modules[name] = MagicMock()
+
+    # Clear GUI modules from sys.modules cache to force a re-import
+    # with the mocked Tkinter and other classes
+    cleared_gui_modules = {}
+    gui_modules = ["photo_selector_toolbox.fullscreen_viewer", "photo_selector_toolbox.sharpness_gui"]
+    for name in gui_modules:
+        if name in sys.modules:
+            cleared_gui_modules[name] = sys.modules.pop(name)
         
     yield
     
+    # Restore the cleared GUI modules
+    for name, mod in cleared_gui_modules.items():
+        sys.modules[name] = mod
+
     for name in modules_to_mock:
         orig = original_modules[name]
         if orig is None:
             sys.modules.pop(name, None)
         else:
             sys.modules[name] = orig
+
+    # Pop any newly imported photo_selector_toolbox modules imported during mock session to prevent pollution
+    to_pop = [m for m in list(sys.modules.keys()) if m.startswith("photo_selector_toolbox") and m not in existing_modules]
+    for m in to_pop:
+        sys.modules.pop(m, None)
+
 
 
 @pytest.fixture(autouse=True)
@@ -49,6 +68,10 @@ def mock_tkinter_and_ttk():
     orig_notebook = ttk.Notebook
     orig_scrollbar = ttk.Scrollbar
     orig_separator = ttk.Separator
+    orig_stringvar = tk.StringVar
+    orig_booleanvar = tk.BooleanVar
+    orig_doublevar = tk.DoubleVar
+    orig_intvar = tk.IntVar
     
     # Define lightweight dummy classes
     class DummyToplevel:
@@ -133,6 +156,21 @@ def mock_tkinter_and_ttk():
         def focus_set(self):
             pass
 
+        def config(self, *args, **kwargs):
+            pass
+
+        def configure(self, *args, **kwargs):
+            pass
+
+        def lift(self, *args, **kwargs):
+            pass
+
+        def delete(self, *args, **kwargs):
+            pass
+
+        def create_image(self, *args, **kwargs):
+            pass
+
     # Inject
     tk.Toplevel = DummyToplevel
     tk.Tk = DummyToplevel
@@ -144,6 +182,12 @@ def mock_tkinter_and_ttk():
     ttk.Notebook = DummyToplevel
     ttk.Scrollbar = DummyToplevel
     ttk.Separator = DummyToplevel
+    
+    # Mock Tkinter variables to avoid default root window creation
+    tk.StringVar = MagicMock
+    tk.BooleanVar = MagicMock
+    tk.DoubleVar = MagicMock
+    tk.IntVar = MagicMock
     
     yield
     
@@ -158,6 +202,10 @@ def mock_tkinter_and_ttk():
     ttk.Notebook = orig_notebook
     ttk.Scrollbar = orig_scrollbar
     ttk.Separator = orig_separator
+    tk.StringVar = orig_stringvar
+    tk.BooleanVar = orig_booleanvar
+    tk.DoubleVar = orig_doublevar
+    tk.IntVar = orig_intvar
 
 
 def test_sharpness_tool_key_event_filtering():
@@ -258,9 +306,12 @@ def test_move_to_selection():
         tool.sorted_files = [mock_jpg]
         tool.files_map = {mock_jpg: MagicMock()}
         tool.candidate_listbox = MagicMock()
+        tool.candidate_listbox.curselection.return_value = (0,)
+        tool.candidate_listbox.size.return_value = 1
         tool.panel_curr = MagicMock()
         tool.panel_prev = MagicMock()
         tool.panel_next = MagicMock()
+        tool.meta_lbl = MagicMock()
         
         with (
             patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
@@ -284,3 +335,39 @@ def test_move_to_selection():
             mock_dirs["RAW"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
             mock_jpg.rename.assert_called_once_with(mock_dirs["JPEG"].__truediv__.return_value)
             mock_raw.rename.assert_called_once_with(mock_dirs["RAW"].__truediv__.return_value)
+
+
+def test_fullscreen_viewer_metadata_display():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test_image.jpg")
+    file_list = [path]
+
+    # Setup parent files_map as a dict so update_metadata finds it
+    parent.files_map = {}
+
+    with (
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
+    ):
+        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        
+        # Verify metadata labels were created
+        assert hasattr(viewer, "meta_panel")
+        assert hasattr(viewer, "meta_filename_lbl")
+        assert hasattr(viewer, "meta_exposure_lbl")
+        assert hasattr(viewer, "meta_lens_lbl")
+        assert hasattr(viewer, "metric_labels")
+        assert "sharpness" in viewer.metric_labels
+        assert "noise" in viewer.metric_labels
+        assert "highlight" in viewer.metric_labels
+        assert "shadow" in viewer.metric_labels
+        assert "aesthetic" in viewer.metric_labels
+
+        # Verify config calls on path update
+        with (
+            patch.object(viewer.meta_filename_lbl, "config") as mock_filename_config,
+            patch.object(viewer.meta_exposure_lbl, "config") as mock_exposure_config,
+        ):
+            viewer.load_new_path(Path("other_image.jpg"))
+            mock_filename_config.assert_called_with(text="other_image.jpg")

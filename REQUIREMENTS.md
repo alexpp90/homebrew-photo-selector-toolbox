@@ -35,6 +35,19 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Deletion Strategy:** The utility first attempts to move files to the trash using `send2trash`.
 *   **Deletion Error Handling:** If `send2trash` fails (e.g., on network drives), the backend utility (`move_to_trash`) must raise an exception rather than returning a boolean status. The GUI layer is responsible for catching this exception and prompting the user for a fallback to permanent deletion (`Path.unlink()`).
 
+### 2.5 Local AI Aesthetic Evaluation (Ollama VLM)
+*   **Ollama REST API Querying:** The application must query a locally running Ollama server via its standard HTTP REST API (defaulting to `http://localhost:11434/api/generate`) using Python's standard library `urllib` to avoid introducing external library dependencies.
+*   **Settings Persistence:** User preferences for the Ollama URL, model name, and prompt must be stored in a config JSON file located at `~/.photo_selector_toolbox/settings.json`.
+*   **Payload Optimization:** To ensure high performance and minimize transmission payloads, the image must be converted to RGB, resized to a maximum boundary of `400x400` pixels, and encoded as a base64 JPEG before being sent to the Ollama endpoint.
+*   **Robust Score Parsing:** The tool must parse the first valid floating-point number found in the Ollama response text and map it to a scale of `1.0` to `10.0`. If no number can be parsed, or if a connection timeout/error occurs, the tool must raise a descriptive `RuntimeError` to be cleanly logged in the GUI's scan status logs.
+*   **Interactive Diagnostic Support:** The GUI configuration dialog must provide an interactive "Test Connection" command that checks server availability, queries the `/api/tags` endpoint, and alerts the user if the selected model is not pulled, with diagnostic instructions.
+
+### 2.6 Persistent Score Cache
+*   **Persistent SQLite Cache:** The application must maintain a persistent SQLite database cache at `~/.photo_selector_toolbox/scores_cache.db` to store and restore calculated analysis values (Sharpness, Noise, Highlight/Shadow Clipping, and Aesthetic Scores).
+*   **MRU Limit:** The cache must be automatically pruned to hold only the most recently used 10,000 images, ordered by access time.
+*   **No Automatic Scanning on Load:** When a folder is opened, the application must immediately restore any cached values and load the images as quickly as possible for immediate review, without automatically initiating background scans or calculations.
+*   **Skip Calculation:** Manual scans must check the cache first and skip executing any analysis tools whose values have already been successfully calculated for the target file.
+
 ## 3. User Interface (GUI) Requirements
 
 ### 3.1 Layout and Rendering Constraints
@@ -55,6 +68,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
     *   **Move to Selection:** The fullscreen viewer must include a "Move to Selection (M)" button and bind `<m>` and `<M>` to move the current image and related files to the "Selection" subfolder. Within the Selection directory, RAW files must be sorted into a `RAW` subfolder, JPEG/JPG files into a `JPEG` subfolder, `.xmp` sidecar files into the same subfolder as their corresponding image file, and other files into the root of the Selection folder.
     *   **Parent Synchronization:** Navigating or deleting images in Fullscreen Viewer must update and synchronize the parent window's active selection.
     *   **Focus Mode Persistence:** If entering Fullscreen from Focus Mode, exiting the viewer (via Escape or Close button) must return the application to Focus Mode.
+    *   **Metadata and Calculated Values Display:** When viewing an image in fullscreen, the viewer must display a clean, non-intrusive metadata panel overlay in the bottom-left corner. This panel must display the file name, standardized EXIF metadata (ISO, Shutter Speed, Aperture, Focal Length), Lens Model, and all active/calculated quality scores (Sharpness Score, Noise Level, Highlight Clipping, Shadow Clipping, and Aesthetic Score). Uncalculated scores must be entirely omitted from this display (completely avoiding "N/A" placeholders), and the panel must update dynamically as the user navigates through images.
 *   **Keyboard Controls (Review & Focus Modes):**
     *   **Shortcut Collision Avoidance:** Key event handlers (Escape, Left, Right, Delete, BackSpace) in the main window must ignore events occurring within other Toplevel windows (like `FullscreenViewer` or confirmation dialogs) to prevent unexpected layout transitions and shortcut interference.
     *   **Escape (`<Escape>`):** Exits Focus mode. Does nothing in Standard mode.
@@ -64,6 +78,10 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 
 ### 3.3 State and Interaction Management
 *   **Thread Safety:** PIL Image objects must be loaded in background threads. Unscaled PIL images are returned and dynamically converted to `ImageTk.PhotoImage` in the main thread during `<Configure>` events. Image analysis scanning (sharpness, noise, clipping) runs on a background `ThreadPoolExecutor` to prevent duplicate GUI window spawning and resource conflicts on macOS.
+*   **Selection Debouncing:** Image triplet loading must be debounced by 100ms on selection change to avoid redundant disk and CPU work during rapid scrolling.
+*   **Stale Load Discards:** Background loaded images must be verified against the current panel selection paths before rendering. If the paths do not match, the stale result must be discarded.
+*   **Asynchronous EXIF Loading:** EXIF data retrieval must run in a background thread if not already cached, updating the UI upon completion to avoid blocking the main thread (tests/mocks may run synchronously).
+*   **Asynchronous Deletion:** File deletion in the Photo Selector must immediately remove items from candidates and listbox controls on the main thread to make deletion feel instantaneous, while the trashing process runs asynchronously in a background thread.
 *   **Tkinter Variable Access:** Access to Tkinter variables (`StringVar`, `IntVar`) must occur only in the main thread. Values must be passed as arguments to worker threads.
 *   **Data Formatting Safety:** UI elements processing dynamically loaded scores must utilize explicit type checks (e.g., `isinstance(score_val, float)`) to safely format numerical data and prevent errors from 'N/A' string defaults.
 *   **State Transitions:** The Photo Selector starts directly on the main preview and review screen. Selecting a folder loads the images immediately without scanning. An optional sharpness/noise analysis scan is offered via a modal configuration dialog, and progress is logged in a separate tab without locking the main photo review interface.
@@ -105,6 +123,9 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 ### 5.2 Release Management
 *   **Permissions:** GitHub Actions require `permissions: contents: write` to allow the workflow to create and update releases.
 *   **Publishing Strategy:** The project utilizes `softprops/action-gh-release` to automatically publish artifacts to the `nightly` tag on every push to the `main` branch.
+*   **Changelog and Upcoming Changes:** All notable changes must be documented in a central `CHANGELOG.md` file in the root of the project using the Keep a Changelog format. Changes implemented in development between releases must be documented under an `[Upcoming]` section.
+*   **GitHub Release Preservation:** Every tagged stable release (tags matching `v*`) must be published as a new GitHub Release and preserved indefinitely. No old releases or release assets may be pruned or deleted from the GitHub Releases page.
+*   **Older Version Access Documentation:** The `README.md` must maintain up-to-date instructions on how to access and install older versions of the standalone executables and the Homebrew Casks.
 
 ### 5.3 Homebrew Distribution (macOS)
 *   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing Cask definitions for both stable releases and nightly builds.

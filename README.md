@@ -8,10 +8,17 @@ This tool analyzes image metadata (EXIF) from a given root folder, including all
 - Lens Model
 
 It also includes advanced utilities for culling photos:
-- **Blurry Image Finder**: Detects out-of-focus or motion-blurred shots.
-- **Duplicate Finder**: Finds identical image files by SHA256 content hashing.
+- **Photo Selector**:
+  - **Sharpness & Noise Analysis**: Evaluates image sharpness (using a center-cropped block variance grid) and estimates noise (using Median Absolute Deviation).
+  - **Highlight & Shadow Clipping**: Automatically identifies percentage of blown highlights and crushed shadows.
+  - **Multi-Image & Fullscreen View**: View the active image side-by-side with its neighbors or inspect it in fullscreen.
+  - **Selection Organizing**: Move selected files (automatically separating RAW and JPEG files into their respective subfolders) or delete them safely via the trash bin.
+  - **Dynamic File Type Filtering**: Focus your review by filtering by specific image formats (e.g. only JPEG or RAW files).
+- **Duplicate Finder**: Identifies duplicate images by content (SHA256 hash) with safe deletion options.
+- **Path Resolution Utility**: Resolves network share paths (`smb://`) to local mount points automatically.
 
 ---
+
 
 ## Installation & Usage
 
@@ -75,6 +82,27 @@ The standalone executable comes with `exiftool` bundled, so you don't need to in
 
 ---
 
+### Accessing Older Releases
+
+All previous versions and release histories are kept indefinitely on GitHub.
+
+#### Standalone Executable (All Platforms)
+To download a standalone executable for an older version:
+1. Visit the [GitHub Releases](https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases) page.
+2. Scroll to locate your desired version tag (e.g., `v0.1.0`).
+3. Under the **Assets** section of that release, download the ZIP file for your platform (Windows, macOS, or Linux).
+
+#### Homebrew Cask (macOS)
+Homebrew installs the latest stable version by default. If you need to install a specific historical version, you can install it directly using the Cask raw file URL from the tap repository's git history:
+1. Find the commit hash associated with the version you want in the [homebrew-photo-selector-toolbox](https://github.com/alexpp90/homebrew-photo-selector-toolbox) repository's history (specifically when `Casks/photo-selector-toolbox.rb` was updated for that version).
+2. Install it by passing the raw URL of that Cask version to `brew install`:
+   ```bash
+   brew install --cask https://raw.githubusercontent.com/alexpp90/homebrew-photo-selector-toolbox/<COMMIT_HASH>/Casks/photo-selector-toolbox.rb
+   ```
+   *(Replace `<COMMIT_HASH>` with the actual commit hash, e.g., the commit where that version's Cask was committed).*
+
+---
+
 ### Option 3: Run from Source
 
 1. Clone the repository.
@@ -97,8 +125,8 @@ The standalone executable comes with `exiftool` bundled, so you don't need to in
    # GUI
    poetry run photo-selector-gui
 
-   # CLI
-   poetry run photo-selector-toolbox /path/to/photos
+   # CLI (Extract metadata and generate plots)
+   poetry run photo-selector-toolbox /path/to/photos [--output <output_dir>] [--show-plots] [--debug]
    ```
 
 ---
@@ -107,10 +135,11 @@ The standalone executable comes with `exiftool` bundled, so you don't need to in
 
 - **No external dependencies** required for the standalone build.
 - **Cross-platform**: Runs on Windows, Linux, and macOS.
-- **RAW Support**: Handles common RAW formats (.ARW, .NEF, .CR2, etc.) using `exiftool` (bundled in the executable).
-- **Fast Analysis**: Uses optimized metadata extraction.
-- **Blurry Image Finder**: Automatically detects blurry images using Laplacian Variance analysis, helping you cull low-quality shots.
-- **Duplicate Finder**: Identifies duplicate images by file size and content (SHA256 hash), with safety features to prevent accidental deletion of all copies.
+- **RAW Support**: Handles common RAW formats (`.ARW`, `.NEF`, `.CR2`, etc.) using `exiftool` (bundled in the executable).
+- **Parallel Analysis**: Uses multi-threaded extraction to speed up metadata processing.
+- **Photo Selector Tool**: Analyze sharpness, noise levels, and highlight/shadow clipping. Compare files side-by-side or fullscreen, apply dynamic format filters, and move/delete selections cleanly.
+- **Network Path Resolution**: Seamlessly resolves `smb://` URLs to macOS/Linux local mount points.
+- **Duplicate Finder**: Identifies duplicate images by size and SHA256 checksum with robust deletion fallback safety.
 
 ---
 
