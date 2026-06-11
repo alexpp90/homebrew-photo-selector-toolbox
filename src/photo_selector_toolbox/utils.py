@@ -16,17 +16,19 @@ except ImportError:
     rawpy = None
 
 
-def resolve_path(path_str: str) -> Path:
+def resolve_path(path_str: str | Path) -> Path:
     """
     Resolves a path string to a pathlib.Path object.
     Supports resolving smb:// URLs to local mount points on Linux (GVFS) and macOS.
 
     Args:
-        path_str: The input path string (e.g., '/tmp/test' or 'smb://server/share/path')
+        path_str: The input path string or Path object (e.g., '/tmp/test' or 'smb://server/share/path')
 
     Returns:
         Path object pointing to the local file system location.
     """
+    if isinstance(path_str, Path):
+        path_str = str(path_str)
     # Check if it looks like an SMB URL
     if path_str.startswith("smb://"):
         # Parse the URL
@@ -293,4 +295,115 @@ def is_excluded_subfolder(file_path: Path, root_path: Path) -> bool:
     except ValueError:
         pass
     return False
+
+
+def calculate_dhash(image: Image.Image, hash_size: int = 8) -> int:
+    """
+    Calculates the difference hash (dHash) of a PIL Image.
+
+    Args:
+        image: The PIL Image to hash.
+        hash_size: The grid size. The image will be resized to (hash_size + 1) x hash_size.
+
+    Returns:
+        The 64-bit integer hash representing the image.
+    """
+    # Resize to (hash_size + 1) x hash_size, convert to grayscale (L)
+    resized = image.resize((hash_size + 1, hash_size), Image.Resampling.BILINEAR).convert('L')
+    pixels = list(resized.getdata())
+
+    diff = []
+    for row in range(hash_size):
+        for col in range(hash_size):
+            pixel_left = pixels[row * (hash_size + 1) + col]
+            pixel_right = pixels[row * (hash_size + 1) + col + 1]
+            diff.append(pixel_left > pixel_right)
+
+    # Convert binary array to integer
+    decimal_value = 0
+    for value in diff:
+        decimal_value = (decimal_value << 1) | value
+    return decimal_value
+
+
+def group_files_by_similarity(files: List[Path], files_map, threshold: int = 10) -> List[List[Path]]:
+    """
+    Groups consecutive image files that are visually similar based on their dHash Hamming distance.
+
+    Args:
+        files: A list of Paths sorted alphabetically/chronologically.
+        files_map: A dict mapping Path to ScanResult, which has a scores dict.
+        threshold: Hamming distance threshold (<= threshold means similar).
+
+    Returns:
+        A list of groups, where each group is a list of Paths.
+    """
+    if not files:
+        return []
+
+    groups = []
+    current_group = [files[0]]
+
+    for next_file in files[1:]:
+        prev_file = current_group[-1]
+
+        prev_res = files_map.get(prev_file)
+        next_res = files_map.get(next_file)
+
+        prev_dhash = prev_res.scores.get("dhash") if prev_res else None
+        next_dhash = next_res.scores.get("dhash") if next_res else None
+
+        similar = False
+        if prev_dhash is not None and next_dhash is not None:
+            try:
+                # Convert hex string back to int if needed
+                h1 = int(prev_dhash, 16) if isinstance(prev_dhash, str) else int(prev_dhash)
+                h2 = int(next_dhash, 16) if isinstance(next_dhash, str) else int(next_dhash)
+
+                # Hamming distance: number of set bits in XOR
+                dist = bin(h1 ^ h2).count('1')
+                if dist <= threshold:
+                    similar = True
+            except (ValueError, TypeError):
+                pass
+
+        if similar:
+            current_group.append(next_file)
+        else:
+            groups.append(current_group)
+            current_group = [next_file]
+
+    groups.append(current_group)
+    return groups
+
+
+def select_representative(group_files: List[Path], files_map) -> Path:
+    """
+    Selects the best representative image in a group.
+    Prefers the one with the highest sharpness score, falling back to the first file in the group.
+
+    Args:
+        group_files: List of Paths in the group.
+        files_map: Dict mapping Path to ScanResult.
+
+    Returns:
+        The Path of the selected representative image.
+    """
+    if not group_files:
+        raise ValueError("Cannot select representative from empty group")
+
+    best_path = group_files[0]
+    best_score = -1.0
+
+    for path in group_files:
+        res = files_map.get(path)
+        if res:
+            score_val = res.scores.get("sharpness")
+            if isinstance(score_val, (int, float)):
+                if float(score_val) > best_score:
+                    best_score = float(score_val)
+                    best_path = path
+
+    return best_path
+
 

@@ -276,9 +276,15 @@ class ImagePanelsMixin:
         n_img = get_image(next_path, size_next)
 
         # Update UI in main thread
-        self.parent.after(0, lambda: self.update_panels_final(p_img, c_img, n_img))
+        self.parent.after(0, lambda: self.update_panels_final(p_img, c_img, n_img, prev_path, curr_path, next_path))
 
-    def update_panels_final(self, p_img, c_img, n_img):
+    def update_panels_final(self, p_img, c_img, n_img, prev_path, curr_path, next_path):
+        if (
+            self.panel_prev.path != prev_path
+            or self.panel_curr.path != curr_path
+            or self.panel_next.path != next_path
+        ):
+            return  # Stale load, ignore
         self.current_triplet_images = (p_img, c_img, n_img)
         self.refresh_active_view()
 

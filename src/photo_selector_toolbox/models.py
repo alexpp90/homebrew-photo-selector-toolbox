@@ -74,3 +74,12 @@ class ScanResult:
     @shadow_clipping.setter
     def shadow_clipping(self, val: Union[float, str]):
         self.scores["shadow_clipping"] = val
+
+    @property
+    def aesthetic_score(self) -> Union[float, str]:
+        """Accessor for AI aesthetic evaluation score."""
+        return self.scores.get("aesthetic", "N/A")
+
+    @aesthetic_score.setter
+    def aesthetic_score(self, val: Union[float, str]):
+        self.scores["aesthetic"] = val

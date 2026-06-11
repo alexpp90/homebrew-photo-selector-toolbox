@@ -60,7 +60,7 @@ def find_duplicates(root_folder, callback=None):
             with os.scandir(path) as it:
                 for entry in it:
                     if entry.is_file():
-                        if entry.name.lower().endswith(ext_tuple):
+                        if entry.name.lower().endswith(ext_tuple) and not entry.name.startswith("._"):
                             try:
                                 s = entry.stat().st_size
                                 size_groups[s].append(Path(entry.path))

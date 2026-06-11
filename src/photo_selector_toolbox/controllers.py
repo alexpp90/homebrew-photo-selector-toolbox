@@ -150,13 +150,26 @@ class ImageCacheManager:
 
 def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> ScanResult:
     """Helper module function to process a single image for parallel execution."""
-    scores = {}
+    from photo_selector_toolbox.cache import ScoreCache
+    cache = ScoreCache()
+    cached = cache.get_scores(f)
+
+    # Initialize scores with cached values
+    scores = {name: val for name, val in cached.items() if val != "N/A"}
+    new_calculations = {}
+
     for tool_name, enabled in tools.items():
         if enabled:
+            # Skip if already calculated
+            if tool_name in scores:
+                continue
+
             try:
                 tool_class = ToolRegistry.get(tool_name)
                 tool_instance = tool_class()
-                scores[tool_name] = tool_instance.analyze(f, grid_size=grid_size)
+                val = tool_instance.analyze(f, grid_size=grid_size)
+                scores[tool_name] = val
+                new_calculations[tool_name] = val
             except KeyError:
                 logger.warning(f"Tool {tool_name} not registered in ToolRegistry.")
                 scores[tool_name] = "N/A"
@@ -164,7 +177,12 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
                 logger.error(f"Error executing tool {tool_name}: {e}")
                 scores[tool_name] = "N/A"
         else:
-            scores[tool_name] = "N/A"
+            if tool_name not in scores:
+                scores[tool_name] = "N/A"
+
+    # Save new calculations to cache
+    if new_calculations:
+        cache.set_scores(f, new_calculations)
 
     # Fetch EXIF
     exif = get_exif_data(f)
@@ -239,7 +257,7 @@ class ScanController:
             log(f"Scanning {total} images. Starting analysis...")
 
             import os
-            max_workers = min(8, (os.cpu_count() or 1) + 4)
+            max_workers = max(1, min(4, (os.cpu_count() or 4) // 2))
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
                 futures = {

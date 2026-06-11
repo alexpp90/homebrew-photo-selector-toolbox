@@ -20,13 +20,14 @@ This project uses a multi-agent system with **5 specialized subagents**. The coo
 | **`@test_agent`** | Testing: `tests/`, `benchmarks/` | `.gemini/agents/test_agent.md` |
 | **`@build_agent`** | Build & CI: `scripts/`, `.github/workflows/`, `pyproject.toml` | `.gemini/agents/build_agent.md` |
 | **`@photo_researcher_agent`** | Photographic science, image quality metrics, aesthetics, and requirement elucidation. | `.gemini/agents/photo_researcher_agent.md` |
+| **`@ux_agent`** | Professional design, user experience (UX) flow, user patterns, and flow analysis. | `.gemini/agents/ux_agent.md` |
 
 ### Coordinator Behavior
 
 The coordinator agent (default) handles:
 
 - **Auto-delegation:** Analyzes incoming requests and routes work to the appropriate subagent based on which files are affected. If a task spans multiple agents' scopes, the coordinator breaks it into subtasks and delegates each part.
-- **Consultation on vagueness:** If a request is vague, subjective, or requires deep photographic domain knowledge, the coordinator consults `@photo_researcher_agent` first to establish a concrete technical design/specification before delegating code tasks.
+- **Consultation on vagueness:** If a request is vague, subjective, or requires deep photographic domain knowledge, the coordinator consults `@photo_researcher_agent` first to establish a concrete technical design/specification before delegating code tasks. If a request involves user workflows, layouts, visual improvements, or styling refinements, the coordinator consults `@ux_agent` to establish a design specification.
 - **Requirements maintenance:** After every change that modifies behavior, the coordinator ensures `REQUIREMENTS.md` is reviewed and updated to stay consistent with the codebase.
 - **Cross-agent coordination:** When changes in one agent's scope affect another (e.g., a backend API change that impacts the GUI), the coordinator ensures both agents are informed and aligned.
 
@@ -37,6 +38,7 @@ The coordinator agent (default) handles:
 - Changes to **tests, coverage, or test infrastructure** → `@test_agent`
 - Changes to **build scripts, CI/CD, dependencies, or packaging** → `@build_agent`
 - **Vague requirements, research on photographic algorithms, or artistic/composition specifications** → `@photo_researcher_agent`
+- **UI/UX design, visual styling guidelines, layout ergonomics, or user pattern analysis** → `@ux_agent` (acts as consultant/designer)
 - **Cross-cutting changes** (e.g., refactoring that touches both backend and GUI) → Coordinator splits into subtasks and delegates to each relevant agent
 
 ### Shared Skill

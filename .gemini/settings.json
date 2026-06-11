@@ -19,6 +19,10 @@
     "photo_researcher_agent": {
       "model": "claude-sonnet-4-20250514",
       "description": "Photo technical and artistic research specialist. Consulted when requirements are vague, requiring deep domain knowledge in photography, metadata standards, image quality metrics, or color science."
+    },
+    "ux_agent": {
+      "model": "claude-sonnet-4-20250514",
+      "description": "Professional design, user experience (UX) flow, user patterns, and flow analysis specialist. Designs premium interface aesthetics, micro-interactions, layout ergonomics, and monitors user interaction trends."
     }
   }
 }
