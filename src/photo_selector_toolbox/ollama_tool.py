@@ -7,7 +7,7 @@ import urllib.error
 import io
 import threading
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Tuple, Union
 from PIL import Image
 
 from photo_selector_toolbox.tools import AnalysisTool, ToolRegistry
@@ -23,8 +23,16 @@ DEFAULT_CONFIG = {
     "ollama_model": "llava",
     "ollama_prompt": (
         "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
-        "Consider composition, lighting, focus, and subject. "
-        "Start your response with the score in the format [SCORE: X.Y], followed by a short sentence of reasoning."
+        "Consider composition, lighting, focus, and subject.\n\n"
+        "Use this calibration scale:\n"
+        "- 1.0 - 3.0: Very poor (blurry, out of focus, extremely poor lighting/exposure, or no clear subject).\n"
+        "- 4.0 - 6.0: Average (acceptable quality but has noticeable flaws in composition, lighting, or sharpness).\n"
+        "- 7.0 - 8.0: Good (sharp, well-composed, appealing lighting/subject).\n"
+        "- 9.0 - 10.0: Outstanding (perfect exposure/lighting, creative composition, excellent sharpness, professional grade).\n\n"
+        "Start your response in this exact format:\n"
+        "[SCORE: X.Y] [ANALYSIS: tag]\n"
+        "where tag is exactly a 1 or 2 word description of the main reason (e.g. 'Blurry', 'Good composition', 'Under-exposed', 'Great lighting', 'Soft focus', 'Well-composed'). "
+        "Follow it with a short sentence explaining your reasoning."
     ),
 }
 
@@ -46,13 +54,20 @@ def load_config() -> Dict[str, str]:
             config = DEFAULT_CONFIG.copy()
             config.update(user_config)
 
-            # Auto-migrate prompt if it uses the old default format
-            old_prompt = (
-                "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
-                "Consider composition, lighting, focus, and subject. "
-                "Provide your reasoning in one short sentence, then end your response with the score in the format [SCORE: X.Y]."
-            )
-            if config.get("ollama_prompt") == old_prompt:
+            # Auto-migrate prompt if it uses any of the old default formats
+            old_prompts = [
+                (
+                    "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
+                    "Consider composition, lighting, focus, and subject. "
+                    "Provide your reasoning in one short sentence, then end your response with the score in the format [SCORE: X.Y]."
+                ),
+                (
+                    "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
+                    "Consider composition, lighting, focus, and subject. "
+                    "Start your response with the score in the format [SCORE: X.Y], followed by a short sentence of reasoning."
+                )
+            ]
+            if config.get("ollama_prompt") in old_prompts:
                 config["ollama_prompt"] = DEFAULT_CONFIG["ollama_prompt"]
                 save_config(config)
 
@@ -86,7 +101,7 @@ class OllamaAestheticTool(AnalysisTool):
     # Class-level lock to serialize local Ollama inference requests
     _lock = threading.Lock()
 
-    def analyze(self, filepath: Path, **kwargs: Any) -> float:
+    def analyze(self, filepath: Path, **kwargs: Any) -> Tuple[float, str]:
         config = load_config()
         ollama_url = config.get("ollama_url", DEFAULT_CONFIG["ollama_url"])
         model_name = config.get("ollama_model", DEFAULT_CONFIG["ollama_model"])
@@ -133,10 +148,10 @@ class OllamaAestheticTool(AnalysisTool):
         except Exception as e:
             raise RuntimeError(f"Ollama API request failed: {e}")
 
-        # 3. Parse score from output
-        match = re.search(r"\[SCORE:\s*(\d+(?:\.\d+)?)\]", response_text, re.IGNORECASE)
-        if match:
-            score = float(match.group(1))
+        # 3. Parse score and analysis tag from output
+        match_score = re.search(r"\[SCORE:\s*(\d+(?:\.\d+)?)\]", response_text, re.IGNORECASE)
+        if match_score:
+            score = float(match_score.group(1))
         else:
             # Fallback to parsing first numeric score found
             matches = re.findall(r"\d+(?:\.\d+)?", response_text)
@@ -144,5 +159,14 @@ class OllamaAestheticTool(AnalysisTool):
                 raise RuntimeError(f"Could not parse a numeric score from Ollama output: '{response_text}'")
             score = float(matches[0])
 
-        return max(1.0, min(10.0, score))
+        score = max(1.0, min(10.0, score))
+
+        match_analysis = re.search(r"\[ANALYSIS:\s*([^\]]+)\]", response_text, re.IGNORECASE)
+        analysis_tag = "N/A"
+        if match_analysis:
+            analysis_tag = match_analysis.group(1).strip()
+            if len(analysis_tag) > 30:
+                analysis_tag = analysis_tag[:27] + "..."
+        
+        return score, analysis_tag
 

@@ -49,7 +49,7 @@ def dummy_image_file(tmp_path):
 @patch("urllib.request.urlopen")
 def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock Ollama HTTP response payload
-    mock_resp_payload = {"response": "The aesthetic quality score of this photo is 8.5."}
+    mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."}
     
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
@@ -57,9 +57,10 @@ def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     mock_urlopen.return_value = mock_response
 
     tool = OllamaAestheticTool()
-    score = tool.analyze(dummy_image_file)
+    score, tag = tool.analyze(dummy_image_file)
 
     assert score == 8.5
+    assert tag == "Great lighting"
     mock_urlopen.assert_called_once()
     # Check that URL used default
     req = mock_urlopen.call_args[0][0]
@@ -78,16 +79,17 @@ def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_d
     save_config(custom_config)
 
     # Mock response
-    mock_resp_payload = {"response": "Score: 9.3 out of 10"}
+    mock_resp_payload = {"response": "[SCORE: 9.3] [ANALYSIS: Sharp] Score: 9.3 out of 10"}
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
 
     tool = OllamaAestheticTool()
-    score = tool.analyze(dummy_image_file)
+    score, tag = tool.analyze(dummy_image_file)
 
     assert score == 9.3
+    assert tag == "Sharp"
     req = mock_urlopen.call_args[0][0]
     assert req.full_url == "http://192.168.1.50:11434/api/generate"
     
@@ -143,12 +145,44 @@ def test_load_config_migration(temp_config_dir):
 
     # Call load_config, which should trigger the migration
     loaded = load_config()
-    
-    # Assert that the prompt is migrated to the new default
     assert loaded["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
+
+    # Now test the second legacy default prompt format
+    old_prompt_2 = (
+        "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
+        "Consider composition, lighting, focus, and subject. "
+        "Start your response with the score in the format [SCORE: X.Y], followed by a short sentence of reasoning."
+    )
+    old_config_2 = {
+        "ollama_url": "http://localhost:11434",
+        "ollama_model": "llava",
+        "ollama_prompt": old_prompt_2,
+    }
+    with open(ot.CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(old_config_2, f, indent=4)
+
+    loaded_2 = load_config()
+    assert loaded_2["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
     
     # Verify that it is also written back to disk
     with open(ot.CONFIG_FILE, "r", encoding="utf-8") as f:
         on_disk = json.load(f)
     assert on_disk["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
+
+
+@patch("urllib.request.urlopen")
+def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_config_dir):
+    # Mock response with SCORE but no ANALYSIS tag
+    mock_resp_payload = {"response": "The aesthetic quality score of this photo is 8.5."}
+    
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
+    mock_response.__enter__.return_value = mock_response
+    mock_urlopen.return_value = mock_response
+
+    tool = OllamaAestheticTool()
+    score, tag = tool.analyze(dummy_image_file)
+
+    assert score == 8.5
+    assert tag == "N/A"
 

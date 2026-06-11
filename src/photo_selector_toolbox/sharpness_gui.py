@@ -191,7 +191,18 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.scan_status_lbl.pack(pady=5)
 
         # Log area
-        self.log_text = tk.Text(container, height=15, state="disabled")
+        self.log_text = tk.Text(
+            container,
+            height=15,
+            state="disabled",
+            bg="#27272A",
+            fg="#F4F4F5",
+            insertbackground="#F4F4F5",
+            highlightbackground="#27272A",
+            highlightcolor="#2563EB",
+            borderwidth=1,
+            relief="flat"
+        )
         self.log_text.pack(fill="both", expand=True, pady=10)
 
         self.cancel_btn = ttk.Button(
@@ -301,7 +312,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         sb.pack(side="right", fill="y")
 
         self.candidate_listbox = tk.Listbox(
-            self.sidebar, yscrollcommand=sb.set, selectmode="single"
+            self.sidebar,
+            yscrollcommand=sb.set,
+            selectmode="single",
+            bg="#27272A",
+            fg="#F4F4F5",
+            selectbackground="#2563EB",
+            selectforeground="#FFFFFF",
+            highlightbackground="#27272A",
+            highlightcolor="#2563EB",
+            borderwidth=1,
+            relief="flat"
         )
         self.candidate_listbox.pack(fill="both", expand=True)
         sb.config(command=self.candidate_listbox.yview)
@@ -399,6 +420,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             return
 
         dialog = tk.Toplevel(self)
+        dialog.configure(bg="#18181B")
         dialog.title("Scan Settings")
         dialog.geometry("500x300")
         dialog.resizable(False, False)
@@ -489,6 +511,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         config = load_config()
         
         dialog = tk.Toplevel(self)
+        dialog.configure(bg="#18181B")
         dialog.title("Ollama Aesthetic Settings")
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
@@ -530,7 +553,18 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         prompt_frame.pack(fill="both", expand=True, pady=5)
         ttk.Label(prompt_frame, text="Prompt:", width=15, anchor="w").pack(side="top", anchor="w", pady=(0, 2))
         
-        prompt_text = tk.Text(prompt_frame, height=5, font=("Helvetica", 10))
+        prompt_text = tk.Text(
+            prompt_frame,
+            height=5,
+            font=("Helvetica", 10),
+            bg="#27272A",
+            fg="#F4F4F5",
+            insertbackground="#F4F4F5",
+            highlightbackground="#27272A",
+            highlightcolor="#2563EB",
+            borderwidth=1,
+            relief="flat"
+        )
         prompt_text.pack(fill="both", expand=True)
         prompt_text.insert("1.0", config.get("ollama_prompt", ""))
         
@@ -1198,6 +1232,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if missing:
             # Show progress dialog
             dialog = tk.Toplevel(self)
+            dialog.configure(bg="#18181B")
             dialog.title("Analyzing Series...")
             dialog.resizable(False, False)
             dialog.transient(self.winfo_toplevel())
@@ -1879,8 +1914,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if sd_score != "N/A":
             lines.append(f"Shadow Clipping: {sd_str}")
         aesthetic_score = res.scores.get("aesthetic", "N/A")
+        aesthetic_analysis = res.scores.get("aesthetic_analysis")
         if aesthetic_score != "N/A":
-            lines.append(f"Aesthetic Score: {format_score(aesthetic_score)}")
+            aes_str = format_score(aesthetic_score)
+            if aesthetic_analysis and aesthetic_analysis != "N/A":
+                aes_str += f" ({aesthetic_analysis})"
+            lines.append(f"Aesthetic Score: {aes_str}")
         lines.append(meta_str)
         txt = "\n".join(lines)
         self.meta_lbl.config(text=txt)
@@ -1921,9 +1960,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 self.focus_sd_lbl.pack(side="top", pady=(0, 5), anchor="w")
             
             aesthetic_score = res.scores.get("aesthetic", "N/A")
+            aesthetic_analysis = res.scores.get("aesthetic_analysis")
             if aesthetic_score != "N/A" and hasattr(self, "focus_aesthetic_lbl"):
+                aes_str = format_score(aesthetic_score)
+                if aesthetic_analysis and aesthetic_analysis != "N/A":
+                    aes_str += f" ({aesthetic_analysis})"
                 self.focus_aesthetic_lbl.config(
-                    text=f"Aesthetic Score: {format_score(aesthetic_score)}"
+                    text=f"Aesthetic Score: {aes_str}"
                 )
                 self.focus_aesthetic_lbl.pack(side="top", pady=(0, 5), anchor="w")
 
@@ -1962,8 +2005,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             lines.append(" | ".join(hl_sd_parts))
 
         aes_score = res.scores.get("aesthetic", "N/A")
+        aes_analysis = res.scores.get("aesthetic_analysis")
         if aes_score != "N/A":
-            lines.append(f"AI: {format_score(aes_score)}")
+            aes_str = format_score(aes_score)
+            if aes_analysis and aes_analysis != "N/A":
+                aes_str += f" ({aes_analysis})"
+            lines.append(f"AI: {aes_str}")
         lines.append(meta_str)
 
         text = "\n".join(lines)
@@ -2116,6 +2163,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             return
 
         dialog = tk.Toplevel(self)
+        dialog.configure(bg="#18181B")
         dialog.title("Confirm Delete")
         dialog.resizable(False, False)
         dialog.transient(self.winfo_toplevel())
