@@ -168,8 +168,15 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
                 tool_class = ToolRegistry.get(tool_name)
                 tool_instance = tool_class()
                 val = tool_instance.analyze(f, grid_size=grid_size)
-                scores[tool_name] = val
-                new_calculations[tool_name] = val
+                if isinstance(val, tuple) and len(val) == 2:
+                    score_val, analysis_val = val
+                    scores[tool_name] = score_val
+                    new_calculations[tool_name] = score_val
+                    scores[f"{tool_name}_analysis"] = analysis_val
+                    new_calculations[f"{tool_name}_analysis"] = analysis_val
+                else:
+                    scores[tool_name] = val
+                    new_calculations[tool_name] = val
             except KeyError:
                 logger.warning(f"Tool {tool_name} not registered in ToolRegistry.")
                 scores[tool_name] = "N/A"

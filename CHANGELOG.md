@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Upcoming]
 
-### Added
-- *New features implemented in development between releases will be added here.*
+- Refactored `OllamaAestheticTool` to return a tuple containing the float score and a parsed one or two-word analysis reason tag.
+- Added a calibration scale to the default Ollama prompt to reduce score randomness.
+- Updated prompt migration logic to migrate legacy default prompts to the new default calibrated prompt.
+- Updated Standard Mode metadata panel, Focus Mode panel, and Fullscreen Viewer metadata overlay to display the aesthetic tag in parentheses next to the score.
 
 ---
 

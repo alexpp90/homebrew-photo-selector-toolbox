@@ -39,7 +39,8 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Ollama REST API Querying:** The application must query a locally running Ollama server via its standard HTTP REST API (defaulting to `http://localhost:11434/api/generate`) using Python's standard library `urllib` to avoid introducing external library dependencies.
 *   **Settings Persistence:** User preferences for the Ollama URL, model name, and prompt must be stored in a config JSON file located at `~/.photo_selector_toolbox/settings.json`.
 *   **Payload Optimization:** To ensure high performance and minimize transmission payloads, the image must be converted to RGB, resized to a maximum boundary of `400x400` pixels, and encoded as a base64 JPEG before being sent to the Ollama endpoint.
-*   **Robust Score Parsing:** The tool must parse the first valid floating-point number found in the Ollama response text and map it to a scale of `1.0` to `10.0`. If no number can be parsed, or if a connection timeout/error occurs, the tool must raise a descriptive `RuntimeError` to be cleanly logged in the GUI's scan status logs.
+*   **Robust Score & Tag Parsing:** The tool must parse the first valid floating-point number found in the Ollama response text and map it to a scale of `1.0` to `10.0` as the aesthetic score, and parse a one or two-word description tag in the format `[ANALYSIS: tag]` (falling back to `"N/A"` if not present). If no numeric score can be parsed, or if a connection timeout/error occurs, the tool must raise a descriptive `RuntimeError` to be cleanly logged in the GUI's scan status logs. When the tag is available, the GUI must display it in parentheses next to the score.
+*   **Aesthetic Rating Calibration:** The default Ollama prompt must define calibration scale ranges (e.g. 1-3 very poor, 4-6 average, 7-8 good, 9-10 outstanding) to calibrate model outputs and reduce score randomness.
 *   **Interactive Diagnostic Support:** The GUI configuration dialog must provide an interactive "Test Connection" command that checks server availability, queries the `/api/tags` endpoint, and alerts the user if the selected model is not pulled, with diagnostic instructions.
 
 ### 2.6 Persistent Score Cache
@@ -87,6 +88,14 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **State Transitions:** The Photo Selector starts directly on the main preview and review screen. Selecting a folder loads the images immediately without scanning. An optional sharpness/noise analysis scan is offered via a modal configuration dialog, and progress is logged in a separate tab without locking the main photo review interface.
 *   **Error Reporting:** Analysis errors in the GUI must be displayed via a popup alert, and the progress bar state must reflect the failure (it must not auto-complete).
 *   **Image RAW Loading:** The utility function `utils.load_image_preview` must explicitly convert images to `RGB` mode to handle 16-bit RAW data (`I;16`) that otherwise causes `ImageTk` crashes.
+
+### 3.4 Visual Aesthetics and Dark Theme System
+*   **Application Dark Theme:** The application enforces a professional dark theme built on top of the `clam` style system. The base background is set to `#18181B` (Zinc-900), frame/card containers to `#27272A` (Zinc-800), active buttons/highlights to `#2563EB` (Blue-600), and foreground text to `#FAFAFA` (Zinc-50).
+*   **Custom Widget Configuration:** Native Tkinter widgets (like `tk.Listbox`, `tk.Text`, and custom `tk.Toplevel` dialog frames) must be manually styled with matching background, foreground, selection, and border colors to preserve a seamless interface theme.
+*   **Dynamic Visual Placeholders:** Missing previews, loading states, and empty panels must not display plain text labels. They must utilize a dynamically drawn PIL gradient image showing a camera outline icon and anti-aliased status text to fill the container.
+*   **Image Statistics Dashboard Overview:** The Image Library Statistics interface must provide an interactive "Overview" notebook tab displaying instructional dashboard cards when the app is first launched.
+*   **Matplotlib Theme Integration:** Figures rendered inside the statistics plots must dynamically map tick marks, labels, text elements, background panels, and distribution bars to the application's dark theme palette.
+*   **Duplicate Finder Empty State:** The Duplicate Finder scrollable list must display a clear empty-state card when no duplicate scanning is active or completed.
 
 ## 4. Technical & Architectural Requirements
 

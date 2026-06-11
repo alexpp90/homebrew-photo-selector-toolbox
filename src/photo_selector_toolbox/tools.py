@@ -19,8 +19,8 @@ class AnalysisTool(ABC):
         pass
 
     @abstractmethod
-    def analyze(self, filepath: Path, **kwargs: Any) -> float:
-        """Run analysis on a single file. Returns a numeric score."""
+    def analyze(self, filepath: Path, **kwargs: Any) -> Any:
+        """Run analysis on a single file. Returns a numeric score or a tuple/dict of results."""
         pass
 
 

@@ -34,6 +34,7 @@ class FullscreenViewer(tk.Toplevel):
         self.title(f"Fullscreen - {path.name}")
         self.attributes("-fullscreen", True)
         self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}")
+        self.configure(bg="black")
 
         # UI Elements
         self.canvas = tk.Canvas(self, bg="black", highlightthickness=0)
@@ -112,38 +113,39 @@ class FullscreenViewer(tk.Toplevel):
             self,
             padding=15,
             relief="solid",
-            borderwidth=1
+            borderwidth=1,
+            style="MetaPanel.TFrame"
         )
         self.meta_panel.place(relx=0.03, rely=0.97, anchor="sw")
 
         self.meta_filename_lbl = ttk.Label(
             self.meta_panel,
             text="",
-            font=("Helvetica", 12, "bold")
+            style="MetaPanelTitle.TLabel"
         )
         self.meta_filename_lbl.pack(side="top", anchor="w")
 
         self.meta_exposure_lbl = ttk.Label(
             self.meta_panel,
             text="",
-            font=("Helvetica", 10)
+            style="MetaPanelExposure.TLabel"
         )
         self.meta_exposure_lbl.pack(side="top", anchor="w", pady=(2, 0))
 
         self.meta_lens_lbl = ttk.Label(
             self.meta_panel,
             text="",
-            font=("Helvetica", 9, "italic")
+            style="MetaPanelLens.TLabel"
         )
 
         self.meta_sep = ttk.Separator(self.meta_panel, orient="horizontal")
 
         self.metric_labels = {
-            "sharpness": ttk.Label(self.meta_panel, text="", font=("Helvetica", 10)),
-            "noise": ttk.Label(self.meta_panel, text="", font=("Helvetica", 10)),
-            "highlight": ttk.Label(self.meta_panel, text="", font=("Helvetica", 10)),
-            "shadow": ttk.Label(self.meta_panel, text="", font=("Helvetica", 10)),
-            "aesthetic": ttk.Label(self.meta_panel, text="", font=("Helvetica", 10))
+            "sharpness": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel"),
+            "noise": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel"),
+            "highlight": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel"),
+            "shadow": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel"),
+            "aesthetic": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel")
         }
 
         # Initialize metadata display
@@ -225,6 +227,7 @@ class FullscreenViewer(tk.Toplevel):
             return
 
         dialog = tk.Toplevel(self)
+        dialog.configure(bg="#18181B")
         dialog.title("Confirm Delete")
         dialog.resizable(False, False)
         dialog.transient(self)
@@ -633,8 +636,11 @@ class FullscreenViewer(tk.Toplevel):
 
             # 5. Aesthetic Score
             aesthetic_score = scores_dict.get("aesthetic", "N/A")
+            aesthetic_analysis = scores_dict.get("aesthetic_analysis")
             if aesthetic_score != "N/A":
                 aes_str = format_score(aesthetic_score)
+                if aesthetic_analysis and aesthetic_analysis != "N/A":
+                    aes_str += f" ({aesthetic_analysis})"
                 self.metric_labels["aesthetic"].config(text=f"Aesthetic Score: {aes_str}")
                 self.metric_labels["aesthetic"].pack(side="top", anchor="w", pady=(2, 0))
                 has_metrics = True
