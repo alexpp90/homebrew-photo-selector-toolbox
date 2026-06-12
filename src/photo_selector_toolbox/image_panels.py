@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 
 # Local imports
-from photo_selector_toolbox.utils import load_image_preview
+from photo_selector_toolbox.utils import load_image_preview, create_placeholder_image
 from photo_selector_toolbox.formatting import format_score, format_meta
 
 logger = logging.getLogger(__name__)
@@ -212,9 +212,20 @@ class ImagePanelsMixin:
         lbl = panel.img_lbl
         details = panel.details_lbl
 
+        panel.img_container.update_idletasks()
+        w = panel.img_container.winfo_width()
+        h = panel.img_container.winfo_height()
+        if w < 10 or h < 10:
+            w, h = 400, 300
+
         if path is None:
-            lbl.config(image="", text="No Image")
+            placeholder_img = create_placeholder_image(w, h, "No Image Selected")
+            tk_img = ImageTk.PhotoImage(placeholder_img)
+            lbl.config(image=tk_img, text="")
+            lbl.image = tk_img
             details.config(text="")
+            panel.pil_image = placeholder_img
+            panel.path = None
             return
 
         res = self.files_map.get(path)
@@ -231,8 +242,11 @@ class ImagePanelsMixin:
         details.config(
             text="\n".join(lines),
         )
-        lbl.config(image="", text="Loading...")
-
+        placeholder_img = create_placeholder_image(w, h, f"Loading: {path.name}")
+        tk_img = ImageTk.PhotoImage(placeholder_img)
+        lbl.config(image=tk_img, text="")
+        lbl.image = tk_img
+        panel.pil_image = placeholder_img
 
     def load_images_background(
         self, prev_path, curr_path, next_path, size_curr, size_prev, size_next
@@ -299,11 +313,20 @@ class ImagePanelsMixin:
                 if img:
                     self.scale_image_to_focus_label(lbl)
                 else:
-                    lbl.config(image="", text=default_text)
+                    lbl.container.update_idletasks()
+                    w = lbl.container.winfo_width()
+                    h = lbl.container.winfo_height()
+                    if w < 10 or h < 10:
+                        w, h = 400, 300
+                    placeholder_img = create_placeholder_image(w, h, default_text)
+                    tk_img = ImageTk.PhotoImage(placeholder_img)
+                    lbl.config(image=tk_img, text="")
+                    lbl.image = tk_img
+                    lbl.pil_image = placeholder_img
 
-            set_lbl(self.focus_prev_lbl, p_img, "Prev")
-            set_lbl(self.focus_curr_lbl, c_img, "No Image")
-            set_lbl(self.focus_next_lbl, n_img, "Next")
+            set_lbl(self.focus_prev_lbl, p_img, "Previous Image")
+            set_lbl(self.focus_curr_lbl, c_img, "No Image Selected")
+            set_lbl(self.focus_next_lbl, n_img, "Next Image")
         else:
             # Helper to set image on a label
             def set_panel_img(panel, img):
@@ -313,9 +336,21 @@ class ImagePanelsMixin:
                 if img:
                     # Initial display before resize event fires
                     self.scale_image_to_panel(panel)
-                elif lbl.cget("text") == "Loading...":
-                    lbl.config(image="", text="Preview\nUnavailable")
+                else:
+                    panel.img_container.update_idletasks()
+                    w = panel.img_container.winfo_width()
+                    h = panel.img_container.winfo_height()
+                    if w < 10 or h < 10:
+                        w, h = 400, 300
+                    p_name = panel.path.name if panel.path else "No Image Selected"
+                    p_text = f"Preview Unavailable: {p_name}" if panel.path else "No Image Selected"
+                    placeholder_img = create_placeholder_image(w, h, p_text)
+                    tk_img = ImageTk.PhotoImage(placeholder_img)
+                    lbl.config(image=tk_img, text="")
+                    lbl.image = tk_img
+                    panel.pil_image = placeholder_img
 
             set_panel_img(self.panel_prev, p_img)
             set_panel_img(self.panel_curr, c_img)
             set_panel_img(self.panel_next, n_img)
+

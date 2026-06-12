@@ -30,6 +30,172 @@ from photo_selector_toolbox.duplicates import find_duplicates, move_to_trash
 from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
 
+def apply_dark_theme(root):
+    style = ttk.Style()
+    style.theme_use("clam")
+
+    # Define color palette: dark backgrounds & electric blue accents
+    bg_dark = "#18181B"      # Zinc-900 (main window)
+    bg_panel = "#27272A"     # Zinc-800 (containers, boxes)
+    bg_hover = "#3F3F46"     # Zinc-700
+    fg_light = "#FAFAFA"     # Zinc-50 (headings/main text)
+    fg_muted = "#A1A1AA"     # Zinc-400 (secondary text)
+    accent_blue = "#2563EB"  # Blue-600 (active buttons/highlight border)
+    accent_hover = "#3B82F6" # Blue-500
+    border_color = "#3F3F46" # Zinc-700
+
+    # Base styling
+    style.configure(".", background=bg_dark, foreground=fg_light, bordercolor=border_color, font=("Helvetica", 10))
+
+    # TFrame
+    style.configure("TFrame", background=bg_dark)
+
+    # TLabelframe
+    style.configure("TLabelframe", background=bg_dark, foreground=fg_light, bordercolor=border_color, padding=10)
+    style.configure("TLabelframe.Label", background=bg_dark, foreground=fg_light, font=("Helvetica", 10, "bold"))
+
+    # TLabel
+    style.configure("TLabel", background=bg_dark, foreground=fg_light)
+    style.configure("Title.TLabel", font=("Helvetica", 12, "bold"))
+    style.configure("Header.TLabel", font=("Helvetica", 14, "bold"), foreground=fg_light)
+    style.configure("Muted.TLabel", foreground=fg_muted, font=("Helvetica", 9))
+
+    # TButton
+    style.configure(
+        "TButton",
+        background=bg_panel,
+        foreground=fg_light,
+        bordercolor=border_color,
+        borderwidth=1,
+        focuscolor="",
+        padding=[12, 6]
+    )
+    style.map(
+        "TButton",
+        background=[("active", bg_hover), ("disabled", bg_dark)],
+        foreground=[("active", fg_light), ("disabled", fg_muted)]
+    )
+
+    # Primary Button Accent
+    style.configure(
+        "Primary.TButton",
+        background=accent_blue,
+        foreground="#FFFFFF",
+        bordercolor=accent_blue,
+        borderwidth=1,
+        focuscolor="",
+        padding=[12, 6]
+    )
+    style.map(
+        "Primary.TButton",
+        background=[("active", accent_hover), ("disabled", bg_dark)],
+        foreground=[("active", "#FFFFFF"), ("disabled", fg_muted)]
+    )
+
+    # TEntry
+    style.configure(
+        "TEntry",
+        fieldbackground=bg_panel,
+        foreground=fg_light,
+        bordercolor=border_color,
+        lightcolor=bg_panel,
+        darkcolor=bg_panel,
+        padding=4
+    )
+    style.map(
+        "TEntry",
+        bordercolor=[("focus", accent_blue)],
+        lightcolor=[("focus", accent_blue)],
+        darkcolor=[("focus", accent_blue)]
+    )
+
+    # TNotebook
+    style.configure(
+        "TNotebook",
+        background=bg_dark,
+        bordercolor=border_color,
+        tabmargins=[2, 5, 2, 0]
+    )
+    style.configure(
+        "TNotebook.Tab",
+        background=bg_panel,
+        foreground=fg_muted,
+        bordercolor=border_color,
+        padding=[14, 6],
+        font=("Helvetica", 9, "bold")
+    )
+    style.map(
+        "TNotebook.Tab",
+        background=[("selected", bg_dark), ("active", bg_hover)],
+        foreground=[("selected", fg_light), ("active", fg_light)]
+    )
+
+    # TProgressbar
+    style.configure(
+        "TProgressbar",
+        background=accent_blue,
+        troughcolor=bg_panel,
+        bordercolor=border_color,
+        thickness=10
+    )
+
+    # TCombobox
+    style.configure(
+        "TCombobox",
+        fieldbackground=bg_panel,
+        background=bg_dark,
+        foreground=fg_light,
+        bordercolor=border_color,
+        arrowcolor=fg_light
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", bg_panel)],
+        foreground=[("readonly", fg_light)]
+    )
+
+    # Custom styles for FullscreenViewer Floating Meta Panel
+    style.configure("MetaPanel.TFrame", background=bg_panel, bordercolor=border_color)
+    style.configure("MetaPanel.TLabel", background=bg_panel, foreground=fg_light)
+    style.configure("MetaPanelTitle.TLabel", background=bg_panel, foreground=fg_light, font=("Helvetica", 12, "bold"))
+    style.configure("MetaPanelExposure.TLabel", background=bg_panel, foreground=fg_light, font=("Helvetica", 10))
+    style.configure("MetaPanelLens.TLabel", background=bg_panel, foreground=fg_light, font=("Helvetica", 9, "italic"))
+
+    # Configure native menus globally
+    root.option_add("*Menu.background", bg_panel)
+    root.option_add("*Menu.foreground", fg_light)
+    root.option_add("*Menu.activeBackground", accent_blue)
+    root.option_add("*Menu.activeForeground", "#FFFFFF")
+
+    # Set root window color
+    root.configure(bg=bg_dark)
+
+
+def apply_dark_theme_to_fig(fig):
+    bg_dark = "#18181B"
+    bg_panel = "#27272A"
+    border_color = "#3F3F46"
+    fg_light = "#F4F4F5"
+
+    fig.patch.set_facecolor(bg_dark)
+    for ax in fig.axes:
+        ax.set_facecolor(bg_panel)
+        ax.spines['bottom'].set_color(border_color)
+        ax.spines['top'].set_color(border_color)
+        ax.spines['left'].set_color(border_color)
+        ax.spines['right'].set_color(border_color)
+        ax.tick_params(colors=fg_light, which='both')
+        ax.yaxis.label.set_color(fg_light)
+        ax.xaxis.label.set_color(fg_light)
+        ax.title.set_color(fg_light)
+        ax.grid(True, color=border_color, linestyle='--', alpha=0.5)
+        # Update colors for bars
+        for container in ax.containers:
+            for child in container.get_children():
+                if hasattr(child, 'set_facecolor'):
+                    child.set_facecolor('#2563EB')
+
+
 class QueueHandler(logging.Handler):
     """Redirects logging to a queue for the Tkinter text widget."""
 
@@ -89,7 +255,7 @@ class ImageLibraryStatistics(ttk.Frame):
 
         # Analyze Button
         self.analyze_btn = ttk.Button(
-            btn_frame, text="Analyze", command=self.start_analysis
+            btn_frame, text="Analyze", command=self.start_analysis, style="Primary.TButton"
         )
         self.analyze_btn.pack(side="left", padx=5)
 
@@ -110,11 +276,66 @@ class ImageLibraryStatistics(ttk.Frame):
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
 
+        # Overview Tab (getting started screen)
+        self.overview_frame = ttk.Frame(self.notebook, padding=20)
+        self.notebook.add(self.overview_frame, text="Overview")
+
+        title_lbl = ttk.Label(self.overview_frame, text="Image Metadata Statistics Dashboard", font=("Helvetica", 14, "bold"))
+        title_lbl.pack(pady=(10, 20), anchor="w")
+
+        desc_lbl = ttk.Label(
+            self.overview_frame,
+            text="Analyze and visualize focal lengths, aperture, shutter speeds, ISO levels, and lens usage across your photo library.",
+            font=("Helvetica", 10),
+            wraplength=600,
+            justify="left"
+        )
+        desc_lbl.pack(pady=(0, 20), anchor="w")
+
+        # Instruction Card
+        card = ttk.LabelFrame(self.overview_frame, text="Getting Started Guide", padding=15)
+        card.pack(fill="x", pady=10)
+
+        steps = [
+            "1. Images Folder: Select the root directory containing your JPEG, RAW, or other image files.",
+            "2. Output Folder: Choose a directory where the generated statistics plots will be saved.",
+            "3. Analyze: Click the 'Analyze' button to start scanning subdirectories.",
+            "4. View Results: Results will appear in real-time. Review logs or click individual plot tabs once complete."
+        ]
+        for step in steps:
+            lbl = ttk.Label(card, text=step, padding=2)
+            lbl.pack(anchor="w")
+
+        features_card = ttk.LabelFrame(self.overview_frame, text="Available Visualizations", padding=15)
+        features_card.pack(fill="x", pady=10)
+
+        features = [
+            "• Shutter Speed: Bar distribution of the top 25 most common shutter speeds.",
+            "• Aperture (f-stop): Distribution across standard camera apertures.",
+            "• ISO Levels: Frequency bar chart of ISO sensitivity ratings.",
+            "• Focal Length: Grouped focal length buckets (e.g. 50mm, 24-70mm).",
+            "• Lenses & Combinations: Most used lenses and aperture + focal length combinations."
+        ]
+        for feat in features:
+            lbl = ttk.Label(features_card, text=feat, padding=2)
+            lbl.pack(anchor="w")
+
         # Logs Tab
         self.logs_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.logs_frame, text="Logs")
 
-        self.log_text = tk.Text(self.logs_frame, state="disabled", wrap="word")
+        self.log_text = tk.Text(
+            self.logs_frame,
+            state="disabled",
+            wrap="word",
+            bg="#27272A",
+            fg="#F4F4F5",
+            insertbackground="#F4F4F5",
+            highlightbackground="#27272A",
+            highlightcolor="#2563EB",
+            borderwidth=1,
+            relief="flat"
+        )
         self.log_text.pack(fill="both", expand=True)
 
         # Scrollbar for logs
@@ -296,6 +517,7 @@ class ImageLibraryStatistics(ttk.Frame):
     def display_results(self, plots):
         for name, fig in plots.items():
             if fig:
+                apply_dark_theme_to_fig(fig)
                 frame = ttk.Frame(self.notebook)
                 self.notebook.add(frame, text=name)
 
@@ -351,7 +573,7 @@ class DuplicateFinder(ttk.Frame):
         btn_frame.grid(row=1, column=0, columnspan=3, pady=10)
 
         self.scan_btn = ttk.Button(
-            btn_frame, text="Find Duplicates", command=self.start_scan
+            btn_frame, text="Find Duplicates", command=self.start_scan, style="Primary.TButton"
         )
         self.scan_btn.pack(side="left", padx=5)
 
@@ -370,7 +592,7 @@ class DuplicateFinder(ttk.Frame):
         results_container.pack(fill="both", expand=True, padx=10, pady=5)
 
         # Canvas for scrolling
-        self.canvas = tk.Canvas(results_container)
+        self.canvas = tk.Canvas(results_container, bg="#18181B", highlightthickness=0)
         scrollbar = ttk.Scrollbar(
             results_container, orient="vertical", command=self.canvas.yview
         )
@@ -386,6 +608,16 @@ class DuplicateFinder(ttk.Frame):
 
         self.canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+
+        # Initial Empty State Card
+        self.empty_state_lbl = ttk.Label(
+            self.scrollable_frame,
+            text="No duplicates searched yet.\n\nSelect a folder above and click 'Find Duplicates' to scan for exact matches.",
+            font=("Helvetica", 11),
+            justify="center",
+            padding=40
+        )
+        self.empty_state_lbl.pack(pady=40, fill="both", expand=True)
 
         # Bottom Actions
         actions_frame = ttk.Frame(self, padding=10)
@@ -608,6 +840,7 @@ class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Photo Selector Toolbox")
+        apply_dark_theme(self)
 
         # Attempt to improve DPI awareness on Windows/Linux
         try:

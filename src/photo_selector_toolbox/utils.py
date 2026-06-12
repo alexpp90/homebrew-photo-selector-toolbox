@@ -407,3 +407,86 @@ def select_representative(group_files: List[Path], files_map) -> Path:
     return best_path
 
 
+def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
+    """
+    Dynamically generates a modern, beautiful dark-gradient placeholder image
+    with a camera icon outline and text below it.
+    """
+    from PIL import ImageDraw
+
+    # Create base image with Zinc-900 base color
+    img = Image.new("RGB", (width, height), color="#18181B")
+    draw = ImageDraw.Draw(img)
+
+    # Draw simple gradient by interpolation
+    # Background gradient: #1E1E24 (dark charcoal) to #121214 (deep charcoal)
+    c1 = (30, 30, 36)
+    c2 = (18, 18, 20)
+    for y in range(height):
+        ratio = y / max(1, height - 1)
+        r = int(c1[0] * (1 - ratio) + c2[0] * ratio)
+        g = int(c1[1] * (1 - ratio) + c2[1] * ratio)
+        b = int(c1[2] * (1 - ratio) + c2[2] * ratio)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # Draw subtle inner border
+    border_color = (63, 63, 70)  # Zinc-700
+    draw.rectangle([(5, 5), (width - 6, height - 6)], outline=border_color, width=1)
+
+    # Draw simple camera icon in the center
+    # Calculate center coordinates
+    cx = width // 2
+    cy = height // 2 - 20  # slightly shifted up to make room for text below
+
+    # Camera body dimensions
+    cam_w, cam_h = 60, 40
+
+    # Camera lens dimensions
+    lens_r = 16
+
+    # Draw camera body
+    # Base rectangle
+    draw.rectangle(
+        [(cx - cam_w // 2, cy - cam_h // 2), (cx + cam_w // 2, cy + cam_h // 2)],
+        outline=(161, 161, 170),  # Zinc-400
+        width=3
+    )
+    # Camera flash/top prism shape
+    draw.polygon(
+        [
+            (cx - 15, cy - cam_h // 2),
+            (cx - 10, cy - cam_h // 2 - 8),
+            (cx + 10, cy - cam_h // 2 - 8),
+            (cx + 15, cy - cam_h // 2)
+        ],
+        outline=(161, 161, 170),
+        fill=(30, 30, 36),
+        width=3
+    )
+    # Camera lens (circle)
+    draw.ellipse(
+        [(cx - lens_r, cy - lens_r), (cx + lens_r, cy + lens_r)],
+        outline=(161, 161, 170),
+        width=3
+    )
+
+    # Centering text helper
+    try:
+        if hasattr(draw, "textbbox"):
+            bbox = draw.textbbox((0, 0), text)
+            tw = bbox[2] - bbox[0]
+        elif hasattr(draw, "textsize"):
+            tw, _ = draw.textsize(text)
+        else:
+            tw = len(text) * 6
+    except Exception:
+        tw = len(text) * 6
+
+    tx = cx - tw // 2
+    ty = cy + cam_h // 2 + 15
+    draw.text((tx, ty), text, fill=(244, 244, 245))
+
+    return img
+
+
+
