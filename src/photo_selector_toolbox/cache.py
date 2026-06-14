@@ -213,3 +213,14 @@ class ScoreCache:
             conn.commit()
         except Exception as e:
             logger.warning(f"Error pruning score cache database: {e}")
+
+    def clear_cache(self) -> None:
+        """Deletes all cached scores from the database."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("DELETE FROM image_cache")
+                conn.commit()
+            logger.info("Score cache cleared successfully.")
+        except Exception as e:
+            logger.error(f"Failed to clear score cache: {e}")
+            raise

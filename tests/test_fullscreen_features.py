@@ -261,10 +261,13 @@ def test_fullscreen_viewer_init_and_delete():
         
         # Check that delete button was created and Delete/BackSpace keys bound
         assert hasattr(viewer, "del_btn")
+        assert hasattr(viewer, "copy_btn")
         assert "<Delete>" in viewer.bindings
         assert "<BackSpace>" in viewer.bindings
         assert "<m>" in viewer.bindings
         assert "<M>" in viewer.bindings
+        assert "<c>" in viewer.bindings
+        assert "<C>" in viewer.bindings
         
         # Test confirm_delete_image creates dialog
         with (
@@ -371,3 +374,66 @@ def test_fullscreen_viewer_metadata_display():
         ):
             viewer.load_new_path(Path("other_image.jpg"))
             mock_filename_config.assert_called_with(text="other_image.jpg")
+
+
+def test_copy_to_selection():
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
+    ):
+        tool = SharpnessTool(parent)
+        tool.folder_var = MagicMock()
+        tool.folder_var.get.return_value = "/mock/dir"
+        
+        mock_jpg = MagicMock(spec=Path)
+        mock_jpg.name = "test.jpg"
+        mock_jpg.suffix = ".jpg"
+        mock_jpg.exists.return_value = True
+
+        mock_raw = MagicMock(spec=Path)
+        mock_raw.name = "test.arw"
+        mock_raw.suffix = ".arw"
+        mock_raw.exists.return_value = True
+        
+        tool.candidates = [mock_jpg]
+        tool.sorted_files = [mock_jpg]
+        tool.files_map = {mock_jpg: MagicMock()}
+        tool.candidate_listbox = MagicMock()
+        tool.candidate_listbox.curselection.return_value = (0,)
+        tool.candidate_listbox.size.return_value = 1
+        tool.panel_curr = MagicMock()
+        tool.panel_prev = MagicMock()
+        tool.panel_next = MagicMock()
+        tool.meta_lbl = MagicMock()
+        
+        with (
+            patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
+            patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_jpg, mock_raw]),
+            patch("photo_selector_toolbox.sharpness_gui.RAW_EXTENSIONS", {".arw", ".nef", ".cr2", ".dng", ".raw"}),
+            patch("photo_selector_toolbox.sharpness_gui.shutil.copy2") as mock_copy2,
+        ):
+            mock_selection_dir = MagicMock()
+            mock_path_cls.return_value = MagicMock()
+            mock_path_cls.return_value.__truediv__.return_value = mock_selection_dir
+            
+            mock_dirs = {}
+            def get_subfolder_mock(subfolder):
+                if subfolder not in mock_dirs:
+                    mock_dirs[subfolder] = MagicMock()
+                return mock_dirs[subfolder]
+            mock_selection_dir.__truediv__.side_effect = get_subfolder_mock
+
+            tool.execute_copy_to_selection(mock_jpg, 0)
+            
+            mock_dirs["JPEG"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            mock_dirs["RAW"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            mock_copy2.assert_any_call(mock_jpg, mock_dirs["JPEG"].__truediv__.return_value)
+            mock_copy2.assert_any_call(mock_raw, mock_dirs["RAW"].__truediv__.return_value)
+            
+            # Candidate list should not shrink since it is copy (unlike move)
+            assert mock_jpg in tool.candidates
