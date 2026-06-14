@@ -163,6 +163,31 @@ def test_load_config_migration(temp_config_dir):
 
     loaded_2 = load_config()
     assert loaded_2["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
+
+    # Now test the third legacy default prompt format (previous version)
+    old_prompt_3 = (
+        "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
+        "Consider composition, lighting, focus, and subject.\n\n"
+        "Use this calibration scale:\n"
+        "- 1.0 - 3.0: Very poor (blurry, out of focus, extremely poor lighting/exposure, or no clear subject).\n"
+        "- 4.0 - 6.0: Average (acceptable quality but has noticeable flaws in composition, lighting, or sharpness).\n"
+        "- 7.0 - 8.0: Good (sharp, well-composed, appealing lighting/subject).\n"
+        "- 9.0 - 10.0: Outstanding (perfect exposure/lighting, creative composition, excellent sharpness, professional grade).\n\n"
+        "Start your response in this exact format:\n"
+        "[SCORE: X.Y] [ANALYSIS: tag]\n"
+        "where tag is exactly a 1 or 2 word description of the main reason (e.g. 'Blurry', 'Good composition', 'Under-exposed', 'Great lighting', 'Soft focus', 'Well-composed'). "
+        "Follow it with a short sentence explaining your reasoning."
+    )
+    old_config_3 = {
+        "ollama_url": "http://localhost:11434",
+        "ollama_model": "llava",
+        "ollama_prompt": old_prompt_3,
+    }
+    with open(ot.CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(old_config_3, f, indent=4)
+
+    loaded_3 = load_config()
+    assert loaded_3["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
     
     # Verify that it is also written back to disk
     with open(ot.CONFIG_FILE, "r", encoding="utf-8") as f:

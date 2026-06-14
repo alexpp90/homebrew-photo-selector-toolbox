@@ -65,6 +65,9 @@ class FullscreenViewer(tk.Toplevel):
         self.move_btn = ttk.Button(self, text="Move to Selection (M)", command=self.move_to_selection)
         self.move_btn.place(relx=0.95, rely=0.25, anchor="ne")
 
+        self.copy_btn = ttk.Button(self, text="Copy to Selection (C)", command=self.copy_to_selection)
+        self.copy_btn.place(relx=0.95, rely=0.30, anchor="ne")
+
         self.update_nav_buttons()
 
         # State
@@ -104,6 +107,8 @@ class FullscreenViewer(tk.Toplevel):
         self.bind("<BackSpace>", lambda e: self.confirm_delete_image())
         self.bind("<m>", self.move_to_selection)
         self.bind("<M>", self.move_to_selection)
+        self.bind("<c>", self.copy_to_selection)
+        self.bind("<C>", self.copy_to_selection)
 
         # Grab focus immediately to ensure key events work
         self.focus_set()
@@ -160,6 +165,8 @@ class FullscreenViewer(tk.Toplevel):
             self.prev_btn.state(["disabled"])
             if hasattr(self, "move_btn"):
                 self.move_btn.state(["disabled"])
+            if hasattr(self, "copy_btn"):
+                self.copy_btn.state(["disabled"])
             return
 
         if self.current_idx < len(self.file_list) - 1:
@@ -174,6 +181,8 @@ class FullscreenViewer(tk.Toplevel):
 
         if hasattr(self, "move_btn"):
             self.move_btn.state(["!disabled"])
+        if hasattr(self, "copy_btn"):
+            self.copy_btn.state(["!disabled"])
 
     def next_image(self, event=None):
         if self.file_list and self.current_idx < len(self.file_list) - 1:
@@ -311,6 +320,20 @@ class FullscreenViewer(tk.Toplevel):
                 self.current_idx = len(self.file_list) - 1
 
             self.load_new_path(self.file_list[self.current_idx])
+
+    def copy_to_selection(self, event=None):
+        path = self.path
+        if not path:
+            return
+        if hasattr(self.parent, "candidates") and path in self.parent.candidates:
+            idx = self.parent.candidates.index(path)
+            self.parent.execute_copy_to_selection(path, idx)
+
+            if self.file_list:
+                new_idx = self.current_idx + 1 if self.current_idx < len(self.file_list) - 1 else self.current_idx
+                if new_idx != self.current_idx:
+                    self.current_idx = new_idx
+                    self.load_new_path(self.file_list[self.current_idx])
 
     def load_image(self):
         if not self.winfo_exists():

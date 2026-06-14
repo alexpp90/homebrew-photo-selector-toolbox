@@ -147,3 +147,23 @@ def test_controller_uses_cache(tmp_path):
 
     finally:
         set_default_db_path(None)
+
+
+def test_score_cache_clear(tmp_path):
+    db_file = tmp_path / "test_cache.db"
+    cache = ScoreCache(db_file)
+
+    p1 = Path("/tmp/img1.jpg")
+    p2 = Path("/tmp/img2.jpg")
+
+    cache.set_scores(p1, {"sharpness": 12.3})
+    cache.set_scores(p2, {"noise": 4.5})
+
+    assert cache.get_scores(p1) == {"sharpness": 12.3}
+    assert cache.get_scores(p2) == {"noise": 4.5}
+
+    # Clear cache
+    cache.clear_cache()
+
+    assert cache.get_scores(p1) == {}
+    assert cache.get_scores(p2) == {}

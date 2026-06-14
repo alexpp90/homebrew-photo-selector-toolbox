@@ -903,6 +903,11 @@ class MainApp(tk.Tk):
             label="Duplicate Finder",
             command=lambda: self.show_frame("DuplicateFinder"),
         )
+        self.tools_menu.add_separator()
+        self.tools_menu.add_command(
+            label="Clear Cached Scores...",
+            command=self.clear_cached_scores,
+        )
         self.menubar.add_cascade(label="Tools", menu=self.tools_menu)
 
         # Help Menu
@@ -949,6 +954,28 @@ class MainApp(tk.Tk):
             "About Photo Selector Toolbox",
             "Photo Selector Toolbox\nVersion 1.0.0\n\nA desktop application for metadata analysis, selection, and duplicate finding.",
         )
+
+    def clear_cached_scores(self):
+        if messagebox.askyesno(
+            "Clear Cached Scores",
+            "Are you sure you want to delete all cached scores?\n"
+            "This will clear all stored analysis values and reset the current folder's loaded scores.",
+            parent=self
+        ):
+            try:
+                from photo_selector_toolbox.cache import ScoreCache
+                cache = ScoreCache()
+                cache.clear_cache()
+                
+                # Check if SharpnessTool frame is initialized and clear its in-memory scores
+                sharpness_frame = self.frames.get("SharpnessTool")
+                if sharpness_frame and hasattr(sharpness_frame, "clear_scores_in_memory"):
+                    sharpness_frame.clear_scores_in_memory()
+                    
+                messagebox.showinfo("Success", "Score cache cleared successfully.", parent=self)
+            except Exception as e:
+                logger.error(f"Failed to clear cache: {e}")
+                messagebox.showerror("Error", f"Failed to clear score cache: {e}", parent=self)
 
 
 def main():
