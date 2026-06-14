@@ -7,7 +7,7 @@ import traceback
 import logging
 from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from PIL import ImageTk
+from PIL import Image, ImageTk
 
 logger = logging.getLogger(__name__)
 
@@ -836,6 +836,101 @@ class Sidebar(ttk.Frame):
         ).pack(fill="x", pady=5)
 
 
+class AboutDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("About Photo Selector Toolbox")
+        self.configure(bg="#18181B")
+        self.resizable(False, False)
+        
+        # Make it modal
+        self.transient(parent)
+        self.grab_set()
+        
+        # Locate logo path
+        logo_path = None
+        if hasattr(sys, "_MEIPASS"):
+            logo_path = Path(sys._MEIPASS) / "logo.png"
+        else:
+            logo_path = Path(__file__).parent.parent.parent / "assets" / "logo.png"
+            
+        # Icon / Logo image
+        self.logo_img = None
+        if logo_path and logo_path.exists():
+            try:
+                img = Image.open(logo_path)
+                img = img.resize((96, 96), Image.Resampling.LANCZOS)
+                self.logo_img = ImageTk.PhotoImage(img)
+            except Exception as e:
+                logger.warning(f"Failed to load logo in AboutDialog: {e}")
+                
+        # Main container with padding
+        content = ttk.Frame(self, padding=20)
+        content.pack(fill="both", expand=True)
+        
+        # Display logo if loaded
+        if self.logo_img:
+            lbl_logo = ttk.Label(content, image=self.logo_img, background="#18181B")
+            lbl_logo.pack(pady=(10, 15))
+            
+        # App Title
+        lbl_title = ttk.Label(content, text="Photo Selector Toolbox", font=("Helvetica", 14, "bold"), background="#18181B", foreground="#FAFAFA")
+        lbl_title.pack()
+        
+        # Version
+        lbl_version = ttk.Label(content, text="Version 1.0.0", font=("Helvetica", 10, "bold"), background="#18181B", foreground="#3B82F6")
+        lbl_version.pack(pady=(2, 10))
+        
+        # Description
+        desc_text = (
+            "A professional desktop application for photography culling, metadata distribution "
+            "analysis, duplicate finding, and quality metric scoring.\n\n"
+            "Features include sharpness & noise analysis, shadow/highlight clipping, "
+            "and offline AI aesthetic scores via Ollama."
+        )
+        lbl_desc = ttk.Label(
+            content,
+            text=desc_text,
+            font=("Helvetica", 9),
+            justify="center",
+            wraplength=350,
+            background="#18181B",
+            foreground="#D4D4D8"
+        )
+        lbl_desc.pack(pady=(5, 15))
+        
+        # Footer / License / Credits
+        lbl_credits = ttk.Label(
+            content,
+            text="Licensed under the MIT License.\nBuilt with Python, Tkinter, OpenCV, & Pillow.",
+            font=("Helvetica", 8, "italic"),
+            justify="center",
+            background="#18181B",
+            foreground="#71717A"
+        )
+        lbl_credits.pack(pady=(0, 20))
+        
+        # Close Button
+        btn_close = ttk.Button(content, text="Close", command=self.destroy, style="Primary.TButton")
+        btn_close.pack(pady=(5, 5))
+        
+        # Center the dialog relative to parent
+        self.update_idletasks()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+        
+        width = self.winfo_width()
+        height = self.winfo_height()
+        x = parent_x + (parent_width // 2) - (width // 2)
+        y = parent_y + (parent_height // 2) - (height // 2)
+        self.geometry(f"+{x}+{y}")
+        
+        # Escape key close
+        self.bind("<Escape>", lambda e: self.destroy())
+
+
 class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -950,10 +1045,7 @@ class MainApp(tk.Tk):
         pass
 
     def show_about(self):
-        messagebox.showinfo(
-            "About Photo Selector Toolbox",
-            "Photo Selector Toolbox\nVersion 1.0.0\n\nA desktop application for metadata analysis, selection, and duplicate finding.",
-        )
+        AboutDialog(self)
 
     def clear_cached_scores(self):
         if messagebox.askyesno(

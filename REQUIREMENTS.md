@@ -98,6 +98,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Image Statistics Dashboard Overview:** The Image Library Statistics interface must provide an interactive "Overview" notebook tab displaying instructional dashboard cards when the app is first launched.
 *   **Matplotlib Theme Integration:** Figures rendered inside the statistics plots must dynamically map tick marks, labels, text elements, background panels, and distribution bars to the application's dark theme palette.
 *   **Duplicate Finder Empty State:** The Duplicate Finder scrollable list must display a clear empty-state card when no duplicate scanning is active or completed.
+*   **Custom About Dialog:** The Help -> About menu option must launch a custom-styled, dark-themed `tk.Toplevel` modal showing the high-resolution logo (resized dynamically via PIL), application title, version number, feature highlights, and MIT license credits, completely matching the application's visual zinc-900 dark theme.
 
 ## 4. Technical & Architectural Requirements
 
