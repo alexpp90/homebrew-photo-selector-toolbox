@@ -46,8 +46,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.parent = parent
         self.log_queue = queue.Queue()
         self.is_scanning = False
+        self.is_grouping = False
         self.stop_event = threading.Event()
         self.bg_stop_event = threading.Event()
+        self.grouping_stop_event = threading.Event()
 
         # State
         self.scan_results: List[ScanResult] = []
@@ -80,8 +82,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.progress_var = tk.DoubleVar()
         self.folder_var = tk.StringVar()
         self.file_type_var = tk.StringVar(value="All Supported")
-        self.group_similar_var = tk.BooleanVar(value=False)
+        config = load_config()
+        self.group_similar_var = tk.BooleanVar(value=config.get("group_similar", False))
+        self.group_level_var = tk.StringVar(value=config.get("group_level", "Time & Filename"))
         self.review_progress_var = tk.DoubleVar()
+        self.group_progress_var = tk.DoubleVar()
+        self._last_applied_group_similar = self.group_similar_var.get()
+        self._last_applied_group_level = self.group_level_var.get()
 
         self.setup_ui()
         self.setup_focus_ui()
@@ -248,6 +255,20 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.group_similar_chk.pack(side="left", padx=(15, 5))
 
+        self.group_level_combo = ttk.Combobox(
+            folder_frame,
+            textvariable=self.group_level_var,
+            values=["Time & Filename", "Time + Fast Similarity", "Detailed Similarity"],
+            state="readonly",
+            width=18,
+        )
+        self.group_level_combo.pack(side="left", padx=(5, 5))
+        self.group_level_combo.bind("<<ComboboxSelected>>", lambda e: self.on_group_similar_change())
+        
+        # Set initial combobox state based on config
+        if not self._is_grouping_enabled():
+            self.group_level_combo.state(["disabled"])
+
         # Sorting Controls
         ttk.Label(controls_row_frame, text="↕ Sort By:").pack(side="left", padx=(15, 5))
         self.sort_by_var = tk.StringVar(value="File Name")
@@ -293,8 +314,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.scan_options_btn = ttk.Button(self.sidebar, text="⚡ Scan for Sharpness/Noise...")
         self.scan_options_btn.pack(fill="x", pady=5)
 
+        # Progress Container (holds scan and grouping progress bars)
+        self.progress_container = ttk.Frame(self.sidebar)
+        self.progress_container.pack(fill="x")
+
         # Scan Progress (Visible during review)
-        self.scan_progress_frame = ttk.Frame(self.sidebar)
+        self.scan_progress_frame = ttk.Frame(self.progress_container)
         self.scan_progress_frame.pack(fill="x", pady=(0, 10))
 
         self.review_status_lbl = ttk.Label(
@@ -307,15 +332,37 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.review_progress_bar.pack(fill="x")
 
+        # Grouping Progress (Hidden by default)
+        self.group_progress_frame = ttk.Frame(self.progress_container)
+        
+        self.group_status_lbl = ttk.Label(
+            self.group_progress_frame, text="👥 Grouping: 0%"
+        )
+        self.group_status_lbl.pack(side="top", anchor="w")
+
+        self.group_progress_bar = ttk.Progressbar(
+            self.group_progress_frame, variable=self.group_progress_var, maximum=100
+        )
+        self.group_progress_bar.pack(fill="x")
+
+        self.group_cancel_btn = ttk.Button(
+            self.group_progress_frame, text="🛑 Cancel Grouping", command=self.cancel_grouping
+        )
+        self.group_cancel_btn.pack(fill="x", pady=(5, 10))
+
         self.update_scan_button_state()
 
         # Scrollbar and Listbox
         sb = ttk.Scrollbar(self.sidebar)
         sb.pack(side="right", fill="y")
 
+        sb_x = ttk.Scrollbar(self.sidebar, orient="horizontal")
+        sb_x.pack(side="bottom", fill="x")
+
         self.candidate_listbox = tk.Listbox(
             self.sidebar,
             yscrollcommand=sb.set,
+            xscrollcommand=sb_x.set,
             selectmode="single",
             bg="#27272A",
             fg="#F4F4F5",
@@ -328,6 +375,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.candidate_listbox.pack(fill="both", expand=True)
         sb.config(command=self.candidate_listbox.yview)
+        sb_x.config(command=self.candidate_listbox.xview)
 
         self.candidate_listbox.bind("<<ListboxSelect>>", self.on_candidate_select)
         self.candidate_listbox.bind("<Double-Button-1>", self.on_listbox_double_click)
@@ -961,6 +1009,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         ]
         files.sort(key=lambda x: x.name)
 
+        if self.is_grouping:
+            self.cancel_grouping()
+
         self.bg_stop_event.set()
 
         self.sorted_files = files
@@ -1040,20 +1091,22 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     res.exif = ExifData()
 
             # 2. Preload/Calculate dHash
-            if "dhash" not in res.scores:
+            if "dhash_8" not in res.scores:
                 try:
                     # Check cache first
                     cached = cache.get_scores(path)
-                    dhash_val = cached.get("dhash") if cached else None
+                    dhash_val = cached.get("dhash_8") or cached.get("dhash")
                     if dhash_val is not None:
+                        res.scores["dhash_8"] = dhash_val
                         res.scores["dhash"] = dhash_val
                     else:
                         img = load_image_preview(path, max_size=(150, 150))
                         if img:
-                            dhash_num = calculate_dhash(img)
+                            dhash_num = calculate_dhash(img, hash_size=8)
                             dhash_str = f"{dhash_num:016x}"
+                            res.scores["dhash_8"] = dhash_str
                             res.scores["dhash"] = dhash_str
-                            cache.set_scores(path, {"dhash": dhash_str})
+                            cache.set_scores(path, {"dhash_8": dhash_str})
                 except Exception as e:
                     logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
 
@@ -1252,7 +1305,64 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         else:
             self.clear_triplet_and_labels()
 
+    def get_missing_grouping_files(self, base_files, level):
+        if level == "Time & Filename":
+            return []
+
+        import re
+        def get_name_prefix(name: str) -> str:
+            stem = Path(name).stem
+            return re.sub(r"\d+$", "", stem)
+
+        def get_mtime(p: Path) -> float:
+            try:
+                return p.stat().st_mtime
+            except OSError:
+                return 0.0
+
+        # Sort base files alphabetically
+        sorted_files = sorted(base_files, key=lambda x: x.name.lower())
+        n = len(sorted_files)
+        if n <= 1:
+            return []
+
+        mtimes = [get_mtime(f) for f in sorted_files]
+        prefixes = [get_name_prefix(f.name) for f in sorted_files]
+
+        # Use 30.0s for all visual levels as per user request
+        time_thresh = 30.0
+        hash_key = "dhash_8" if level == "Time + Fast Similarity" else "dhash_16"
+
+        candidate_indices = set()
+        for i in range(n):
+            # Check previous neighbor
+            if i > 0 and abs(mtimes[i] - mtimes[i - 1]) <= time_thresh and prefixes[i] == prefixes[i - 1]:
+                candidate_indices.add(i)
+                candidate_indices.add(i - 1)
+            # Check next neighbor
+            if i < n - 1 and abs(mtimes[i] - mtimes[i + 1]) <= time_thresh and prefixes[i] == prefixes[i + 1]:
+                candidate_indices.add(i)
+                candidate_indices.add(i + 1)
+
+        missing = []
+        for idx in sorted(candidate_indices):
+            f = sorted_files[idx]
+            res = self.files_map.get(f)
+            if not res or hash_key not in res.scores:
+                # For dhash_8, also check legacy "dhash" key
+                if hash_key == "dhash_8" and res and "dhash" in res.scores:
+                    continue
+                missing.append(f)
+
+        return missing
+
     def on_group_similar_change(self):
+        # Update combobox state
+        if self._is_grouping_enabled():
+            self.group_level_combo.state(["!disabled"])
+        else:
+            self.group_level_combo.state(["disabled"])
+
         selected = self.file_type_var.get()
         if selected == "All Supported" or not selected:
             base_files = self.sorted_files.copy()
@@ -1260,94 +1370,154 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             base_files = [f for f in self.sorted_files if f.suffix.upper() == selected]
 
         if not self._is_grouping_enabled():
+            # Save settings
+            config = load_config()
+            config["group_similar"] = False
+            config["group_level"] = self.group_level_var.get()
+            save_config(config)
+            
+            self._last_applied_group_similar = False
             self.apply_grouping_and_refresh()
             return
 
-        # Check for missing dhashes
-        missing = [
-            f for f in base_files
-            if "dhash" not in self.files_map.get(f, ScanResult(f)).scores
-        ]
+        level = self.group_level_var.get()
+        missing = self.get_missing_grouping_files(base_files, level)
 
         if missing:
-            # Show progress dialog
-            dialog = tk.Toplevel(self)
-            dialog.configure(bg="#18181B")
-            dialog.title("Analyzing Series...")
-            dialog.resizable(False, False)
-            dialog.transient(self.winfo_toplevel())
-            dialog.grab_set()
+            self.start_grouping_analysis(missing, level)
+        else:
+            # Save settings
+            config = load_config()
+            config["group_similar"] = True
+            config["group_level"] = level
+            save_config(config)
 
-            ttk.Label(
-                dialog,
-                text="Analyzing image similarity for series grouping...",
-                font=("Helvetica", 11)
-            ).pack(pady=(20, 5), padx=20)
+            self._last_applied_group_similar = True
+            self._last_applied_group_level = level
+            self.apply_grouping_and_refresh()
 
-            progress_var = tk.DoubleVar()
-            progress_bar = ttk.Progressbar(
-                dialog, variable=progress_var, maximum=100, width=300
-            )
-            progress_bar.pack(pady=10, padx=20)
+    def start_grouping_analysis(self, missing, level):
+        self.cancel_grouping()
 
-            status_lbl = ttk.Label(dialog, text=f"Processed 0/{len(missing)}")
-            status_lbl.pack(pady=(0, 20))
+        self.is_grouping = True
+        self.grouping_stop_event.clear()
 
-            # Center dialog
-            dialog.update_idletasks()
-            width = dialog.winfo_reqwidth()
-            height = dialog.winfo_reqheight()
-            parent = self.winfo_toplevel()
-            x = parent.winfo_x() + (parent.winfo_width() - width) // 2
-            y = parent.winfo_y() + (parent.winfo_height() - height) // 2
-            dialog.geometry(f"+{x}+{y}")
+        # Show the progress frame in sidebar
+        self.group_progress_frame.pack(fill="x", pady=(0, 10))
+        self.group_progress_var.set(0.0)
+        self.group_status_lbl.config(text=f"👥 Grouping: 0% (0/{len(missing)})")
 
-            def run_calc():
-                from photo_selector_toolbox.utils import calculate_dhash
-                from photo_selector_toolbox.cache import ScoreCache
-                cache = ScoreCache()
+        # Disable grouping controls while running
+        self.group_similar_chk.state(["disabled"])
+        self.group_level_combo.state(["disabled"])
 
-                total = len(missing)
-                for idx, path in enumerate(missing):
-                    if not dialog.winfo_exists():
-                        return
-                    try:
-                        cached = cache.get_scores(path)
-                        dhash_val = cached.get("dhash") if cached else None
-                        if dhash_val is not None:
-                            dhash_str = dhash_val
+        # Also disable scan options button to prevent concurrent scans
+        self.scan_options_btn.state(["disabled"])
+
+        self.log(f"Starting similarity analysis for series grouping on {len(missing)} files...")
+
+        def run_calc():
+            from photo_selector_toolbox.utils import calculate_dhash
+            from photo_selector_toolbox.cache import ScoreCache
+            cache = ScoreCache()
+
+            total = len(missing)
+            hash_size = 8 if level == "Time + Fast Similarity" else 16
+            hash_key = "dhash_8" if level == "Time + Fast Similarity" else "dhash_16"
+
+            for idx, path in enumerate(missing):
+                if self.grouping_stop_event.is_set():
+                    self.parent.after(0, self._handle_grouping_cancelled)
+                    return
+                try:
+                    cached = cache.get_scores(path)
+                    dhash_val = cached.get(hash_key)
+                    # Fallback for dhash_8 to old "dhash" key
+                    if dhash_val is None and hash_key == "dhash_8":
+                        dhash_val = cached.get("dhash")
+
+                    if dhash_val is not None:
+                        dhash_str = dhash_val
+                    else:
+                        img = load_image_preview(path, max_size=(150, 150))
+                        if img:
+                            dhash_num = calculate_dhash(img, hash_size=hash_size)
+                            format_str = f"0{hash_size*hash_size//4}x"
+                            dhash_str = format(dhash_num, format_str)
+                            cache.set_scores(path, {hash_key: dhash_str})
                         else:
-                            img = load_image_preview(path, max_size=(150, 150))
-                            if img:
-                                dhash_num = calculate_dhash(img)
-                                dhash_str = f"{dhash_num:016x}"
-                                cache.set_scores(path, {"dhash": dhash_str})
-                            else:
-                                dhash_str = None
+                            dhash_str = None
 
-                        if dhash_str:
-                            res = self.files_map.get(path)
-                            if res:
-                                res.scores["dhash"] = dhash_str
-                    except Exception as e:
-                        logger.debug(f"Failed to calculate dhash: {e}")
+                    if dhash_str:
+                        res = self.files_map.get(path)
+                        if res:
+                            res.scores[hash_key] = dhash_str
+                except Exception as e:
+                    logger.debug(f"Failed to calculate dhash: {e}")
 
-                    pct = ((idx + 1) / total) * 100
-                    self.parent.after(
-                        0,
-                        lambda p=pct, i=idx+1: (
-                            progress_var.set(p),
-                            status_lbl.config(text=f"Processed {i}/{total}")
-                        )
-                    )
-
+                pct = ((idx + 1) / total) * 100
                 self.parent.after(
-                    0, lambda: (dialog.destroy(), self.apply_grouping_and_refresh())
+                    0,
+                    lambda p=pct, i=idx+1: (
+                        self.group_progress_var.set(p),
+                        self.group_status_lbl.config(text=f"👥 Grouping: {int(p)}% ({i}/{total})")
+                    )
                 )
 
-            threading.Thread(target=run_calc, daemon=True).start()
+            self.parent.after(0, lambda: self._handle_grouping_finished(level))
+
+        threading.Thread(target=run_calc, daemon=True).start()
+
+    def cancel_grouping(self):
+        if self.is_grouping:
+            self.grouping_stop_event.set()
+            self.log("Stopping similarity analysis...")
+
+    def _handle_grouping_finished(self, level):
+        self.is_grouping = False
+        self.group_progress_frame.pack_forget()
+
+        # Re-enable controls
+        self.group_similar_chk.state(["!disabled"])
+        self.group_level_combo.state(["!disabled"])
+        self.scan_options_btn.state(["!disabled"])
+
+        # Save settings
+        config = load_config()
+        config["group_similar"] = True
+        config["group_level"] = level
+        save_config(config)
+
+        self._last_applied_group_similar = True
+        self._last_applied_group_level = level
+
+        self.log("Similarity analysis complete.")
+        self.apply_grouping_and_refresh()
+
+    def _handle_grouping_cancelled(self):
+        self.is_grouping = False
+        self.group_progress_frame.pack_forget()
+
+        # Re-enable controls
+        self.group_similar_chk.state(["!disabled"])
+        if self._last_applied_group_similar:
+            self.group_level_combo.state(["!disabled"])
         else:
-            self.apply_grouping_and_refresh()
+            self.group_level_combo.state(["disabled"])
+        self.scan_options_btn.state(["!disabled"])
+
+        # Revert variables to last applied state
+        self.group_similar_var.set(self._last_applied_group_similar)
+        self.group_level_var.set(self._last_applied_group_level)
+
+        # Re-save config to last applied state
+        config = load_config()
+        config["group_similar"] = self._last_applied_group_similar
+        config["group_level"] = self._last_applied_group_level
+        save_config(config)
+
+        self.log("Similarity analysis cancelled.")
+        self.apply_grouping_and_refresh()
 
     def apply_grouping_and_refresh(self, select_path=None):
         selected = self.file_type_var.get()
@@ -1370,7 +1540,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             )
             # Ensure grouping is done on alphabetically name-sorted files
             base_files_sorted = sorted(base_files, key=lambda x: x.name.lower())
-            raw_groups = group_files_by_similarity(base_files_sorted, self.files_map)
+            raw_groups = group_files_by_similarity(
+                base_files_sorted,
+                self.files_map,
+                group_level=self.group_level_var.get()
+            )
 
             old_expanded = {}
             if hasattr(self, "image_groups"):
@@ -1474,6 +1648,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if not folder or not Path(folder).exists():
             messagebox.showerror("Error", "Please select a valid folder.")
             return
+
+        if self.is_grouping:
+            self.cancel_grouping()
+
+        # Disable grouping controls
+        self.group_similar_chk.state(["disabled"])
+        self.group_level_combo.state(["disabled"])
 
         self.bg_stop_event.set()
         self.is_scanning = True
@@ -1651,6 +1832,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.update_scan_button_state()
 
         self.review_status_lbl.config(text="Scan Complete.")
+
+        # Re-enable grouping controls based on their state
+        self.group_similar_chk.state(["!disabled"])
+        if self._is_grouping_enabled():
+            self.group_level_combo.state(["!disabled"])
+        else:
+            self.group_level_combo.state(["disabled"])
 
         selected_path = None
         sel = self.candidate_listbox.curselection()
@@ -1900,27 +2088,27 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         parts = []
         if self._is_valid_metric(res.score):
             lbl_pfx = "" if is_testing else "🎯 "
-            parts.append(f"{lbl_pfx}Sharpness: {format_score(res.score)}")
+            parts.append(f"{lbl_pfx}{format_score(res.score)}")
         if self._is_valid_metric(res.noise_score):
             lbl_pfx = "" if is_testing else "🔊 "
-            parts.append(f"{lbl_pfx}Noise: {format_score(res.noise_score)}")
+            parts.append(f"{lbl_pfx}{format_score(res.noise_score)}")
 
         hl_score = res.scores.get("highlight_clipping", "N/A")
         if self._is_valid_metric(hl_score):
             hl_text = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
             lbl_pfx = "" if is_testing else "🔆 "
-            parts.append(f"{lbl_pfx}HL: {hl_text}")
+            parts.append(f"{lbl_pfx}{hl_text}")
 
         sd_score = res.scores.get("shadow_clipping", "N/A")
         if self._is_valid_metric(sd_score):
             sd_text = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
             lbl_pfx = "" if is_testing else "🌑 "
-            parts.append(f"{lbl_pfx}SD: {sd_text}")
+            parts.append(f"{lbl_pfx}{sd_text}")
 
         aesthetic_score = res.scores.get("aesthetic", "N/A")
         if self._is_valid_metric(aesthetic_score):
             lbl_pfx = "" if is_testing else "🎨 "
-            parts.append(f"{lbl_pfx}AI: {format_score(aesthetic_score)}")
+            parts.append(f"{lbl_pfx}{format_score(aesthetic_score)}")
 
         if parts:
             return f"{prefix}{path.name}{group_suffix} ({', '.join(parts)})"

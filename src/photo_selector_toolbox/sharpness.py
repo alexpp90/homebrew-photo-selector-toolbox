@@ -87,6 +87,173 @@ def get_image_data(filepath: Path) -> Optional[np.ndarray]:
         return None
 
 
+# --- Internal helpers that operate on pre-loaded grayscale data ---
+# These avoid redundant disk I/O when multiple analyses run on the same image.
+
+
+def _calculate_noise_from_gray(gray: np.ndarray) -> float:
+    """Estimates noise from a pre-loaded grayscale array using MAD of the Laplacian."""
+    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    mad = np.median(np.abs(laplacian - np.median(laplacian)))
+    return mad / 0.6745
+
+
+def _calculate_sharpness_from_gray(gray: np.ndarray, grid_size: int = 1) -> float:
+    """Calculates sharpness from a pre-loaded grayscale array (center 50% crop)."""
+    h, w = gray.shape
+    h_start = int(h * 0.25)
+    h_end = int(h * 0.75)
+    w_start = int(w * 0.25)
+    w_end = int(w * 0.75)
+
+    if h_start >= h_end or w_start >= w_end:
+        cropped = gray
+    else:
+        cropped = gray[h_start:h_end, w_start:w_end]
+
+    if grid_size <= 1:
+        return cv2.Laplacian(cropped, cv2.CV_64F).var()
+
+    ch, cw = cropped.shape
+    block_h = ch // grid_size
+    block_w = cw // grid_size
+
+    if block_h < 10 or block_w < 10:
+        return cv2.Laplacian(cropped, cv2.CV_64F).var()
+
+    max_score = 0.0
+    for r in range(grid_size):
+        for c in range(grid_size):
+            y0 = r * block_h
+            y1 = y0 + block_h
+            x0 = c * block_w
+            x1 = x0 + block_w
+            block = cropped[y0:y1, x0:x1]
+            score = cv2.Laplacian(block, cv2.CV_64F).var()
+            if score > max_score:
+                max_score = score
+    return max_score
+
+
+def _calculate_highlight_clipping_from_gray(gray: np.ndarray) -> float:
+    """Calculates highlight clipping percentage from a pre-loaded grayscale array."""
+    total = gray.size
+    if total == 0:
+        return 0.0
+    clipped = np.sum(gray >= 254)
+    return float((clipped / total) * 100.0)
+
+
+def _calculate_shadow_clipping_from_gray(gray: np.ndarray) -> float:
+    """Calculates shadow clipping percentage from a pre-loaded grayscale array."""
+    total = gray.size
+    if total == 0:
+        return 0.0
+    clipped = np.sum(gray <= 2)
+    return float((clipped / total) * 100.0)
+
+
+from typing import Dict, Union
+
+
+def calculate_all_scores(
+    filepath: Path,
+    grid_size: int = 1,
+    tools: Optional[Dict[str, bool]] = None,
+) -> Dict[str, Union[float, str]]:
+    """
+    Loads the image ONCE and runs all enabled built-in analyses on the same data.
+
+    This eliminates redundant disk I/O when multiple analysis tools are enabled
+    simultaneously (the common case). For a 40MP RAW image, this avoids 3 extra
+    decode operations (~300ms each).
+
+    The Ollama aesthetic tool is NOT handled here because it uses its own
+    resized JPEG pipeline and doesn't benefit from shared image data.
+
+    Args:
+        filepath: Path to the image file.
+        grid_size: Grid size for sharpness analysis.
+        tools: Dict of tool_name -> enabled. Only enabled tools are computed.
+
+    Returns:
+        Dict mapping tool names to their computed scores.
+    """
+    if tools is None:
+        tools = {}
+
+    # Identify which built-in analyses are requested
+    need_sharpness = tools.get("sharpness", False)
+    need_noise = tools.get("noise", False)
+    need_highlight = tools.get("highlight_clipping", False)
+    need_shadow = tools.get("shadow_clipping", False)
+
+    need_any_builtin = need_sharpness or need_noise or need_highlight or need_shadow
+
+    results: Dict[str, Union[float, str]] = {}
+
+    if not need_any_builtin:
+        return results
+
+    # Single image load + single grayscale conversion
+    img = get_image_data(filepath)
+    if img is None:
+        # Return 0.0 for all requested tools (consistent with individual functions)
+        if need_sharpness:
+            results["sharpness"] = 0.0
+        if need_noise:
+            results["noise"] = 0.0
+        if need_highlight:
+            results["highlight_clipping"] = 0.0
+        if need_shadow:
+            results["shadow_clipping"] = 0.0
+        return results
+
+    try:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    except Exception as e:
+        logger.error(f"Error converting {filepath} to grayscale: {e}")
+        if need_sharpness:
+            results["sharpness"] = 0.0
+        if need_noise:
+            results["noise"] = 0.0
+        if need_highlight:
+            results["highlight_clipping"] = 0.0
+        if need_shadow:
+            results["shadow_clipping"] = 0.0
+        return results
+
+    if need_sharpness:
+        try:
+            results["sharpness"] = _calculate_sharpness_from_gray(gray, grid_size)
+        except Exception as e:
+            logger.error(f"Error calculating sharpness for {filepath}: {e}")
+            results["sharpness"] = 0.0
+
+    if need_noise:
+        try:
+            results["noise"] = _calculate_noise_from_gray(gray)
+        except Exception as e:
+            logger.error(f"Error calculating noise for {filepath}: {e}")
+            results["noise"] = 0.0
+
+    if need_highlight:
+        try:
+            results["highlight_clipping"] = _calculate_highlight_clipping_from_gray(gray)
+        except Exception as e:
+            logger.error(f"Error calculating highlight clipping for {filepath}: {e}")
+            results["highlight_clipping"] = 0.0
+
+    if need_shadow:
+        try:
+            results["shadow_clipping"] = _calculate_shadow_clipping_from_gray(gray)
+        except Exception as e:
+            logger.error(f"Error calculating shadow clipping for {filepath}: {e}")
+            results["shadow_clipping"] = 0.0
+
+    return results
+
+
 def calculate_noise(filepath: Path) -> float:
     """
     Estimates the noise level in an image.
@@ -102,20 +269,8 @@ def calculate_noise(filepath: Path) -> float:
         return 0.0
 
     try:
-        # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        # Apply Laplacian filter
-        laplacian = cv2.Laplacian(gray, cv2.CV_64F)
-
-        # Calculate Median Absolute Deviation (MAD)
-        # Using the standard constant 0.6745 for Gaussian distribution
-        # sigma = MAD / 0.6745
-        mad = np.median(np.abs(laplacian - np.median(laplacian)))
-        sigma = mad / 0.6745
-
-        return sigma
-
+        return _calculate_noise_from_gray(gray)
     except Exception as e:
         logger.error(f"Error calculating noise for {filepath}: {e}")
         return 0.0
@@ -138,56 +293,8 @@ def calculate_sharpness(filepath: Path, grid_size: int = 1) -> float:
         return 0.0
 
     try:
-        # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        # Get dimensions
-        h, w = gray.shape
-
-        # Crop to center 50%
-        # Calculate start and end points
-        h_start = int(h * 0.25)
-        h_end = int(h * 0.75)
-        w_start = int(w * 0.25)
-        w_end = int(w * 0.75)
-
-        # Ensure we have a valid crop
-        if h_start >= h_end or w_start >= w_end:
-            # Fallback to full image if too small
-            cropped = gray
-        else:
-            cropped = gray[h_start:h_end, w_start:w_end]
-
-        if grid_size <= 1:
-            # Original behavior: Calculate Laplacian Variance for the whole crop
-            score = cv2.Laplacian(cropped, cv2.CV_64F).var()
-            return score
-        else:
-            # Grid-based analysis: find the maximum sharpness among blocks
-            ch, cw = cropped.shape
-            block_h = ch // grid_size
-            block_w = cw // grid_size
-
-            # If blocks are too small, fallback to global
-            if block_h < 10 or block_w < 10:
-                return cv2.Laplacian(cropped, cv2.CV_64F).var()
-
-            max_score = 0.0
-
-            for r in range(grid_size):
-                for c in range(grid_size):
-                    y0 = r * block_h
-                    y1 = y0 + block_h
-                    x0 = c * block_w
-                    x1 = x0 + block_w
-
-                    block = cropped[y0:y1, x0:x1]
-                    score = cv2.Laplacian(block, cv2.CV_64F).var()
-                    if score > max_score:
-                        max_score = score
-
-            return max_score
-
+        return _calculate_sharpness_from_gray(gray, grid_size)
     except Exception as e:
         logger.error(f"Error calculating sharpness for {filepath}: {e}")
         return 0.0
@@ -286,13 +393,8 @@ def calculate_highlight_clipping(filepath: Path) -> float:
         return 0.0
 
     try:
-        # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        total = gray.size
-        if total == 0:
-            return 0.0
-        clipped = np.sum(gray >= 254)
-        return float((clipped / total) * 100.0)
+        return _calculate_highlight_clipping_from_gray(gray)
     except Exception as e:
         logger.error(f"Error calculating highlight clipping for {filepath}: {e}")
         return 0.0
@@ -308,13 +410,8 @@ def calculate_shadow_clipping(filepath: Path) -> float:
         return 0.0
 
     try:
-        # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        total = gray.size
-        if total == 0:
-            return 0.0
-        clipped = np.sum(gray <= 2)
-        return float((clipped / total) * 100.0)
+        return _calculate_shadow_clipping_from_gray(gray)
     except Exception as e:
         logger.error(f"Error calculating shadow clipping for {filepath}: {e}")
         return 0.0

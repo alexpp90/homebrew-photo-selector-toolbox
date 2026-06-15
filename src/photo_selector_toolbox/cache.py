@@ -20,7 +20,15 @@ class ScoreCache:
     """
     Manages persistent caching of image analysis scores in a SQLite database.
     Retains only the 10,000 most recently used records.
+
+    Performance notes:
+    - Uses WAL journal mode for concurrent reader/writer access across threads.
+    - Defers pruning to every _PRUNE_INTERVAL writes to avoid per-write overhead.
+    - Reads (get_scores) do NOT update last_used to avoid write contention on
+      the hot read path; timestamps are updated on set_scores instead.
     """
+
+    _PRUNE_INTERVAL = 50  # Prune every N set_scores calls
 
     def __init__(self, db_path: Optional[Path] = None):
         if db_path is None:
@@ -31,11 +39,14 @@ class ScoreCache:
                 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
                 db_path = CONFIG_DIR / "scores_cache.db"
         self.db_path = db_path
+        self._write_count = 0
         self._init_db()
 
     def _init_db(self) -> None:
         try:
             with sqlite3.connect(self.db_path) as conn:
+                # WAL mode: allows concurrent reads while writes are in progress
+                conn.execute("PRAGMA journal_mode=WAL")
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS image_cache (
@@ -45,12 +56,20 @@ class ScoreCache:
                     )
                     """
                 )
+                # Index on last_used to speed up ORDER BY in prune queries
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_last_used ON image_cache(last_used)"
+                )
                 conn.commit()
         except Exception as e:
             logger.error(f"Failed to initialize score cache database: {e}")
 
     def get_scores(self, filepath: Path) -> Dict[str, Union[float, str]]:
-        """Retrieves cached scores for a single image, updating its last_used timestamp."""
+        """Retrieves cached scores for a single image.
+
+        Does NOT update last_used on read to avoid write contention.
+        Timestamps are refreshed when scores are written via set_scores().
+        """
         try:
             filepath_str = str(filepath.resolve())
             with sqlite3.connect(self.db_path) as conn:
@@ -61,12 +80,6 @@ class ScoreCache:
                 )
                 row = cursor.fetchone()
                 if row:
-                    now = int(time.time())
-                    conn.execute(
-                        "UPDATE image_cache SET last_used = ? WHERE filepath = ?",
-                        (now, filepath_str),
-                    )
-                    conn.commit()
                     return json.loads(row[0])
         except Exception as e:
             logger.warning(f"Error reading from score cache: {e}")
@@ -101,7 +114,10 @@ class ScoreCache:
                     (filepath_str, now, json.dumps(existing)),
                 )
                 conn.commit()
-                self._prune(conn)
+                self._write_count += 1
+                if self._write_count >= self._PRUNE_INTERVAL:
+                    self._write_count = 0
+                    self._prune(conn)
         except Exception as e:
             logger.warning(f"Error writing to score cache: {e}")
 
