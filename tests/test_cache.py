@@ -1,10 +1,6 @@
 import json
-import sqlite3
-import time
 from pathlib import Path
-import pytest
 from photo_selector_toolbox.cache import ScoreCache, set_default_db_path
-from photo_selector_toolbox.models import ScanResult
 
 
 def test_score_cache_basic_get_set(tmp_path):
@@ -27,10 +23,10 @@ def test_score_cache_merge(tmp_path):
     cache = ScoreCache(db_file)
 
     p1 = Path("/tmp/img1.jpg")
-    
+
     # First write
     cache.set_scores(p1, {"sharpness": 12.3})
-    
+
     # Second write (different tool)
     cache.set_scores(p1, {"noise": 4.5})
 
@@ -67,21 +63,22 @@ def test_score_cache_pruning(tmp_path):
     cache = ScoreCache(db_file)
 
     # Insert 10,005 dummy items
-    # To test pruning, we can temporarily lower the limit in the database or just verify it handles a smaller prune limit.
+    # To test pruning, we can temporarily lower the limit or just verify it handles a smaller prune limit.
     # But since it's hardcoded to 10000 in cache.py, let's verify that pruning works by inserting 10,005 items.
-    # Since executing 10,000 inserts using set_scores might be slow, let's use a smaller mock prune or a batch insert to speed it up.
+    # Since executing 10k inserts might be slow, let's use a smaller mock prune or a batch insert to speed it up.
     # Actually, we can batch insert 10005 items using executemany, and then call self._prune()!
     # Let's write a batch inserter to test pruning directly.
     import sqlite3
+
     with sqlite3.connect(db_file) as conn:
         data = []
         for i in range(10010):
             # We vary last_used so we can test LRU order
             data.append((f"/tmp/img{i}.jpg", i, json.dumps({"sharpness": float(i)})))
-        
+
         conn.executemany(
             "INSERT INTO image_cache (filepath, last_used, scores) VALUES (?, ?, ?)",
-            data
+            data,
         )
         conn.commit()
 
@@ -96,7 +93,9 @@ def test_score_cache_pruning(tmp_path):
         assert count == 10000
 
         # And verify that the ones with smaller last_used (which were the first 10) are deleted
-        cursor.execute("SELECT filepath FROM image_cache ORDER BY last_used ASC LIMIT 5")
+        cursor.execute(
+            "SELECT filepath FROM image_cache ORDER BY last_used ASC LIMIT 5"
+        )
         lowest = cursor.fetchall()
         # The remaining lowest should be img10.jpg
         assert lowest[0][0] == "/tmp/img10.jpg"
@@ -111,7 +110,7 @@ def test_controller_uses_cache(tmp_path):
         from unittest.mock import patch
 
         img_path = Path("/tmp/dummy_img.jpg")
-        
+
         # Pre-seed the cache with sharpness score 999.0
         cache = ScoreCache()
         cache.set_scores(img_path, {"sharpness": 999.0})
@@ -122,13 +121,14 @@ def test_controller_uses_cache(tmp_path):
         # Mock EXIF reader and sharpness/noise tools
         with (
             patch("photo_selector_toolbox.controllers.get_exif_data") as mock_exif,
-            patch("photo_selector_toolbox.controllers.ToolRegistry.get") as mock_tool_registry,
+            patch(
+                "photo_selector_toolbox.sharpness.calculate_all_scores"
+            ) as mock_calculate_all,
         ):
             mock_exif.return_value = None
-            
-            # Setup a mock NoiseTool that returns 1.5
-            mock_noise_tool = mock_tool_registry.return_value.return_value
-            mock_noise_tool.analyze.return_value = 1.5
+
+            # Setup mock calculate_all_scores
+            mock_calculate_all.return_value = {"noise": 1.5}
 
             # Execute
             res = _process_single_file(img_path, grid_size=1, tools=tools)
@@ -137,10 +137,12 @@ def test_controller_uses_cache(tmp_path):
             assert res.scores["sharpness"] == 999.0  # restored from cache!
             assert res.scores["noise"] == 1.5  # calculated!
 
-            # Assert that SharpnessTool was NOT fetched/executed from ToolRegistry!
-            # Since sharpness was in cache, we only queried the registry for 'noise'
-            mock_tool_registry.assert_called_once_with("noise")
-            
+            # Assert that only noise was requested to be calculated!
+            # Since sharpness was in cache
+            mock_calculate_all.assert_called_once_with(
+                img_path, grid_size=1, tools={"noise": True}
+            )
+
             # Check database now has both merged
             cached = cache.get_scores(img_path)
             assert cached == {"sharpness": 999.0, "noise": 1.5}

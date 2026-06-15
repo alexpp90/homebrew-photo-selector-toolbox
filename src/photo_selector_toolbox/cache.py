@@ -36,6 +36,7 @@ class ScoreCache:
                 db_path = _DEFAULT_DB_PATH
             else:
                 from photo_selector_toolbox.ollama_tool import CONFIG_DIR
+
                 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
                 db_path = CONFIG_DIR / "scores_cache.db"
         self.db_path = db_path
@@ -47,15 +48,13 @@ class ScoreCache:
             with sqlite3.connect(self.db_path) as conn:
                 # WAL mode: allows concurrent reads while writes are in progress
                 conn.execute("PRAGMA journal_mode=WAL")
-                conn.execute(
-                    """
+                conn.execute("""
                     CREATE TABLE IF NOT EXISTS image_cache (
                         filepath TEXT PRIMARY KEY,
                         last_used INTEGER,
                         scores TEXT
                     )
-                    """
-                )
+                    """)
                 # Index on last_used to speed up ORDER BY in prune queries
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_last_used ON image_cache(last_used)"
@@ -121,7 +120,9 @@ class ScoreCache:
         except Exception as e:
             logger.warning(f"Error writing to score cache: {e}")
 
-    def get_multiple_scores(self, filepaths: List[Path]) -> Dict[Path, Dict[str, Union[float, str]]]:
+    def get_multiple_scores(
+        self, filepaths: List[Path]
+    ) -> Dict[Path, Dict[str, Union[float, str]]]:
         """Retrieves cached scores for multiple images in a batch, updating their timestamps."""
         results: Dict[Path, Dict[str, Union[float, str]]] = {}
         if not filepaths:
@@ -152,19 +153,19 @@ class ScoreCache:
                 # Bulk update last_used for matches
                 if results:
                     matched_fps = [str(p.resolve()) for p in results.keys()]
-                    for i in range(0, len(matched_fps), chunk_size):
-                        chunk = matched_fps[i : i + chunk_size]
-                        placeholders = ",".join("?" for _ in chunk)
-                        conn.execute(
-                            f"UPDATE image_cache SET last_used = ? WHERE filepath IN ({placeholders})",
-                            [now] + chunk,
-                        )
+                    update_data = [(now, fp) for fp in matched_fps]
+                    conn.executemany(
+                        "UPDATE image_cache SET last_used = ? WHERE filepath = ?",
+                        update_data,
+                    )
                     conn.commit()
         except Exception as e:
             logger.warning(f"Error bulk reading from score cache: {e}")
         return results
 
-    def set_multiple_scores(self, scores_dict: Dict[Path, Dict[str, Union[float, str]]]) -> None:
+    def set_multiple_scores(
+        self, scores_dict: Dict[Path, Dict[str, Union[float, str]]]
+    ) -> None:
         """Stores or updates scores for multiple images in a batch, pruning the database to 10,000 items afterwards."""
         if not scores_dict:
             return
@@ -216,16 +217,14 @@ class ScoreCache:
     def _prune(self, conn: sqlite3.Connection) -> None:
         """Limits database records to the 10,000 most recently used ones."""
         try:
-            conn.execute(
-                """
+            conn.execute("""
                 DELETE FROM image_cache
                 WHERE filepath NOT IN (
                     SELECT filepath FROM image_cache
                     ORDER BY last_used DESC
                     LIMIT 10000
                 )
-                """
-            )
+                """)
             conn.commit()
         except Exception as e:
             logger.warning(f"Error pruning score cache database: {e}")
