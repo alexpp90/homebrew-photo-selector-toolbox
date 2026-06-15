@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a calibration scale to the default Ollama prompt to reduce score randomness.
 - Updated prompt migration logic to migrate legacy default prompts to the new default calibrated prompt.
 - Updated Standard Mode metadata panel, Focus Mode panel, and Fullscreen Viewer metadata overlay to display the aesthetic tag in parentheses next to the score.
+- Optimized RAW image preview loading by extracting embedded camera JPEGs using `rawpy`'s `extract_thumb()`, avoiding expensive sensor demosaicing.
+- Introduced three configurable grouping levels (Time & Filename, Time + Fast Similarity, Detailed Similarity) with a 30s timeframe.
+- Optimized grouping visual similarity calculations by restricting dHash checks only to temporal candidate files (burst candidates), reducing image loading by up to 90% in large directories.
+- Added GUI Combobox next to the grouping checkbox to select active level, with disabled state synchronization and persistent settings storage.
 
 ---
 

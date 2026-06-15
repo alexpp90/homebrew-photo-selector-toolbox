@@ -154,6 +154,19 @@ def apply_dark_theme(root):
         foreground=[("readonly", fg_light)]
     )
 
+    # TCheckbutton
+    style.configure(
+        "TCheckbutton",
+        background=bg_dark,
+        foreground=fg_light,
+        focuscolor=""
+    )
+    style.map(
+        "TCheckbutton",
+        background=[("active", bg_dark), ("disabled", bg_dark)],
+        foreground=[("active", fg_light), ("disabled", fg_muted)]
+    )
+
     # Custom styles for FullscreenViewer Floating Meta Panel
     style.configure("MetaPanel.TFrame", background=bg_panel, bordercolor=border_color)
     style.configure("MetaPanel.TLabel", background=bg_panel, foreground=fg_light)
@@ -1107,6 +1120,11 @@ class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Photo Selector Toolbox")
+        
+        # Hide main window initially and show custom splash screen
+        self.withdraw()
+        self.show_splash_screen()
+        
         apply_dark_theme(self)
 
         # Attempt to improve DPI awareness on Windows/Linux
@@ -1196,14 +1214,137 @@ class MainApp(tk.Tk):
             frame = F(self.content_area)
             self.frames[page_name] = frame
             frame.grid(row=0, column=0, sticky="nsew")
+            if hasattr(self, "splash") and self.splash:
+                try:
+                    self.splash.update()
+                except Exception:
+                    pass
 
         self.content_area.grid_rowconfigure(0, weight=1)
         self.content_area.grid_columnconfigure(0, weight=1)
 
         self.show_frame("SharpnessTool")
 
+        # Close Tkinter splash screen and show main window
+        if hasattr(self, "splash") and self.splash:
+            try:
+                self.splash_progress.stop()
+                self.splash.destroy()
+            except Exception:
+                pass
+            self.splash = None
+        self.deiconify()
+
         # Close splash screen if it exists (after GUI is ready)
         self.after(100, self.close_splash)
+
+    def show_splash_screen(self):
+        # Close the PyInstaller splash screen first if it exists to avoid overlaps
+        self.close_splash()
+
+        self.splash = tk.Toplevel(self)
+        self.splash.configure(bg="#18181B")
+        self.splash.overrideredirect(True)
+
+        # Center splash screen on the screen
+        width = 450
+        height = 300
+        try:
+            screen_width = self.winfo_screenwidth()
+            screen_height = self.winfo_screenheight()
+        except Exception:
+            screen_width = 1920
+            screen_height = 1080
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.splash.geometry(f"{width}x{height}+{x}+{y}")
+
+        # Set splash to be topmost
+        try:
+            self.splash.attributes("-topmost", True)
+        except Exception:
+            pass
+
+        # Main frame with borders
+        splash_frame = tk.Frame(self.splash, bg="#18181B", highlightthickness=1, highlightbackground="#3F3F46")
+        splash_frame.pack(fill="both", expand=True)
+
+        # Load logo
+        logo_path = None
+        if hasattr(sys, "_MEIPASS"):
+            logo_path = Path(sys._MEIPASS) / "logo.png"
+        else:
+            logo_path = Path(__file__).parent.parent.parent / "assets" / "logo.png"
+
+        self.splash_logo = None
+        if logo_path and logo_path.exists():
+            try:
+                img = Image.open(logo_path)
+                img = img.resize((120, 120), Image.Resampling.LANCZOS)
+                self.splash_logo = ImageTk.PhotoImage(img)
+            except Exception as e:
+                logger.warning(f"Failed to load logo in splash screen: {e}")
+
+        # Display logo if loaded
+        if self.splash_logo:
+            lbl_logo = tk.Label(splash_frame, image=self.splash_logo, bg="#18181B")
+            lbl_logo.pack(pady=(30, 15))
+
+        # Title / Application Name
+        lbl_title = tk.Label(
+            splash_frame,
+            text="Photo Selector Toolbox",
+            font=("Helvetica", 16, "bold"),
+            bg="#18181B",
+            fg="#FAFAFA"
+        )
+        lbl_title.pack()
+
+        # Status Label
+        self.splash_status = tk.Label(
+            splash_frame,
+            text="Loading components...",
+            font=("Helvetica", 10),
+            bg="#18181B",
+            fg="#A1A1AA"
+        )
+        self.splash_status.pack(pady=(5, 15))
+
+        # Modern Indeterminate Progress Bar
+        style = ttk.Style(self.splash)
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+        style.configure(
+            "Splash.Horizontal.TProgressbar",
+            troughcolor="#27272A",
+            background="#6366F1",
+            lightcolor="#6366F1",
+            darkcolor="#6366F1",
+            bordercolor="#27272A",
+            thickness=6,
+            borderwidth=0
+        )
+
+        self.splash_progress = ttk.Progressbar(
+            splash_frame,
+            style="Splash.Horizontal.TProgressbar",
+            orient="horizontal",
+            length=300,
+            mode="indeterminate"
+        )
+        self.splash_progress.pack(pady=(5, 20))
+        try:
+            self.splash_progress.start(10)  # Start animation
+        except Exception:
+            pass
+
+        # Force render/update immediately
+        try:
+            self.splash.update()
+        except Exception:
+            pass
 
     def close_splash(self):
         try:

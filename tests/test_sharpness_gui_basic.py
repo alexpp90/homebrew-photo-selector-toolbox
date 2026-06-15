@@ -233,18 +233,18 @@ def test_get_candidate_listbox_text():
                 
                 # Test case 2: Sharpness calculated, others not
                 tool.files_map[path] = ScanResult(path=path, score=42.5)
-                assert tool._get_candidate_listbox_text(path) == "img1.jpg (Sharpness: 42.5)"
+                assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5)"
                 
                 # Test case 3: Sharpness and Noise calculated
                 tool.files_map[path] = ScanResult(path=path, score=42.5, noise_score=1.2)
-                assert tool._get_candidate_listbox_text(path) == "img1.jpg (Sharpness: 42.5, Noise: 1.2)"
+                assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5, 1.2)"
                 
                 # Test case 4: Sharpness, Noise, and Highlight/Shadow clipping calculated
                 res = ScanResult(path=path, score=42.5, noise_score=1.2)
                 res.scores["highlight_clipping"] = 0.5
                 res.scores["shadow_clipping"] = 1.0
                 tool.files_map[path] = res
-                assert tool._get_candidate_listbox_text(path) == "img1.jpg (Sharpness: 42.5, Noise: 1.2, HL: 0.5%, SD: 1.0%)"
+                assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5, 1.2, 0.5%, 1.0%)"
         finally:
             sg.format_score = original_format_score
     finally:

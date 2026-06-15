@@ -151,6 +151,8 @@ class ImageCacheManager:
 def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> ScanResult:
     """Helper module function to process a single image for parallel execution."""
     from photo_selector_toolbox.cache import ScoreCache
+    from photo_selector_toolbox.sharpness import calculate_all_scores
+
     cache = ScoreCache()
     cached = cache.get_scores(f)
 
@@ -158,12 +160,36 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
     scores = {name: val for name, val in cached.items() if val != "N/A"}
     new_calculations = {}
 
+    # --- Optimized path: calculate all built-in metrics with a single image load ---
+    # Built-in tools that share the same image data pipeline
+    BUILTIN_TOOLS = {"sharpness", "noise", "highlight_clipping", "shadow_clipping"}
+
+    # Determine which built-in tools need computation (enabled AND not yet cached)
+    builtin_to_compute = {
+        name: True
+        for name in BUILTIN_TOOLS
+        if tools.get(name, False) and name not in scores
+    }
+
+    if builtin_to_compute:
+        # Single image load → single grayscale conversion → all analyses
+        combined_results = calculate_all_scores(f, grid_size=grid_size, tools=builtin_to_compute)
+        for tool_name, val in combined_results.items():
+            scores[tool_name] = val
+            new_calculations[tool_name] = val
+
+    # Mark disabled built-in tools as N/A if not already set
+    for name in BUILTIN_TOOLS:
+        if not tools.get(name, False) and name not in scores:
+            scores[name] = "N/A"
+
+    # --- Standard path: non-builtin tools (e.g., aesthetic/Ollama) via ToolRegistry ---
     for tool_name, enabled in tools.items():
+        if tool_name in BUILTIN_TOOLS:
+            continue  # Already handled above
         if enabled:
-            # Skip if already calculated
             if tool_name in scores:
                 continue
-
             try:
                 tool_class = ToolRegistry.get(tool_name)
                 tool_instance = tool_class()
