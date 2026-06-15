@@ -114,6 +114,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
 
       - name: Download macOS artifact
         run: |
@@ -131,22 +132,41 @@ jobs:
 
       - name: Update Cask File
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Nightly Cask Update
-            sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox@nightly.rb
-            git add Casks/photo-selector-toolbox@nightly.rb
-            COMMIT_MSG="Update nightly Cask SHA256"
-          else
-            # Stable Cask Update
-            TAG_NAME="${{ github.ref_name }}"
-            VERSION="${TAG_NAME#v}"
-            sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/photo-selector-toolbox.rb
-            sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox.rb
-            git add Casks/photo-selector-toolbox.rb
-            COMMIT_MSG="Update stable Cask to version ${VERSION}"
-          fi
-          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
-          git push
+          
+          update_and_push() {
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              # Nightly Cask Update
+              sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox@nightly.rb
+              git add Casks/photo-selector-toolbox@nightly.rb
+              COMMIT_MSG="Update nightly Cask SHA256"
+            else
+              # Stable Cask Update
+              TAG_NAME="${{ github.ref_name }}"
+              VERSION="${TAG_NAME#v}"
+              sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/photo-selector-toolbox.rb
+              sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox.rb
+              git add Casks/photo-selector-toolbox.rb
+              COMMIT_MSG="Update stable Cask to version ${VERSION}"
+            fi
+            
+            git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
+            git push origin main
+          }
+          
+          for i in {1..5}; do
+            if update_and_push; then
+              echo "Cask updated and pushed successfully."
+              exit 0
+            fi
+            echo "Attempt $i failed. Retrying in 2 seconds..."
+            sleep 2
+          done
+          
+          echo "Failed to update and push Cask after 5 attempts."
+          exit 1
