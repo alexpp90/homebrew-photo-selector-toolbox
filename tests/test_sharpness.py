@@ -85,6 +85,10 @@ def test_find_related_files(tmp_path):
     (tmp_path / "DSC001.JPG").touch()
     (tmp_path / "DSC001.xmp").touch()
     (tmp_path / "DSC002.ARW").touch()
+    (tmp_path / "DSC001-Edit.tif").touch()
+    (tmp_path / "DSC001-Edit-2.jpg").touch()
+    (tmp_path / "DSC001-Edit.xmp").touch()
+    (tmp_path / "DSC001-other.jpg").touch()
 
     target = tmp_path / "DSC001.ARW"
     related = find_related_files(target)
@@ -93,7 +97,11 @@ def test_find_related_files(tmp_path):
     assert "DSC001.ARW" in related_names
     assert "DSC001.JPG" in related_names
     assert "DSC001.xmp" in related_names
+    assert "DSC001-Edit.tif" in related_names
+    assert "DSC001-Edit-2.jpg" in related_names
+    assert "DSC001-Edit.xmp" in related_names
     assert "DSC002.ARW" not in related_names
+    assert "DSC001-other.jpg" not in related_names
 
 
 @patch.object(shp, "get_image_data")

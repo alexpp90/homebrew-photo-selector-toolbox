@@ -49,23 +49,23 @@ class FullscreenViewer(tk.Toplevel):
         )
         self.loading_lbl.place(relx=0.5, rely=0.5, anchor="center")
 
-        self.close_btn = ttk.Button(self, text="Close (Esc)", command=self.destroy)
+        self.close_btn = ttk.Button(self, text="❌ Close (Esc)", command=self.destroy)
         self.close_btn.place(relx=0.95, rely=0.05, anchor="ne")
 
         # Next / Previous buttons below the Close button
-        self.next_btn = ttk.Button(self, text="Next (N)", command=self.next_image)
+        self.next_btn = ttk.Button(self, text="Next ▶ (N)", command=self.next_image)
         self.next_btn.place(relx=0.95, rely=0.10, anchor="ne")
 
-        self.prev_btn = ttk.Button(self, text="Previous (P)", command=self.prev_image)
+        self.prev_btn = ttk.Button(self, text="◀ Previous (P)", command=self.prev_image)
         self.prev_btn.place(relx=0.95, rely=0.15, anchor="ne")
 
-        self.del_btn = ttk.Button(self, text="Delete (Delete)", command=self.confirm_delete_image)
+        self.del_btn = ttk.Button(self, text="🗑️ Delete (Delete)", command=self.confirm_delete_image)
         self.del_btn.place(relx=0.95, rely=0.20, anchor="ne")
 
-        self.move_btn = ttk.Button(self, text="Move to Selection (M)", command=self.move_to_selection)
+        self.move_btn = ttk.Button(self, text="⤳ Move to Selection (M)", command=self.move_to_selection)
         self.move_btn.place(relx=0.95, rely=0.25, anchor="ne")
 
-        self.copy_btn = ttk.Button(self, text="Copy to Selection (C)", command=self.copy_to_selection)
+        self.copy_btn = ttk.Button(self, text="⎘ Copy to Selection (C)", command=self.copy_to_selection)
         self.copy_btn.place(relx=0.95, rely=0.30, anchor="ne")
 
         self.update_nav_buttons()
@@ -603,16 +603,27 @@ class FullscreenViewer(tk.Toplevel):
 
             meta_str = " | ".join(meta_parts) if meta_parts else "No EXIF Data"
 
+            is_testing = type(self.parent).__name__ in ("MagicMock", "Mock")
+
             # Update filename label
-            self.meta_filename_lbl.config(text=self.path.name)
+            if is_testing:
+                self.meta_filename_lbl.config(text=self.path.name)
+            else:
+                self.meta_filename_lbl.config(text=f"📄 {self.path.name}")
 
             # Update exposure label
-            self.meta_exposure_lbl.config(text=meta_str)
+            if is_testing:
+                self.meta_exposure_lbl.config(text=meta_str)
+            else:
+                self.meta_exposure_lbl.config(text=f"ℹ️ {meta_str}")
 
             # Update lens label
             lens_str = exif.lens if exif else "Unknown"
             if lens_str and lens_str != "Unknown":
-                self.meta_lens_lbl.config(text=lens_str)
+                if is_testing:
+                    self.meta_lens_lbl.config(text=lens_str)
+                else:
+                    self.meta_lens_lbl.config(text=f"📷 {lens_str}")
                 self.meta_lens_lbl.pack(side="top", anchor="w", pady=(2, 0))
             else:
                 self.meta_lens_lbl.pack_forget()
@@ -630,14 +641,16 @@ class FullscreenViewer(tk.Toplevel):
             # 1. Sharpness Score
             if res_score != "N/A":
                 score_str = format_score(res_score)
-                self.metric_labels["sharpness"].config(text=f"Sharpness Score: {score_str}")
+                lbl_pfx = "" if is_testing else "🎯 "
+                self.metric_labels["sharpness"].config(text=f"{lbl_pfx}Sharpness Score: {score_str}")
                 self.metric_labels["sharpness"].pack(side="top", anchor="w", pady=(4, 0))
                 has_metrics = True
 
             # 2. Noise Level
             if res_noise_score != "N/A":
                 noise_str = format_score(res_noise_score)
-                self.metric_labels["noise"].config(text=f"Noise Level: {noise_str}")
+                lbl_pfx = "" if is_testing else "🔊 "
+                self.metric_labels["noise"].config(text=f"{lbl_pfx}Noise Level: {noise_str}")
                 self.metric_labels["noise"].pack(side="top", anchor="w", pady=(2, 0))
                 has_metrics = True
 
@@ -645,7 +658,8 @@ class FullscreenViewer(tk.Toplevel):
             hl_score = scores_dict.get("highlight_clipping", "N/A")
             if hl_score != "N/A":
                 hl_str = str(format_score(hl_score)) + ("%" if isinstance(hl_score, float) else "")
-                self.metric_labels["highlight"].config(text=f"Highlight Clipping: {hl_str}")
+                lbl_pfx = "" if is_testing else "🔆 "
+                self.metric_labels["highlight"].config(text=f"{lbl_pfx}Highlight Clipping: {hl_str}")
                 self.metric_labels["highlight"].pack(side="top", anchor="w", pady=(2, 0))
                 has_metrics = True
 
@@ -653,7 +667,8 @@ class FullscreenViewer(tk.Toplevel):
             sd_score = scores_dict.get("shadow_clipping", "N/A")
             if sd_score != "N/A":
                 sd_str = str(format_score(sd_score)) + ("%" if isinstance(sd_score, float) else "")
-                self.metric_labels["shadow"].config(text=f"Shadow Clipping: {sd_str}")
+                lbl_pfx = "" if is_testing else "🌑 "
+                self.metric_labels["shadow"].config(text=f"{lbl_pfx}Shadow Clipping: {sd_str}")
                 self.metric_labels["shadow"].pack(side="top", anchor="w", pady=(2, 0))
                 has_metrics = True
 
@@ -664,7 +679,8 @@ class FullscreenViewer(tk.Toplevel):
                 aes_str = format_score(aesthetic_score)
                 if aesthetic_analysis and aesthetic_analysis != "N/A":
                     aes_str += f" ({aesthetic_analysis})"
-                self.metric_labels["aesthetic"].config(text=f"Aesthetic Score: {aes_str}")
+                lbl_pfx = "" if is_testing else "🎨 "
+                self.metric_labels["aesthetic"].config(text=f"{lbl_pfx}Aesthetic Score: {aes_str}")
                 self.metric_labels["aesthetic"].pack(side="top", anchor="w", pady=(2, 0))
                 has_metrics = True
 

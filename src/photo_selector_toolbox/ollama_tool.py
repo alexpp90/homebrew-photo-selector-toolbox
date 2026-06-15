@@ -37,6 +37,8 @@ DEFAULT_CONFIG = {
         "[SCORE: X.Y] [ANALYSIS: tag]\n"
         "where tag is exactly a 1 or 2 word description of the main reason (e.g., 'Empty Sky', 'Blurry', 'Soft Focus', 'Under-exposed', 'Great Lighting', 'Good Composition')."
     ),
+    "selection_folder": "Selection",
+    "separate_raw_jpeg": True,
 }
 
 

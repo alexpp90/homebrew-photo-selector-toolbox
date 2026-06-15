@@ -55,3 +55,15 @@ def test_main_app_init(mock_gui_deps):
         assert "ImageLibraryStatistics" in app.frames
         assert "DuplicateFinder" in app.frames
         assert "SharpnessTool" in app.frames
+
+
+def test_show_about(mock_gui_deps):
+    from photo_selector_toolbox.gui import MainApp
+    with (
+        patch("photo_selector_toolbox.gui.SharpnessTool") as MockTool,
+        patch("photo_selector_toolbox.gui.AboutDialog") as MockAbout
+    ):
+        MockTool.__name__ = "SharpnessTool"
+        app = MainApp()
+        app.show_about()
+        MockAbout.assert_called_once_with(app)
