@@ -288,9 +288,20 @@ def is_excluded_subfolder(file_path: Path, root_path: Path) -> bool:
     """
     try:
         relative = file_path.relative_to(root_path)
+        excluded_names = {"selection", "selected"}
+        try:
+            from photo_selector_toolbox.ollama_tool import load_config
+            config = load_config()
+            custom_folder = config.get("selection_folder", "Selection")
+            custom_path = Path(custom_folder)
+            if not custom_path.is_absolute():
+                excluded_names.add(custom_path.name.lower())
+        except Exception:
+            pass
+
         # Check all parts of the relative path except the last one (the filename)
         for part in relative.parts[:-1]:
-            if part.lower() in ("selection", "selected"):
+            if part.lower() in excluded_names:
                 return True
     except ValueError:
         pass

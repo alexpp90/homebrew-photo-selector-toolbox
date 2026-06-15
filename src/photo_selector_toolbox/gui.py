@@ -34,14 +34,14 @@ def apply_dark_theme(root):
     style = ttk.Style()
     style.theme_use("clam")
 
-    # Define color palette: dark backgrounds & electric blue accents
+    # Define color palette: dark backgrounds & Indigo accents matching logo/banner
     bg_dark = "#18181B"      # Zinc-900 (main window)
     bg_panel = "#27272A"     # Zinc-800 (containers, boxes)
     bg_hover = "#3F3F46"     # Zinc-700
     fg_light = "#FAFAFA"     # Zinc-50 (headings/main text)
     fg_muted = "#A1A1AA"     # Zinc-400 (secondary text)
-    accent_blue = "#2563EB"  # Blue-600 (active buttons/highlight border)
-    accent_hover = "#3B82F6" # Blue-500
+    accent_blue = "#6366F1"  # Indigo-500 (active buttons/highlight border)
+    accent_hover = "#4F46E5" # Indigo-600
     border_color = "#3F3F46" # Zinc-700
 
     # Base styling
@@ -127,7 +127,7 @@ def apply_dark_theme(root):
     style.map(
         "TNotebook.Tab",
         background=[("selected", bg_dark), ("active", bg_hover)],
-        foreground=[("selected", fg_light), ("active", fg_light)]
+        foreground=[("selected", accent_blue), ("active", fg_light)]
     )
 
     # TProgressbar
@@ -193,7 +193,7 @@ def apply_dark_theme_to_fig(fig):
         for container in ax.containers:
             for child in container.get_children():
                 if hasattr(child, 'set_facecolor'):
-                    child.set_facecolor('#2563EB')
+                    child.set_facecolor('#6366F1')
 
 
 class QueueHandler(logging.Handler):
@@ -226,7 +226,7 @@ class ImageLibraryStatistics(ttk.Frame):
         controls_frame.pack(fill="x", padx=10, pady=5)
 
         # Root Folder
-        ttk.Label(controls_frame, text="Images Folder:").grid(
+        ttk.Label(controls_frame, text="📂 Images Folder:").grid(
             row=0, column=0, sticky="w"
         )
         self.root_folder_var = tk.StringVar()
@@ -234,11 +234,11 @@ class ImageLibraryStatistics(ttk.Frame):
             row=0, column=1, padx=5
         )
         ttk.Button(
-            controls_frame, text="Browse...", command=self.browse_root_folder
+            controls_frame, text="📂 Browse...", command=self.browse_root_folder
         ).grid(row=0, column=2)
 
         # Output Folder
-        ttk.Label(controls_frame, text="Output Folder:").grid(
+        ttk.Label(controls_frame, text="📁 Output Folder:").grid(
             row=1, column=0, sticky="w"
         )
         self.output_folder_var = tk.StringVar(value="analysis_results")
@@ -246,7 +246,7 @@ class ImageLibraryStatistics(ttk.Frame):
             row=1, column=1, padx=5
         )
         ttk.Button(
-            controls_frame, text="Browse...", command=self.browse_output_folder
+            controls_frame, text="📂 Browse...", command=self.browse_output_folder
         ).grid(row=1, column=2)
 
         # Buttons Frame
@@ -255,13 +255,13 @@ class ImageLibraryStatistics(ttk.Frame):
 
         # Analyze Button
         self.analyze_btn = ttk.Button(
-            btn_frame, text="Analyze", command=self.start_analysis, style="Primary.TButton"
+            btn_frame, text="📊 Analyze", command=self.start_analysis, style="Primary.TButton"
         )
         self.analyze_btn.pack(side="left", padx=5)
 
         # Cancel Button
         self.cancel_btn = ttk.Button(
-            btn_frame, text="Cancel", command=self.cancel_analysis, state="disabled"
+            btn_frame, text="🛑 Cancel", command=self.cancel_analysis, state="disabled"
         )
         self.cancel_btn.pack(side="left", padx=5)
 
@@ -278,7 +278,7 @@ class ImageLibraryStatistics(ttk.Frame):
 
         # Overview Tab (getting started screen)
         self.overview_frame = ttk.Frame(self.notebook, padding=20)
-        self.notebook.add(self.overview_frame, text="Overview")
+        self.notebook.add(self.overview_frame, text="ℹ️ Overview")
 
         title_lbl = ttk.Label(self.overview_frame, text="Image Metadata Statistics Dashboard", font=("Helvetica", 14, "bold"))
         title_lbl.pack(pady=(10, 20), anchor="w")
@@ -322,7 +322,7 @@ class ImageLibraryStatistics(ttk.Frame):
 
         # Logs Tab
         self.logs_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.logs_frame, text="Logs")
+        self.notebook.add(self.logs_frame, text="📝 Logs")
 
         self.log_text = tk.Text(
             self.logs_frame,
@@ -332,7 +332,7 @@ class ImageLibraryStatistics(ttk.Frame):
             fg="#F4F4F5",
             insertbackground="#F4F4F5",
             highlightbackground="#27272A",
-            highlightcolor="#2563EB",
+            highlightcolor="#6366F1",
             borderwidth=1,
             relief="flat"
         )
@@ -557,7 +557,7 @@ class DuplicateFinder(ttk.Frame):
         controls_frame.pack(fill="x", padx=10, pady=5)
 
         # Root Folder
-        ttk.Label(controls_frame, text="Images Folder:").grid(
+        ttk.Label(controls_frame, text="📂 Images Folder:").grid(
             row=0, column=0, sticky="w"
         )
         self.root_folder_var = tk.StringVar()
@@ -565,7 +565,7 @@ class DuplicateFinder(ttk.Frame):
             row=0, column=1, padx=5
         )
         ttk.Button(
-            controls_frame, text="Browse...", command=self.browse_root_folder
+            controls_frame, text="📂 Browse...", command=self.browse_root_folder
         ).grid(row=0, column=2)
 
         # Buttons
@@ -573,7 +573,7 @@ class DuplicateFinder(ttk.Frame):
         btn_frame.grid(row=1, column=0, columnspan=3, pady=10)
 
         self.scan_btn = ttk.Button(
-            btn_frame, text="Find Duplicates", command=self.start_scan, style="Primary.TButton"
+            btn_frame, text="🔍 Find Duplicates", command=self.start_scan, style="Primary.TButton"
         )
         self.scan_btn.pack(side="left", padx=5)
 
@@ -625,7 +625,7 @@ class DuplicateFinder(ttk.Frame):
 
         ttk.Button(
             actions_frame,
-            text="Delete Selected (Move to Trash)",
+            text="🗑️ Delete Selected (Move to Trash)",
             command=self.delete_selected,
         ).pack(side="right")
 
@@ -815,23 +815,23 @@ class Sidebar(ttk.Frame):
         super().__init__(parent, width=200, padding=10)
         self.controller = controller
 
-        ttk.Label(self, text="Tools", font=("Helvetica", 12, "bold")).pack(pady=10)
+        ttk.Label(self, text="🛠️ Tools", font=("Helvetica", 12, "bold")).pack(pady=10)
 
         ttk.Button(
             self,
-            text="Photo Selector",
+            text="📸 Photo Selector",
             command=lambda: controller.show_frame("SharpnessTool"),
         ).pack(fill="x", pady=5)
 
         ttk.Button(
             self,
-            text="Image Library Statistics",
+            text="📊 Image Library Statistics",
             command=lambda: controller.show_frame("ImageLibraryStatistics"),
         ).pack(fill="x", pady=5)
 
         ttk.Button(
             self,
-            text="Duplicate Finder",
+            text="🔍 Duplicate Finder",
             command=lambda: controller.show_frame("DuplicateFinder"),
         ).pack(fill="x", pady=5)
 
@@ -878,7 +878,7 @@ class AboutDialog(tk.Toplevel):
         lbl_title.pack()
         
         # Version
-        lbl_version = ttk.Label(content, text="Version 1.0.0", font=("Helvetica", 10, "bold"), background="#18181B", foreground="#3B82F6")
+        lbl_version = ttk.Label(content, text="🏷️ Version 1.0.0", font=("Helvetica", 10, "bold"), background="#18181B", foreground="#3B82F6")
         lbl_version.pack(pady=(2, 10))
         
         # Description
@@ -911,7 +911,7 @@ class AboutDialog(tk.Toplevel):
         lbl_credits.pack(pady=(0, 20))
         
         # Close Button
-        btn_close = ttk.Button(content, text="Close", command=self.destroy, style="Primary.TButton")
+        btn_close = ttk.Button(content, text="❌ Close", command=self.destroy, style="Primary.TButton")
         btn_close.pack(pady=(5, 5))
         
         # Center the dialog relative to parent
@@ -929,6 +929,178 @@ class AboutDialog(tk.Toplevel):
         
         # Escape key close
         self.bind("<Escape>", lambda e: self.destroy())
+
+
+class CollectionSettingsDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Collection Settings")
+        self.configure(bg="#18181B")
+        self.resizable(False, False)
+        
+        # Make it modal
+        self.transient(parent)
+        self.grab_set()
+        
+        # Load existing config
+        from photo_selector_toolbox.ollama_tool import load_config, save_config
+        self.config_data = load_config()
+        
+        # Variables
+        self.selection_folder_var = tk.StringVar(value=self.config_data.get("selection_folder", "Selection"))
+        self.separate_var = tk.BooleanVar(value=self.config_data.get("separate_raw_jpeg", True))
+        
+        # Main container with padding
+        content = ttk.Frame(self, padding=20)
+        content.pack(fill="both", expand=True)
+        
+        # Header
+        lbl_title = ttk.Label(
+            content,
+            text="📁 Collection Destination Settings",
+            font=("Helvetica", 12, "bold"),
+            background="#18181B",
+            foreground="#FAFAFA"
+        )
+        lbl_title.pack(anchor="w", pady=(0, 15))
+        
+        # Folder setting row
+        folder_frame = ttk.Frame(content)
+        folder_frame.pack(fill="x", pady=5)
+        
+        ttk.Label(
+            folder_frame,
+            text="Destination Folder Name / Path:",
+            font=("Helvetica", 10),
+            background="#18181B",
+            foreground="#FAFAFA"
+        ).pack(anchor="w", pady=(0, 2))
+        
+        entry_frame = ttk.Frame(folder_frame)
+        entry_frame.pack(fill="x")
+        
+        self.folder_entry = ttk.Entry(
+            entry_frame,
+            textvariable=self.selection_folder_var,
+            font=("Helvetica", 10)
+        )
+        self.folder_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        
+        btn_browse = ttk.Button(
+            entry_frame,
+            text="📁 Browse...",
+            command=self.browse_folder,
+            style="Primary.TButton"
+        )
+        btn_browse.pack(side="right")
+        
+        # Explanation note
+        note_text = (
+            "Note: If you enter a simple folder name (e.g. 'Selection'), it will be created relative "
+            "to the scanned folder. If you enter or choose an absolute path, files will be sent there."
+        )
+        lbl_note = ttk.Label(
+            content,
+            text=note_text,
+            font=("Helvetica", 8, "italic"),
+            justify="left",
+            wraplength=420,
+            background="#18181B",
+            foreground="#71717A"
+        )
+        lbl_note.pack(anchor="w", pady=(2, 15))
+        
+        # Separation checkbutton
+        chk_frame = ttk.Frame(content)
+        chk_frame.pack(fill="x", pady=5)
+        
+        self.separate_chk = ttk.Checkbutton(
+            chk_frame,
+            text="Separate RAW and JPEG files into subfolders",
+            variable=self.separate_var
+        )
+        self.separate_chk.pack(anchor="w")
+        
+        # Extra note for Lightroom edit grouping
+        lr_note = (
+            "Lightroom edit files (like filename-Edit.*) are automatically grouped with the RAW files."
+        )
+        lbl_lr_note = ttk.Label(
+            content,
+            text=lr_note,
+            font=("Helvetica", 8, "italic"),
+            background="#18181B",
+            foreground="#71717A"
+        )
+        lbl_lr_note.pack(anchor="w", pady=(2, 20))
+        
+        # Buttons frame (Reset, Save, Cancel)
+        btn_frame = ttk.Frame(content)
+        btn_frame.pack(fill="x")
+        
+        btn_reset = ttk.Button(
+            btn_frame,
+            text="🔄 Reset to Default",
+            command=self.reset_defaults
+        )
+        btn_reset.pack(side="left")
+        
+        btn_cancel = ttk.Button(
+            btn_frame,
+            text="❌ Cancel",
+            command=self.destroy
+        )
+        btn_cancel.pack(side="right", padx=5)
+        
+        btn_save = ttk.Button(
+            btn_frame,
+            text="✔️ Save",
+            command=self.save_settings,
+            style="Primary.TButton"
+        )
+        btn_save.pack(side="right")
+        
+        # Center the dialog relative to parent
+        self.update_idletasks()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+        
+        width = 460
+        height = self.winfo_reqheight()
+        x = parent_x + (parent_width // 2) - (width // 2)
+        y = parent_y + (parent_height // 2) - (height // 2)
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        
+        # Escape key close
+        self.bind("<Escape>", lambda e: self.destroy())
+        
+    def browse_folder(self):
+        folder = filedialog.askdirectory(parent=self)
+        if folder:
+            self.selection_folder_var.set(folder)
+            
+    def reset_defaults(self):
+        self.selection_folder_var.set("Selection")
+        self.separate_var.set(True)
+        
+    def save_settings(self):
+        from photo_selector_toolbox.ollama_tool import save_config
+        folder_val = self.selection_folder_var.get().strip()
+        if not folder_val:
+            messagebox.showerror("Error", "Destination folder/path cannot be empty.", parent=self)
+            return
+            
+        self.config_data["selection_folder"] = folder_val
+        self.config_data["separate_raw_jpeg"] = self.separate_var.get()
+        
+        try:
+            save_config(self.config_data)
+            messagebox.showinfo("Success", "Collection settings saved successfully.", parent=self)
+            self.destroy()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save settings: {e}", parent=self)
 
 
 class MainApp(tk.Tk):
@@ -1000,6 +1172,10 @@ class MainApp(tk.Tk):
         )
         self.tools_menu.add_separator()
         self.tools_menu.add_command(
+            label="Collection Settings...",
+            command=self.show_collection_config,
+        )
+        self.tools_menu.add_command(
             label="Clear Cached Scores...",
             command=self.clear_cached_scores,
         )
@@ -1046,6 +1222,9 @@ class MainApp(tk.Tk):
 
     def show_about(self):
         AboutDialog(self)
+
+    def show_collection_config(self):
+        CollectionSettingsDialog(self)
 
     def clear_cached_scores(self):
         if messagebox.askyesno(

@@ -215,6 +215,7 @@ def find_related_files(filepath: Path) -> List[Path]:
     Finds files related to the given filepath (same name, different extension)
     in the same directory.
     Example: DSC001.ARW -> [DSC001.ARW, DSC001.JPG, DSC001.xmp]
+    Also includes Lightroom editing files (e.g., DSC001-Edit.tif, DSC001-Edit.xmp).
     """
     related = []
     if not filepath.exists():
@@ -233,6 +234,12 @@ def find_related_files(filepath: Path) -> List[Path]:
         for f in parent.glob(f"{escaped_stem}.*"):
             if f.is_file() and f.stem == stem:
                 related.append(f)
+
+        # Also look for Lightroom editing files starting with stem + "-edit" (case-insensitive)
+        for f in parent.glob(f"{escaped_stem}-*"):
+            if f.is_file() and f.name.lower().startswith(f"{stem.lower()}-edit"):
+                if f not in related:
+                    related.append(f)
 
         # If the file has no extension (e.g. "DSC001"), glob f"{escaped_stem}.*" won't find it.
         # But we must ensure we include the exact match. We don't need glob for it,

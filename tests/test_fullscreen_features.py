@@ -297,11 +297,13 @@ def test_move_to_selection():
         
         mock_jpg = MagicMock(spec=Path)
         mock_jpg.name = "test.jpg"
+        mock_jpg.stem = "test"
         mock_jpg.suffix = ".jpg"
         mock_jpg.exists.return_value = True
 
         mock_raw = MagicMock(spec=Path)
         mock_raw.name = "test.arw"
+        mock_raw.stem = "test"
         mock_raw.suffix = ".arw"
         mock_raw.exists.return_value = True
         
@@ -317,6 +319,7 @@ def test_move_to_selection():
         tool.meta_lbl = MagicMock()
         
         with (
+            patch("photo_selector_toolbox.sharpness_gui.load_config", return_value={"selection_folder": "Selection", "separate_raw_jpeg": True}),
             patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
             patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_jpg, mock_raw]),
             patch("photo_selector_toolbox.sharpness_gui.RAW_EXTENSIONS", {".arw", ".nef", ".cr2", ".dng", ".raw"}),
@@ -392,11 +395,13 @@ def test_copy_to_selection():
         
         mock_jpg = MagicMock(spec=Path)
         mock_jpg.name = "test.jpg"
+        mock_jpg.stem = "test"
         mock_jpg.suffix = ".jpg"
         mock_jpg.exists.return_value = True
 
         mock_raw = MagicMock(spec=Path)
         mock_raw.name = "test.arw"
+        mock_raw.stem = "test"
         mock_raw.suffix = ".arw"
         mock_raw.exists.return_value = True
         
@@ -412,6 +417,7 @@ def test_copy_to_selection():
         tool.meta_lbl = MagicMock()
         
         with (
+            patch("photo_selector_toolbox.sharpness_gui.load_config", return_value={"selection_folder": "Selection", "separate_raw_jpeg": True}),
             patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
             patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_jpg, mock_raw]),
             patch("photo_selector_toolbox.sharpness_gui.RAW_EXTENSIONS", {".arw", ".nef", ".cr2", ".dng", ".raw"}),
@@ -437,3 +443,170 @@ def test_copy_to_selection():
             
             # Candidate list should not shrink since it is copy (unlike move)
             assert mock_jpg in tool.candidates
+
+
+def test_move_to_selection_no_separation():
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
+    ):
+        tool = SharpnessTool(parent)
+        tool.folder_var = MagicMock()
+        tool.folder_var.get.return_value = "/mock/dir"
+        
+        mock_jpg = MagicMock(spec=Path)
+        mock_jpg.name = "test.jpg"
+        mock_jpg.stem = "test"
+        mock_jpg.suffix = ".jpg"
+        mock_jpg.exists.return_value = True
+
+        mock_raw = MagicMock(spec=Path)
+        mock_raw.name = "test.arw"
+        mock_raw.stem = "test"
+        mock_raw.suffix = ".arw"
+        mock_raw.exists.return_value = True
+        
+        tool.candidates = [mock_jpg]
+        tool.sorted_files = [mock_jpg]
+        tool.files_map = {mock_jpg: MagicMock()}
+        tool.candidate_listbox = MagicMock()
+        tool.candidate_listbox.curselection.return_value = (0,)
+        tool.candidate_listbox.size.return_value = 1
+        tool.panel_curr = MagicMock()
+        tool.panel_prev = MagicMock()
+        tool.panel_next = MagicMock()
+        tool.meta_lbl = MagicMock()
+        
+        with (
+            patch("photo_selector_toolbox.sharpness_gui.load_config", return_value={"selection_folder": "Selection", "separate_raw_jpeg": False}),
+            patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
+            patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_jpg, mock_raw]),
+            patch("photo_selector_toolbox.sharpness_gui.RAW_EXTENSIONS", {".arw", ".nef", ".cr2", ".dng", ".raw"}),
+        ):
+            mock_selection_dir = MagicMock()
+            mock_path_cls.return_value = MagicMock()
+            # Since no separation, we use the root selection_dir itself
+            mock_path_cls.return_value.__truediv__.return_value = mock_selection_dir
+            
+            tool.execute_move_to_selection(mock_jpg, 0)
+            
+            # Directory should be created once at the beginning
+            mock_selection_dir.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            # rename should be directly to the root of selection folder
+            mock_jpg.rename.assert_called_once_with(mock_selection_dir.__truediv__.return_value)
+            mock_raw.rename.assert_called_once_with(mock_selection_dir.__truediv__.return_value)
+
+
+def test_move_to_selection_custom_absolute_path():
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
+    ):
+        tool = SharpnessTool(parent)
+        tool.folder_var = MagicMock()
+        tool.folder_var.get.return_value = "/mock/dir"
+        
+        mock_jpg = MagicMock(spec=Path)
+        mock_jpg.name = "test.jpg"
+        mock_jpg.stem = "test"
+        mock_jpg.suffix = ".jpg"
+        mock_jpg.exists.return_value = True
+        
+        tool.candidates = [mock_jpg]
+        tool.sorted_files = [mock_jpg]
+        tool.files_map = {mock_jpg: MagicMock()}
+        tool.candidate_listbox = MagicMock()
+        tool.candidate_listbox.curselection.return_value = (0,)
+        tool.candidate_listbox.size.return_value = 1
+        tool.panel_curr = MagicMock()
+        tool.panel_prev = MagicMock()
+        tool.panel_next = MagicMock()
+        tool.meta_lbl = MagicMock()
+        
+        with (
+            patch("photo_selector_toolbox.sharpness_gui.load_config", return_value={"selection_folder": "/custom/absolute/path", "separate_raw_jpeg": False}),
+            patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
+            patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_jpg]),
+            patch("photo_selector_toolbox.sharpness_gui.os.path.isabs", return_value=True),
+        ):
+            mock_custom_dir = MagicMock()
+            mock_path_cls.return_value = mock_custom_dir
+            
+            tool.execute_move_to_selection(mock_jpg, 0)
+            
+            # Should create and use /custom/absolute/path directly
+            mock_custom_dir.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            mock_jpg.rename.assert_called_once_with(mock_custom_dir.__truediv__.return_value)
+
+
+def test_move_to_selection_with_lightroom_edit():
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
+    ):
+        tool = SharpnessTool(parent)
+        tool.folder_var = MagicMock()
+        tool.folder_var.get.return_value = "/mock/dir"
+        
+        mock_jpg = MagicMock(spec=Path)
+        mock_jpg.name = "test.jpg"
+        mock_jpg.stem = "test"
+        mock_jpg.suffix = ".jpg"
+        mock_jpg.exists.return_value = True
+
+        mock_edit_tif = MagicMock(spec=Path)
+        mock_edit_tif.name = "test-Edit.tif"
+        mock_edit_tif.stem = "test-Edit"
+        mock_edit_tif.suffix = ".tif"
+        mock_edit_tif.exists.return_value = True
+        
+        tool.candidates = [mock_jpg]
+        tool.sorted_files = [mock_jpg]
+        tool.files_map = {mock_jpg: MagicMock()}
+        tool.candidate_listbox = MagicMock()
+        tool.candidate_listbox.curselection.return_value = (0,)
+        tool.candidate_listbox.size.return_value = 1
+        tool.panel_curr = MagicMock()
+        tool.panel_prev = MagicMock()
+        tool.panel_next = MagicMock()
+        tool.meta_lbl = MagicMock()
+        
+        with (
+            patch("photo_selector_toolbox.sharpness_gui.load_config", return_value={"selection_folder": "Selection", "separate_raw_jpeg": True}),
+            patch("photo_selector_toolbox.sharpness_gui.Path") as mock_path_cls,
+            patch("photo_selector_toolbox.sharpness_gui.find_related_files", return_value=[mock_jpg, mock_edit_tif]),
+            patch("photo_selector_toolbox.sharpness_gui.RAW_EXTENSIONS", {".arw", ".nef", ".cr2", ".dng", ".raw"}),
+        ):
+            mock_selection_dir = MagicMock()
+            mock_path_cls.return_value = MagicMock()
+            mock_path_cls.return_value.__truediv__.return_value = mock_selection_dir
+            
+            mock_dirs = {}
+            def get_subfolder_mock(subfolder):
+                if subfolder not in mock_dirs:
+                    mock_dirs[subfolder] = MagicMock()
+                return mock_dirs[subfolder]
+            mock_selection_dir.__truediv__.side_effect = get_subfolder_mock
+
+            tool.execute_move_to_selection(mock_jpg, 0)
+            
+            # The JPG goes to JPEG subfolder, but the Lightroom Edit goes to RAW subfolder
+            mock_dirs["JPEG"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            mock_dirs["RAW"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
+            mock_jpg.rename.assert_called_once_with(mock_dirs["JPEG"].__truediv__.return_value)
+            mock_edit_tif.rename.assert_called_once_with(mock_dirs["RAW"].__truediv__.return_value)
