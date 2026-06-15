@@ -3,7 +3,6 @@ from tkinter import ttk, filedialog, messagebox
 import threading
 import queue
 import sys
-import traceback
 import logging
 from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
