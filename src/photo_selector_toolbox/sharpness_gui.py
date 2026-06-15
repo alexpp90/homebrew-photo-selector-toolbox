@@ -1155,11 +1155,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
     def _background_update_worker(self, files, grid_size, tools):
         from photo_selector_toolbox.controllers import _process_single_file
         import os
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import ProcessPoolExecutor, as_completed
 
-        max_workers = min(4, (os.cpu_count() or 1))
+        max_workers = max(1, os.cpu_count() or 4)
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(_process_single_file, f, grid_size, tools): f
                 for f in files
