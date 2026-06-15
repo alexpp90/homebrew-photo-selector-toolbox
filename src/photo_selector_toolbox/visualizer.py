@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import webbrowser
 from pathlib import Path
 from typing import Optional, List, Dict
 from collections import Counter
@@ -17,14 +18,14 @@ from photo_selector_toolbox.models import ExifData
 def _open_file_for_user(filepath: Path):
     """Opens a file in the default application in a cross-platform way."""
     try:
-        abs_filepath = filepath.absolute()
-        if sys.platform == "win32":
-            os.startfile(abs_filepath)
-        elif sys.platform == "darwin":
-            subprocess.run(["open", str(abs_filepath)], check=True)
-        else:
-            subprocess.run(["xdg-open", str(abs_filepath)], check=True)
-    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        # Security: Enforce strict whitelist validation to prevent arbitrary code execution
+        if filepath.suffix.lower() != '.png':
+            print(f"Refused to open file with unsupported extension: {filepath.suffix}")
+            return
+
+        uri = filepath.resolve().as_uri()
+        webbrowser.open(uri)
+    except Exception as e:
         print(f"Could not open file '{filepath}'. Please open it manually.")
         print(f"Error: {e}")
 

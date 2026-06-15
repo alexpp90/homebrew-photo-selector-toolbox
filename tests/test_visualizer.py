@@ -141,33 +141,18 @@ def test_create_plots_empty_data(mock_open, tmp_path):
         assert not mock_open.called
 
 
-@patch("photo_selector_toolbox.visualizer.subprocess.run")
-@patch("photo_selector_toolbox.visualizer.os.startfile", create=True)
-def test_open_file_for_user_absolute_path(mock_startfile, mock_run):
-    """Test that _open_file_for_user always resolves paths to absolute before calling system commands."""
+@patch("photo_selector_toolbox.visualizer.webbrowser.open")
+def test_open_file_for_user_absolute_path(mock_webbrowser):
+    """Test that _open_file_for_user uses webbrowser.open with absolute URI."""
     test_path = Path("-test_file.png")
-    absolute_test_path = test_path.absolute()
+    expected_uri = test_path.resolve().as_uri()
 
-    # Test Windows
-    with patch("photo_selector_toolbox.visualizer.sys.platform", "win32"):
-        _open_file_for_user(test_path)
-        mock_startfile.assert_called_once_with(absolute_test_path)
-        mock_run.assert_not_called()
+    _open_file_for_user(test_path)
+    mock_webbrowser.assert_called_once_with(expected_uri)
 
-    mock_startfile.reset_mock()
-    mock_run.reset_mock()
-
-    # Test Darwin
-    with patch("photo_selector_toolbox.visualizer.sys.platform", "darwin"):
-        _open_file_for_user(test_path)
-        mock_run.assert_called_once_with(["open", str(absolute_test_path)], check=True)
-        mock_startfile.assert_not_called()
-
-    mock_startfile.reset_mock()
-    mock_run.reset_mock()
-
-    # Test Linux/Other
-    with patch("photo_selector_toolbox.visualizer.sys.platform", "linux"):
-        _open_file_for_user(test_path)
-        mock_run.assert_called_once_with(["xdg-open", str(absolute_test_path)], check=True)
-        mock_startfile.assert_not_called()
+@patch("photo_selector_toolbox.visualizer.webbrowser.open")
+def test_open_file_for_user_whitelist(mock_webbrowser):
+    """Test that _open_file_for_user rejects non-png files."""
+    test_path = Path("test_file.txt")
+    _open_file_for_user(test_path)
+    mock_webbrowser.assert_not_called()
