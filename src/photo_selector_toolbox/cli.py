@@ -1,5 +1,5 @@
 import argparse
-import concurrent.futures
+import concurrent.futures  # intentionally retained; used for ThreadPoolExecutor
 import os
 from pathlib import Path
 
@@ -48,12 +48,17 @@ def main():
     print(f"Scanning for images in '{root_path}'...")
 
     # Avoid test mock pollution
-    if hasattr(is_excluded_subfolder, "return_value") and not isinstance(is_excluded_subfolder.return_value, bool):
+    if hasattr(is_excluded_subfolder, "return_value") and not isinstance(
+        is_excluded_subfolder.return_value, bool
+    ):
         is_excluded_subfolder.return_value = False
 
     image_files = [
-        f for f in root_path.rglob("*")
-        if f.suffix.lower() in SUPPORTED_EXTENSIONS and not is_excluded_subfolder(f, root_path) and not f.name.startswith("._")
+        f
+        for f in root_path.rglob("*")
+        if f.suffix.lower() in SUPPORTED_EXTENSIONS
+        and not is_excluded_subfolder(f, root_path)
+        and not f.name.startswith("._")
     ]
 
     if not image_files:
