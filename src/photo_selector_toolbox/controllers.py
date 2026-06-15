@@ -1,7 +1,7 @@
 import logging
 import queue
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from typing import Dict, Optional, Callable, List, Union
 from pathlib import Path
 from PIL import Image
@@ -153,6 +153,8 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
     from photo_selector_toolbox.cache import ScoreCache
     from photo_selector_toolbox.sharpness import calculate_all_scores
 
+    import photo_selector_toolbox.ollama_tool
+
     cache = ScoreCache()
     cached = cache.get_scores(f)
 
@@ -290,8 +292,8 @@ class ScanController:
             log(f"Scanning {total} images. Starting analysis...")
 
             import os
-            max_workers = max(1, min(4, (os.cpu_count() or 4) // 2))
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            max_workers = max(1, os.cpu_count() or 4)
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
                 futures = {
                     executor.submit(_process_single_file, f, grid_size, tools): f
