@@ -1,7 +1,7 @@
 import shutil
 import sys
 import os
-import urllib.parse
+import urllib.parse  # Intentionally retained: used in resolve_path for smb URLs
 import logging
 import functools
 from pathlib import Path
