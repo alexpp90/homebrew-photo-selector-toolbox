@@ -5,14 +5,18 @@ from photo_selector_toolbox.controllers import ScanController
 from photo_selector_toolbox.models import ScanResult
 from concurrent.futures import ThreadPoolExecutor
 
+
 def dummy_progress(res, i, total):
     pass
+
 
 def dummy_finished():
     pass
 
+
 def log(msg):
     pass
+
 
 def setup_test_images():
     import cv2
@@ -29,6 +33,7 @@ def setup_test_images():
             cv2.imwrite(str(filepath), img)
         files.append(filepath)
     return files
+
 
 def main():
     files = setup_test_images()
@@ -59,10 +64,11 @@ def main():
 
         for i, future in enumerate(futures):
             res = future.result()
-            dummy_progress(res, i+1, len(files))
+            dummy_progress(res, i + 1, len(files))
 
     end = time.time()
     print(f"Threaded Scan Time: {end - start:.2f} seconds")
+
 
 if __name__ == "__main__":
     main()

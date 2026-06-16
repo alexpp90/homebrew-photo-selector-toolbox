@@ -130,4 +130,3 @@ def test_find_duplicates_excludes_subfolders(tmp_path):
     group_sel = duplicates_selection[0]
     filenames_sel = {p.name for p in group_sel["files"]}
     assert filenames_sel == {"c.jpg", "d.jpg"}
-

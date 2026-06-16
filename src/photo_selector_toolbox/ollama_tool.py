@@ -2,7 +2,7 @@ import base64
 import json
 import logging
 import re
-import urllib.request
+import urllib.request  # Retained: actively used in analyze() to query the Ollama REST API
 import urllib.error
 import io
 import threading
@@ -45,7 +45,11 @@ DEFAULT_CONFIG = {
 def load_config() -> Dict[str, str]:
     """Loads settings.json config file, creating it with defaults if it doesn't exist."""
     import sys
-    if "pytest" in sys.modules and CONFIG_DIR == Path.home() / ".photo_selector_toolbox":
+
+    if (
+        "pytest" in sys.modules
+        and CONFIG_DIR == Path.home() / ".photo_selector_toolbox"
+    ):
         return DEFAULT_CONFIG.copy()
     try:
         if not CONFIG_DIR.exists():
@@ -86,7 +90,7 @@ def load_config() -> Dict[str, str]:
                     "[SCORE: X.Y] [ANALYSIS: tag]\n"
                     "where tag is exactly a 1 or 2 word description of the main reason (e.g. 'Blurry', 'Good composition', 'Under-exposed', 'Great lighting', 'Soft focus', 'Well-composed'). "
                     "Follow it with a short sentence explaining your reasoning."
-                )
+                ),
             ]
             if config.get("ollama_prompt") in old_prompts:
                 config["ollama_prompt"] = DEFAULT_CONFIG["ollama_prompt"]
@@ -133,7 +137,7 @@ class OllamaAestheticTool(AnalysisTool):
             rgb_img = load_image_preview(filepath, max_size=(400, 400))
             if rgb_img is None:
                 raise RuntimeError("load_image_preview returned None")
-                
+
             buffer = io.BytesIO()
             rgb_img.save(buffer, format="JPEG", quality=85)
             img_bytes = buffer.getvalue()
@@ -149,7 +153,7 @@ class OllamaAestheticTool(AnalysisTool):
             "images": [img_b64],
             "stream": False,
         }
-        
+
         try:
             req = urllib.request.Request(
                 url,
@@ -170,24 +174,29 @@ class OllamaAestheticTool(AnalysisTool):
             raise RuntimeError(f"Ollama API request failed: {e}")
 
         # 3. Parse score and analysis tag from output
-        match_score = re.search(r"\[SCORE:\s*(\d+(?:\.\d+)?)\]", response_text, re.IGNORECASE)
+        match_score = re.search(
+            r"\[SCORE:\s*(\d+(?:\.\d+)?)\]", response_text, re.IGNORECASE
+        )
         if match_score:
             score = float(match_score.group(1))
         else:
             # Fallback to parsing first numeric score found
             matches = re.findall(r"\d+(?:\.\d+)?", response_text)
             if not matches:
-                raise RuntimeError(f"Could not parse a numeric score from Ollama output: '{response_text}'")
+                raise RuntimeError(
+                    f"Could not parse a numeric score from Ollama output: '{response_text}'"
+                )
             score = float(matches[0])
 
         score = max(1.0, min(10.0, score))
 
-        match_analysis = re.search(r"\[ANALYSIS:\s*([^\]]+)\]", response_text, re.IGNORECASE)
+        match_analysis = re.search(
+            r"\[ANALYSIS:\s*([^\]]+)\]", response_text, re.IGNORECASE
+        )
         analysis_tag = "N/A"
         if match_analysis:
             analysis_tag = match_analysis.group(1).strip()
             if len(analysis_tag) > 30:
                 analysis_tag = analysis_tag[:27] + "..."
-        
-        return score, analysis_tag
 
+        return score, analysis_tag

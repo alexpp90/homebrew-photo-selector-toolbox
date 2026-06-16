@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 try:
-    if hasattr(cv2, 'utils') and hasattr(cv2.utils, 'logging'):
+    if hasattr(cv2, "utils") and hasattr(cv2.utils, "logging"):
         cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
 except Exception:
     pass
@@ -239,7 +239,9 @@ def calculate_all_scores(
 
     if need_highlight:
         try:
-            results["highlight_clipping"] = _calculate_highlight_clipping_from_gray(gray)
+            results["highlight_clipping"] = _calculate_highlight_clipping_from_gray(
+                gray
+            )
         except Exception as e:
             logger.error(f"Error calculating highlight clipping for {filepath}: {e}")
             results["highlight_clipping"] = 0.0

@@ -6,30 +6,40 @@ try:
     import PIL
     import PIL.Image
 except ImportError:
+
     class MockUnidentifiedImageError(Exception):
         pass
+
     mock_pil = MagicMock()
     mock_image = MagicMock()
     mock_image.UnidentifiedImageError = MockUnidentifiedImageError
     mock_pil.Image = mock_image
-    sys.modules['PIL'] = mock_pil
-    sys.modules['PIL.Image'] = mock_image
+    sys.modules["PIL"] = mock_pil
+    sys.modules["PIL.Image"] = mock_image
     PIL = mock_pil
 
 try:
     import rawpy
 except ImportError:
+
     class MockLibRawError(Exception):
         pass
+
     mock_rawpy = MagicMock()
     mock_rawpy.LibRawError = MockLibRawError
-    sys.modules['rawpy'] = mock_rawpy
+    sys.modules["rawpy"] = mock_rawpy
     rawpy = mock_rawpy
 
 import unittest
 from unittest.mock import patch
 from pathlib import Path
-from photo_selector_toolbox.utils import resolve_path, get_exiftool_path, load_image_preview, is_excluded_subfolder
+from photo_selector_toolbox.utils import (
+    resolve_path,
+    get_exiftool_path,
+    load_image_preview,
+    is_excluded_subfolder,
+)
+
 
 class TestGetExiftoolPath(unittest.TestCase):
 
@@ -37,15 +47,15 @@ class TestGetExiftoolPath(unittest.TestCase):
         # Clear the lru_cache before each test to ensure tests don't interfere with each other
         get_exiftool_path.cache_clear()
 
-    @patch('shutil.which')
+    @patch("shutil.which")
     def test_found_in_path(self, mock_which):
         """Tests that 'exiftool' is returned if found in system PATH."""
         mock_which.return_value = "/usr/bin/exiftool"
         self.assertEqual(get_exiftool_path(), "exiftool")
 
-    @patch('pathlib.Path.exists')
-    @patch('sys.platform', 'linux')
-    @patch('shutil.which', return_value=None)
+    @patch("pathlib.Path.exists")
+    @patch("sys.platform", "linux")
+    @patch("shutil.which", return_value=None)
     def test_found_in_source_bin(self, mock_which, mock_exists):
         """Tests that it checks the bundled 'bin' directory when run from source."""
         mock_exists.return_value = True
@@ -54,9 +64,9 @@ class TestGetExiftoolPath(unittest.TestCase):
         self.assertIsNotNone(path)
         self.assertTrue("bin" in path and "exiftool" in path)
 
-    @patch('pathlib.Path.exists')
-    @patch('sys.platform', 'win32')
-    @patch('shutil.which', return_value=None)
+    @patch("pathlib.Path.exists")
+    @patch("sys.platform", "win32")
+    @patch("shutil.which", return_value=None)
     def test_found_in_source_bin_windows(self, mock_which, mock_exists):
         """Tests that it checks for 'exiftool.exe' on Windows."""
         mock_exists.return_value = True
@@ -65,9 +75,9 @@ class TestGetExiftoolPath(unittest.TestCase):
         self.assertIsNotNone(path)
         self.assertTrue("bin" in path and "exiftool.exe" in path)
 
-    @patch('pathlib.Path.exists')
-    @patch('sys.platform', 'win32')
-    @patch('shutil.which', return_value=None)
+    @patch("pathlib.Path.exists")
+    @patch("sys.platform", "win32")
+    @patch("shutil.which", return_value=None)
     def test_found_in_source_bin_windows_no_ext(self, mock_which, mock_exists):
         """Tests fallback to 'exiftool' without extension on Windows."""
         mock_exists.side_effect = [False, True]
@@ -77,27 +87,30 @@ class TestGetExiftoolPath(unittest.TestCase):
         self.assertTrue("bin" in path)
         self.assertTrue(path.endswith("exiftool"))
 
-    @patch('pathlib.Path.exists')
-    @patch('sys.platform', 'linux')
-    @patch('shutil.which', return_value=None)
+    @patch("pathlib.Path.exists")
+    @patch("sys.platform", "linux")
+    @patch("shutil.which", return_value=None)
     def test_not_found(self, mock_which, mock_exists):
         """Tests that it returns None if not found anywhere."""
         mock_exists.return_value = False
         self.assertIsNone(get_exiftool_path())
 
-    @patch('pathlib.Path.exists')
-    @patch('sys.platform', 'linux')
-    @patch('shutil.which', return_value=None)
+    @patch("pathlib.Path.exists")
+    @patch("sys.platform", "linux")
+    @patch("shutil.which", return_value=None)
     def test_found_in_meipass_frozen(self, mock_which, mock_exists):
         """Tests that it checks sys._MEIPASS when frozen (PyInstaller)."""
         mock_exists.return_value = True
 
-        with patch.object(sys, 'frozen', True, create=True), \
-             patch.object(sys, '_MEIPASS', '/tmp/_MEI12345', create=True):
+        with (
+            patch.object(sys, "frozen", True, create=True),
+            patch.object(sys, "_MEIPASS", "/tmp/_MEI12345", create=True),
+        ):
             path = get_exiftool_path()
             self.assertIsNotNone(path)
-            expected = str(Path('/tmp/_MEI12345') / 'exiftool')
+            expected = str(Path("/tmp/_MEI12345") / "exiftool")
             self.assertEqual(path, expected)
+
 
 class TestResolvePath(unittest.TestCase):
     def test_local_path(self):
@@ -113,7 +126,9 @@ class TestResolvePath(unittest.TestCase):
         """Tests SMB URL resolution to GVFS mount points on Linux."""
         path_str = "smb://myserver/myshare/path/to/image.jpg"
         result = resolve_path(path_str)
-        expected = Path("/run/user/1000/gvfs/smb-share:server=myserver,share=myshare/path/to/image.jpg")
+        expected = Path(
+            "/run/user/1000/gvfs/smb-share:server=myserver,share=myshare/path/to/image.jpg"
+        )
         self.assertEqual(result, expected)
 
     @patch("sys.platform", "darwin")
@@ -148,22 +163,22 @@ class TestResolvePath(unittest.TestCase):
 
 
 class TestLoadImagePreview(unittest.TestCase):
-    @patch('photo_selector_toolbox.utils.Image.open')
+    @patch("photo_selector_toolbox.utils.Image.open")
     def test_standard_image(self, mock_open):
         """Test loading a standard image (e.g., JPEG)."""
         mock_img = MagicMock()
         mock_img.convert.return_value = mock_img
         mock_open.return_value = mock_img
 
-        path = Path('test.jpg')
+        path = Path("test.jpg")
         result = load_image_preview(path)
 
         mock_open.assert_called_once_with(path)
         mock_img.thumbnail.assert_called_once_with((150, 150))
         self.assertEqual(result, mock_img)
 
-    @patch('photo_selector_toolbox.utils.Image.fromarray')
-    @patch('photo_selector_toolbox.utils.rawpy.imread')
+    @patch("photo_selector_toolbox.utils.Image.fromarray")
+    @patch("photo_selector_toolbox.utils.rawpy.imread")
     def test_raw_image(self, mock_imread, mock_fromarray):
         """Test loading a RAW image."""
         mock_raw = MagicMock()
@@ -175,31 +190,33 @@ class TestLoadImagePreview(unittest.TestCase):
         mock_img = MagicMock()
         mock_fromarray.return_value = mock_img
 
-        path = Path('test.arw')
+        path = Path("test.arw")
         result = load_image_preview(path)
 
-        mock_imread.assert_called_once_with('test.arw')
-        mock_raw.postprocess.assert_called_once_with(use_camera_wb=True, bright=1.0, half_size=True)
+        mock_imread.assert_called_once_with("test.arw")
+        mock_raw.postprocess.assert_called_once_with(
+            use_camera_wb=True, bright=1.0, half_size=True
+        )
         mock_fromarray.assert_called_once_with(mock_rgb)
         mock_img.thumbnail.assert_called_once_with((150, 150))
         self.assertEqual(result, mock_img)
 
-    @patch('photo_selector_toolbox.utils.Image.open')
+    @patch("photo_selector_toolbox.utils.Image.open")
     def test_full_res(self, mock_open):
         """Test loading a standard image at full resolution."""
         mock_img = MagicMock()
         mock_img.convert.return_value = mock_img
         mock_open.return_value = mock_img
 
-        path = Path('test.jpg')
+        path = Path("test.jpg")
         result = load_image_preview(path, full_res=True)
 
         mock_open.assert_called_once_with(path)
         mock_img.thumbnail.assert_not_called()
         self.assertEqual(result, mock_img)
 
-    @patch('photo_selector_toolbox.utils.Image.open')
-    @patch('photo_selector_toolbox.utils.rawpy.imread')
+    @patch("photo_selector_toolbox.utils.Image.open")
+    @patch("photo_selector_toolbox.utils.rawpy.imread")
     def test_raw_fallback_to_pillow(self, mock_imread, mock_open):
         """Test that Pillow is used if rawpy fails."""
         mock_imread.side_effect = rawpy.LibRawError("rawpy failed")
@@ -208,30 +225,32 @@ class TestLoadImagePreview(unittest.TestCase):
         mock_img.convert.return_value = mock_img
         mock_open.return_value = mock_img
 
-        path = Path('test.arw')
+        path = Path("test.arw")
         result = load_image_preview(path)
 
-        mock_imread.assert_called_once_with('test.arw')
+        mock_imread.assert_called_once_with("test.arw")
         mock_open.assert_called_once_with(path)
         mock_img.thumbnail.assert_called_once_with((150, 150))
         self.assertEqual(result, mock_img)
 
-    @patch('photo_selector_toolbox.utils.Image.open')
+    @patch("photo_selector_toolbox.utils.Image.open")
     def test_exception_handling(self, mock_open):
         """Test that None is returned on common image loading exceptions."""
         mock_open.side_effect = OSError("File not found or access denied")
 
-        path = Path('test.jpg')
+        path = Path("test.jpg")
         result = load_image_preview(path)
 
         self.assertIsNone(result)
 
-    @patch('photo_selector_toolbox.utils.Image.open')
+    @patch("photo_selector_toolbox.utils.Image.open")
     def test_unidentified_image_error(self, mock_open):
         """Test that None is returned when Pillow cannot identify the image."""
-        mock_open.side_effect = PIL.Image.UnidentifiedImageError("Cannot identify image file")
+        mock_open.side_effect = PIL.Image.UnidentifiedImageError(
+            "Cannot identify image file"
+        )
 
-        path = Path('test.jpg')
+        path = Path("test.jpg")
         result = load_image_preview(path)
 
         self.assertIsNone(result)
@@ -247,13 +266,15 @@ class TestIsExcludedSubfolder(unittest.TestCase):
         # Case insensitive
         self.assertTrue(is_excluded_subfolder(root / "selection" / "img.jpg", root))
         self.assertTrue(is_excluded_subfolder(root / "selected" / "img.jpg", root))
-        self.assertTrue(is_excluded_subfolder(root / "SELECTION" / "sub" / "img.jpg", root))
+        self.assertTrue(
+            is_excluded_subfolder(root / "SELECTION" / "sub" / "img.jpg", root)
+        )
 
     def test_not_excluded_when_root(self):
         # Specifically selected root
         root = Path("/Users/alex/Photos/Selection")
         self.assertFalse(is_excluded_subfolder(root / "img.jpg", root))
-        
+
         root2 = Path("/Users/alex/Photos/Selected")
         self.assertFalse(is_excluded_subfolder(root2 / "img.jpg", root2))
 
@@ -261,11 +282,10 @@ class TestIsExcludedSubfolder(unittest.TestCase):
         root = Path("/Users/alex/Photos")
         self.assertFalse(is_excluded_subfolder(root / "img.jpg", root))
         self.assertFalse(is_excluded_subfolder(root / "Vacation" / "img.jpg", root))
-        
+
         # Filename is 'Selection' but it's not a folder name in path
         self.assertFalse(is_excluded_subfolder(root / "Selection.jpg", root))
 
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -9,6 +9,7 @@ from collections import Counter
 from typing import List, Set, Tuple, Optional
 from PIL import Image
 import numpy as np
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -121,7 +122,9 @@ def get_exiftool_path() -> str | None:
     return None
 
 
-def _get_focal_length_groups(unique_fls: List[float], threshold: float) -> List[List[float]]:
+def _get_focal_length_groups(
+    unique_fls: List[float], threshold: float
+) -> List[List[float]]:
     groups = []
     if not unique_fls:
         return groups
@@ -168,7 +171,9 @@ def _format_focal_length_label(min_fl: float, max_fl: float) -> str:
     return f"{fmt(min_fl)}-{fmt(max_fl)} mm"
 
 
-def _generate_exact_buckets(unique_fls: List[float], counts: Counter) -> List[Tuple[str, int, float]]:
+def _generate_exact_buckets(
+    unique_fls: List[float], counts: Counter
+) -> List[Tuple[str, int, float]]:
     """Generates buckets with exact focal length values when no aggregation is needed."""
     result = []
     for fl in unique_fls:
@@ -177,7 +182,9 @@ def _generate_exact_buckets(unique_fls: List[float], counts: Counter) -> List[Tu
     return result
 
 
-def _generate_aggregated_buckets(unique_fls: List[float], counts: Counter, max_buckets: int) -> List[Tuple[str, int, float]]:
+def _generate_aggregated_buckets(
+    unique_fls: List[float], counts: Counter, max_buckets: int
+) -> List[Tuple[str, int, float]]:
     """Generates aggregated buckets when there are too many unique focal lengths."""
     best_threshold = _find_best_threshold(unique_fls, max_buckets)
     final_groups = _get_focal_length_groups(unique_fls, best_threshold)
@@ -247,6 +254,7 @@ def load_image_preview(
     """
     try:
         from photo_selector_toolbox.reader import RAW_EXTENSIONS
+
         ext = path.suffix.lower()
         img = None
 
@@ -258,15 +266,26 @@ def load_image_preview(
                     if not full_res:
                         try:
                             thumb = raw.extract_thumb()
-                            if hasattr(rawpy, "ThumbFormat") and thumb.format == rawpy.ThumbFormat.JPEG:
+                            if (
+                                hasattr(rawpy, "ThumbFormat")
+                                and thumb.format == rawpy.ThumbFormat.JPEG
+                            ):
                                 import io
+
                                 img = Image.open(io.BytesIO(thumb.data))
                                 img = img.convert("RGB")
-                            elif hasattr(rawpy, "ThumbFormat") and thumb.format == rawpy.ThumbFormat.BITMAP:
+                            elif (
+                                hasattr(rawpy, "ThumbFormat")
+                                and thumb.format == rawpy.ThumbFormat.BITMAP
+                            ):
                                 img = Image.fromarray(thumb.data)
                                 img = img.convert("RGB")
                         except Exception as e:
-                            logger.debug("Failed to extract embedded thumbnail for %s: %s", path.name, e)
+                            logger.debug(
+                                "Failed to extract embedded thumbnail for %s: %s",
+                                path.name,
+                                e,
+                            )
 
                     # Fallback to standard postprocess if thumbnail extraction failed or full_res requested
                     if img is None:
@@ -317,6 +336,7 @@ def is_excluded_subfolder(
             excluded_names = {"selection", "selected"}
             try:
                 from photo_selector_toolbox.ollama_tool import load_config
+
                 config = load_config()
                 custom_folder = config.get("selection_folder", "Selection")
                 custom_path = Path(custom_folder)
@@ -347,7 +367,9 @@ def calculate_dhash(image: Image.Image, hash_size: int = 8) -> int:
         The integer hash representing the image.
     """
     # Resize to (hash_size + 1) x hash_size, convert to grayscale (L)
-    resized = image.resize((hash_size + 1, hash_size), Image.Resampling.BILINEAR).convert('L')
+    resized = image.resize(
+        (hash_size + 1, hash_size), Image.Resampling.BILINEAR
+    ).convert("L")
     pixels = np.array(resized)
 
     # Compare adjacent columns: diff[row, col] = pixel[row, col] > pixel[row, col+1]
@@ -359,7 +381,7 @@ def calculate_dhash(image: Image.Image, hash_size: int = 8) -> int:
     packed = np.packbits(flat)
     # np.packbits pads to the next byte boundary; shift out any extra bits
     extra_bits = len(packed) * 8 - total_bits
-    result = int.from_bytes(packed.tobytes(), 'big') >> extra_bits
+    result = int.from_bytes(packed.tobytes(), "big") >> extra_bits
     return result
 
 
@@ -436,7 +458,7 @@ def group_files_by_similarity(
                     try:
                         h1 = int(h1_val, 16) if isinstance(h1_val, str) else int(h1_val)
                         h2 = int(h2_val, 16) if isinstance(h2_val, str) else int(h2_val)
-                        dist = bin(h1 ^ h2).count('1')
+                        dist = bin(h1 ^ h2).count("1")
                         if dist <= threshold:
                             similar = True
                     except (ValueError, TypeError):
@@ -454,7 +476,7 @@ def group_files_by_similarity(
                     try:
                         h1 = int(h1_val, 16) if isinstance(h1_val, str) else int(h1_val)
                         h2 = int(h2_val, 16) if isinstance(h2_val, str) else int(h2_val)
-                        dist = bin(h1 ^ h2).count('1')
+                        dist = bin(h1 ^ h2).count("1")
                         if dist <= 24:  # Strict threshold for 16x16 (256 bits)
                             similar = True
                     except (ValueError, TypeError):
@@ -469,7 +491,7 @@ def group_files_by_similarity(
                 try:
                     h1 = int(h1_val, 16) if isinstance(h1_val, str) else int(h1_val)
                     h2 = int(h2_val, 16) if isinstance(h2_val, str) else int(h2_val)
-                    dist = bin(h1 ^ h2).count('1')
+                    dist = bin(h1 ^ h2).count("1")
                     if dist <= threshold:
                         similar = True
                 except (ValueError, TypeError):
@@ -561,7 +583,7 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
     draw.rectangle(
         [(cx - cam_w // 2, cy - cam_h // 2), (cx + cam_w // 2, cy + cam_h // 2)],
         outline=(161, 161, 170),  # Zinc-400
-        width=3
+        width=3,
     )
     # Camera flash/top prism shape
     draw.polygon(
@@ -569,17 +591,17 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
             (cx - 15, cy - cam_h // 2),
             (cx - 10, cy - cam_h // 2 - 8),
             (cx + 10, cy - cam_h // 2 - 8),
-            (cx + 15, cy - cam_h // 2)
+            (cx + 15, cy - cam_h // 2),
         ],
         outline=(161, 161, 170),
         fill=(30, 30, 36),
-        width=3
+        width=3,
     )
     # Camera lens (circle)
     draw.ellipse(
         [(cx - lens_r, cy - lens_r), (cx + lens_r, cy + lens_r)],
         outline=(161, 161, 170),
-        width=3
+        width=3,
     )
 
     # Centering text helper
@@ -600,6 +622,3 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
 
     # Return a copy so the cached original is never mutated
     return img.copy()
-
-
-

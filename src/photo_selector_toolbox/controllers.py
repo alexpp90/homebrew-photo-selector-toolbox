@@ -173,7 +173,9 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
 
     if builtin_to_compute:
         # Single image load → single grayscale conversion → all analyses
-        combined_results = calculate_all_scores(f, grid_size=grid_size, tools=builtin_to_compute)
+        combined_results = calculate_all_scores(
+            f, grid_size=grid_size, tools=builtin_to_compute
+        )
         for tool_name, val in combined_results.items():
             scores[tool_name] = val
             new_calculations[tool_name] = val
@@ -290,6 +292,7 @@ class ScanController:
             log(f"Scanning {total} images. Starting analysis...")
 
             import os
+
             max_workers = max(1, min(4, (os.cpu_count() or 4) // 2))
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks

@@ -66,7 +66,9 @@ def test_tool_registry():
     assert sd_tool_class is ShadowClippingTool
 
     # Verify analyze method
-    with patch("photo_selector_toolbox.sharpness.calculate_highlight_clipping") as mock_hl:
+    with patch(
+        "photo_selector_toolbox.sharpness.calculate_highlight_clipping"
+    ) as mock_hl:
         mock_hl.return_value = 5.5
         hl_tool = HighlightClippingTool()
         assert hl_tool.analyze(Path("dummy.jpg")) == 5.5

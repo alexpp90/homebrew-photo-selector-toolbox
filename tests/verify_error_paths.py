@@ -17,11 +17,12 @@ from photo_selector_toolbox.sharpness import calculate_sharpness, calculate_nois
 import unittest
 from unittest.mock import patch
 
+
 class TestErrorPaths(unittest.TestCase):
     @patch("photo_selector_toolbox.sharpness.get_image_data")
     def test_calculate_sharpness_exception(self, mock_get_data):
         # Setup mock to return a valid dummy image
-        mock_get_data.return_value = MagicMock() # Representing a numpy array
+        mock_get_data.return_value = MagicMock()  # Representing a numpy array
         # Mock cvtColor to raise an exception
         mock_cv2.cvtColor.side_effect = Exception("Mocked sharpness error")
 
@@ -34,7 +35,7 @@ class TestErrorPaths(unittest.TestCase):
     @patch("photo_selector_toolbox.sharpness.get_image_data")
     def test_calculate_noise_exception(self, mock_get_data):
         # Setup mock to return a valid dummy image
-        mock_get_data.return_value = MagicMock() # Representing a numpy array
+        mock_get_data.return_value = MagicMock()  # Representing a numpy array
         # Mock cvtColor to raise an exception
         mock_cv2.cvtColor.side_effect = Exception("Mocked noise error")
 
@@ -43,6 +44,7 @@ class TestErrorPaths(unittest.TestCase):
         self.assertEqual(score, 0.0)
         # Reset side effect for other tests
         mock_cv2.cvtColor.side_effect = None
+
 
 if __name__ == "__main__":
     unittest.main()

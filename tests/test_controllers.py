@@ -44,7 +44,7 @@ def test_image_cache_manager_limits(mock_load_image):
         if not manager.preview_queue.empty():
             time.sleep(0.05)
         else:
-            time.sleep(0.05) # one more for processing
+            time.sleep(0.05)  # one more for processing
             break
 
     # the cache limit is 2
@@ -80,14 +80,16 @@ def test_scan_controller_run(tmp_path):
         "sharpness": True,
         "noise": True,
         "highlight_clipping": True,
-        "shadow_clipping": True
+        "shadow_clipping": True,
     }
 
     progress_results = []
+
     def progress_cb(result, current, total):
         progress_results.append(result)
 
     finished_flag = False
+
     def finished_cb():
         nonlocal finished_flag
         finished_flag = True
@@ -97,7 +99,7 @@ def test_scan_controller_run(tmp_path):
         grid_size=8,
         tools=tools,
         progress_callback=progress_cb,
-        finished_callback=finished_cb
+        finished_callback=finished_cb,
     )
 
     for _ in range(50):
@@ -110,4 +112,3 @@ def test_scan_controller_run(tmp_path):
     assert progress_results[0].path == img_path
     assert "sharpness" in progress_results[0].scores
     assert "noise" in progress_results[0].scores
-

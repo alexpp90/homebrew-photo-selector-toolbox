@@ -2,23 +2,25 @@ import sys
 from unittest.mock import MagicMock
 
 # Mock dependencies
-sys.modules['send2trash'] = MagicMock()
-sys.modules['PIL'] = MagicMock()
-sys.modules['PIL.Image'] = MagicMock()
-sys.modules['PIL.ExifTags'] = MagicMock()
-sys.modules['exifread'] = MagicMock()
-sys.modules['exiftool'] = MagicMock()
-sys.modules['rawpy'] = MagicMock()
-sys.modules['numpy'] = MagicMock()
-sys.modules['cv2'] = MagicMock()
+sys.modules["send2trash"] = MagicMock()
+sys.modules["PIL"] = MagicMock()
+sys.modules["PIL.Image"] = MagicMock()
+sys.modules["PIL.ExifTags"] = MagicMock()
+sys.modules["exifread"] = MagicMock()
+sys.modules["exiftool"] = MagicMock()
+sys.modules["rawpy"] = MagicMock()
+sys.modules["numpy"] = MagicMock()
+sys.modules["cv2"] = MagicMock()
 
 import time
 import os
 import shutil
 from pathlib import Path
+
 # We need to make sure src is in sys.path
 sys.path.insert(0, os.path.abspath("src"))
 from photo_selector_toolbox.duplicates import find_duplicates
+
 
 def setup_test_files(base_dir, num_groups, files_per_group, size_bytes):
     base_path = Path(base_dir)
@@ -28,8 +30,9 @@ def setup_test_files(base_dir, num_groups, files_per_group, size_bytes):
         content = os.urandom(size_bytes)
         for f in range(files_per_group):
             file_path = base_path / f"group_{g}_file_{f}.jpg"
-            with open(file_path, 'wb') as fout:
+            with open(file_path, "wb") as fout:
                 fout.write(content)
+
 
 if __name__ == "__main__":
     test_dir = "benchmarks/test_data_duplicates_perf"
@@ -40,7 +43,7 @@ if __name__ == "__main__":
     # Significantly more groups to emphasize overhead
     num_groups = 10000
     files_per_group = 2
-    file_size = 64 # Very small files to minimize hashing time
+    file_size = 64  # Very small files to minimize hashing time
 
     print(f"Setting up {num_groups * files_per_group} test files...")
     setup_test_files(test_dir, num_groups, files_per_group, file_size)

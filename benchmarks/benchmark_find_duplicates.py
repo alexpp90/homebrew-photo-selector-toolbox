@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 from photo_selector_toolbox.duplicates import find_duplicates
 
+
 def setup_test_files(base_dir, num_files, size_bytes):
     base_path = Path(base_dir)
     base_path.mkdir(parents=True, exist_ok=True)
@@ -12,7 +13,7 @@ def setup_test_files(base_dir, num_files, size_bytes):
     for i in range(num_files):
         content = os.urandom(size_bytes)
         file_path = base_path / f"test_file_{i}.jpg"
-        with open(file_path, 'wb') as f:
+        with open(file_path, "wb") as f:
             f.write(content)
 
     # Create duplicates for some of the files
@@ -20,6 +21,7 @@ def setup_test_files(base_dir, num_files, size_bytes):
         src_path = base_path / f"test_file_{i}.jpg"
         dst_path = base_path / f"test_file_{i}_dup.jpg"
         shutil.copy(src_path, dst_path)
+
 
 if __name__ == "__main__":
     test_dir = "benchmarks/test_data_duplicates"

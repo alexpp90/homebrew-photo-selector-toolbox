@@ -40,7 +40,9 @@ def analyze_data(data: list[ExifData]):
     # Helper to extract values
     def get_values(key):
         attr_name = attr_map[key]
-        return [getattr(d, attr_name) for d in data if getattr(d, attr_name) is not None]
+        return [
+            getattr(d, attr_name) for d in data if getattr(d, attr_name) is not None
+        ]
 
     for key in ["Shutter Speed", "Aperture", "Focal Length", "ISO"]:
         values = get_values(key)

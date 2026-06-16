@@ -57,7 +57,10 @@ def test_get_exif_data_exiftool_import_error(image_dir, caplog):
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    assert any("PyExifTool not installed or found." in record.message for record in caplog.records)
+    assert any(
+        "PyExifTool not installed or found." in record.message
+        for record in caplog.records
+    )
     # It should fall back to Pillow and return None for our dummy image
     assert result is None
 
@@ -85,8 +88,13 @@ def test_get_exif_data_exifread_import_error(image_dir, caplog):
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    assert any("PyExifTool not installed or found." in record.message for record in caplog.records)
-    assert any("`exifread` library not found." in record.message for record in caplog.records)
+    assert any(
+        "PyExifTool not installed or found." in record.message
+        for record in caplog.records
+    )
+    assert any(
+        "`exifread` library not found." in record.message for record in caplog.records
+    )
     # It should fall back to Pillow and return None for our dummy image
     assert result is None
 
@@ -111,7 +119,11 @@ def test_get_exif_data_exiftool_general_error(image_dir, caplog):
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    assert any("exiftool failed on test.dng: Mocked general error for exiftool" in record.message for record in caplog.records)
+    assert any(
+        "exiftool failed on test.dng: Mocked general error for exiftool"
+        in record.message
+        for record in caplog.records
+    )
     assert result is None
 
 
@@ -137,7 +149,11 @@ def test_get_exif_data_exifread_general_error(image_dir, caplog):
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    assert any("exifread failed on test.dng: Mocked general error for exifread" in record.message for record in caplog.records)
+    assert any(
+        "exifread failed on test.dng: Mocked general error for exifread"
+        in record.message
+        for record in caplog.records
+    )
     assert result is None
 
 
@@ -148,7 +164,7 @@ def test_get_exif_data_pillow_exception(image_dir, caplog):
     p = image_dir / "test.jpg"
     p.write_text("dummy")
 
-    with patch('photo_selector_toolbox.readers.pillow.Image.open') as mock_open:
+    with patch("photo_selector_toolbox.readers.pillow.Image.open") as mock_open:
         mock_img = MagicMock()
         mock_img.getexif.side_effect = ValueError("Mocked Pillow Error")
         mock_open.return_value = mock_img

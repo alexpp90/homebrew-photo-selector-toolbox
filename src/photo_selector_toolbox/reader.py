@@ -9,8 +9,18 @@ warnings.filterwarnings("ignore", "(Possibly )?corrupt EXIF data", UserWarning)
 
 # Canonical raw format extensions - single source of truth
 RAW_EXTENSIONS = {
-    ".arw", ".nef", ".cr2", ".dng", ".raw",
-    ".cr3", ".raf", ".orf", ".rw2", ".pef", ".srw", ".sr2",
+    ".arw",
+    ".nef",
+    ".cr2",
+    ".dng",
+    ".raw",
+    ".cr3",
+    ".raf",
+    ".orf",
+    ".rw2",
+    ".pef",
+    ".srw",
+    ".sr2",
 }
 
 # Extensions that should be processed with ExifTool if available, as they often contain

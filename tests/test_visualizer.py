@@ -16,7 +16,11 @@ from photo_selector_toolbox.visualizer import (
 
 
 def test_get_shutter_speed_plot():
-    data = [ExifData(shutter_speed=0.01), ExifData(shutter_speed=0.02), ExifData(shutter_speed=0.01)]
+    data = [
+        ExifData(shutter_speed=0.01),
+        ExifData(shutter_speed=0.02),
+        ExifData(shutter_speed=0.01),
+    ]
     fig = get_shutter_speed_plot(data)
     assert fig is not None
 
@@ -120,7 +124,9 @@ def test_create_plots(mock_open, tmp_path):
         ]
 
         # Verify savefig was called with paths for all our expected files
-        saved_paths = [call.args[0].name for call in mock_savefig.call_args_list if call.args]
+        saved_paths = [
+            call.args[0].name for call in mock_savefig.call_args_list if call.args
+        ]
         for filename in expected_files:
             assert filename in saved_paths, f"Expected {filename} to be saved."
 
@@ -149,6 +155,7 @@ def test_open_file_for_user_absolute_path(mock_webbrowser):
 
     _open_file_for_user(test_path)
     mock_webbrowser.assert_called_once_with(expected_uri)
+
 
 @patch("photo_selector_toolbox.visualizer.webbrowser.open")
 def test_open_file_for_user_whitelist(mock_webbrowser):
