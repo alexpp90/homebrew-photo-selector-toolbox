@@ -84,3 +84,13 @@ def test_tool_registry_all_tools():
     assert len(tools) == 2
     assert tools["mock_tool"] is MockTool
     assert tools["mock_tool_prop"] is MockToolWithProperty
+
+
+def test_abstract_methods_pass():
+    """Test that the abstract methods just pass to ensure full coverage."""
+    from photo_selector_toolbox.tools import AnalysisTool
+    from pathlib import Path
+
+    assert AnalysisTool.name.fget(None) is None
+    assert AnalysisTool.display_name.fget(None) is None
+    assert AnalysisTool.analyze(None, Path("dummy.jpg")) is None
