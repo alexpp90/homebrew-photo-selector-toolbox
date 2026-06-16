@@ -131,3 +131,9 @@ def test_find_duplicates_excludes_subfolders(tmp_path):
     filenames_sel = {p.name for p in group_sel["files"]}
     assert filenames_sel == {"c.jpg", "d.jpg"}
 
+
+@patch("builtins.open")
+def test_get_file_hash_oserror(mock_open):
+    mock_open.side_effect = OSError("Permission denied")
+    h = get_file_hash("dummy_path")
+    assert h is None
