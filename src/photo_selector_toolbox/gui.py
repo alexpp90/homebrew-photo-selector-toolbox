@@ -67,13 +67,14 @@ def apply_dark_theme(root):
         foreground=fg_light,
         bordercolor=border_color,
         borderwidth=1,
-        focuscolor="",
+        focuscolor=accent_blue,
         padding=[12, 6]
     )
     style.map(
         "TButton",
         background=[("active", bg_hover), ("disabled", bg_dark)],
-        foreground=[("active", fg_light), ("disabled", fg_muted)]
+        foreground=[("active", fg_light), ("disabled", fg_muted)],
+        bordercolor=[("focus", accent_blue)]
     )
 
     # Primary Button Accent
@@ -83,13 +84,14 @@ def apply_dark_theme(root):
         foreground="#FFFFFF",
         bordercolor=accent_blue,
         borderwidth=1,
-        focuscolor="",
+        focuscolor="#FFFFFF",
         padding=[12, 6]
     )
     style.map(
         "Primary.TButton",
         background=[("active", accent_hover), ("disabled", bg_dark)],
-        foreground=[("active", "#FFFFFF"), ("disabled", fg_muted)]
+        foreground=[("active", "#FFFFFF"), ("disabled", fg_muted)],
+        bordercolor=[("focus", "#FFFFFF")]
     )
 
     # TEntry
@@ -159,7 +161,7 @@ def apply_dark_theme(root):
         "TCheckbutton",
         background=bg_dark,
         foreground=fg_light,
-        focuscolor=""
+        focuscolor=accent_blue
     )
     style.map(
         "TCheckbutton",
