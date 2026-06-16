@@ -273,7 +273,7 @@ def load_image_preview(
                         rgb = raw.postprocess(
                             use_camera_wb=True, bright=1.0, half_size=not full_res
                         )
-                        img = Image.fromarray(rgb)
+                        img = Image.fromarray(rgb).copy()
             except (rawpy.LibRawError, OSError, ValueError) as e:
                 # Catch common rawpy failures and fall through to Pillow
                 logger.debug("rawpy failed to load %s: %s", path, e)
