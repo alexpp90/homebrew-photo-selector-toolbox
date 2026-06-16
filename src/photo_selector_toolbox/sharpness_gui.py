@@ -646,6 +646,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             url = url_var.get().strip()
             model = model_var.get().strip()
             try:
+                if not url.lower().startswith(('http://', 'https://')):
+                    raise ValueError("URL must start with http:// or https://")
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
