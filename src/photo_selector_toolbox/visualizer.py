@@ -1,9 +1,6 @@
-import os
-import subprocess
-import sys
 import webbrowser
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List
 from collections import Counter
 
 import matplotlib.pyplot as plt
@@ -19,7 +16,7 @@ def _open_file_for_user(filepath: Path):
     """Opens a file in the default application in a cross-platform way."""
     try:
         # Security: Enforce strict whitelist validation to prevent arbitrary code execution
-        if filepath.suffix.lower() != '.png':
+        if filepath.suffix.lower() != ".png":
             print(f"Refused to open file with unsupported extension: {filepath.suffix}")
             return
 
@@ -68,7 +65,9 @@ def get_shutter_speed_plot(data: List[ExifData]) -> Optional[Figure]:
     return fig
 
 
-def _get_distribution_plot(data: List[ExifData], key: str, title: str, xlabel: str) -> Optional[Figure]:
+def _get_distribution_plot(
+    data: List[ExifData], key: str, title: str, xlabel: str
+) -> Optional[Figure]:
     attr_name = "aperture" if key == "Aperture" else "iso"
     values = [getattr(d, attr_name) for d in data if getattr(d, attr_name) is not None]
     if not values:
@@ -95,16 +94,13 @@ def get_aperture_plot(data: List[ExifData]) -> Optional[Figure]:
         data=data,
         key="Aperture",
         title="Aperture (F-Number) Distribution",
-        xlabel="Aperture (f-stop)"
+        xlabel="Aperture (f-stop)",
     )
 
 
 def get_iso_plot(data: List[ExifData]) -> Optional[Figure]:
     return _get_distribution_plot(
-        data=data,
-        key="ISO",
-        title="ISO Distribution",
-        xlabel="ISO"
+        data=data, key="ISO", title="ISO Distribution", xlabel="ISO"
     )
 
 
@@ -156,11 +152,7 @@ def _create_equivalent_focal_length_plot(values: List[float], title: str) -> Fig
 
 
 def get_equivalent_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
-    values = [
-        d.focal_length_35mm
-        for d in data
-        if d.focal_length_35mm is not None
-    ]
+    values = [d.focal_length_35mm for d in data if d.focal_length_35mm is not None]
     if not values:
         return None
 
@@ -241,14 +233,34 @@ def create_plots(data: List[ExifData], output_dir: Path, show_plots: bool = Fals
     plt.style.use("seaborn-v0_8-whitegrid")
 
     plot_configs = [
-        ("Shutter Speed", get_shutter_speed_plot, "shutter_speed_distribution.png", False),
+        (
+            "Shutter Speed",
+            get_shutter_speed_plot,
+            "shutter_speed_distribution.png",
+            False,
+        ),
         ("Aperture", get_aperture_plot, "aperture_distribution.png", True),
         ("ISO", get_iso_plot, "iso_distribution.png", False),
         ("Focal Length", get_focal_length_plot, "focal_length_distribution.png", True),
-        ("Equivalent Focal Length (35mm)", get_equivalent_focal_length_plot, "equivalent_focal_length_35mm_distribution.png", True),
-        ("Equivalent Focal Length (APS-C)", get_apsc_equivalent_focal_length_plot, "equivalent_focal_length_apsc_distribution.png", True),
+        (
+            "Equivalent Focal Length (35mm)",
+            get_equivalent_focal_length_plot,
+            "equivalent_focal_length_35mm_distribution.png",
+            True,
+        ),
+        (
+            "Equivalent Focal Length (APS-C)",
+            get_apsc_equivalent_focal_length_plot,
+            "equivalent_focal_length_apsc_distribution.png",
+            True,
+        ),
         ("Lens", get_lens_plot, "lens_usage.png", True),
-        ("Aperture & Focal Length combination", get_combination_plot, "aperture_focal_length_combinations.png", True),
+        (
+            "Aperture & Focal Length combination",
+            get_combination_plot,
+            "aperture_focal_length_combinations.png",
+            True,
+        ),
     ]
 
     for name, getter, filename, should_show in plot_configs:
@@ -262,4 +274,3 @@ def create_plots(data: List[ExifData], output_dir: Path, show_plots: bool = Fals
             print(f"Skipping {name} plot: No data available.")
 
     print("Plots saved successfully.")
-
