@@ -102,8 +102,8 @@ jobs:
           files: artifacts/*.zip
           make_latest: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
 
-  update-homebrew-cask:
-    name: Update Homebrew Cask
+  update-homebrew-taps:
+    name: Update Homebrew Taps
     needs: release
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -116,21 +116,28 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: main
 
-      - name: Download macOS artifact
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download release artifacts
         run: |
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            curl -L -o macos.zip \
-              "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/nightly/photo-selector-toolbox-macos-apple-silicon.zip"
+            TAG_DIR="nightly"
           else
-            curl -L -o macos.zip \
-              "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/${{ github.ref_name }}/photo-selector-toolbox-macos-apple-silicon.zip"
+            TAG_DIR="${{ github.ref_name }}"
           fi
-      
-      - name: Compute SHA256
-        id: sha
-        run: echo "sha256=$(shasum -a 256 macos.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          curl -L -o macos.zip "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/${TAG_DIR}/photo-selector-toolbox-macos-apple-silicon.zip"
+          curl -L -o linux.zip "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/${TAG_DIR}/photo-selector-toolbox-linux-x64.zip"
 
-      - name: Update Cask File
+      - name: Compute SHA256 hashes
+        id: hashes
+        run: |
+          echo "macos_sha256=$(shasum -a 256 macos.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "linux_sha256=$(shasum -a 256 linux.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew Files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -141,18 +148,36 @@ jobs:
             git reset --hard origin/main
             
             if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              # Nightly Cask Update
-              sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox@nightly.rb
-              git add Casks/photo-selector-toolbox@nightly.rb
-              COMMIT_MSG="Update nightly Cask SHA256"
+              # Nightly update: update Cask and Formula
+              python3 scripts/update_formula.py \
+                --file Casks/photo-selector-toolbox@nightly.rb \
+                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
+              
+              python3 scripts/update_formula.py \
+                --file Formula/photo-selector-toolbox@nightly.rb \
+                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
+                --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
+              
+              git add Casks/photo-selector-toolbox@nightly.rb Formula/photo-selector-toolbox@nightly.rb
+              COMMIT_MSG="Update nightly Homebrew SHA256 hashes"
             else
-              # Stable Cask Update
+              # Stable update: update Cask and Formula
               TAG_NAME="${{ github.ref_name }}"
               VERSION="${TAG_NAME#v}"
-              sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/photo-selector-toolbox.rb
-              sed -i "s/sha256 \".*\"/sha256 \"${{ steps.sha.outputs.sha256 }}\"/" Casks/photo-selector-toolbox.rb
-              git add Casks/photo-selector-toolbox.rb
-              COMMIT_MSG="Update stable Cask to version ${VERSION}"
+              
+              python3 scripts/update_formula.py \
+                --file Casks/photo-selector-toolbox.rb \
+                --version-val "${VERSION}" \
+                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
+              
+              python3 scripts/update_formula.py \
+                --file Formula/photo-selector-toolbox.rb \
+                --version-val "${VERSION}" \
+                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
+                --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
+              
+              git add Casks/photo-selector-toolbox.rb Formula/photo-selector-toolbox.rb
+              COMMIT_MSG="Update stable Homebrew files to version ${VERSION}"
             fi
             
             git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
@@ -161,12 +186,13 @@ jobs:
           
           for i in {1..5}; do
             if update_and_push; then
-              echo "Cask updated and pushed successfully."
+              echo "Homebrew files updated and pushed successfully."
               exit 0
             fi
             echo "Attempt $i failed. Retrying in 2 seconds..."
             sleep 2
           done
           
-          echo "Failed to update and push Cask after 5 attempts."
+          echo "Failed to update and push Homebrew files after 5 attempts."
           exit 1
+        shell: bash
