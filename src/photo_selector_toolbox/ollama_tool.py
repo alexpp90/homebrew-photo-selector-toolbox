@@ -142,6 +142,9 @@ class OllamaAestheticTool(AnalysisTool):
             raise RuntimeError(f"Failed to process image bytes: {e}")
 
         # 2. Query Ollama REST API
+        if not ollama_url.lower().startswith(('http://', 'https://')):
+            raise RuntimeError("Ollama URL must start with http:// or https://")
+
         url = f"{ollama_url.rstrip('/')}/api/generate"
         payload = {
             "model": model_name,
