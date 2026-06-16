@@ -2,7 +2,6 @@ import logging
 import threading
 from pathlib import Path
 from PIL import Image, ImageTk
-import tkinter as tk
 from tkinter import ttk
 
 # Local imports
