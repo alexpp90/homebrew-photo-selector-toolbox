@@ -145,13 +145,18 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **GitHub Release Preservation:** Every tagged stable release (tags matching `v*`) must be published as a new GitHub Release and preserved indefinitely. No old releases or release assets may be pruned or deleted from the GitHub Releases page.
 *   **Older Version Access Documentation:** The `README.md` must maintain up-to-date instructions on how to access and install older versions of the standalone executables and the Homebrew Casks.
 
-### 5.3 Homebrew Distribution (macOS)
-*   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing Cask definitions for both stable releases and nightly builds.
-*   **Release Selection:** Users can choose to install the stable release (`brew install --cask photo-selector-toolbox`) or the latest nightly build (`brew install --cask photo-selector-toolbox@nightly`).
-*   **Auto-Update:** The CI workflow automatically updates the Cask configurations:
-    *   For nightly builds (on pushes to `main`), the `photo-selector-toolbox@nightly` Cask's SHA256 is updated.
-    *   For stable releases (on tag pushes matching `v*`), the stable `photo-selector-toolbox` Cask's `version` and `sha256` are updated.
-*   **Install Artifacts:** The Cask installs the `Photo Selector Toolbox.app` bundle to `/Applications` and symlinks the CLI binary into Homebrew's bin directory.
+### 5.3 Homebrew Distribution (macOS & Linux)
+*   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing Cask definitions (macOS GUI) and Formula definitions (Linux GUI/CLI and macOS CLI) for both stable releases and nightly builds.
+*   **Release Selection:**
+    *   **macOS GUI (Cask):** Users can install the stable release (`brew install --cask photo-selector-toolbox`) or nightly build (`brew install --cask photo-selector-toolbox@nightly`).
+    *   **Linux / macOS CLI (Formula):** Users can install the stable release (`brew install photo-selector-toolbox`) or nightly build (`brew install photo-selector-toolbox@nightly`).
+*   **Auto-Update:** The CI workflow automatically updates both Cask and Formula configurations using a Python utility script `scripts/update_formula.py`:
+    *   For nightly builds (on pushes to `main`), the nightly Cask and Formula SHA256 hashes are updated.
+    *   For stable releases (on tag pushes matching `v*`), the stable Cask and Formula versions and SHA256 hashes are updated.
+*   **Install Artifacts:**
+    *   The macOS Cask installs the `Photo Selector Toolbox.app` bundle to `/Applications` and symlinks the CLI binary to Homebrew's bin directory.
+    *   The macOS Formula installs the CLI binary `photo-selector-toolbox` to Homebrew's bin directory.
+    *   The Linux Formula installs both the CLI binary `photo-selector-toolbox` and the GUI binary `photo-selector-toolbox-gui` to Homebrew's bin directory.
 
 ## 6. Testing Requirements
 

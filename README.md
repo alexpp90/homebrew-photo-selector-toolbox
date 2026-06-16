@@ -64,9 +64,11 @@ Photo Selector Toolbox is a **cross-platform desktop application** for photograp
 
 ## 📥 Installation
 
-### Homebrew (macOS — Recommended)
+### Homebrew (macOS & Linux)
 
-The easiest way to install on macOS. Choose between **stable** and **nightly** builds:
+The easiest way to install on macOS and Linux. Choose between **stable** and **nightly** builds:
+
+#### macOS (Cask — Includes GUI & CLI)
 
 <table>
 <tr>
@@ -111,10 +113,61 @@ brew upgrade --cask --greedy photo-selector-toolbox@nightly
 </tr>
 </table>
 
-**One-liner install** (stable, interactive):
+**One-liner install** (macOS, stable, interactive):
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/alexpp90/homebrew-photo-selector-toolbox/main/scripts/install-mac.sh)"
+```
+
+#### Linux & macOS CLI (Formula — CLI, plus GUI on Linux)
+
+<table>
+<tr>
+<th>Stable Release</th>
+<th>Nightly Build (Latest Features)</th>
+</tr>
+<tr>
+<td>
+
+```bash
+brew tap alexpp90/photo-selector-toolbox
+brew install photo-selector-toolbox
+```
+
+</td>
+<td>
+
+```bash
+brew tap alexpp90/photo-selector-toolbox
+brew install photo-selector-toolbox@nightly
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+```bash
+# Upgrade
+brew upgrade photo-selector-toolbox
+```
+
+</td>
+<td>
+
+```bash
+# Upgrade
+brew upgrade photo-selector-toolbox@nightly
+```
+
+</td>
+</tr>
+</table>
+
+**One-liner install** (Linux, stable, interactive):
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/alexpp90/homebrew-photo-selector-toolbox/main/scripts/install-linux.sh)"
 ```
 
 ---
@@ -182,15 +235,20 @@ All previous versions are preserved indefinitely on GitHub.
 </details>
 
 <details>
-<summary><strong>Homebrew Cask (macOS)</strong></summary>
+<summary><strong>Homebrew Cask / Formula</strong></summary>
 
 To install a specific historical version:
 
-1. Find the commit hash where `Casks/photo-selector-toolbox.rb` was updated for that version in the [tap repository](https://github.com/alexpp90/homebrew-photo-selector-toolbox) history
-2. Install using the raw Cask URL:
-   ```bash
-   brew install --cask https://raw.githubusercontent.com/alexpp90/homebrew-photo-selector-toolbox/<COMMIT_HASH>/Casks/photo-selector-toolbox.rb
-   ```
+1. Find the commit hash where the Cask (`Casks/photo-selector-toolbox.rb`) or Formula (`Formula/photo-selector-toolbox.rb`) was updated for that version in the [tap repository](https://github.com/alexpp90/homebrew-photo-selector-toolbox) history.
+2. Install using the raw URL:
+   - **Cask (macOS GUI)**:
+     ```bash
+     brew install --cask https://raw.githubusercontent.com/alexpp90/homebrew-photo-selector-toolbox/<COMMIT_HASH>/Casks/photo-selector-toolbox.rb
+     ```
+   - **Formula (Linux / macOS CLI)**:
+     ```bash
+     brew install https://raw.githubusercontent.com/alexpp90/homebrew-photo-selector-toolbox/<COMMIT_HASH>/Formula/photo-selector-toolbox.rb
+     ```
 
 </details>
 
