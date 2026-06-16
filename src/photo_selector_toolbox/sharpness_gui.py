@@ -1948,53 +1948,64 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
    # Threading methods removed, handled by ImageCacheManager
 
     def update_button_states(self):
+        # Cache buttons if not already cached
+        if not hasattr(self, "_cached_buttons"):
+            self._cached_buttons = {
+                "prev": [],
+                "next": [],
+                "action": []
+            }
+            for btn in ["prev_btn", "focus_prev_btn"]:
+                if hasattr(self, btn):
+                    self._cached_buttons["prev"].append(getattr(self, btn))
+            for btn in ["next_btn", "focus_next_btn"]:
+                if hasattr(self, btn):
+                    self._cached_buttons["next"].append(getattr(self, btn))
+            for btn in ["del_btn", "focus_del_btn", "move_btn", "focus_move_btn", "copy_btn", "focus_copy_btn"]:
+                if hasattr(self, btn):
+                    self._cached_buttons["action"].append(getattr(self, btn))
+            self._cached_all_buttons = self._cached_buttons["prev"] + self._cached_buttons["next"] + self._cached_buttons["action"]
+
         sel = self.candidate_listbox.curselection()
         if not sel:
-            for btn in [
-                "prev_btn", "next_btn", "del_btn", "move_btn", "copy_btn",
-                "focus_prev_btn", "focus_next_btn", "focus_del_btn", "focus_move_btn", "focus_copy_btn"
-            ]:
-                if hasattr(self, btn):
-                    try:
-                        getattr(self, btn).state(["disabled"])
-                    except Exception:
-                        pass
+            for btn in self._cached_all_buttons:
+                try:
+                    btn.state(["disabled"])
+                except Exception:
+                    pass
             return
 
         idx = sel[0]
         total = self.candidate_listbox.size()
 
-       # Hardening against mock objects in tests
+        # Hardening against mock objects in tests
         if type(idx).__name__ in ("MagicMock", "Mock"):
             idx = 0
         if type(total).__name__ in ("MagicMock", "Mock"):
             total = 1
 
-       # Previous buttons
+        # Previous buttons
         prev_state = "!disabled" if idx > 0 else "disabled"
-        for btn in ["prev_btn", "focus_prev_btn"]:
-            if hasattr(self, btn):
-                try:
-                    getattr(self, btn).state([prev_state])
-                except Exception:
-                    pass
+        for btn in self._cached_buttons["prev"]:
+            try:
+                btn.state([prev_state])
+            except Exception:
+                pass
 
-       # Next buttons
+        # Next buttons
         next_state = "!disabled" if idx < total - 1 else "disabled"
-        for btn in ["next_btn", "focus_next_btn"]:
-            if hasattr(self, btn):
-                try:
-                    getattr(self, btn).state([next_state])
-                except Exception:
-                    pass
+        for btn in self._cached_buttons["next"]:
+            try:
+                btn.state([next_state])
+            except Exception:
+                pass
 
-       # Action buttons
-        for btn in ["del_btn", "focus_del_btn", "move_btn", "focus_move_btn", "copy_btn", "focus_copy_btn"]:
-            if hasattr(self, btn):
-                try:
-                    getattr(self, btn).state(["!disabled"])
-                except Exception:
-                    pass
+        # Action buttons
+        for btn in self._cached_buttons["action"]:
+            try:
+                btn.state(["!disabled"])
+            except Exception:
+                pass
 
     def load_triplet_view(self, current_path):
        # Find index in candidates list
