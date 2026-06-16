@@ -3,7 +3,6 @@ from tkinter import ttk, filedialog, messagebox
 import threading
 import queue
 import sys
-import traceback
 import logging
 from dataclasses import dataclass
 from pathlib import Path
