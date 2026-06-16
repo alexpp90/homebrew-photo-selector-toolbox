@@ -1,5 +1,5 @@
 import argparse
-import concurrent.futures  # intentionally retained; used for ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from pathlib import Path
 
@@ -71,7 +71,7 @@ def main():
     # We use a ThreadPoolExecutor with a worker count optimized for I/O operations.
     all_metadata = []
     max_workers = min(32, (os.cpu_count() or 1) + 4)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # We use executor.map with a lambda to preserve the original image order and update tqdm.
         # However, to easily skip None results and keep tqdm responsive, we'll use submit/as_completed.
         futures = {
@@ -79,7 +79,7 @@ def main():
         }
 
         with tqdm(total=len(image_files), desc="Processing images") as pbar:
-            for future in concurrent.futures.as_completed(futures):
+            for future in as_completed(futures):
                 data = future.result()
                 if data:
                     all_metadata.append(data)
@@ -95,5 +95,6 @@ def main():
 
 if __name__ == "__main__":
     import multiprocessing
+
     multiprocessing.freeze_support()
     main()
