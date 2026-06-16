@@ -5,10 +5,10 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from photo_selector_toolbox.reader import get_exif_data, SUPPORTED_EXTENSIONS
 from photo_selector_toolbox.analyzer import analyze_data
-from photo_selector_toolbox.visualizer import create_plots
+from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS, get_exif_data
 from photo_selector_toolbox.utils import is_excluded_subfolder
+from photo_selector_toolbox.visualizer import create_plots
 
 
 def main():
@@ -48,12 +48,17 @@ def main():
     print(f"Scanning for images in '{root_path}'...")
 
     # Avoid test mock pollution
-    if hasattr(is_excluded_subfolder, "return_value") and not isinstance(is_excluded_subfolder.return_value, bool):
+    if hasattr(is_excluded_subfolder, "return_value") and not isinstance(
+        is_excluded_subfolder.return_value, bool
+    ):
         is_excluded_subfolder.return_value = False
 
     image_files = [
-        f for f in root_path.rglob("*")
-        if f.suffix.lower() in SUPPORTED_EXTENSIONS and not is_excluded_subfolder(f, root_path) and not f.name.startswith("._")
+        f
+        for f in root_path.rglob("*")
+        if f.suffix.lower() in SUPPORTED_EXTENSIONS
+        and not is_excluded_subfolder(f, root_path)
+        and not f.name.startswith("._")
     ]
 
     if not image_files:

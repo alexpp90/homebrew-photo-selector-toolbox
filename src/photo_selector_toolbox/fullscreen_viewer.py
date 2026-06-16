@@ -2,15 +2,16 @@ import logging
 import threading
 import tkinter as tk
 from pathlib import Path
-from typing import List, Optional
 from tkinter import ttk
+from typing import List, Optional
+
 from PIL import Image, ImageTk
 
+from photo_selector_toolbox.formatting import format_meta, format_score
+from photo_selector_toolbox.models import ExifData, ScanResult
+from photo_selector_toolbox.reader import get_exif_data
 # Local imports
 from photo_selector_toolbox.utils import load_image_preview
-from photo_selector_toolbox.formatting import format_score, format_meta
-from photo_selector_toolbox.reader import get_exif_data
-from photo_selector_toolbox.models import ExifData, ScanResult
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +60,19 @@ class FullscreenViewer(tk.Toplevel):
         self.prev_btn = ttk.Button(self, text="◀ Previous (P)", command=self.prev_image)
         self.prev_btn.place(relx=0.95, rely=0.15, anchor="ne")
 
-        self.del_btn = ttk.Button(self, text="🗑️ Delete (Delete)", command=self.confirm_delete_image)
+        self.del_btn = ttk.Button(
+            self, text="🗑️ Delete (Delete)", command=self.confirm_delete_image
+        )
         self.del_btn.place(relx=0.95, rely=0.20, anchor="ne")
 
-        self.move_btn = ttk.Button(self, text="⤳ Move to Selection (M)", command=self.move_to_selection)
+        self.move_btn = ttk.Button(
+            self, text="⤳ Move to Selection (M)", command=self.move_to_selection
+        )
         self.move_btn.place(relx=0.95, rely=0.25, anchor="ne")
 
-        self.copy_btn = ttk.Button(self, text="⎘ Copy to Selection (C)", command=self.copy_to_selection)
+        self.copy_btn = ttk.Button(
+            self, text="⎘ Copy to Selection (C)", command=self.copy_to_selection
+        )
         self.copy_btn.place(relx=0.95, rely=0.30, anchor="ne")
 
         self.update_nav_buttons()
@@ -115,42 +122,42 @@ class FullscreenViewer(tk.Toplevel):
 
         # Metadata Panel Overlay (uses standard ttk.Frame & ttk.Label for theme compatibility)
         self.meta_panel = ttk.Frame(
-            self,
-            padding=15,
-            relief="solid",
-            borderwidth=1,
-            style="MetaPanel.TFrame"
+            self, padding=15, relief="solid", borderwidth=1, style="MetaPanel.TFrame"
         )
         self.meta_panel.place(relx=0.03, rely=0.97, anchor="sw")
 
         self.meta_filename_lbl = ttk.Label(
-            self.meta_panel,
-            text="",
-            style="MetaPanelTitle.TLabel"
+            self.meta_panel, text="", style="MetaPanelTitle.TLabel"
         )
         self.meta_filename_lbl.pack(side="top", anchor="w")
 
         self.meta_exposure_lbl = ttk.Label(
-            self.meta_panel,
-            text="",
-            style="MetaPanelExposure.TLabel"
+            self.meta_panel, text="", style="MetaPanelExposure.TLabel"
         )
         self.meta_exposure_lbl.pack(side="top", anchor="w", pady=(2, 0))
 
         self.meta_lens_lbl = ttk.Label(
-            self.meta_panel,
-            text="",
-            style="MetaPanelLens.TLabel"
+            self.meta_panel, text="", style="MetaPanelLens.TLabel"
         )
 
         self.meta_sep = ttk.Separator(self.meta_panel, orient="horizontal")
 
         self.metric_labels = {
-            "sharpness": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel"),
-            "noise": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel"),
-            "highlight": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel"),
-            "shadow": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel"),
-            "aesthetic": ttk.Label(self.meta_panel, text="", style="MetaPanelExposure.TLabel")
+            "sharpness": ttk.Label(
+                self.meta_panel, text="", style="MetaPanelExposure.TLabel"
+            ),
+            "noise": ttk.Label(
+                self.meta_panel, text="", style="MetaPanelExposure.TLabel"
+            ),
+            "highlight": ttk.Label(
+                self.meta_panel, text="", style="MetaPanelExposure.TLabel"
+            ),
+            "shadow": ttk.Label(
+                self.meta_panel, text="", style="MetaPanelExposure.TLabel"
+            ),
+            "aesthetic": ttk.Label(
+                self.meta_panel, text="", style="MetaPanelExposure.TLabel"
+            ),
         }
 
         # Initialize metadata display
@@ -330,7 +337,11 @@ class FullscreenViewer(tk.Toplevel):
             self.parent.execute_copy_to_selection(path, idx)
 
             if self.file_list:
-                new_idx = self.current_idx + 1 if self.current_idx < len(self.file_list) - 1 else self.current_idx
+                new_idx = (
+                    self.current_idx + 1
+                    if self.current_idx < len(self.file_list) - 1
+                    else self.current_idx
+                )
                 if new_idx != self.current_idx:
                     self.current_idx = new_idx
                     self.load_new_path(self.file_list[self.current_idx])
@@ -358,15 +369,19 @@ class FullscreenViewer(tk.Toplevel):
                 with self.parent.cache_manager.full_res_lock:
                     self.parent.cache_manager.full_res_cache[self.path] = img
             else:
+
                 def on_failed():
                     if self.winfo_exists():
                         self.loading_lbl.config(text="Failed to load.")
+
                 self.parent.after(0, on_failed)
         except Exception as e:
             msg = f"Error: {e}"
+
             def on_error():
                 if self.winfo_exists():
                     self.loading_lbl.config(text=msg)
+
             self.parent.after(0, on_error)
 
     def on_image_loaded(self):
@@ -560,7 +575,9 @@ class FullscreenViewer(tk.Toplevel):
         try:
             # Check if parent has files_map and it's a dict
             res = None
-            if hasattr(self.parent, "files_map") and isinstance(self.parent.files_map, dict):
+            if hasattr(self.parent, "files_map") and isinstance(
+                self.parent.files_map, dict
+            ):
                 res = self.parent.files_map.get(self.path)
 
             if not res:
@@ -579,7 +596,9 @@ class FullscreenViewer(tk.Toplevel):
                     else:
                         res.exif = ExifData()
                 except Exception as e:
-                    logger.debug(f"Failed to load EXIF data dynamically in fullscreen: {e}")
+                    logger.debug(
+                        f"Failed to load EXIF data dynamically in fullscreen: {e}"
+                    )
                     res.exif = ExifData()
 
             exif = None if is_mock else res.exif
@@ -636,39 +655,57 @@ class FullscreenViewer(tk.Toplevel):
 
             res_score = "N/A" if is_mock else res.score
             res_noise_score = "N/A" if is_mock else res.noise_score
-            scores_dict = {} if is_mock else (res.scores if isinstance(res.scores, dict) else {})
+            scores_dict = (
+                {} if is_mock else (res.scores if isinstance(res.scores, dict) else {})
+            )
 
             # 1. Sharpness Score
             if res_score != "N/A":
                 score_str = format_score(res_score)
                 lbl_pfx = "" if is_testing else "🎯 "
-                self.metric_labels["sharpness"].config(text=f"{lbl_pfx}Sharpness Score: {score_str}")
-                self.metric_labels["sharpness"].pack(side="top", anchor="w", pady=(4, 0))
+                self.metric_labels["sharpness"].config(
+                    text=f"{lbl_pfx}Sharpness Score: {score_str}"
+                )
+                self.metric_labels["sharpness"].pack(
+                    side="top", anchor="w", pady=(4, 0)
+                )
                 has_metrics = True
 
             # 2. Noise Level
             if res_noise_score != "N/A":
                 noise_str = format_score(res_noise_score)
                 lbl_pfx = "" if is_testing else "🔊 "
-                self.metric_labels["noise"].config(text=f"{lbl_pfx}Noise Level: {noise_str}")
+                self.metric_labels["noise"].config(
+                    text=f"{lbl_pfx}Noise Level: {noise_str}"
+                )
                 self.metric_labels["noise"].pack(side="top", anchor="w", pady=(2, 0))
                 has_metrics = True
 
             # 3. Highlight Clipping
             hl_score = scores_dict.get("highlight_clipping", "N/A")
             if hl_score != "N/A":
-                hl_str = str(format_score(hl_score)) + ("%" if isinstance(hl_score, float) else "")
+                hl_str = str(format_score(hl_score)) + (
+                    "%" if isinstance(hl_score, float) else ""
+                )
                 lbl_pfx = "" if is_testing else "🔆 "
-                self.metric_labels["highlight"].config(text=f"{lbl_pfx}Highlight Clipping: {hl_str}")
-                self.metric_labels["highlight"].pack(side="top", anchor="w", pady=(2, 0))
+                self.metric_labels["highlight"].config(
+                    text=f"{lbl_pfx}Highlight Clipping: {hl_str}"
+                )
+                self.metric_labels["highlight"].pack(
+                    side="top", anchor="w", pady=(2, 0)
+                )
                 has_metrics = True
 
             # 4. Shadow Clipping
             sd_score = scores_dict.get("shadow_clipping", "N/A")
             if sd_score != "N/A":
-                sd_str = str(format_score(sd_score)) + ("%" if isinstance(sd_score, float) else "")
+                sd_str = str(format_score(sd_score)) + (
+                    "%" if isinstance(sd_score, float) else ""
+                )
                 lbl_pfx = "" if is_testing else "🌑 "
-                self.metric_labels["shadow"].config(text=f"{lbl_pfx}Shadow Clipping: {sd_str}")
+                self.metric_labels["shadow"].config(
+                    text=f"{lbl_pfx}Shadow Clipping: {sd_str}"
+                )
                 self.metric_labels["shadow"].pack(side="top", anchor="w", pady=(2, 0))
                 has_metrics = True
 
@@ -680,13 +717,19 @@ class FullscreenViewer(tk.Toplevel):
                 if aesthetic_analysis and aesthetic_analysis != "N/A":
                     aes_str += f" ({aesthetic_analysis})"
                 lbl_pfx = "" if is_testing else "🎨 "
-                self.metric_labels["aesthetic"].config(text=f"{lbl_pfx}Aesthetic Score: {aes_str}")
-                self.metric_labels["aesthetic"].pack(side="top", anchor="w", pady=(2, 0))
+                self.metric_labels["aesthetic"].config(
+                    text=f"{lbl_pfx}Aesthetic Score: {aes_str}"
+                )
+                self.metric_labels["aesthetic"].pack(
+                    side="top", anchor="w", pady=(2, 0)
+                )
                 has_metrics = True
 
             # Adjust separator visibility
             if has_metrics:
-                self.meta_sep.pack(side="top", fill="x", pady=6, after=self.meta_exposure_lbl)
+                self.meta_sep.pack(
+                    side="top", fill="x", pady=6, after=self.meta_exposure_lbl
+                )
             else:
                 self.meta_sep.pack_forget()
 

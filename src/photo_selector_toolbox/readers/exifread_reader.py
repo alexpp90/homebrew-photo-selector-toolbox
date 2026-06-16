@@ -1,16 +1,19 @@
 import logging
 from pathlib import Path
 from typing import Optional
+
 from photo_selector_toolbox.models import ExifData
 from photo_selector_toolbox.readers.base import ExifReader
 
 logger = logging.getLogger(__name__)
 
+
 class ExifReadReader(ExifReader):
     """EXIF reader using exifread library."""
-    
+
     def can_handle(self, path: Path) -> bool:
         from photo_selector_toolbox.reader import FORCE_EXIFTOOL_EXTENSIONS
+
         return path.suffix.lower() in FORCE_EXIFTOOL_EXTENSIONS
 
     def read(self, path: Path, debug: bool = False) -> Optional[ExifData]:
@@ -21,6 +24,7 @@ class ExifReadReader(ExifReader):
                 tags = exifread.process_file(f, details=False)
 
             if tags:
+
                 def get_tag_float(tag_name):
                     tag = tags.get(tag_name)
                     if not tag or not tag.values:

@@ -1,8 +1,9 @@
 import logging
-from collections import Counter
 import statistics
-from photo_selector_toolbox.utils import aggregate_focal_lengths
+from collections import Counter
+
 from photo_selector_toolbox.models import ExifData
+from photo_selector_toolbox.utils import aggregate_focal_lengths
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,9 @@ def analyze_data(data: list[ExifData]):
     # Helper to extract values
     def get_values(key):
         attr_name = attr_map[key]
-        return [getattr(d, attr_name) for d in data if getattr(d, attr_name) is not None]
+        return [
+            getattr(d, attr_name) for d in data if getattr(d, attr_name) is not None
+        ]
 
     for key in ["Shutter Speed", "Aperture", "Focal Length", "ISO"]:
         values = get_values(key)

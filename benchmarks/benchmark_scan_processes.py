@@ -1,18 +1,23 @@
-import time
 import os
+import time
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+
 from photo_selector_toolbox.controllers import ScanController
 from photo_selector_toolbox.models import ScanResult
-from concurrent.futures import ProcessPoolExecutor
+
 
 def dummy_progress(res, i, total):
     pass
 
+
 def dummy_finished():
     pass
 
+
 def log(msg):
     pass
+
 
 def setup_test_images():
     import cv2
@@ -30,9 +35,11 @@ def setup_test_images():
         files.append(filepath)
     return files
 
+
 def process_file(f, grid_size, tools):
-    from photo_selector_toolbox.sharpness import calculate_sharpness, calculate_noise
     from photo_selector_toolbox.reader import get_exif_data
+    from photo_selector_toolbox.sharpness import (calculate_noise,
+                                                  calculate_sharpness)
 
     score = "N/A"
     if tools.get("sharpness", False):
@@ -59,10 +66,11 @@ def main():
 
         for i, future in enumerate(futures):
             res = future.result()
-            dummy_progress(res, i+1, len(files))
+            dummy_progress(res, i + 1, len(files))
 
     end = time.time()
     print(f"Process Scan Time: {end - start:.2f} seconds")
+
 
 if __name__ == "__main__":
     main()

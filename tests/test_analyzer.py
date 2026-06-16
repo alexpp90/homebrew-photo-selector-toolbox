@@ -1,5 +1,6 @@
 def test_analyzer_no_data(caplog):
     import logging
+
     from photo_selector_toolbox.analyzer import analyze_data
 
     caplog.set_level(logging.INFO)
@@ -9,6 +10,7 @@ def test_analyzer_no_data(caplog):
 
 def test_analyzer_basic_stats(caplog):
     import logging
+
     from photo_selector_toolbox.analyzer import analyze_data
     from photo_selector_toolbox.models import ExifData
 

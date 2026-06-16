@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Type, Any
+from typing import Any, Dict, Type
 
 
 class AnalysisTool(ABC):
@@ -26,6 +26,7 @@ class AnalysisTool(ABC):
 
 class ToolRegistry:
     """Central registry for analysis tools."""
+
     _tools: Dict[str, Type[AnalysisTool]] = {}
 
     @classmethod

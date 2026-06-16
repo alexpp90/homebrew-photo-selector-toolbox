@@ -1,4 +1,5 @@
 import unittest
+
 from photo_selector_toolbox.utils import aggregate_focal_lengths
 
 

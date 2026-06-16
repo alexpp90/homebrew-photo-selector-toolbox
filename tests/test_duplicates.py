@@ -1,10 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from photo_selector_toolbox.duplicates import (
-    find_duplicates,
-    move_to_trash,
-    get_file_hash,
-)
+
+from photo_selector_toolbox.duplicates import (find_duplicates, get_file_hash,
+                                               move_to_trash)
 
 
 @pytest.fixture
@@ -130,4 +129,3 @@ def test_find_duplicates_excludes_subfolders(tmp_path):
     group_sel = duplicates_selection[0]
     filenames_sel = {p.name for p in group_sel["files"]}
     assert filenames_sel == {"c.jpg", "d.jpg"}
-

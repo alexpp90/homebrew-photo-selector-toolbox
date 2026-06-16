@@ -1,17 +1,16 @@
-import pytest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import numpy as np
-from unittest.mock import patch, MagicMock
-from photo_selector_toolbox.sharpness import (
-    calculate_sharpness,
-    calculate_noise,
-    categorize_sharpness,
-    find_related_files,
-    SharpnessCategories,
-    get_image_data,
-    rawpy,
-)
+import pytest
+
 import photo_selector_toolbox.sharpness as shp
+from photo_selector_toolbox.sharpness import (SharpnessCategories,
+                                              calculate_noise,
+                                              calculate_sharpness,
+                                              categorize_sharpness,
+                                              find_related_files,
+                                              get_image_data, rawpy)
 
 
 # Mock data for testing

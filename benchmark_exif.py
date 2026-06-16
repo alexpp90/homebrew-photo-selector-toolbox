@@ -1,21 +1,25 @@
+import concurrent.futures
 import time
 from pathlib import Path
+
 from photo_selector_toolbox.reader import get_exif_data
-import concurrent.futures
+
 
 def create_dummy_images(num_images=100):
-    from PIL import Image
     import os
+
+    from PIL import Image
 
     test_dir = Path("benchmark_images")
     test_dir.mkdir(exist_ok=True)
 
     for i in range(num_images):
-        img = Image.new('RGB', (100, 100), color = 'red')
+        img = Image.new("RGB", (100, 100), color="red")
         # Add some dummy EXIF
         img.save(test_dir / f"test_image_{i}.jpg")
 
     return list(test_dir.glob("*.jpg"))
+
 
 def sequential_scan(image_files):
     all_metadata = []
@@ -25,6 +29,7 @@ def sequential_scan(image_files):
             all_metadata.append(data)
     return all_metadata
 
+
 def parallel_scan(image_files):
     all_metadata = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -32,6 +37,7 @@ def parallel_scan(image_files):
             if data:
                 all_metadata.append(data)
     return all_metadata
+
 
 if __name__ == "__main__":
     print("Creating test images...")
@@ -53,4 +59,5 @@ if __name__ == "__main__":
 
     # Cleanup
     import shutil
+
     shutil.rmtree("benchmark_images")
