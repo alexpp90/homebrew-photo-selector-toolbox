@@ -120,6 +120,12 @@ def mock_tkinter_and_ttk():
         def winfo_y(self):
             return 100
 
+        def winfo_rootx(self):
+            return 100
+
+        def winfo_rooty(self):
+            return 100
+
         def winfo_exists(self):
             return True
 

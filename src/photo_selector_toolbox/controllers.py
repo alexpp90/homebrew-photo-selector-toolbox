@@ -1,6 +1,7 @@
 import logging
 import queue
 import threading
+import os
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from typing import Dict, Optional, Callable, List, Union
 from pathlib import Path
@@ -10,6 +11,9 @@ from photo_selector_toolbox.utils import load_image_preview
 from photo_selector_toolbox.models import ScanResult
 from photo_selector_toolbox.reader import get_exif_data
 from photo_selector_toolbox.tools import ToolRegistry
+from photo_selector_toolbox.cache import ScoreCache
+import photo_selector_toolbox.sharpness
+import photo_selector_toolbox.ollama_tool
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +154,6 @@ class ImageCacheManager:
 
 def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> ScanResult:
     """Helper module function to process a single image for parallel execution."""
-    from photo_selector_toolbox.cache import ScoreCache
-    from photo_selector_toolbox.sharpness import calculate_all_scores
-
-    import photo_selector_toolbox.ollama_tool
-
     cache = ScoreCache()
     cached = cache.get_scores(f)
 
@@ -175,7 +174,7 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
 
     if builtin_to_compute:
         # Single image load → single grayscale conversion → all analyses
-        combined_results = calculate_all_scores(f, grid_size=grid_size, tools=builtin_to_compute)
+        combined_results = photo_selector_toolbox.sharpness.calculate_all_scores(f, grid_size=grid_size, tools=builtin_to_compute)
         for tool_name, val in combined_results.items():
             scores[tool_name] = val
             new_calculations[tool_name] = val
@@ -291,7 +290,6 @@ class ScanController:
 
             log(f"Scanning {total} images. Starting analysis...")
 
-            import os
             max_workers = max(1, os.cpu_count() or 4)
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks

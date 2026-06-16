@@ -64,6 +64,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Unscaled References:** The application must explicitly store the raw, unscaled `pil_image` to support high-quality responsive resizing when window adjustments occur.
 *   **Preloader Cache:** The background image preloader cache size (`CACHE_SIZE`) must be strictly set to 1200x900 to guarantee high-resolution images for responsive UI scaling.
 *   **Menu Bar Navigation:** To ensure the tools do not take up space in standard view, the sidebar is removed. Navigation between the tools (Photo Selector, Image Library Statistics, and Duplicate Finder) is handled via the top menu bar's "Tools" menu, next to a "Help" menu.
+*   **Dialog Layout and Centering:** To ensure proper readability and consistent user experience, all modal/toplevel dialogs (Scan Settings, Ollama Aesthetic Settings, Collection Settings, About Dialog, and Delete Confirmation) must be centered relative to their parent window using root coordinates (`winfo_rootx()`, `winfo_rooty()`, `winfo_width()`, and `winfo_height()`). Their sizes must be computed dynamically using `update_idletasks()` and size constraints (minimum height/width rules). Dialogs must bind the `<Escape>` key to safely close/dismiss the window.
 
 ### 3.2 Display Modes (Sharpness Tool)
 *   **Standard Mode Layout:** The current image is centered in the top row, with previous/next images side-by-side in the bottom row.

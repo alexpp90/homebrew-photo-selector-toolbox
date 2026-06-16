@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import List, Dict
 from tkinter import filedialog, messagebox, ttk
 import os
+import json
+import urllib.request
 
 import send2trash
 import shutil
@@ -470,7 +472,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
 
     def show_scan_dialog(self):
-       # Ensure a folder is selected first
+        # Ensure a folder is selected first
         folder = self.folder_var.get()
         if not folder or not Path(folder).exists():
             messagebox.showerror("Error", "Please select a valid folder first.")
@@ -479,29 +481,21 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         dialog = tk.Toplevel(self)
         dialog.configure(bg="#18181B")
         dialog.title("Scan Settings")
-        dialog.geometry("500x300")
-        dialog.resizable(False, False)
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
 
-       # Center on parent
-        parent = self.winfo_toplevel()
-        x = parent.winfo_x() + (parent.winfo_width() - 500) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - 300) // 2
-        dialog.geometry(f"+{x}+{y}")
-
-       # Label
+        # Label
         ttk.Label(
             dialog,
             text="⚡ Configure Sharpness & Noise Analysis",
             font=("Helvetica", 12, "bold")
         ).pack(pady=15)
 
-       # Container
+        # Container
         container = ttk.Frame(dialog, padding=10)
         container.pack(fill="both", expand=True)
 
-       # Sharpness row
+        # Sharpness row
         sharpness_row = ttk.Frame(container)
         sharpness_row.pack(fill="x", pady=5)
         ttk.Checkbutton(
@@ -520,28 +514,28 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         grid_combo.pack(side="left", padx=5)
 
-       # Noise row
+        # Noise row
         noise_row = ttk.Frame(container)
         noise_row.pack(fill="x", pady=5)
         ttk.Checkbutton(
             noise_row, text="Noise Analysis", variable=self.tool_noise_var
         ).pack(side="left", padx=5)
 
-       # Highlight clipping row
+        # Highlight clipping row
         hl_row = ttk.Frame(container)
         hl_row.pack(fill="x", pady=5)
         ttk.Checkbutton(
             hl_row, text="Highlight Clipping Analysis", variable=self.tool_highlight_var
         ).pack(side="left", padx=5)
 
-       # Shadow clipping row
+        # Shadow clipping row
         sd_row = ttk.Frame(container)
         sd_row.pack(fill="x", pady=5)
         ttk.Checkbutton(
             sd_row, text="Shadow Clipping Analysis", variable=self.tool_shadow_var
         ).pack(side="left", padx=5)
 
-       # Aesthetic row (Ollama VLM)
+        # Aesthetic row (Ollama VLM)
         aesthetic_row = ttk.Frame(container)
         aesthetic_row.pack(fill="x", pady=5)
         ttk.Checkbutton(
@@ -553,7 +547,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         config_btn.pack(side="left", padx=10)
 
-       # Buttons
+        # Buttons
         btn_frame = ttk.Frame(dialog, padding=10)
         btn_frame.pack(fill="x")
 
@@ -564,6 +558,29 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         ttk.Button(btn_frame, text="⚡ Start Scan", command=start_and_close).pack(side="left", expand=True, padx=5)
         ttk.Button(btn_frame, text="❌ Cancel", command=dialog.destroy).pack(side="right", expand=True, padx=5)
 
+        # Force layout calculations
+        dialog.update_idletasks()
+
+        # Set the dialog size dynamically
+        width = max(520, int(dialog.winfo_reqwidth()))
+        height = max(320, int(dialog.winfo_reqheight()))
+
+        # Compute center coordinates relative to parent using screen (root) coordinates
+        parent = self.winfo_toplevel()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+
+        x = parent_x + (parent_width - width) // 2
+        y = parent_y + (parent_height - height) // 2
+
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+        dialog.resizable(False, False)
+
+        # Bind <Escape> to close the dialog safely
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+
     def show_ollama_config_dialog(self):
         config = load_config()
         
@@ -573,13 +590,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
         
-       # Center on parent
-        parent = self.winfo_toplevel()
-        x = parent.winfo_x() + (parent.winfo_width() - 550) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - 400) // 2
-        dialog.geometry(f"+{x}+{y}")
-        
-       # Title
+        # Title
         ttk.Label(
             dialog,
             text="🤖 Configure Ollama VLM Integration",
@@ -589,7 +600,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         container = ttk.Frame(dialog, padding=15)
         container.pack(fill="both", expand=True)
         
-       # URL
+        # URL
         url_frame = ttk.Frame(container)
         url_frame.pack(fill="x", pady=5)
         ttk.Label(url_frame, text="🌐 Ollama URL:", width=15, anchor="w").pack(side="left")
@@ -597,7 +608,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         url_ent = ttk.Entry(url_frame, textvariable=url_var)
         url_ent.pack(side="left", fill="x", expand=True)
         
-       # Model
+        # Model
         model_frame = ttk.Frame(container)
         model_frame.pack(fill="x", pady=5)
         ttk.Label(model_frame, text="🤖 Model Name:", width=15, anchor="w").pack(side="left")
@@ -605,7 +616,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         model_ent = ttk.Entry(model_frame, textvariable=model_var)
         model_ent.pack(side="left", fill="x", expand=True)
         
-       # Prompt
+        # Prompt
         prompt_frame = ttk.Frame(container)
         prompt_frame.pack(fill="both", expand=True, pady=5)
         ttk.Label(prompt_frame, text="📝 Prompt:", width=15, anchor="w").pack(side="top", anchor="w", pady=(0, 2))
@@ -625,7 +636,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         prompt_text.pack(fill="both", expand=True)
         prompt_text.insert("1.0", config.get("ollama_prompt", ""))
         
-       # Status & Connection Test
+        # Status & Connection Test
         status_frame = ttk.LabelFrame(container, text="Connection Status", padding=8)
         status_frame.pack(fill="x", pady=10)
         
@@ -636,9 +647,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             wraplength=480
         )
         status_lbl.pack(fill="x", pady=5)
-        
-        import urllib.request
-        import json
         
         def run_test():
             status_lbl.config(text="Connecting to Ollama...", foreground="blue")
@@ -654,7 +662,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
                 
-               # Check for standard model match, e.g. "llava" matches "llava:latest" or "llava:7b"
+                # Check for standard model match, e.g. "llava" matches "llava:latest" or "llava:7b"
                 matched = False
                 for m in models:
                     if m == model or m.split(":")[0] == model:
@@ -681,7 +689,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         test_btn = ttk.Button(status_frame, text="🔌 Test Connection", command=lambda: threading.Thread(target=run_test, daemon=True).start())
         test_btn.pack(anchor="e")
         
-       # Dialog Action Buttons
+        # Dialog Action Buttons
         btn_frame = ttk.Frame(dialog, padding=10)
         btn_frame.pack(fill="x")
         
@@ -696,6 +704,30 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             
         ttk.Button(btn_frame, text="💾 Save Settings", command=save_and_close).pack(side="left", expand=True, padx=5)
         ttk.Button(btn_frame, text="❌ Cancel", command=dialog.destroy).pack(side="right", expand=True, padx=5)
+
+        # Force layout calculations
+        dialog.update_idletasks()
+
+        # Calculate size dynamically
+        width = max(550, int(dialog.winfo_reqwidth()))
+        height = max(450, int(dialog.winfo_reqheight()))
+
+        # Center it relative to parent using root coordinates
+        parent = self.winfo_toplevel()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+
+        x = parent_x + (parent_width - width) // 2
+        y = parent_y + (parent_height - height) // 2
+
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+        dialog.minsize(width, height)
+        dialog.resizable(True, True)
+
+        # Bind <Escape> to close the dialog
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
 
     def update_scan_button_state(self):
         if self.is_scanning:
@@ -2494,10 +2526,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             width = 400
             height = 180
 
-       # Center on parent
+        # Center on parent
         parent = self.winfo_toplevel()
-        x = parent.winfo_x() + (parent.winfo_width() - width) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - height) // 2
+        x = parent.winfo_rootx() + (parent.winfo_width() - width) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height() - height) // 2
         dialog.geometry(f"{width}x{height}+{x}+{y}")
 
        # Bind Delete key to confirm
