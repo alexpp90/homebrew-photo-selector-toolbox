@@ -84,3 +84,11 @@ def test_tool_registry_all_tools():
     assert len(tools) == 2
     assert tools["mock_tool"] is MockTool
     assert tools["mock_tool_prop"] is MockToolWithProperty
+
+
+def test_analysis_tool_abstract_methods():
+    """Test that the abstract methods in AnalysisTool contain pass statements and can be called directly."""
+    assert AnalysisTool.name.fget(None) is None
+    assert AnalysisTool.display_name.fget(None) is None
+    # We can invoke the analyze method directly using the class dict or getattr, though the method is unbound.
+    assert getattr(AnalysisTool, "analyze")(None, Path("dummy.jpg")) is None
