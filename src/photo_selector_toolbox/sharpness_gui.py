@@ -1040,7 +1040,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 if any(v != "N/A" for v in res.scores.values()):
                     self.scan_results.append(res)
             self.files_map[f] = res
-            self.candidate_listbox.insert("end", self._get_candidate_listbox_text(f))
+
+        if self.candidates:
+            self.candidate_listbox.insert(
+                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+            )
 
         if self.candidates:
             self.log(f"Loaded {len(self.candidates)} images. Ready for review.")
@@ -1296,8 +1300,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             selected_path = self.candidates[sel[0]]
 
         self.candidate_listbox.delete(0, "end")
-        for f in self.candidates:
-            self.candidate_listbox.insert("end", self._get_candidate_listbox_text(f))
+        if self.candidates:
+            self.candidate_listbox.insert(
+                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+            )
 
         if selected_path and selected_path in self.candidates:
             idx = self.candidates.index(selected_path)
@@ -1598,8 +1604,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.candidates = base_files
 
         self.candidate_listbox.delete(0, "end")
-        for f in self.candidates:
-            self.candidate_listbox.insert("end", self._get_candidate_listbox_text(f))
+        if self.candidates:
+            self.candidate_listbox.insert(
+                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+            )
 
         if self.candidates:
             new_idx = 0
@@ -1948,53 +1956,64 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
    # Threading methods removed, handled by ImageCacheManager
 
     def update_button_states(self):
+        # Cache buttons if not already cached
+        if not hasattr(self, "_cached_buttons"):
+            self._cached_buttons = {
+                "prev": [],
+                "next": [],
+                "action": []
+            }
+            for btn in ["prev_btn", "focus_prev_btn"]:
+                if hasattr(self, btn):
+                    self._cached_buttons["prev"].append(getattr(self, btn))
+            for btn in ["next_btn", "focus_next_btn"]:
+                if hasattr(self, btn):
+                    self._cached_buttons["next"].append(getattr(self, btn))
+            for btn in ["del_btn", "focus_del_btn", "move_btn", "focus_move_btn", "copy_btn", "focus_copy_btn"]:
+                if hasattr(self, btn):
+                    self._cached_buttons["action"].append(getattr(self, btn))
+            self._cached_all_buttons = self._cached_buttons["prev"] + self._cached_buttons["next"] + self._cached_buttons["action"]
+
         sel = self.candidate_listbox.curselection()
         if not sel:
-            for btn in [
-                "prev_btn", "next_btn", "del_btn", "move_btn", "copy_btn",
-                "focus_prev_btn", "focus_next_btn", "focus_del_btn", "focus_move_btn", "focus_copy_btn"
-            ]:
-                if hasattr(self, btn):
-                    try:
-                        getattr(self, btn).state(["disabled"])
-                    except Exception:
-                        pass
+            for btn in self._cached_all_buttons:
+                try:
+                    btn.state(["disabled"])
+                except Exception:
+                    pass
             return
 
         idx = sel[0]
         total = self.candidate_listbox.size()
 
-       # Hardening against mock objects in tests
+        # Hardening against mock objects in tests
         if type(idx).__name__ in ("MagicMock", "Mock"):
             idx = 0
         if type(total).__name__ in ("MagicMock", "Mock"):
             total = 1
 
-       # Previous buttons
+        # Previous buttons
         prev_state = "!disabled" if idx > 0 else "disabled"
-        for btn in ["prev_btn", "focus_prev_btn"]:
-            if hasattr(self, btn):
-                try:
-                    getattr(self, btn).state([prev_state])
-                except Exception:
-                    pass
+        for btn in self._cached_buttons["prev"]:
+            try:
+                btn.state([prev_state])
+            except Exception:
+                pass
 
-       # Next buttons
+        # Next buttons
         next_state = "!disabled" if idx < total - 1 else "disabled"
-        for btn in ["next_btn", "focus_next_btn"]:
-            if hasattr(self, btn):
-                try:
-                    getattr(self, btn).state([next_state])
-                except Exception:
-                    pass
+        for btn in self._cached_buttons["next"]:
+            try:
+                btn.state([next_state])
+            except Exception:
+                pass
 
-       # Action buttons
-        for btn in ["del_btn", "focus_del_btn", "move_btn", "focus_move_btn", "copy_btn", "focus_copy_btn"]:
-            if hasattr(self, btn):
-                try:
-                    getattr(self, btn).state(["!disabled"])
-                except Exception:
-                    pass
+        # Action buttons
+        for btn in self._cached_buttons["action"]:
+            try:
+                btn.state(["!disabled"])
+            except Exception:
+                pass
 
     def load_triplet_view(self, current_path):
        # Find index in candidates list
@@ -2607,16 +2626,28 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         moved_files = []
         failed_files = []
 
-       # Determine if RAW or JPEG files are present in the related group to sort sidecars
-        has_raw = any(f.suffix.lower() in RAW_EXTENSIONS or f.name.lower().startswith(f"{path.stem.lower()}-edit") for f in related)
-        has_jpeg = any(f.suffix.lower() in {".jpg", ".jpeg"} and not f.name.lower().startswith(f"{path.stem.lower()}-edit") for f in related)
+        # Determine if RAW or JPEG files are present in the related group to sort sidecars
+        path_stem_lower_edit = f"{path.stem.lower()}-edit"
+        has_raw = False
+        has_jpeg = False
+        file_info = []
 
-        for f in list(related):
+        for f in related:
             suffix = f.suffix.lower()
+            name_lower = f.name.lower()
+            is_lightroom_edit = name_lower.startswith(path_stem_lower_edit)
+
+            if suffix in RAW_EXTENSIONS or is_lightroom_edit:
+                has_raw = True
+            elif suffix in {".jpg", ".jpeg"}:
+                has_jpeg = True
+
+            file_info.append((f, suffix, is_lightroom_edit))
+
+        for f, suffix, is_lightroom_edit in file_info:
             subfolder = ""
 
             if separate_raw_jpeg:
-                is_lightroom_edit = f.name.lower().startswith(f"{path.stem.lower()}-edit")
                 if suffix in RAW_EXTENSIONS or is_lightroom_edit:
                     subfolder = "RAW"
                 elif suffix in {".jpg", ".jpeg"}:
@@ -2658,8 +2689,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if failed_files:
             err_msg = "\n".join([f"{f.name}: {e}" for f, e in failed_files])
             messagebox.showerror("Move Failed", f"Failed to move some files:\n{err_msg}")
-           # If the main file failed to move, do not remove from internal list
-            if path in [f for f, e in failed_files]:
+            # If the main file failed to move, do not remove from internal list
+            if any(f == path for f, _ in failed_files):
                 return
 
        # Update UI lists
@@ -2744,16 +2775,28 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         copied_files = []
         failed_files = []
 
-       # Determine if RAW or JPEG files are present in the related group to sort sidecars
-        has_raw = any(f.suffix.lower() in RAW_EXTENSIONS or f.name.lower().startswith(f"{path.stem.lower()}-edit") for f in related)
-        has_jpeg = any(f.suffix.lower() in {".jpg", ".jpeg"} and not f.name.lower().startswith(f"{path.stem.lower()}-edit") for f in related)
+        # Determine if RAW or JPEG files are present in the related group to sort sidecars
+        path_stem_lower_edit = f"{path.stem.lower()}-edit"
+        has_raw = False
+        has_jpeg = False
+        file_info = []
 
-        for f in list(related):
+        for f in related:
             suffix = f.suffix.lower()
+            name_lower = f.name.lower()
+            is_lightroom_edit = name_lower.startswith(path_stem_lower_edit)
+
+            if suffix in RAW_EXTENSIONS or is_lightroom_edit:
+                has_raw = True
+            elif suffix in {".jpg", ".jpeg"}:
+                has_jpeg = True
+
+            file_info.append((f, suffix, is_lightroom_edit))
+
+        for f, suffix, is_lightroom_edit in file_info:
             subfolder = ""
 
             if separate_raw_jpeg:
-                is_lightroom_edit = f.name.lower().startswith(f"{path.stem.lower()}-edit")
                 if suffix in RAW_EXTENSIONS or is_lightroom_edit:
                     subfolder = "RAW"
                 elif suffix in {".jpg", ".jpeg"}:
