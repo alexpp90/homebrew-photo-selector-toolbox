@@ -116,16 +116,13 @@ def test_tool_registry_register_and_retrieve():
     class RegisterMockTool(AnalysisTool):
         @property
         def name(self):
-            super().name
             return "register_mock"
 
         @property
         def display_name(self):
-            super().display_name
             return "Register Mock Tool"
 
         def analyze(self, filepath: Path, **kwargs: Any) -> Any:
-            super().analyze(filepath, **kwargs)
             return "register_mock_result"
 
     # Register the tool
