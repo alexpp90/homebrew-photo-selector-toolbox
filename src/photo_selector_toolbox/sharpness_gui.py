@@ -4,7 +4,8 @@ import threading
 import tkinter as tk
 from pathlib import Path
 from typing import List, Dict
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
+from photo_selector_toolbox.gui_utils import ask_directory
 import os
 
 import send2trash
@@ -986,7 +987,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             )
 
     def browse_folder(self):
-        folder = filedialog.askdirectory()
+        initial = self.folder_var.get()
+        folder = ask_directory(parent=self, title="Select Image Folder for Review", initialdir=initial)
         if folder:
             self.folder_var.set(folder)
             self._load_folder_contents(folder)

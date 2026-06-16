@@ -1,6 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, messagebox
 import threading
+from photo_selector_toolbox.gui_utils import ask_directory
 import queue
 import sys
 import logging
@@ -427,12 +428,14 @@ class ImageLibraryStatistics(ttk.Frame):
         self.plot_tabs = {}
 
     def browse_root_folder(self):
-        folder = filedialog.askdirectory()
+        initial = self.root_folder_var.get()
+        folder = ask_directory(parent=self, title="Select Image Library Root Folder", initialdir=initial)
         if folder:
             self.root_folder_var.set(folder)
 
     def browse_output_folder(self):
-        folder = filedialog.askdirectory()
+        initial = self.output_folder_var.get()
+        folder = ask_directory(parent=self, title="Select Output Folder for Plots", initialdir=initial)
         if folder:
             self.output_folder_var.set(folder)
 
@@ -715,7 +718,8 @@ class DuplicateFinder(ttk.Frame):
         ).pack(side="right")
 
     def browse_root_folder(self):
-        folder = filedialog.askdirectory()
+        initial = self.root_folder_var.get()
+        folder = ask_directory(parent=self, title="Select Folder to Scan for Duplicates", initialdir=initial)
         if folder:
             self.root_folder_var.set(folder)
 
@@ -1175,7 +1179,8 @@ class CollectionSettingsDialog(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
 
     def browse_folder(self):
-        folder = filedialog.askdirectory(parent=self)
+        initial = self.selection_folder_var.get()
+        folder = ask_directory(parent=self, title="Select Selection Destination Folder", initialdir=initial)
         if folder:
             self.selection_folder_var.set(folder)
 
