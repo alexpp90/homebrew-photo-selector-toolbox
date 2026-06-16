@@ -2656,7 +2656,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             err_msg = "\n".join([f"{f.name}: {e}" for f, e in failed_files])
             messagebox.showerror("Move Failed", f"Failed to move some files:\n{err_msg}")
             # If the main file failed to move, do not remove from internal list
-            if path in [f for f, e in failed_files]:
+            if any(f == path for f, _ in failed_files):
                 return
 
         # Update UI lists
