@@ -108,3 +108,36 @@ def test_abstract_methods():
     tool.name
     tool.display_name
     tool.analyze(Path("dummy"))
+
+
+def test_tool_registry_register_and_retrieve():
+    """Assert that a mock tool can be registered and retrieved."""
+
+    class RegisterMockTool(AnalysisTool):
+        @property
+        def name(self):
+            super().name
+            return "register_mock"
+
+        @property
+        def display_name(self):
+            super().display_name
+            return "Register Mock Tool"
+
+        def analyze(self, filepath: Path, **kwargs: Any) -> Any:
+            super().analyze(filepath, **kwargs)
+            return "register_mock_result"
+
+    # Register the tool
+    registered_class = ToolRegistry.register(RegisterMockTool)
+    assert registered_class is RegisterMockTool
+
+    # Assert it can be retrieved
+    retrieved_class = ToolRegistry.get("register_mock")
+    assert retrieved_class is RegisterMockTool
+
+    # Assert instantiation and mock method call for coverage
+    instance = retrieved_class()
+    assert instance.name == "register_mock"
+    assert instance.display_name == "Register Mock Tool"
+    assert instance.analyze(Path("dummy.jpg")) == "register_mock_result"
