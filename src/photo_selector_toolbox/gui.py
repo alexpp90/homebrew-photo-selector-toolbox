@@ -213,6 +213,7 @@ def _configure_input_styles(style: ttk.Style, colors: ThemeColors) -> None:
         foreground=[("readonly", colors.fg_light)],
     )
 
+
 def apply_dark_theme(root: tk.Tk) -> None:
     style = ttk.Style(root)
     if "clam" in style.theme_names():
