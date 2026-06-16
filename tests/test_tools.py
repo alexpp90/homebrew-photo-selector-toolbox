@@ -84,3 +84,27 @@ def test_tool_registry_all_tools():
     assert len(tools) == 2
     assert tools["mock_tool"] is MockTool
     assert tools["mock_tool_prop"] is MockToolWithProperty
+
+
+def test_abstract_methods():
+    """Test that abstract methods can be called (for coverage)."""
+
+    class DummyTool(AnalysisTool):
+        @property
+        def name(self) -> str:
+            super().name
+            return "dummy"
+
+        @property
+        def display_name(self) -> str:
+            super().display_name
+            return "Dummy"
+
+        def analyze(self, filepath: Path, **kwargs: Any) -> Any:
+            super().analyze(filepath, **kwargs)
+            return "result"
+
+    tool = DummyTool()
+    tool.name
+    tool.display_name
+    tool.analyze(Path("dummy"))
