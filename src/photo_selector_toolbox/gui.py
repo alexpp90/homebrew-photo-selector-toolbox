@@ -135,13 +135,14 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
         foreground=colors.fg_light,
         bordercolor=colors.border_color,
         borderwidth=1,
-        focuscolor="",
+        focuscolor=colors.accent_blue,
         padding=[12, 6],
     )
     style.map(
         "TButton",
         background=[("active", colors.bg_hover), ("disabled", colors.bg_dark)],
         foreground=[("active", colors.fg_light), ("disabled", colors.fg_muted)],
+        bordercolor=[("focus", colors.accent_blue)],
     )
 
     style.configure(
@@ -150,20 +151,21 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
         foreground="#FFFFFF",
         bordercolor=colors.accent_blue,
         borderwidth=1,
-        focuscolor="",
+        focuscolor="#FFFFFF",
         padding=[12, 6],
     )
     style.map(
         "Primary.TButton",
         background=[("active", colors.accent_hover), ("disabled", colors.bg_dark)],
         foreground=[("active", "#FFFFFF"), ("disabled", colors.fg_muted)],
+        bordercolor=[("focus", "#FFFFFF")],
     )
 
     style.configure(
         "TCheckbutton",
         background=colors.bg_dark,
         foreground=colors.fg_light,
-        focuscolor="",
+        focuscolor=colors.accent_blue,
     )
     style.map(
         "TCheckbutton",
@@ -210,7 +212,6 @@ def _configure_input_styles(style: ttk.Style, colors: ThemeColors) -> None:
         fieldbackground=[("readonly", colors.bg_panel)],
         foreground=[("readonly", colors.fg_light)],
     )
-
 
 def apply_dark_theme(root: tk.Tk) -> None:
     style = ttk.Style(root)
