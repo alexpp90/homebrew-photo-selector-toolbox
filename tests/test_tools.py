@@ -84,3 +84,57 @@ def test_tool_registry_all_tools():
     assert len(tools) == 2
     assert tools["mock_tool"] is MockTool
     assert tools["mock_tool_prop"] is MockToolWithProperty
+
+
+def test_abstract_methods():
+    """Test that abstract methods can be called (for coverage)."""
+
+    class DummyTool(AnalysisTool):
+        @property
+        def name(self) -> str:
+            super().name
+            return "dummy"
+
+        @property
+        def display_name(self) -> str:
+            super().display_name
+            return "Dummy"
+
+        def analyze(self, filepath: Path, **kwargs: Any) -> Any:
+            super().analyze(filepath, **kwargs)
+            return "result"
+
+    tool = DummyTool()
+    tool.name
+    tool.display_name
+    tool.analyze(Path("dummy"))
+
+
+def test_tool_registry_register_and_retrieve():
+    """Assert that a mock tool can be registered and retrieved."""
+
+    class RegisterMockTool(AnalysisTool):
+        @property
+        def name(self):
+            return "register_mock"
+
+        @property
+        def display_name(self):
+            return "Register Mock Tool"
+
+        def analyze(self, filepath: Path, **kwargs: Any) -> Any:
+            return "register_mock_result"
+
+    # Register the tool
+    registered_class = ToolRegistry.register(RegisterMockTool)
+    assert registered_class is RegisterMockTool
+
+    # Assert it can be retrieved
+    retrieved_class = ToolRegistry.get("register_mock")
+    assert retrieved_class is RegisterMockTool
+
+    # Assert instantiation and mock method call for coverage
+    instance = retrieved_class()
+    assert instance.name == "register_mock"
+    assert instance.display_name == "Register Mock Tool"
+    assert instance.analyze(Path("dummy.jpg")) == "register_mock_result"

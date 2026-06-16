@@ -26,6 +26,7 @@ class AnalysisTool(ABC):
 
 class ToolRegistry:
     """Central registry for analysis tools."""
+
     _tools: Dict[str, Type[AnalysisTool]] = {}
 
     @classmethod
