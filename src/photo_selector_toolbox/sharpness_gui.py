@@ -15,7 +15,11 @@ from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.formatting import format_score, format_meta
-from photo_selector_toolbox.ollama_tool import load_config, save_config, OllamaAestheticTool
+from photo_selector_toolbox.ollama_tool import (
+    load_config,
+    save_config,
+    OllamaAestheticTool,
+)
 from photo_selector_toolbox.utils import (
     is_excluded_subfolder,
     calculate_dhash,
@@ -34,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 class ImageGroup:
     """Represents a group of visually similar series of images."""
+
     def __init__(self, representative: Path, files: List[Path], expanded: bool = False):
         self.representative = representative
         self.files = files
@@ -84,7 +89,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.file_type_var = tk.StringVar(value="All Supported")
         config = load_config()
         self.group_similar_var = tk.BooleanVar(value=config.get("group_similar", False))
-        self.group_level_var = tk.StringVar(value=config.get("group_level", "Time & Filename"))
+        self.group_level_var = tk.StringVar(
+            value=config.get("group_level", "Time & Filename")
+        )
         self.review_progress_var = tk.DoubleVar()
         self.group_progress_var = tk.DoubleVar()
         self._last_applied_group_similar = self.group_similar_var.get()
@@ -210,7 +217,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             highlightbackground="#27272A",
             highlightcolor="#6366F1",
             borderwidth=1,
-            relief="flat"
+            relief="flat",
         )
         self.log_text.pack(fill="both", expand=True, pady=10)
 
@@ -263,8 +270,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             width=18,
         )
         self.group_level_combo.pack(side="left", padx=(5, 5))
-        self.group_level_combo.bind("<<ComboboxSelected>>", lambda e: self.on_group_similar_change())
-        
+        self.group_level_combo.bind(
+            "<<ComboboxSelected>>", lambda e: self.on_group_similar_change()
+        )
+
         # Set initial combobox state based on config
         if not self._is_grouping_enabled():
             self.group_level_combo.state(["disabled"])
@@ -281,7 +290,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 "Noise Level",
                 "Highlight Clipping",
                 "Shadow Clipping",
-                "Aesthetic Score"
+                "Aesthetic Score",
             ],
             state="readonly",
             width=18,
@@ -311,7 +320,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         ttk.Label(self.sidebar, text="🖼️ Images").pack(pady=5)
 
         # Scan button
-        self.scan_options_btn = ttk.Button(self.sidebar, text="⚡ Scan for Sharpness/Noise...")
+        self.scan_options_btn = ttk.Button(
+            self.sidebar, text="⚡ Scan for Sharpness/Noise..."
+        )
         self.scan_options_btn.pack(fill="x", pady=5)
 
         # Progress Container (holds scan and grouping progress bars)
@@ -334,7 +345,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         # Grouping Progress (Hidden by default)
         self.group_progress_frame = ttk.Frame(self.progress_container)
-        
+
         self.group_status_lbl = ttk.Label(
             self.group_progress_frame, text="👥 Grouping: 0%"
         )
@@ -346,7 +357,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.group_progress_bar.pack(fill="x")
 
         self.group_cancel_btn = ttk.Button(
-            self.group_progress_frame, text="🛑 Cancel Grouping", command=self.cancel_grouping
+            self.group_progress_frame,
+            text="🛑 Cancel Grouping",
+            command=self.cancel_grouping,
         )
         self.group_cancel_btn.pack(fill="x", pady=(5, 10))
 
@@ -371,7 +384,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             highlightbackground="#27272A",
             highlightcolor="#6366F1",
             borderwidth=1,
-            relief="flat"
+            relief="flat",
         )
         self.candidate_listbox.pack(fill="both", expand=True)
         sb.config(command=self.candidate_listbox.yview)
@@ -393,7 +406,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.top_container.columnconfigure(1, weight=1)  # Controls Right
 
         # Current Candidate (Left)
-        self.panel_curr = self.create_image_panel(self.top_container, "📄 Current Image")
+        self.panel_curr = self.create_image_panel(
+            self.top_container, "📄 Current Image"
+        )
         # Using sticky="nsew" so it expands and centers properly if window shrinks
         self.panel_curr.grid(row=0, column=0, padx=10, sticky="nsew")
 
@@ -468,7 +483,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.panel_next = self.create_image_panel(self.bottom_container, "Next Image ▶")
         self.panel_next.pack(side="right", fill="both", expand=True, padx=2)
 
-
     def show_scan_dialog(self):
         # Ensure a folder is selected first
         folder = self.folder_var.get()
@@ -494,7 +508,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         ttk.Label(
             dialog,
             text="⚡ Configure Sharpness & Noise Analysis",
-            font=("Helvetica", 12, "bold")
+            font=("Helvetica", 12, "bold"),
         ).pack(pady=15)
 
         # Container
@@ -545,11 +559,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         aesthetic_row = ttk.Frame(container)
         aesthetic_row.pack(fill="x", pady=5)
         ttk.Checkbutton(
-            aesthetic_row, text="AI Aesthetic Evaluation (Ollama)", variable=self.tool_aesthetic_var
+            aesthetic_row,
+            text="AI Aesthetic Evaluation (Ollama)",
+            variable=self.tool_aesthetic_var,
         ).pack(side="left", padx=5)
-        
+
         config_btn = ttk.Button(
-            aesthetic_row, text="⚙️ Configure AI...", command=self.show_ollama_config_dialog, width=15
+            aesthetic_row,
+            text="⚙️ Configure AI...",
+            command=self.show_ollama_config_dialog,
+            width=15,
         )
         config_btn.pack(side="left", padx=10)
 
@@ -561,55 +580,65 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             dialog.destroy()
             self.start_scan()
 
-        ttk.Button(btn_frame, text="⚡ Start Scan", command=start_and_close).pack(side="left", expand=True, padx=5)
-        ttk.Button(btn_frame, text="❌ Cancel", command=dialog.destroy).pack(side="right", expand=True, padx=5)
+        ttk.Button(btn_frame, text="⚡ Start Scan", command=start_and_close).pack(
+            side="left", expand=True, padx=5
+        )
+        ttk.Button(btn_frame, text="❌ Cancel", command=dialog.destroy).pack(
+            side="right", expand=True, padx=5
+        )
 
     def show_ollama_config_dialog(self):
         config = load_config()
-        
+
         dialog = tk.Toplevel(self)
         dialog.configure(bg="#18181B")
         dialog.title("Ollama Aesthetic Settings")
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
-        
+
         # Center on parent
         parent = self.winfo_toplevel()
         x = parent.winfo_x() + (parent.winfo_width() - 550) // 2
         y = parent.winfo_y() + (parent.winfo_height() - 400) // 2
         dialog.geometry(f"+{x}+{y}")
-        
+
         # Title
         ttk.Label(
             dialog,
             text="🤖 Configure Ollama VLM Integration",
-            font=("Helvetica", 12, "bold")
+            font=("Helvetica", 12, "bold"),
         ).pack(pady=10)
-        
+
         container = ttk.Frame(dialog, padding=15)
         container.pack(fill="both", expand=True)
-        
+
         # URL
         url_frame = ttk.Frame(container)
         url_frame.pack(fill="x", pady=5)
-        ttk.Label(url_frame, text="🌐 Ollama URL:", width=15, anchor="w").pack(side="left")
+        ttk.Label(url_frame, text="🌐 Ollama URL:", width=15, anchor="w").pack(
+            side="left"
+        )
         url_var = tk.StringVar(value=config.get("ollama_url", ""))
         url_ent = ttk.Entry(url_frame, textvariable=url_var)
         url_ent.pack(side="left", fill="x", expand=True)
-        
+
         # Model
         model_frame = ttk.Frame(container)
         model_frame.pack(fill="x", pady=5)
-        ttk.Label(model_frame, text="🤖 Model Name:", width=15, anchor="w").pack(side="left")
+        ttk.Label(model_frame, text="🤖 Model Name:", width=15, anchor="w").pack(
+            side="left"
+        )
         model_var = tk.StringVar(value=config.get("ollama_model", ""))
         model_ent = ttk.Entry(model_frame, textvariable=model_var)
         model_ent.pack(side="left", fill="x", expand=True)
-        
+
         # Prompt
         prompt_frame = ttk.Frame(container)
         prompt_frame.pack(fill="both", expand=True, pady=5)
-        ttk.Label(prompt_frame, text="📝 Prompt:", width=15, anchor="w").pack(side="top", anchor="w", pady=(0, 2))
-        
+        ttk.Label(prompt_frame, text="📝 Prompt:", width=15, anchor="w").pack(
+            side="top", anchor="w", pady=(0, 2)
+        )
+
         prompt_text = tk.Text(
             prompt_frame,
             height=5,
@@ -620,26 +649,26 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             highlightbackground="#27272A",
             highlightcolor="#6366F1",
             borderwidth=1,
-            relief="flat"
+            relief="flat",
         )
         prompt_text.pack(fill="both", expand=True)
         prompt_text.insert("1.0", config.get("ollama_prompt", ""))
-        
+
         # Status & Connection Test
         status_frame = ttk.LabelFrame(container, text="Connection Status", padding=8)
         status_frame.pack(fill="x", pady=10)
-        
+
         status_lbl = ttk.Label(
             status_frame,
             text="Click 'Test Connection' to check setup.",
             foreground="gray",
-            wraplength=480
+            wraplength=480,
         )
         status_lbl.pack(fill="x", pady=5)
-        
+
         import urllib.request
         import json
-        
+
         def run_test():
             status_lbl.config(text="Connecting to Ollama...", foreground="blue")
             dialog.update_idletasks()
@@ -648,59 +677,70 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             try:
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
-                    data = json.loads(resp.read().decode('utf-8'))
+                    data = json.loads(resp.read().decode("utf-8"))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
-                
+
                 # Check for standard model match, e.g. "llava" matches "llava:latest" or "llava:7b"
                 matched = False
                 for m in models:
                     if m == model or m.split(":")[0] == model:
                         matched = True
                         break
-                
+
                 if matched:
                     status_lbl.config(
                         text=f"Success! Model '{model}' is running locally and ready for analysis.",
-                        foreground="green"
+                        foreground="green",
                     )
                 else:
                     available = ", ".join(models) if models else "none"
                     status_lbl.config(
                         text=f"Connected to Ollama, but model '{model}' is not pulled.\nAvailable models: {available}\nPlease run 'ollama pull {model}' in your terminal.",
-                        foreground="orange"
+                        foreground="orange",
                     )
             except Exception as e:
                 status_lbl.config(
                     text=f"Cannot connect to Ollama at '{url}'.\nIs the service running? Install it from https://ollama.com.\nError: {e}",
-                    foreground="red"
+                    foreground="red",
                 )
-        
-        test_btn = ttk.Button(status_frame, text="🔌 Test Connection", command=lambda: threading.Thread(target=run_test, daemon=True).start())
+
+        test_btn = ttk.Button(
+            status_frame,
+            text="🔌 Test Connection",
+            command=lambda: threading.Thread(target=run_test, daemon=True).start(),
+        )
         test_btn.pack(anchor="e")
-        
+
         # Dialog Action Buttons
         btn_frame = ttk.Frame(dialog, padding=10)
         btn_frame.pack(fill="x")
-        
+
         def save_and_close():
             new_config = {
                 "ollama_url": url_var.get().strip(),
                 "ollama_model": model_var.get().strip(),
-                "ollama_prompt": prompt_text.get("1.0", "end-1c").strip()
+                "ollama_prompt": prompt_text.get("1.0", "end-1c").strip(),
             }
             save_config(new_config)
             dialog.destroy()
-            
-        ttk.Button(btn_frame, text="💾 Save Settings", command=save_and_close).pack(side="left", expand=True, padx=5)
-        ttk.Button(btn_frame, text="❌ Cancel", command=dialog.destroy).pack(side="right", expand=True, padx=5)
+
+        ttk.Button(btn_frame, text="💾 Save Settings", command=save_and_close).pack(
+            side="left", expand=True, padx=5
+        )
+        ttk.Button(btn_frame, text="❌ Cancel", command=dialog.destroy).pack(
+            side="right", expand=True, padx=5
+        )
 
     def update_scan_button_state(self):
         if self.is_scanning:
-            self.scan_options_btn.config(text="🛑 Cancel Scan", command=self.cancel_scan)
+            self.scan_options_btn.config(
+                text="🛑 Cancel Scan", command=self.cancel_scan
+            )
         else:
-            self.scan_options_btn.config(text="⚡ Scan for Sharpness/Noise...", command=self.show_scan_dialog)
-
+            self.scan_options_btn.config(
+                text="⚡ Scan for Sharpness/Noise...", command=self.show_scan_dialog
+            )
 
     def setup_focus_ui(self):
         """Builds the fullscreen-optimized focus layout."""
@@ -996,7 +1036,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.update()
 
         # Avoid test mock pollution
-        if hasattr(is_excluded_subfolder, "return_value") and not isinstance(is_excluded_subfolder.return_value, bool):
+        if hasattr(is_excluded_subfolder, "return_value") and not isinstance(
+            is_excluded_subfolder.return_value, bool
+        ):
             is_excluded_subfolder.return_value = False
 
         p = Path(folder_path)
@@ -1004,8 +1046,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         extensions = SUPPORTED_EXTENSIONS
         files = [
-            f for f in p.rglob("*")
-            if f.suffix.lower() in extensions and not is_excluded_subfolder(f, p) and not f.name.startswith("._")
+            f
+            for f in p.rglob("*")
+            if f.suffix.lower() in extensions
+            and not is_excluded_subfolder(f, p)
+            and not f.name.startswith("._")
         ]
         files.sort(key=lambda x: x.name)
 
@@ -1028,6 +1073,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         # Bulk load cached scores from SQLite
         from photo_selector_toolbox.cache import ScoreCache
+
         cache = ScoreCache()
         cached_scores = cache.get_multiple_scores(self.candidates)
 
@@ -1038,7 +1084,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 if any(v != "N/A" for v in res.scores.values()):
                     self.scan_results.append(res)
             self.files_map[f] = res
-            self.candidate_listbox.insert("end", self._get_candidate_listbox_text(f))
+
+        if self.candidates:
+            self.candidate_listbox.insert(
+                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+            )
 
         if self.candidates:
             self.log(f"Loaded {len(self.candidates)} images. Ready for review.")
@@ -1067,6 +1117,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
     def _preload_all_metadata_and_dhashes(self, paths):
         from photo_selector_toolbox.utils import calculate_dhash
         from photo_selector_toolbox.cache import ScoreCache
+
         cache = ScoreCache()
 
         for path in paths:
@@ -1108,7 +1159,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             res.scores["dhash"] = dhash_str
                             cache.set_scores(path, {"dhash_8": dhash_str})
                 except Exception as e:
-                    logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
+                    logger.debug(
+                        f"Failed to calculate dhash in background for {path.name}: {e}"
+                    )
 
     def _start_background_update_scan(self):
         # Stop previous background updates
@@ -1294,8 +1347,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             selected_path = self.candidates[sel[0]]
 
         self.candidate_listbox.delete(0, "end")
-        for f in self.candidates:
-            self.candidate_listbox.insert("end", self._get_candidate_listbox_text(f))
+        if self.candidates:
+            self.candidate_listbox.insert(
+                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+            )
 
         if selected_path and selected_path in self.candidates:
             idx = self.candidates.index(selected_path)
@@ -1310,6 +1365,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             return []
 
         import re
+
         def get_name_prefix(name: str) -> str:
             stem = Path(name).stem
             return re.sub(r"\d+$", "", stem)
@@ -1336,11 +1392,19 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         candidate_indices = set()
         for i in range(n):
             # Check previous neighbor
-            if i > 0 and abs(mtimes[i] - mtimes[i - 1]) <= time_thresh and prefixes[i] == prefixes[i - 1]:
+            if (
+                i > 0
+                and abs(mtimes[i] - mtimes[i - 1]) <= time_thresh
+                and prefixes[i] == prefixes[i - 1]
+            ):
                 candidate_indices.add(i)
                 candidate_indices.add(i - 1)
             # Check next neighbor
-            if i < n - 1 and abs(mtimes[i] - mtimes[i + 1]) <= time_thresh and prefixes[i] == prefixes[i + 1]:
+            if (
+                i < n - 1
+                and abs(mtimes[i] - mtimes[i + 1]) <= time_thresh
+                and prefixes[i] == prefixes[i + 1]
+            ):
                 candidate_indices.add(i)
                 candidate_indices.add(i + 1)
 
@@ -1375,7 +1439,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             config["group_similar"] = False
             config["group_level"] = self.group_level_var.get()
             save_config(config)
-            
+
             self._last_applied_group_similar = False
             self.apply_grouping_and_refresh()
             return
@@ -1414,11 +1478,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         # Also disable scan options button to prevent concurrent scans
         self.scan_options_btn.state(["disabled"])
 
-        self.log(f"Starting similarity analysis for series grouping on {len(missing)} files...")
+        self.log(
+            f"Starting similarity analysis for series grouping on {len(missing)} files..."
+        )
 
         def run_calc():
             from photo_selector_toolbox.utils import calculate_dhash
             from photo_selector_toolbox.cache import ScoreCache
+
             cache = ScoreCache()
 
             total = len(missing)
@@ -1458,10 +1525,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 pct = ((idx + 1) / total) * 100
                 self.parent.after(
                     0,
-                    lambda p=pct, i=idx+1: (
+                    lambda p=pct, i=idx + 1: (
                         self.group_progress_var.set(p),
-                        self.group_status_lbl.config(text=f"👥 Grouping: {int(p)}% ({i}/{total})")
-                    )
+                        self.group_status_lbl.config(
+                            text=f"👥 Grouping: {int(p)}% ({i}/{total})"
+                        ),
+                    ),
                 )
 
             self.parent.after(0, lambda: self._handle_grouping_finished(level))
@@ -1531,19 +1600,20 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if sel and self.candidates:
                 select_path = self.candidates[sel[0]]
 
-        is_descending = (self.sort_order_var.get() == "Descending")
+        is_descending = self.sort_order_var.get() == "Descending"
         sort_by = self.sort_by_var.get()
 
         if self._is_grouping_enabled():
             from photo_selector_toolbox.utils import (
                 group_files_by_similarity,
             )
+
             # Ensure grouping is done on alphabetically name-sorted files
             base_files_sorted = sorted(base_files, key=lambda x: x.name.lower())
             raw_groups = group_files_by_similarity(
                 base_files_sorted,
                 self.files_map,
-                group_level=self.group_level_var.get()
+                group_level=self.group_level_var.get(),
             )
 
             old_expanded = {}
@@ -1557,10 +1627,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 if sort_by == "File Name":
                     g_files.sort(key=lambda x: x.name.lower(), reverse=is_descending)
                 else:
-                    g_files.sort(key=lambda x: self._get_sort_key(x, sort_by, is_descending))
+                    g_files.sort(
+                        key=lambda x: self._get_sort_key(x, sort_by, is_descending)
+                    )
 
                 # Representative is chosen using select_representative (sharpest image)
                 from photo_selector_toolbox.utils import select_representative
+
                 rep = select_representative(g_files, self.files_map)
                 is_expanded = old_expanded.get(rep, False)
 
@@ -1573,9 +1646,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             # Sort the groups themselves by their representative's score/name
             if sort_by == "File Name":
-                self.image_groups.sort(key=lambda g: g.representative.name.lower(), reverse=is_descending)
+                self.image_groups.sort(
+                    key=lambda g: g.representative.name.lower(), reverse=is_descending
+                )
             else:
-                self.image_groups.sort(key=lambda g: self._get_sort_key(g.representative, sort_by, is_descending))
+                self.image_groups.sort(
+                    key=lambda g: self._get_sort_key(
+                        g.representative, sort_by, is_descending
+                    )
+                )
 
             self.candidates = []
             for group in self.image_groups:
@@ -1591,12 +1670,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if sort_by == "File Name":
                 base_files.sort(key=lambda x: x.name.lower(), reverse=is_descending)
             else:
-                base_files.sort(key=lambda x: self._get_sort_key(x, sort_by, is_descending))
+                base_files.sort(
+                    key=lambda x: self._get_sort_key(x, sort_by, is_descending)
+                )
             self.candidates = base_files
 
         self.candidate_listbox.delete(0, "end")
-        for f in self.candidates:
-            self.candidate_listbox.insert("end", self._get_candidate_listbox_text(f))
+        if self.candidates:
+            self.candidate_listbox.insert(
+                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+            )
 
         if self.candidates:
             new_idx = 0
@@ -1786,12 +1869,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if path in self.candidates:
                 try:
                     idx = self.candidates.index(path)
-                    is_selected = (selected_path == path)
-                    
+                    is_selected = selected_path == path
+
                     # Update listbox text
                     self.candidate_listbox.delete(idx)
-                    self.candidate_listbox.insert(idx, self._get_candidate_listbox_text(path))
-                    
+                    self.candidate_listbox.insert(
+                        idx, self._get_candidate_listbox_text(path)
+                    )
+
                     if is_selected:
                         self.candidate_listbox.selection_set(idx)
                         self.update_metadata_label(path)
@@ -1948,8 +2033,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         sel = self.candidate_listbox.curselection()
         if not sel:
             for btn in [
-                "prev_btn", "next_btn", "del_btn", "move_btn", "copy_btn",
-                "focus_prev_btn", "focus_next_btn", "focus_del_btn", "focus_move_btn", "focus_copy_btn"
+                "prev_btn",
+                "next_btn",
+                "del_btn",
+                "move_btn",
+                "copy_btn",
+                "focus_prev_btn",
+                "focus_next_btn",
+                "focus_del_btn",
+                "focus_move_btn",
+                "focus_copy_btn",
             ]:
                 if hasattr(self, btn):
                     try:
@@ -1986,7 +2079,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     pass
 
         # Action buttons
-        for btn in ["del_btn", "focus_del_btn", "move_btn", "focus_move_btn", "copy_btn", "focus_copy_btn"]:
+        for btn in [
+            "del_btn",
+            "focus_del_btn",
+            "move_btn",
+            "focus_move_btn",
+            "copy_btn",
+            "focus_copy_btn",
+        ]:
             if hasattr(self, btn):
                 try:
                     getattr(self, btn).state(["!disabled"])
@@ -2001,11 +2101,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         idx = self.candidates.index(current_path)
 
         prev_path = self.candidates[idx - 1] if idx > 0 else None
-        next_path = (
-            self.candidates[idx + 1]
-            if idx < len(self.candidates) - 1
-            else None
-        )
+        next_path = self.candidates[idx + 1] if idx < len(self.candidates) - 1 else None
 
         # Store paths in panels for fullscreen access
         self.panel_prev.path = prev_path
@@ -2067,7 +2163,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
     def _get_candidate_listbox_text(self, path):
         prefix = ""
         group_suffix = ""
-        if self._is_grouping_enabled() and hasattr(self, "image_groups") and self.image_groups:
+        if (
+            self._is_grouping_enabled()
+            and hasattr(self, "image_groups")
+            and self.image_groups
+        ):
             for group in self.image_groups:
                 if len(group.files) > 1:
                     if path == group.representative:
@@ -2095,13 +2195,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         hl_score = res.scores.get("highlight_clipping", "N/A")
         if self._is_valid_metric(hl_score):
-            hl_text = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
+            hl_text = format_score(hl_score) + (
+                "%" if isinstance(hl_score, float) else ""
+            )
             lbl_pfx = "" if is_testing else "🔆 "
             parts.append(f"{lbl_pfx}{hl_text}")
 
         sd_score = res.scores.get("shadow_clipping", "N/A")
         if self._is_valid_metric(sd_score):
-            sd_text = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
+            sd_text = format_score(sd_score) + (
+                "%" if isinstance(sd_score, float) else ""
+            )
             lbl_pfx = "" if is_testing else "🌑 "
             parts.append(f"{lbl_pfx}{sd_text}")
 
@@ -2118,7 +2222,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
     def _refresh_metadata_if_current(self, path):
         if self.panel_curr.path == path:
             self.update_metadata_label(path)
-        elif (hasattr(self, "panel_prev") and self.panel_prev.path == path) or (hasattr(self, "panel_next") and self.panel_next.path == path):
+        elif (hasattr(self, "panel_prev") and self.panel_prev.path == path) or (
+            hasattr(self, "panel_next") and self.panel_next.path == path
+        ):
             if self.panel_curr.path:
                 self.update_metadata_label(self.panel_curr.path)
 
@@ -2202,23 +2308,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 self.focus_score_lbl.pack(side="top", pady=(5, 0), anchor="w")
             if res.noise_score != "N/A":
                 lbl_pfx = "" if is_testing else "🔊 "
-                self.focus_noise_lbl.config(
-                    text=f"{lbl_pfx}Noise Level: {noise_str}"
-                )
+                self.focus_noise_lbl.config(text=f"{lbl_pfx}Noise Level: {noise_str}")
                 self.focus_noise_lbl.pack(side="top", pady=(0, 5), anchor="w")
             if hl_score != "N/A":
                 lbl_pfx = "" if is_testing else "🔆 "
-                self.focus_hl_lbl.config(
-                    text=f"{lbl_pfx}Highlight Clipping: {hl_str}"
-                )
+                self.focus_hl_lbl.config(text=f"{lbl_pfx}Highlight Clipping: {hl_str}")
                 self.focus_hl_lbl.pack(side="top", pady=(0, 5), anchor="w")
             if sd_score != "N/A":
                 lbl_pfx = "" if is_testing else "🌑 "
-                self.focus_sd_lbl.config(
-                    text=f"{lbl_pfx}Shadow Clipping: {sd_str}"
-                )
+                self.focus_sd_lbl.config(text=f"{lbl_pfx}Shadow Clipping: {sd_str}")
                 self.focus_sd_lbl.pack(side="top", pady=(0, 5), anchor="w")
-            
+
             aesthetic_score = res.scores.get("aesthetic", "N/A")
             aesthetic_analysis = res.scores.get("aesthetic_analysis")
             if aesthetic_score != "N/A" and hasattr(self, "focus_aesthetic_lbl"):
@@ -2235,7 +2335,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_cat_lbl.pack(side="top", pady=5, anchor="w")
             self.focus_filename_lbl.config(text=current_path.name)
             self.focus_filename_lbl.pack(side="top", pady=5, anchor="w")
-            
+
             meta_txt = meta_str if is_testing else f"ℹ️ {meta_str}"
             self.focus_meta_lbl.config(text=meta_txt)
             self.focus_meta_lbl.pack(side="top", pady=5, anchor="w")
@@ -2280,7 +2380,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 aes_str += f" ({aes_analysis})"
             lbl_pfx = "" if is_testing else "🎨 "
             lines.append(f"{lbl_pfx}AI: {aes_str}")
-            
+
         meta_txt = meta_str if is_testing else f"ℹ️ {meta_str}"
         lines.append(meta_txt)
 
@@ -2293,7 +2393,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if not res:
             return
 
-        is_mocked = hasattr(get_exif_data, "assert_called_once_with") or type(get_exif_data).__name__ in ('MagicMock', 'Mock')
+        is_mocked = hasattr(get_exif_data, "assert_called_once_with") or type(
+            get_exif_data
+        ).__name__ in ("MagicMock", "Mock")
 
         if res.exif is None:
             if sync or is_mocked:
@@ -2311,6 +2413,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             else:
                 # Initial placeholder display
                 self._set_metadata_labels(current_path, ExifData(), res)
+
                 # Load asynchronously
                 def load_exif_async():
                     try:
@@ -2321,7 +2424,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         logger.debug(f"Failed to load EXIF data dynamically: {e}")
                         exif = ExifData()
                     res.exif = exif
-                    self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                    self.parent.after(
+                        0, lambda: self._refresh_metadata_if_current(current_path)
+                    )
+
                 threading.Thread(target=load_exif_async, daemon=True).start()
         else:
             self._set_metadata_labels(current_path, res.exif, res)
@@ -2341,24 +2447,55 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 else:
                                     prev_res.exif = ExifData()
                             except Exception as e:
-                                logger.debug(f"Failed to load EXIF data dynamically: {e}")
+                                logger.debug(
+                                    f"Failed to load EXIF data dynamically: {e}"
+                                )
                                 prev_res.exif = ExifData()
-                            self._set_overlay_label(self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res)
+                            self._set_overlay_label(
+                                self.focus_prev_overlay,
+                                "Previous",
+                                prev_path,
+                                prev_res.exif,
+                                prev_res,
+                            )
                         else:
+
                             def load_prev_exif_async(p=prev_path, r=prev_res):
                                 try:
                                     exif = get_exif_data(p)
                                     if not exif or type(exif).__name__ != "ExifData":
                                         exif = ExifData()
                                 except Exception as e:
-                                    logger.debug(f"Failed to load EXIF data dynamically: {e}")
+                                    logger.debug(
+                                        f"Failed to load EXIF data dynamically: {e}"
+                                    )
                                     exif = ExifData()
                                 r.exif = exif
-                                self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
-                            threading.Thread(target=load_prev_exif_async, daemon=True).start()
-                            self._set_overlay_label(self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res)
+                                self.parent.after(
+                                    0,
+                                    lambda: self._refresh_metadata_if_current(
+                                        current_path
+                                    ),
+                                )
+
+                            threading.Thread(
+                                target=load_prev_exif_async, daemon=True
+                            ).start()
+                            self._set_overlay_label(
+                                self.focus_prev_overlay,
+                                "Previous",
+                                prev_path,
+                                ExifData(),
+                                prev_res,
+                            )
                     else:
-                        self._set_overlay_label(self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res)
+                        self._set_overlay_label(
+                            self.focus_prev_overlay,
+                            "Previous",
+                            prev_path,
+                            prev_res.exif,
+                            prev_res,
+                        )
             else:
                 self.focus_prev_overlay.place_forget()
 
@@ -2376,24 +2513,55 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 else:
                                     next_res.exif = ExifData()
                             except Exception as e:
-                                logger.debug(f"Failed to load EXIF data dynamically: {e}")
+                                logger.debug(
+                                    f"Failed to load EXIF data dynamically: {e}"
+                                )
                                 next_res.exif = ExifData()
-                            self._set_overlay_label(self.focus_next_overlay, "Next", next_path, next_res.exif, next_res)
+                            self._set_overlay_label(
+                                self.focus_next_overlay,
+                                "Next",
+                                next_path,
+                                next_res.exif,
+                                next_res,
+                            )
                         else:
+
                             def load_next_exif_async(p=next_path, r=next_res):
                                 try:
                                     exif = get_exif_data(p)
                                     if not exif or type(exif).__name__ != "ExifData":
                                         exif = ExifData()
                                 except Exception as e:
-                                    logger.debug(f"Failed to load EXIF data dynamically: {e}")
+                                    logger.debug(
+                                        f"Failed to load EXIF data dynamically: {e}"
+                                    )
                                     exif = ExifData()
                                 r.exif = exif
-                                self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
-                            threading.Thread(target=load_next_exif_async, daemon=True).start()
-                            self._set_overlay_label(self.focus_next_overlay, "Next", next_path, ExifData(), next_res)
+                                self.parent.after(
+                                    0,
+                                    lambda: self._refresh_metadata_if_current(
+                                        current_path
+                                    ),
+                                )
+
+                            threading.Thread(
+                                target=load_next_exif_async, daemon=True
+                            ).start()
+                            self._set_overlay_label(
+                                self.focus_next_overlay,
+                                "Next",
+                                next_path,
+                                ExifData(),
+                                next_res,
+                            )
                     else:
-                        self._set_overlay_label(self.focus_next_overlay, "Next", next_path, next_res.exif, next_res)
+                        self._set_overlay_label(
+                            self.focus_next_overlay,
+                            "Next",
+                            next_path,
+                            next_res.exif,
+                            next_res,
+                        )
             else:
                 self.focus_next_overlay.place_forget()
 
@@ -2494,14 +2662,23 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if path in self.files_map:
             self.files_map.pop(path, None)
 
-        if self._is_grouping_enabled() and hasattr(self, "image_groups") and self.image_groups:
+        if (
+            self._is_grouping_enabled()
+            and hasattr(self, "image_groups")
+            and self.image_groups
+        ):
             for group in self.image_groups:
                 if path in group.files:
                     group.files.remove(path)
                     if path == group.representative:
                         if group.files:
-                            from photo_selector_toolbox.utils import select_representative
-                            group.representative = select_representative(group.files, self.files_map)
+                            from photo_selector_toolbox.utils import (
+                                select_representative,
+                            )
+
+                            group.representative = select_representative(
+                                group.files, self.files_map
+                            )
                     break
             self.image_groups = [g for g in self.image_groups if g.files]
 
@@ -2527,7 +2704,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             # Select next if available, or prev
             if self.candidates:
-                new_idx = idx if idx < len(self.candidates) else len(self.candidates) - 1
+                new_idx = (
+                    idx if idx < len(self.candidates) else len(self.candidates) - 1
+                )
                 self.candidate_listbox.selection_set(new_idx)
                 self.on_candidate_select(None)
             else:
@@ -2555,6 +2734,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         "Do you want to PERMANENTLY delete them?"
                     )
                     if messagebox.askyesno("Trash Failed", msg):
+
                         def delete_permanent_async():
                             for f in failed_trash:
                                 try:
@@ -2564,7 +2744,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 except Exception as e:
                                     msg = f"Delete failed for {f}: {e}"
                                     self.log(msg)
-                        threading.Thread(target=delete_permanent_async, daemon=True).start()
+
+                        threading.Thread(
+                            target=delete_permanent_async, daemon=True
+                        ).start()
 
                 self.parent.after(0, ask_permanent)
 
@@ -2605,15 +2788,25 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         failed_files = []
 
         # Determine if RAW or JPEG files are present in the related group to sort sidecars
-        has_raw = any(f.suffix.lower() in RAW_EXTENSIONS or f.name.lower().startswith(f"{path.stem.lower()}-edit") for f in related)
-        has_jpeg = any(f.suffix.lower() in {".jpg", ".jpeg"} and not f.name.lower().startswith(f"{path.stem.lower()}-edit") for f in related)
+        has_raw = any(
+            f.suffix.lower() in RAW_EXTENSIONS
+            or f.name.lower().startswith(f"{path.stem.lower()}-edit")
+            for f in related
+        )
+        has_jpeg = any(
+            f.suffix.lower() in {".jpg", ".jpeg"}
+            and not f.name.lower().startswith(f"{path.stem.lower()}-edit")
+            for f in related
+        )
 
         for f in list(related):
             suffix = f.suffix.lower()
             subfolder = ""
 
             if separate_raw_jpeg:
-                is_lightroom_edit = f.name.lower().startswith(f"{path.stem.lower()}-edit")
+                is_lightroom_edit = f.name.lower().startswith(
+                    f"{path.stem.lower()}-edit"
+                )
                 if suffix in RAW_EXTENSIONS or is_lightroom_edit:
                     subfolder = "RAW"
                 elif suffix in {".jpg", ".jpeg"}:
@@ -2645,7 +2838,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 f.rename(dest)
                 moved_files.append(f)
                 log_path_name = selection_dir.name
-                log_path = f"{log_path_name}/{subfolder}" if subfolder else log_path_name
+                log_path = (
+                    f"{log_path_name}/{subfolder}" if subfolder else log_path_name
+                )
                 self.log(f"Moved to {log_path}: {f.name}")
             except Exception as e:
                 failed_files.append((f, e))
@@ -2654,7 +2849,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         if failed_files:
             err_msg = "\n".join([f"{f.name}: {e}" for f, e in failed_files])
-            messagebox.showerror("Move Failed", f"Failed to move some files:\n{err_msg}")
+            messagebox.showerror(
+                "Move Failed", f"Failed to move some files:\n{err_msg}"
+            )
             # If the main file failed to move, do not remove from internal list
             if path in [f for f, e in failed_files]:
                 return
@@ -2665,14 +2862,23 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if path in self.files_map:
             self.files_map.pop(path, None)
 
-        if self._is_grouping_enabled() and hasattr(self, "image_groups") and self.image_groups:
+        if (
+            self._is_grouping_enabled()
+            and hasattr(self, "image_groups")
+            and self.image_groups
+        ):
             for group in self.image_groups:
                 if path in group.files:
                     group.files.remove(path)
                     if path == group.representative:
                         if group.files:
-                            from photo_selector_toolbox.utils import select_representative
-                            group.representative = select_representative(group.files, self.files_map)
+                            from photo_selector_toolbox.utils import (
+                                select_representative,
+                            )
+
+                            group.representative = select_representative(
+                                group.files, self.files_map
+                            )
                     break
             self.image_groups = [g for g in self.image_groups if g.files]
 
@@ -2698,7 +2904,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             # Select next if available, or prev
             if self.candidates:
-                new_idx = idx if idx < len(self.candidates) else len(self.candidates) - 1
+                new_idx = (
+                    idx if idx < len(self.candidates) else len(self.candidates) - 1
+                )
                 self.candidate_listbox.selection_clear(0, "end")
                 self.candidate_listbox.selection_set(new_idx)
                 self.on_candidate_select(None)
@@ -2742,15 +2950,25 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         failed_files = []
 
         # Determine if RAW or JPEG files are present in the related group to sort sidecars
-        has_raw = any(f.suffix.lower() in RAW_EXTENSIONS or f.name.lower().startswith(f"{path.stem.lower()}-edit") for f in related)
-        has_jpeg = any(f.suffix.lower() in {".jpg", ".jpeg"} and not f.name.lower().startswith(f"{path.stem.lower()}-edit") for f in related)
+        has_raw = any(
+            f.suffix.lower() in RAW_EXTENSIONS
+            or f.name.lower().startswith(f"{path.stem.lower()}-edit")
+            for f in related
+        )
+        has_jpeg = any(
+            f.suffix.lower() in {".jpg", ".jpeg"}
+            and not f.name.lower().startswith(f"{path.stem.lower()}-edit")
+            for f in related
+        )
 
         for f in list(related):
             suffix = f.suffix.lower()
             subfolder = ""
 
             if separate_raw_jpeg:
-                is_lightroom_edit = f.name.lower().startswith(f"{path.stem.lower()}-edit")
+                is_lightroom_edit = f.name.lower().startswith(
+                    f"{path.stem.lower()}-edit"
+                )
                 if suffix in RAW_EXTENSIONS or is_lightroom_edit:
                     subfolder = "RAW"
                 elif suffix in {".jpg", ".jpeg"}:
@@ -2782,7 +3000,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 shutil.copy2(f, dest)
                 copied_files.append(f)
                 log_path_name = selection_dir.name
-                log_path = f"{log_path_name}/{subfolder}" if subfolder else log_path_name
+                log_path = (
+                    f"{log_path_name}/{subfolder}" if subfolder else log_path_name
+                )
                 self.log(f"Copied to {log_path}: {f.name}")
             except Exception as e:
                 failed_files.append((f, e))
@@ -2791,7 +3011,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         if failed_files:
             err_msg = "\n".join([f"{f.name}: {e}" for f, e in failed_files])
-            messagebox.showerror("Copy Failed", f"Failed to copy some files:\n{err_msg}")
+            messagebox.showerror(
+                "Copy Failed", f"Failed to copy some files:\n{err_msg}"
+            )
 
         # Update UI selection to advance to the next item
         if self.candidates:
