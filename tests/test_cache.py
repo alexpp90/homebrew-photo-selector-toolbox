@@ -122,13 +122,12 @@ def test_controller_uses_cache(tmp_path):
         # Mock EXIF reader and sharpness/noise tools
         with (
             patch("photo_selector_toolbox.controllers.get_exif_data") as mock_exif,
-            patch("photo_selector_toolbox.controllers.ToolRegistry.get") as mock_tool_registry,
+            patch("photo_selector_toolbox.controllers.calculate_all_scores") as mock_calculate,
         ):
             mock_exif.return_value = None
             
             # Setup a mock NoiseTool that returns 1.5
-            mock_noise_tool = mock_tool_registry.return_value.return_value
-            mock_noise_tool.analyze.return_value = 1.5
+            mock_calculate.return_value = {"noise": 1.5}
 
             # Execute
             res = _process_single_file(img_path, grid_size=1, tools=tools)
@@ -139,7 +138,7 @@ def test_controller_uses_cache(tmp_path):
 
             # Assert that SharpnessTool was NOT fetched/executed from ToolRegistry!
             # Since sharpness was in cache, we only queried the registry for 'noise'
-            mock_tool_registry.assert_called_once_with("noise")
+            mock_calculate.assert_called_once()
             
             # Check database now has both merged
             cached = cache.get_scores(img_path)
