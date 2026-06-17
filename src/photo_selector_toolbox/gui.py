@@ -85,6 +85,7 @@ def _configure_container_styles(style: ttk.Style, colors: ThemeColors) -> None:
         bordercolor=colors.border_color,
         padding=[14, 6],
         font=("Helvetica", 9, "bold"),
+        focuscolor=colors.accent_blue,
     )
     style.map(
         "TNotebook.Tab",
@@ -211,6 +212,9 @@ def _configure_input_styles(style: ttk.Style, colors: ThemeColors) -> None:
         "TCombobox",
         fieldbackground=[("readonly", colors.bg_panel)],
         foreground=[("readonly", colors.fg_light)],
+        bordercolor=[("focus", colors.accent_blue)],
+        lightcolor=[("focus", colors.accent_blue)],
+        darkcolor=[("focus", colors.accent_blue)],
     )
 
 
