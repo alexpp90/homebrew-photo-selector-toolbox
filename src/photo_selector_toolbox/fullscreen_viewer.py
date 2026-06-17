@@ -272,8 +272,8 @@ class FullscreenViewer(tk.Toplevel):
             height = 180
 
         # Center on FullscreenViewer
-        x = self.winfo_x() + (self.winfo_width() - width) // 2
-        y = self.winfo_y() + (self.winfo_height() - height) // 2
+        x = self.winfo_rootx() + (self.winfo_width() - width) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - height) // 2
         dialog.geometry(f"{width}x{height}+{x}+{y}")
 
         dialog.bind("<Delete>", on_confirm)

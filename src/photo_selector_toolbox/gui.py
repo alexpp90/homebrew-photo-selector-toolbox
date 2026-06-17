@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image, ImageTk
+import os
+import concurrent.futures
+import multiprocessing
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,8 @@ from photo_selector_toolbox.visualizer import (
 )
 from photo_selector_toolbox.duplicates import find_duplicates, move_to_trash
 from photo_selector_toolbox.sharpness_gui import SharpnessTool
+from photo_selector_toolbox.ollama_tool import load_config, save_config
+from photo_selector_toolbox.cache import ScoreCache
 
 
 @dataclass
@@ -545,8 +550,6 @@ class ImageLibraryStatistics(ttk.Frame):
             logger.info(f"Found {total_files} image files. Extracting metadata...")
 
             all_metadata = []
-            import concurrent.futures
-            import os
 
             # Determine thread count: use at most 8 threads to balance performance and overhead
             max_workers = min(8, (os.cpu_count() or 1) + 4)
@@ -779,10 +782,7 @@ class DuplicateFinder(ttk.Frame):
                         pass
                 return None
 
-            import concurrent.futures
-
             # Determine thread count: use at most 8 threads to balance performance and overhead
-            import os
 
             max_workers = min(8, (os.cpu_count() or 1) + 4)
             with concurrent.futures.ThreadPoolExecutor(
@@ -1027,16 +1027,17 @@ class AboutDialog(tk.Toplevel):
 
         # Center the dialog relative to parent
         self.update_idletasks()
+        width = max(450, int(self.winfo_reqwidth()))
+        height = max(350, int(self.winfo_reqheight()))
+
         parent_width = parent.winfo_width()
         parent_height = parent.winfo_height()
         parent_x = parent.winfo_rootx()
         parent_y = parent.winfo_rooty()
 
-        width = self.winfo_width()
-        height = self.winfo_height()
-        x = parent_x + (parent_width // 2) - (width // 2)
-        y = parent_y + (parent_height // 2) - (height // 2)
-        self.geometry(f"+{x}+{y}")
+        x = parent_x + (parent_width - width) // 2
+        y = parent_y + (parent_height - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
 
         # Escape key close
         self.bind("<Escape>", lambda e: self.destroy())
@@ -1054,8 +1055,6 @@ class CollectionSettingsDialog(tk.Toplevel):
         self.grab_set()
 
         # Load existing config
-        from photo_selector_toolbox.ollama_tool import load_config, save_config
-
         self.config_data = load_config()
 
         # Variables
@@ -1168,15 +1167,16 @@ class CollectionSettingsDialog(tk.Toplevel):
 
         # Center the dialog relative to parent
         self.update_idletasks()
+        width = max(480, int(self.winfo_reqwidth()))
+        height = max(280, int(self.winfo_reqheight()))
+
         parent_width = parent.winfo_width()
         parent_height = parent.winfo_height()
         parent_x = parent.winfo_rootx()
         parent_y = parent.winfo_rooty()
 
-        width = 460
-        height = self.winfo_reqheight()
-        x = parent_x + (parent_width // 2) - (width // 2)
-        y = parent_y + (parent_height // 2) - (height // 2)
+        x = parent_x + (parent_width - width) // 2
+        y = parent_y + (parent_height - height) // 2
         self.geometry(f"{width}x{height}+{x}+{y}")
 
         # Escape key close
@@ -1193,8 +1193,6 @@ class CollectionSettingsDialog(tk.Toplevel):
         self.separate_var.set(True)
 
     def save_settings(self):
-        from photo_selector_toolbox.ollama_tool import save_config
-
         folder_val = self.selection_folder_var.get().strip()
         if not folder_val:
             messagebox.showerror(
@@ -1479,8 +1477,6 @@ class MainApp(tk.Tk):
             parent=self,
         ):
             try:
-                from photo_selector_toolbox.cache import ScoreCache
-
                 cache = ScoreCache()
                 cache.clear_cache()
 
@@ -1519,6 +1515,5 @@ def main():
 
 
 if __name__ == "__main__":
-    import multiprocessing
     multiprocessing.freeze_support()
     main()
