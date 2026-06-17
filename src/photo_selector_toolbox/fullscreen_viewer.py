@@ -553,6 +553,99 @@ class FullscreenViewer(tk.Toplevel):
         self.clamp_offsets()
         self.redraw()
 
+
+
+    def _format_exposure_string(self, exif):
+        iso = format_meta(exif.iso if exif else None, "")
+        shutter = format_meta(exif.shutter_speed if exif else None, "s")
+        aperture = format_meta(exif.aperture if exif else None, "f/")
+        focal = format_meta(exif.focal_length if exif else None, "mm")
+
+        meta_parts = []
+        if iso:
+            meta_parts.append(f"ISO {iso}")
+        if shutter:
+            meta_parts.append(str(shutter))
+        if aperture:
+            meta_parts.append(str(aperture))
+        if focal:
+            meta_parts.append(str(focal))
+
+        return " | ".join(meta_parts) if meta_parts else "No EXIF Data"
+
+    def _update_basic_labels(self, meta_str, exif, is_testing):
+        if is_testing:
+            self.meta_filename_lbl.config(text=self.path.name)
+            self.meta_exposure_lbl.config(text=meta_str)
+        else:
+            self.meta_filename_lbl.config(text=f"📄 {self.path.name}")
+            self.meta_exposure_lbl.config(text=f"ℹ️ {meta_str}")
+
+        lens_str = exif.lens if exif else "Unknown"
+        if lens_str and lens_str != "Unknown":
+            if is_testing:
+                self.meta_lens_lbl.config(text=lens_str)
+            else:
+                self.meta_lens_lbl.config(text=f"📷 {lens_str}")
+            self.meta_lens_lbl.pack(side="top", anchor="w", pady=(2, 0))
+        else:
+            self.meta_lens_lbl.pack_forget()
+
+    def _update_metric_labels(self, res, is_mock, is_testing):
+        for lbl in self.metric_labels.values():
+            lbl.pack_forget()
+
+        has_metrics = False
+
+        res_score = "N/A" if is_mock else res.score
+        res_noise_score = "N/A" if is_mock else res.noise_score
+        scores_dict = {} if is_mock else (res.scores if isinstance(res.scores, dict) else {})
+
+        if res_score != "N/A":
+            score_str = format_score(res_score)
+            lbl_pfx = "" if is_testing else "🎯 "
+            self.metric_labels["sharpness"].config(text=f"{lbl_pfx}Sharpness Score: {score_str}")
+            self.metric_labels["sharpness"].pack(side="top", anchor="w", pady=(4, 0))
+            has_metrics = True
+
+        if res_noise_score != "N/A":
+            noise_str = format_score(res_noise_score)
+            lbl_pfx = "" if is_testing else "🔊 "
+            self.metric_labels["noise"].config(text=f"{lbl_pfx}Noise Level: {noise_str}")
+            self.metric_labels["noise"].pack(side="top", anchor="w", pady=(2, 0))
+            has_metrics = True
+
+        hl_score = scores_dict.get("highlight_clipping", "N/A")
+        if hl_score != "N/A":
+            hl_str = str(format_score(hl_score)) + ("%" if isinstance(hl_score, float) else "")
+            lbl_pfx = "" if is_testing else "🔆 "
+            self.metric_labels["highlight"].config(text=f"{lbl_pfx}Highlight Clipping: {hl_str}")
+            self.metric_labels["highlight"].pack(side="top", anchor="w", pady=(2, 0))
+            has_metrics = True
+
+        sd_score = scores_dict.get("shadow_clipping", "N/A")
+        if sd_score != "N/A":
+            sd_str = str(format_score(sd_score)) + ("%" if isinstance(sd_score, float) else "")
+            lbl_pfx = "" if is_testing else "🌑 "
+            self.metric_labels["shadow"].config(text=f"{lbl_pfx}Shadow Clipping: {sd_str}")
+            self.metric_labels["shadow"].pack(side="top", anchor="w", pady=(2, 0))
+            has_metrics = True
+
+        aesthetic_score = scores_dict.get("aesthetic", "N/A")
+        aesthetic_analysis = scores_dict.get("aesthetic_analysis")
+        if aesthetic_score != "N/A":
+            aes_str = format_score(aesthetic_score)
+            if aesthetic_analysis and aesthetic_analysis != "N/A":
+                aes_str += f" ({aesthetic_analysis})"
+            lbl_pfx = "" if is_testing else "🎨 "
+            self.metric_labels["aesthetic"].config(text=f"{lbl_pfx}Aesthetic Score: {aes_str}")
+            self.metric_labels["aesthetic"].pack(side="top", anchor="w", pady=(2, 0))
+            has_metrics = True
+
+        if has_metrics:
+            self.meta_sep.pack(side="top", fill="x", pady=6, after=self.meta_exposure_lbl)
+        else:
+            self.meta_sep.pack_forget()
     def update_metadata(self):
         if not hasattr(self, "meta_panel") or not self.meta_panel:
             return
@@ -583,112 +676,14 @@ class FullscreenViewer(tk.Toplevel):
                     res.exif = ExifData()
 
             exif = None if is_mock else res.exif
-
-            # Formatting values
-            iso = format_meta(exif.iso if exif else None, "")
-            shutter = format_meta(exif.shutter_speed if exif else None, "s")
-            aperture = format_meta(exif.aperture if exif else None, "f/")
-            focal = format_meta(exif.focal_length if exif else None, "mm")
-
-            # ISO: 100 | 1/200s | f/2.8 | 50mm
-            meta_parts = []
-            if iso:
-                meta_parts.append(f"ISO {iso}")
-            if shutter:
-                meta_parts.append(str(shutter))
-            if aperture:
-                meta_parts.append(str(aperture))
-            if focal:
-                meta_parts.append(str(focal))
-
-            meta_str = " | ".join(meta_parts) if meta_parts else "No EXIF Data"
-
             is_testing = type(self.parent).__name__ in ("MagicMock", "Mock")
 
-            # Update filename label
-            if is_testing:
-                self.meta_filename_lbl.config(text=self.path.name)
-            else:
-                self.meta_filename_lbl.config(text=f"📄 {self.path.name}")
+            # Format and update basic labels
+            meta_str = self._format_exposure_string(exif)
+            self._update_basic_labels(meta_str, exif, is_testing)
 
-            # Update exposure label
-            if is_testing:
-                self.meta_exposure_lbl.config(text=meta_str)
-            else:
-                self.meta_exposure_lbl.config(text=f"ℹ️ {meta_str}")
-
-            # Update lens label
-            lens_str = exif.lens if exif else "Unknown"
-            if lens_str and lens_str != "Unknown":
-                if is_testing:
-                    self.meta_lens_lbl.config(text=lens_str)
-                else:
-                    self.meta_lens_lbl.config(text=f"📷 {lens_str}")
-                self.meta_lens_lbl.pack(side="top", anchor="w", pady=(2, 0))
-            else:
-                self.meta_lens_lbl.pack_forget()
-
-            # Update metrics: clear previous and pack active metrics
-            for lbl in self.metric_labels.values():
-                lbl.pack_forget()
-
-            has_metrics = False
-
-            res_score = "N/A" if is_mock else res.score
-            res_noise_score = "N/A" if is_mock else res.noise_score
-            scores_dict = {} if is_mock else (res.scores if isinstance(res.scores, dict) else {})
-
-            # 1. Sharpness Score
-            if res_score != "N/A":
-                score_str = format_score(res_score)
-                lbl_pfx = "" if is_testing else "🎯 "
-                self.metric_labels["sharpness"].config(text=f"{lbl_pfx}Sharpness Score: {score_str}")
-                self.metric_labels["sharpness"].pack(side="top", anchor="w", pady=(4, 0))
-                has_metrics = True
-
-            # 2. Noise Level
-            if res_noise_score != "N/A":
-                noise_str = format_score(res_noise_score)
-                lbl_pfx = "" if is_testing else "🔊 "
-                self.metric_labels["noise"].config(text=f"{lbl_pfx}Noise Level: {noise_str}")
-                self.metric_labels["noise"].pack(side="top", anchor="w", pady=(2, 0))
-                has_metrics = True
-
-            # 3. Highlight Clipping
-            hl_score = scores_dict.get("highlight_clipping", "N/A")
-            if hl_score != "N/A":
-                hl_str = str(format_score(hl_score)) + ("%" if isinstance(hl_score, float) else "")
-                lbl_pfx = "" if is_testing else "🔆 "
-                self.metric_labels["highlight"].config(text=f"{lbl_pfx}Highlight Clipping: {hl_str}")
-                self.metric_labels["highlight"].pack(side="top", anchor="w", pady=(2, 0))
-                has_metrics = True
-
-            # 4. Shadow Clipping
-            sd_score = scores_dict.get("shadow_clipping", "N/A")
-            if sd_score != "N/A":
-                sd_str = str(format_score(sd_score)) + ("%" if isinstance(sd_score, float) else "")
-                lbl_pfx = "" if is_testing else "🌑 "
-                self.metric_labels["shadow"].config(text=f"{lbl_pfx}Shadow Clipping: {sd_str}")
-                self.metric_labels["shadow"].pack(side="top", anchor="w", pady=(2, 0))
-                has_metrics = True
-
-            # 5. Aesthetic Score
-            aesthetic_score = scores_dict.get("aesthetic", "N/A")
-            aesthetic_analysis = scores_dict.get("aesthetic_analysis")
-            if aesthetic_score != "N/A":
-                aes_str = format_score(aesthetic_score)
-                if aesthetic_analysis and aesthetic_analysis != "N/A":
-                    aes_str += f" ({aesthetic_analysis})"
-                lbl_pfx = "" if is_testing else "🎨 "
-                self.metric_labels["aesthetic"].config(text=f"{lbl_pfx}Aesthetic Score: {aes_str}")
-                self.metric_labels["aesthetic"].pack(side="top", anchor="w", pady=(2, 0))
-                has_metrics = True
-
-            # Adjust separator visibility
-            if has_metrics:
-                self.meta_sep.pack(side="top", fill="x", pady=6, after=self.meta_exposure_lbl)
-            else:
-                self.meta_sep.pack_forget()
+            # Update metric labels
+            self._update_metric_labels(res, is_mock, is_testing)
 
             # Lift the panel to make sure it floats on top of the canvas
             self.meta_panel.lift()
