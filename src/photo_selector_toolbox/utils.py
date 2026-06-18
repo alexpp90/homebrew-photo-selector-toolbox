@@ -47,9 +47,15 @@ def resolve_path(path_str: str | Path) -> Path:
 
         # Split into share and relative path
         # full_path_decoded starts with /, e.g. /private/Bilder_Alben
-        parts = full_path_decoded.strip("/").split("/", 1)
-        share_name = parts[0]
-        remainder = parts[1] if len(parts) > 1 else ""
+        # Security: sanitize components to prevent path traversal via ".." or empty segments
+        raw_parts = full_path_decoded.strip("/").split("/")
+        clean_parts = [p for p in raw_parts if p and p != ".."]
+
+        if not clean_parts:
+            return Path(path_str)
+
+        share_name = clean_parts[0]
+        remainder = "/".join(clean_parts[1:]) if len(clean_parts) > 1 else ""
 
         if sys.platform == "linux":
             # GVFS mount point pattern: /run/user/<uid>/gvfs/smb-share:server=<server>,share=<share>/<remainder>
