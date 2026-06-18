@@ -22,3 +22,5 @@ src/photo_selector_toolbox/bin/
 
 # OS files
 .DS_Store
+test_dir/
+test_dir_large/

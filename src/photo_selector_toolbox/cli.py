@@ -54,13 +54,30 @@ def main():
     ):
         is_excluded_subfolder.return_value = False
 
-    image_files = [
-        f
-        for f in root_path.rglob("*")
-        if f.suffix.lower() in SUPPORTED_EXTENSIONS
-        and not is_excluded_subfolder(f, root_path)
-        and not f.name.startswith("._")
-    ]
+    from photo_selector_toolbox.utils import get_excluded_folder_names
+    excluded_names = get_excluded_folder_names()
+
+    image_files = []
+
+    p_str = str(root_path)
+    for root, dirs, filenames in os.walk(p_str):
+        if is_excluded_subfolder(Path(root), root_path):
+            dirs[:] = []
+            continue
+
+        # Modify dirs in-place to skip excluded directories using set lookup
+        dirs[:] = [
+            d for d in dirs
+            if d.lower() not in excluded_names and not is_excluded_subfolder(Path(root) / d, root_path)
+        ]
+
+        root_p = Path(root)
+        for name in filenames:
+            if not name.startswith("._"):
+                suffix = os.path.splitext(name)[1].lower()
+                if suffix in SUPPORTED_EXTENSIONS:
+                    filepath = root_p / name
+                    image_files.append(filepath)
 
     if not image_files:
         print("No supported image files found.")
