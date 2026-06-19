@@ -45,7 +45,13 @@ def setup_exiftool():
 
         print("Extracting...")
         with zipfile.ZipFile(dest, 'r') as zip_ref:
-            zip_ref.extractall(BIN_DIR)
+            # Secure extraction to prevent Zip Slip
+            for member in zip_ref.infolist():
+                target_path = (BIN_DIR / member.filename).resolve()
+                if os.path.commonpath([BIN_DIR.resolve(), target_path]) != str(BIN_DIR.resolve()):
+                    print(f"Warning: Skipping {member.filename} (Zip Slip vulnerability detected)")
+                    continue
+                zip_ref.extract(member, BIN_DIR)
 
         found_exe = False
         for root, dirs, files in os.walk(BIN_DIR):
@@ -77,7 +83,16 @@ def setup_exiftool():
         print("Extracting...")
         # Use simple extraction
         with tarfile.open(dest, "r:gz") as tar:
-            tar.extractall(BIN_DIR)
+            if hasattr(tarfile, 'data_filter'):
+                tar.extractall(BIN_DIR, filter='data')
+            else:
+                # Secure extraction to prevent Tar Slip on older Python versions
+                for member in tar.getmembers():
+                    target_path = (BIN_DIR / member.name).resolve()
+                    if os.path.commonpath([BIN_DIR.resolve(), target_path]) != str(BIN_DIR.resolve()):
+                        print(f"Warning: Skipping {member.name} (Tar Slip vulnerability detected)")
+                        continue
+                    tar.extract(member, BIN_DIR)
 
         # Check what we have
         extracted_dirs = [p for p in BIN_DIR.iterdir() if p.is_dir()]
