@@ -6,7 +6,13 @@ data class ImageItem(
     val fileSize: Long,
     val lastModified: Long,
     val mimeType: String?,
+    val imageWidth: Int = 0,
+    val imageHeight: Int = 0,
     val exifData: ExifData? = null,
     val scanResult: ScanResult? = null,
-    val groupId: Int? = null
-)
+    val groupId: Int? = null,
+) {
+    /** True when the image is wider than it is tall (or dimensions unknown). */
+    val isLandscape: Boolean
+        get() = imageWidth == 0 && imageHeight == 0 || imageWidth > imageHeight
+}

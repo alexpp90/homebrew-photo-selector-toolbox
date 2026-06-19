@@ -336,7 +336,7 @@ private fun FullscreenContent(
                                         } else "${speed}s"
                                         add(formatted)
                                     }
-                                    exif.aperture?.let { add("f/%.1f".format(it)) }
+                                    exif.aperture?.let { add("f/%.1f".format(java.util.Locale.US, it)) }
                                     exif.focalLength?.let { add("${it.toInt()}mm") }
                                     if (exif.lens != "Unknown") add(exif.lens)
                                 }

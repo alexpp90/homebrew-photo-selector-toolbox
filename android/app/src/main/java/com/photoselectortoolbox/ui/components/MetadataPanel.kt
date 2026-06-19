@@ -35,7 +35,7 @@ fun MetadataPanel(
                 MetadataValue(value = formatShutterSpeed(speed))
             }
             exifData.aperture?.let { aperture ->
-                MetadataValue(value = "f/%.1f".format(aperture))
+                MetadataValue(value = "f/%.1f".format(java.util.Locale.US, aperture))
             }
             exifData.focalLength?.let { focal ->
                 MetadataValue(value = "${focal.toInt()}mm")
@@ -53,7 +53,7 @@ fun MetadataPanel(
                 MetadataRow(label = "Shutter Speed", value = formatShutterSpeed(speed))
             }
             exifData.aperture?.let { aperture ->
-                MetadataRow(label = "Aperture", value = "f/%.1f".format(aperture))
+                MetadataRow(label = "Aperture", value = "f/%.1f".format(java.util.Locale.US, aperture))
             }
             exifData.focalLength?.let { focal ->
                 MetadataRow(label = "Focal Length", value = "${focal.toInt()}mm")

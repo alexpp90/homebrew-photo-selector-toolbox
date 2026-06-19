@@ -46,4 +46,10 @@ pythonpath = [
 testpaths = [
   "tests"
 ]
+markers = [
+  "linux_only: skip unless running on Linux",
+  "mac_only: skip unless running on macOS",
+  "windows_only: skip unless running on Windows",
+  "gui_required: skip when no display is available",
+]
 

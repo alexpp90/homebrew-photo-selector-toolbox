@@ -131,7 +131,7 @@ class StatisticsViewModel @Inject constructor(
                     }
 
                     exif.aperture?.let { aperture ->
-                        val label = "f/%.1f".format(aperture)
+                        val label = "f/%.1f".format(java.util.Locale.US, aperture)
                         apertures[label] = (apertures[label] ?: 0) + 1
                     }
 
@@ -186,7 +186,7 @@ class StatisticsViewModel @Inject constructor(
             if (speed == speed.toLong().toDouble()) {
                 "${speed.toLong()}\""
             } else {
-                "%.1f\"".format(speed)
+                "%.1f\"".format(java.util.Locale.US, speed)
             }
         } else {
             val denominator = (1.0 / speed).toLong()

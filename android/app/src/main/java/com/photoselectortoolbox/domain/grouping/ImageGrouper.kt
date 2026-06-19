@@ -144,8 +144,13 @@ class ImageGrouper @Inject constructor(
     internal fun extractNamePrefix(fileName: String): String {
         // Remove extension
         val stem = fileName.substringBeforeLast('.')
-        // Remove trailing digits
-        return stem.trimEnd { it.isDigit() }
+        // Extract prefix before first digit
+        val firstDigitIdx = stem.indexOfFirst { it.isDigit() }
+        return if (firstDigitIdx != -1) {
+            stem.substring(0, firstDigitIdx)
+        } else {
+            stem
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.photoselectortoolbox.data.source
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
@@ -49,6 +50,25 @@ class LocalImageSourceImpl @Inject constructor(
         emit(sorted)
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * Read width and height from image header only (no pixel decode).
+     * Returns (0, 0) if the dimensions cannot be determined.
+     */
+    private fun readImageDimensions(uri: Uri): Pair<Int, Int> {
+        return try {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, opts)
+            }
+            val w = opts.outWidth.coerceAtLeast(0)
+            val h = opts.outHeight.coerceAtLeast(0)
+            Pair(w, h)
+        } catch (e: Exception) {
+            Log.d(TAG, "Cannot read dimensions for $uri: ${e.message}")
+            Pair(0, 0)
+        }
+    }
+
     private fun enumerateImages(folder: DocumentFile, results: MutableList<ImageItem>) {
         val files = folder.listFiles()
 
@@ -70,12 +90,17 @@ class LocalImageSourceImpl @Inject constructor(
 
             if (extension !in SUPPORTED_EXTENSIONS) continue
 
+            // Read dimensions from image header (metadata only, fast)
+            val (w, h) = readImageDimensions(file.uri)
+
             val imageItem = ImageItem(
                 uri = file.uri.toString(),
                 fileName = fileName,
                 fileSize = file.length(),
                 lastModified = file.lastModified(),
-                mimeType = file.type
+                mimeType = file.type,
+                imageWidth = w,
+                imageHeight = h,
             )
             results.add(imageItem)
         }

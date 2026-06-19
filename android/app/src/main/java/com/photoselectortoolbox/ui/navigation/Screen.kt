@@ -36,7 +36,15 @@ sealed class Screen(
         label = "Settings",
     )
 
+    /** Phone-mode: simplified TikTok-style experience. Not shown in nav bars. */
+    data object PhoneMode : Screen(
+        route = "phone_mode",
+        icon = Icons.Default.PhotoCamera,
+        label = "Phone Mode",
+    )
+
     companion object {
+        /** Screens shown in the desktop/tablet navigation bars. */
         val all: List<Screen> = listOf(PhotoSelector, Statistics, DuplicateFinder, Settings)
     }
 }

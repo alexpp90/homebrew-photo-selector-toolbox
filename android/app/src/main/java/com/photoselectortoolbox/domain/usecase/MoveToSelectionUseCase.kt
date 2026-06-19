@@ -161,14 +161,14 @@ class MoveToSelectionUseCase @Inject constructor(
         val stem = fileName.substringBeforeLast('.')
 
         return when {
+            // Lightroom edit files (*-Edit.tif, *-Edit.jpg, etc.) go to RAW subfolder
+            stem.endsWith(EDIT_SUFFIX) -> rawDir ?: selectionDir
+
             // RAW files go to RAW subfolder
             extension in RAW_EXTENSIONS -> rawDir ?: selectionDir
 
             // JPEG files go to JPEG subfolder
             extension in JPEG_EXTENSIONS -> jpegDir ?: selectionDir
-
-            // Lightroom edit files (*-Edit.tif, *-Edit.jpg, etc.) go to RAW subfolder
-            stem.endsWith(EDIT_SUFFIX) -> rawDir ?: selectionDir
 
             // XMP sidecar files follow their parent image
             extension == XMP_EXTENSION -> {
