@@ -24,7 +24,9 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -286,6 +288,68 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = Zinc400,
                     )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // --- Phone Mode Section ---
+        SettingsSection(title = "Phone Mode") {
+            SettingsToggleItem(
+                title = "Sort by Orientation",
+                description = "Show landscape images first, then portrait",
+                checked = uiState.phoneSortByOrientation,
+                onCheckedChange = { viewModel.updatePhoneSortByOrientation(it) },
+                icon = Icons.Default.SwapVert,
+            )
+
+            HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
+
+            SettingsToggleItem(
+                title = "Delete Confirmation",
+                description = "Ask before deleting images on swipe",
+                checked = uiState.phoneDeleteConfirmEnabled,
+                onCheckedChange = { viewModel.updatePhoneDeleteConfirm(it) },
+                icon = Icons.Default.DeleteSweep,
+            )
+
+            HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            ) {
+                Text(
+                    text = "Double-Tap Action",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                listOf("copy" to "Copy to Collection", "move" to "Move to Collection").forEach { (value, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = uiState.phoneCollectionAction == value,
+                            onClick = { viewModel.updatePhoneCollectionAction(value) },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = Indigo500,
+                                unselectedColor = Zinc400,
+                            ),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }

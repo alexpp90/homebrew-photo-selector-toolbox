@@ -42,7 +42,7 @@ fun ScoreChip(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = String.format(format, value),
+                text = String.format(java.util.Locale.US, format, value),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -75,7 +75,7 @@ fun ScoreChip(
                 style = MaterialTheme.typography.labelSmall,
             )
             Text(
-                text = String.format(format, value),
+                text = String.format(java.util.Locale.US, format, value),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
