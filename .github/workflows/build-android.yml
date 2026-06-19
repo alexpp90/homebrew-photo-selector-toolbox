@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload to Firebase App Distribution
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: wzieba/Firebase-App-Distribution@v3
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
