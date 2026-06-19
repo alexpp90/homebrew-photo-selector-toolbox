@@ -529,18 +529,19 @@ class ImageLibraryStatistics(ttk.Frame):
 
             logger.info(f"Scanning for images in '{root_path}'...")
 
-            # Avoid test mock pollution
-            if hasattr(is_excluded_subfolder, "return_value") and not isinstance(
-                is_excluded_subfolder.return_value, bool
-            ):
-                is_excluded_subfolder.return_value = False
+            from photo_selector_toolbox.utils import get_excluded_folder_names
+            excluded_names = get_excluded_folder_names()
 
-            image_files = [
-                f
-                for f in root_path.rglob("*")
-                if f.suffix.lower() in SUPPORTED_EXTENSIONS
-                and not is_excluded_subfolder(f, root_path)
-            ]
+            image_files = []
+            for dirpath, dirnames, filenames in os.walk(str(root_path)):
+                # In-place prune excluded directories
+                dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+
+                for f in filenames:
+                    if not f.startswith("._"):
+                        ext = os.path.splitext(f)[1].lower()
+                        if ext in SUPPORTED_EXTENSIONS:
+                            image_files.append(Path(dirpath) / f)
 
             if not image_files:
                 logger.info("No supported image files found.")

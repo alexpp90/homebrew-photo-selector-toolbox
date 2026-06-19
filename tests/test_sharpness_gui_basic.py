@@ -141,7 +141,13 @@ def test_sharpness_tool_filtering():
             Path("/mock/folder/img4.png"),
         ]
         
-        with patch("photo_selector_toolbox.sharpness_gui.Path.rglob", return_value=test_files):
+        def mock_os_walk(start_path):
+            dirpath = "/mock/folder"
+            dirnames = []
+            filenames = [f.name for f in test_files]
+            yield dirpath, dirnames, filenames
+
+        with patch("photo_selector_toolbox.sharpness_gui.os.walk", side_effect=mock_os_walk):
             with patch("photo_selector_toolbox.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}):
                 tool._load_folder_contents("/mock/folder")
                 
@@ -369,7 +375,13 @@ def test_mac_metadata_ignored():
             Path("/mock/folder/._img2.arw"),
         ]
         
-        with patch("photo_selector_toolbox.sharpness_gui.Path.rglob", return_value=test_files):
+        def mock_os_walk(start_path):
+            dirpath = "/mock/folder"
+            dirnames = []
+            filenames = [f.name for f in test_files]
+            yield dirpath, dirnames, filenames
+
+        with patch("photo_selector_toolbox.sharpness_gui.os.walk", side_effect=mock_os_walk):
             with patch("photo_selector_toolbox.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw"}):
                 tool._load_folder_contents("/mock/folder")
                 

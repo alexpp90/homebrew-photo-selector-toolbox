@@ -1031,18 +1031,24 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.config(cursor="watch")
         self.update()
 
-       # Avoid test mock pollution
-        if hasattr(is_excluded_subfolder, "return_value") and not isinstance(is_excluded_subfolder.return_value, bool):
-            is_excluded_subfolder.return_value = False
-
         p = Path(folder_path)
         from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS
+        from photo_selector_toolbox.utils import get_excluded_folder_names
 
         extensions = SUPPORTED_EXTENSIONS
-        files = [
-            f for f in p.rglob("*")
-            if f.suffix.lower() in extensions and not is_excluded_subfolder(f, p) and not f.name.startswith("._")
-        ]
+        excluded_names = get_excluded_folder_names()
+
+        files = []
+        for dirpath, dirnames, filenames in os.walk(str(p)):
+            # In-place prune excluded directories
+            dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+
+            for f in filenames:
+                if not f.startswith("._"):
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext in extensions:
+                        files.append(Path(dirpath) / f)
+
         files.sort(key=lambda x: x.name)
 
         if self.is_grouping:
