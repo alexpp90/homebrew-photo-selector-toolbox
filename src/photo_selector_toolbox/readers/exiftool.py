@@ -1,15 +1,16 @@
 import logging
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional
 from photo_selector_toolbox.models import ExifData
 from photo_selector_toolbox.readers.base import ExifReader
 from photo_selector_toolbox.utils import get_exiftool_path
 
 logger = logging.getLogger(__name__)
 
+
 class ExifToolReader(ExifReader):
     """EXIF reader using PyExifTool."""
-    
+
     def can_handle(self, path: Path) -> bool:
         # Avoid top-level import to prevent circular dependency
         from photo_selector_toolbox.reader import FORCE_EXIFTOOL_EXTENSIONS

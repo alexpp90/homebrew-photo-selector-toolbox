@@ -5,7 +5,10 @@ All notable changes to the Photo Selector Toolbox project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Upcoming]
+- Added Homebrew Formula support for stable and nightly releases (`photo-selector-toolbox` and `photo-selector-toolbox@nightly`), allowing installation on Linux and macOS (CLI-only).
+- Updated GitHub Actions build workflow to automatically compute SHA256 hashes and update both Cask and Formula files for stable/nightly releases.
+- Implemented `scripts/update_formula.py` to automate version and checksum updates.
+- Added `scripts/install-linux.sh` installer script for Linux environments.
 
 - Refactored `OllamaAestheticTool` to return a tuple containing the float score and a parsed one or two-word analysis reason tag.
 - Added a calibration scale to the default Ollama prompt to reduce score randomness.

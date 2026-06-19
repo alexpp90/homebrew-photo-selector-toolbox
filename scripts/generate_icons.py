@@ -1,57 +1,51 @@
 import os
-import sys
-from pathlib import Path
-import cairosvg
 from PIL import Image
 
-PROJECT_ROOT = Path(__file__).parent.parent
-ASSETS_DIR = PROJECT_ROOT / "assets"
-SVG_FILE = ASSETS_DIR / "logo.svg"
-PNG_FILE = ASSETS_DIR / "logo.png"
-ICO_FILE = ASSETS_DIR / "logo.ico"
-ICNS_FILE = ASSETS_DIR / "logo.icns"
-
 def generate_icons():
-    if not ASSETS_DIR.exists():
-        print(f"Error: Assets directory not found at {ASSETS_DIR}")
-        return False
+    logo_path = 'assets/logo.png'
+    res_base = 'android/app/src/main/res'
+    
+    if not os.path.exists(logo_path):
+        print(f"Error: {logo_path} does not exist.")
+        return
+        
+    img = Image.open(logo_path)
+    
+    # Scale factors:
+    # mdpi: 1.0, hdpi: 1.5, xhdpi: 2.0, xxhdpi: 3.0, xxxhdpi: 4.0
+    densities = {
+        'mipmap-mdpi': 1.0,
+        'mipmap-hdpi': 1.5,
+        'mipmap-xhdpi': 2.0,
+        'mipmap-xxhdpi': 3.0,
+        'mipmap-xxxhdpi': 4.0
+    }
+    
+    for folder, scale in densities.items():
+        folder_path = os.path.join(res_base, folder)
+        os.makedirs(folder_path, exist_ok=True)
+        
+        # 1. Legacy Launcher Icon (48 * scale)
+        legacy_size = int(48 * scale)
+        legacy_img = img.resize((legacy_size, legacy_size), Image.Resampling.LANCZOS)
+        
+        legacy_img.save(os.path.join(folder_path, 'ic_launcher.png'))
+        legacy_img.save(os.path.join(folder_path, 'ic_launcher_round.png'))
+        print(f"Generated legacy launcher icon in {folder} ({legacy_size}x{legacy_size})")
+        
+        # 2. Adaptive Foreground Icon (108 * scale canvas, 72 * scale logo centered)
+        canvas_size = int(108 * scale)
+        logo_size = int(72 * scale)
+        
+        foreground_logo = img.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+        
+        # Create transparent canvas
+        canvas = Image.new('RGBA', (canvas_size, canvas_size), (0, 0, 0, 0))
+        offset = (canvas_size - logo_size) // 2
+        canvas.paste(foreground_logo, (offset, offset), foreground_logo)
+        
+        canvas.save(os.path.join(folder_path, 'ic_launcher_foreground.png'))
+        print(f"Generated adaptive foreground icon in {folder} ({canvas_size}x{canvas_size}, logo {logo_size}x{logo_size})")
 
-    if not SVG_FILE.exists():
-        print(f"Error: SVG file not found at {SVG_FILE}")
-        return False
-
-    print(f"Converting {SVG_FILE} to {PNG_FILE}...")
-    try:
-        cairosvg.svg2png(url=str(SVG_FILE), write_to=str(PNG_FILE), output_width=256, output_height=256)
-    except Exception as e:
-        print(f"Error converting SVG to PNG: {e}")
-        return False
-
-    if not PNG_FILE.exists():
-        print("Error: PNG file was not created.")
-        return False
-
-    print(f"Converting {PNG_FILE} to {ICO_FILE}...")
-    try:
-        img = Image.open(PNG_FILE)
-        # Create ICO with multiple sizes
-        img.save(ICO_FILE, format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)])
-    except Exception as e:
-        print(f"Error converting PNG to ICO: {e}")
-        return False
-
-    print(f"Converting {PNG_FILE} to {ICNS_FILE}...")
-    try:
-        img = Image.open(PNG_FILE)
-        # Create ICNS
-        img.save(ICNS_FILE, format='ICNS')
-    except Exception as e:
-        print(f"Error converting PNG to ICNS: {e}")
-        return False
-
-    print("Icon generation complete.")
-    return True
-
-if __name__ == "__main__":
-    success = generate_icons()
-    sys.exit(0 if success else 1)
+if __name__ == '__main__':
+    generate_icons()

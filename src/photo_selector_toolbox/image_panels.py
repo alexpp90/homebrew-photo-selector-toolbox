@@ -1,13 +1,10 @@
 import logging
-import threading
-from pathlib import Path
 from PIL import Image, ImageTk
-import tkinter as tk
 from tkinter import ttk
 
 # Local imports
 from photo_selector_toolbox.utils import load_image_preview, create_placeholder_image
-from photo_selector_toolbox.formatting import format_score, format_meta
+from photo_selector_toolbox.formatting import format_score
 
 logger = logging.getLogger(__name__)
 
@@ -353,4 +350,3 @@ class ImagePanelsMixin:
             set_panel_img(self.panel_prev, p_img)
             set_panel_img(self.panel_curr, c_img)
             set_panel_img(self.panel_next, n_img)
-

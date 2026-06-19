@@ -95,7 +95,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Data Formatting Safety:** UI elements processing dynamically loaded scores must utilize explicit type checks (e.g., `isinstance(score_val, float)`) to safely format numerical data and prevent errors from 'N/A' string defaults.
 *   **State Transitions:** The Photo Selector starts directly on the main preview and review screen. Selecting a folder loads the images immediately without scanning. An optional sharpness/noise analysis scan is offered via a modal configuration dialog, and progress is logged in a separate tab without locking the main photo review interface.
 *   **Error Reporting:** Analysis errors in the GUI must be displayed via a popup alert, and the progress bar state must reflect the failure (it must not auto-complete).
-*   **Image RAW Loading:** The utility function `utils.load_image_preview` must explicitly convert images to `RGB` mode to handle 16-bit RAW data (`I;16`) that otherwise causes `ImageTk` crashes.
+*   **Image RAW Loading:** The utility function `utils.load_image_preview` must explicitly convert images to `RGB` mode to handle 16-bit RAW data (`I;16`) that otherwise causes `ImageTk` crashes. Furthermore, any PIL Image created from a rawpy postprocessed numpy array must be copied (e.g., via `.copy()`) before the `rawpy.imread` context closes to prevent dangling references to recycled LibRaw memory buffers, which leads to visual artifacts and image mixing.
 
 ### 3.4 Visual Aesthetics and Dark Theme System
 *   **Application Dark Theme:** The application enforces a professional dark theme built on top of the `clam` style system. The base background is set to `#18181B` (Zinc-900), frame/card containers to `#27272A` (Zinc-800), active buttons/highlights to `#6366F1` (Indigo-500) with hover highlights of `#4F46E5` (Indigo-600) to match the logo colors, and foreground text to `#FAFAFA` (Zinc-50). Unicode emojis/icons are used adjacent to button text and major headers to improve usability and match the repository banner layout.
@@ -145,17 +145,121 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **GitHub Release Preservation:** Every tagged stable release (tags matching `v*`) must be published as a new GitHub Release and preserved indefinitely. No old releases or release assets may be pruned or deleted from the GitHub Releases page.
 *   **Older Version Access Documentation:** The `README.md` must maintain up-to-date instructions on how to access and install older versions of the standalone executables and the Homebrew Casks.
 
-### 5.3 Homebrew Distribution (macOS)
-*   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing Cask definitions for both stable releases and nightly builds.
-*   **Release Selection:** Users can choose to install the stable release (`brew install --cask photo-selector-toolbox`) or the latest nightly build (`brew install --cask photo-selector-toolbox@nightly`).
-*   **Auto-Update:** The CI workflow automatically updates the Cask configurations:
-    *   For nightly builds (on pushes to `main`), the `photo-selector-toolbox@nightly` Cask's SHA256 is updated.
-    *   For stable releases (on tag pushes matching `v*`), the stable `photo-selector-toolbox` Cask's `version` and `sha256` are updated.
-*   **Install Artifacts:** The Cask installs the `Photo Selector Toolbox.app` bundle to `/Applications` and symlinks the CLI binary into Homebrew's bin directory.
+### 5.3 Homebrew Distribution (macOS & Linux)
+*   **Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing Cask definitions (macOS GUI) and Formula definitions (Linux GUI/CLI and macOS CLI) for both stable releases and nightly builds.
+*   **Release Selection:**
+    *   **macOS GUI (Cask):** Users can install the stable release (`brew install --cask photo-selector-toolbox`) or nightly build (`brew install --cask photo-selector-toolbox@nightly`).
+    *   **Linux / macOS CLI (Formula):** Users can install the stable release (`brew install photo-selector-toolbox`) or nightly build (`brew install photo-selector-toolbox@nightly`).
+*   **Auto-Update:** The CI workflow automatically updates both Cask and Formula configurations using a Python utility script `scripts/update_formula.py`:
+    *   For nightly builds (on pushes to `main`), the nightly Cask and Formula SHA256 hashes are updated.
+    *   For stable releases (on tag pushes matching `v*`), the stable Cask and Formula versions and SHA256 hashes are updated.
+*   **Install Artifacts:**
+    *   The macOS Cask installs the `Photo Selector Toolbox.app` bundle to `/Applications` and symlinks the CLI binary to Homebrew's bin directory.
+    *   The macOS Formula installs the CLI binary `photo-selector-toolbox` to Homebrew's bin directory.
+    *   The Linux Formula installs both the CLI binary `photo-selector-toolbox` and the GUI binary `photo-selector-toolbox-gui` to Homebrew's bin directory.
 
-## 6. Testing Requirements
+## 6. Testing Requirements (Desktop)
 
 *   **Path Resolution Tests:** The `resolve_path` utility must be tested across simulated platforms (Linux, macOS, Windows) using mocking for `sys.platform` and `os.getuid`.
 *   **GUI Unit Tests:** Tests validating GUI components (e.g., `tests/test_sharpness_gui_basic.py`) require extensive mocking of `tkinter`, `PIL`, and `photo_selector_toolbox` dependencies due to the lack of a display environment in CI runners.
 *   **Headless Execution:** To run or test standalone Tkinter GUI scripts headlessly in the development environment, developers must use `xvfb-run` (e.g., `poetry run xvfb-run python3 script.py`) to avoid `_tkinter.TclError` exceptions.
 *   **Execution Command:** Tests should be executed using `poetry run pytest tests/` after ensuring dependencies are installed via `poetry install`.
+
+## 7. Android Application Requirements
+
+### 7.1 Platform Targets & Tech Stack
+*   **Primary Targets:** Samsung Galaxy Tab S11 Ultra (tablet), Samsung Galaxy S25 Ultra with DeX (desktop mode). The application must provide a feature-rich experience on large screens (≥840dp) that approaches desktop parity.
+*   **Secondary Target:** Phone form factor (<600dp) with a streamlined UI optimized for touch-first interaction.
+*   **Language & Framework:** Kotlin 2.0+ with Jetpack Compose and Material Design 3.
+*   **Architecture:** MVVM with Clean Architecture (UI → ViewModel → UseCase → Repository → DataSource). All layers are separated by interfaces.
+*   **Async Model:** Kotlin Coroutines with Flow for reactive data streams. Use `Dispatchers.IO` for file I/O, `Dispatchers.Default` for CPU-intensive analysis. Never block the main thread.
+*   **Dependency Injection:** Hilt for all injectable classes.
+*   **Android SDK:** minSdk 26, targetSdk 35, compileSdk 35.
+
+### 7.2 Adaptive Layout Requirements
+*   **Window Size Classes:** Every screen must support three `WindowWidthSizeClass` breakpoints:
+    *   **Compact (<600dp):** Single-pane layouts, BottomNavigation, simplified controls, swipe-based navigation.
+    *   **Medium (600–840dp) and Expanded (≥840dp):** NavigationRail, widescreen horizontal three-column side-by-side comparison layout showing the Previous, Current, and Next images in equal dimensions with filenames, compact EXIF metadata, quality scores, and actions (Move, Copy, Delete under the Current active image).
+*   **Samsung DeX:** Treat as Expanded window size class. Support resizable windows. Enable hardware keyboard shortcuts (arrow keys, Delete, Backspace, M, C, Escape) in both standard and fullscreen modes.
+*   **Edge-to-Edge:** All screens must use `enableEdgeToEdge()` and properly handle `WindowInsets` for system bar padding.
+*   **DeX Metadata & Layout Limits:** The manifest must include `com.samsung.android.keepalive.density` metadata and `resizeableActivity="true"`. To optimize desktop window launching (e.g. on 10-inch Chromebooks or DeX), explicit layout size limits (default width 1024dp, default height 768dp, min width 800dp, min height 600dp) are configured.
+
+### 7.3 Feature Set (Android)
+The Android app includes all desktop features except:
+*   **Excluded:** Local AI Aesthetic Evaluation (Ollama VLM) — battery drain and insufficient compute on mobile.
+*   **Excluded:** CLI interface — not applicable on Android.
+*   **Excluded:** Homebrew distribution — uses APK/Play Store instead.
+*   **Excluded:** ExifTool bundling — replaced by AndroidX ExifInterface.
+*   **Excluded:** SMB path resolution — Android handles network shares via SAF providers.
+
+Phone mode may additionally omit:
+*   Focus Mode / side-by-side comparison view (not practical on small screens).
+*   Detailed EXIF metadata panel (accessible via tap-to-expand on phone).
+
+### 7.4 Touch Interaction Patterns
+*   **Photo Navigation:** Horizontal swipe via HorizontalPager (phone) or tap on prev/next thumbnails (tablet).
+*   **Fullscreen Viewer:** Pinch-to-zoom, double-tap to toggle fit/100%, swipe-down to dismiss, horizontal swipe to navigate.
+*   **Selection/Deletion:** Long-press for context menu. Swipe gestures configurable. Delete uses Snackbar with Undo (30s) for single items, confirmation dialog for batch operations.
+*   **Minimum Touch Target:** 48dp for all interactive elements.
+*   **Context Menus:** Long-press activated. No hover-dependent interactions.
+*   **Desktop/Input Enhancements**: Mouse pointer cursors automatically display hand pointer shapes (`PointerIcon.Hand`) when hovering over interactive components (buttons, clickable images, list thumbnails). Folder drag-and-drop capability is supported, enabling users to drag a photo folder from external file managers directly into the app window to load it automatically.
+
+### 7.5 Image Analysis (Algorithm Parity)
+All analysis algorithms must produce equivalent results to the desktop Python implementation:
+*   **Sharpness:** Center 50% crop → 8×8 grid → max Laplacian variance (OpenCV Android: `Imgproc.Laplacian` with `CV_64F`).
+*   **Noise:** MAD of Laplacian filter: σ = median(|∇²I - median(∇²I)|) / 0.6745.
+*   **Highlight Clipping:** Percentage of grayscale pixels ≥ 254.
+*   **Shadow Clipping:** Percentage of grayscale pixels ≤ 2.
+*   **Duplicate Detection:** SHA-256 file content hashing via streaming `DigestInputStream`.
+*   **Image Grouping:** Three levels matching desktop: Time & Filename, Time + Fast Similarity (8×8 dHash, Hamming ≤ 10), Detailed Similarity (16×16 dHash, Hamming ≤ 24).
+
+### 7.6 EXIF Extraction (Android)
+*   **Primary Reader:** AndroidX ExifInterface — supports JPEG, DNG, CR2, NEF, ARW, RAF, ORF, RW2, PEF, SRW, WebP, HEIF. Employs `ParcelFileDescriptor` for local files to enable random seek access, falling back to sequential stream reads when PFD is unavailable.
+*   **Fallback Reader:** MediaStore columns for basic metadata when ExifInterface fails.
+*   **Standardized Keys:** Output uses the same standardized `ExifData` data class as desktop (shutter speed, aperture, focal length, focal length 35mm, ISO, lens, isFallback).
+*   **Asynchronous Loading:** EXIF data for the current image and its immediate neighbors (previous/next) must be loaded dynamically and asynchronously in the background as the user navigates, updating the UI reactively on completion.
+
+### 7.7 Storage & File Access
+*   **Primary Access:** Storage Access Framework (SAF) via `Intent.ACTION_OPEN_DOCUMENT_TREE`. To comply with Google Play permissions policies, the application declares no global storage permissions (such as `MANAGE_EXTERNAL_STORAGE` or `READ_EXTERNAL_STORAGE`) in the manifest.
+*   **Permission Persistence:** URI permissions are persisted across restarts using `ContentResolver.takePersistableUriPermission`. ViewModels must handle `SecurityException` gracefully and clear any persisted folder URI if access has been revoked or the directory is deleted.
+*   **File Discovery:** `DocumentFile` API for folder traversal. Same exclusion rules as desktop: skip "Selection" and "Selected" subfolders (case-insensitive) unless specifically selected as root.
+*   **Selection Destination:** Configurable subfolder name (default "Selection"). RAW/JPEG/XMP sorting into subfolders follows desktop logic. Lightroom edit files (*-Edit.*) sorted to RAW subfolder.
+*   **Deletion:** Use `MediaStore.createTrashRequest()` on Android 11+ for recoverable deletion. Fall back to `DocumentFile.delete()`.
+
+### 7.8 Persistent Cache (Android)
+*   **Room Database:** SQLite cache at app-internal storage storing sharpness, noise, highlight/shadow clipping scores.
+*   **MRU Limit:** 10,000 entries, pruned by last access time (matching desktop).
+*   **Cache-First Loading:** On folder open, restore cached values immediately from Room DB. Scores are pre-populated into `ImageItem.scanResult` on discovery, validated against file size and modification time. Manual scans skip already-cached entries.
+*   **Clear Cache:** Available in Settings screen with confirmation dialog.
+
+### 7.9 Performance & Battery
+*   **Thread Pool:** `minOf(4, availableProcessors)` — reduced from desktop's `min(8, cpuCount + 4)` for battery conservation. Both the default value and the settings UI slider enforce a maximum of 4.
+*   **Parallel Image Scanning:** Multiple images are analyzed concurrently using a `Semaphore`-gated coroutine pool (sized by the thread count setting). Within each image, sharpness, noise, and clipping analysis run in parallel via `async`/`await`. Clipping analysis (highlight + shadow) uses a combined single-pass method to avoid duplicate bitmap→Mat and grayscale conversions.
+*   **Image Decoding:** Use `BitmapFactory.Options.inSampleSize` or `ImageDecoder` for memory-efficient downsampled decode. Hardware bitmaps for display, software bitmaps for analysis. Forced decoding in `ARGB_8888` for analysis to avoid pixel quantization that truncates bright highlights and dark shadows.
+*   **Battery Awareness (Deferred):** Reduce worker threads when battery < 20%. Pause scan and notify when battery < 10%. Use `WorkManager` with `Constraints.Builder().setRequiresBatteryNotLow(true)` for background scans. *Status: WorkManager dependency is declared but feature is not yet implemented.*
+*   **Memory Management:** Coil handles display image caching. Analysis images decoded at max 2048px on longest edge using `ImageDecoder` on API >= 28 (supporting RAW formats) and `BitmapFactory` on older APIs. SHA-256 uses streaming reads. Mat objects released immediately after use. EXIF data cache uses bounded LRU eviction (max 50 entries). dHash values are cached per grouping pass to avoid redundant bitmap decoding.
+
+### 7.10 Android Build & CI
+*   **Build System:** Gradle with Kotlin DSL and version catalog (`gradle/libs.versions.toml`).
+*   **CI Workflow:** `.github/workflows/build-android.yml` — runs on `ubuntu-latest` with JDK 17. Triggers on pushes to `main` and PRs modifying `android/**`. Runs lint and unit tests before building. Produces signed APK and AAB.
+*   **Artifact Naming:** `photo-selector-toolbox-android-release.apk` and `photo-selector-toolbox-android-release.aab`.
+*   **R8 Optimization:** Release builds enable R8 full mode with minification and resource shrinking. OpenCV native libraries excluded from stripping.
+*   **ABI Filter:** Release APKs include only `arm64-v8a` (covers Galaxy S25 Ultra and Tab S11 Ultra).
+*   **Signing:** Debug uses default keystore. Release signing is configured in `build.gradle.kts` dynamically using environment variables (`KEYSTORE_FILE`, `STORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`) populated by the CI environment to package properly signed release artifacts.
+*   **Firebase App Distribution:** Release builds pushed to the `main` branch are automatically uploaded to Firebase App Distribution for over-the-air tester updates.
+
+### 7.11 Android Visual Theme
+*   **Dark Theme Only:** Matches desktop's dark theme. Material 3 custom `darkColorScheme`:
+    *   `surface` = Zinc-900 (#18181B), `surfaceVariant` = Zinc-800 (#27272A)
+    *   `primary` = Indigo-500 (#6366F1), `primaryContainer` = Indigo-600 (#4F46E5)
+    *   `onSurface` = Zinc-50 (#FAFAFA), `onSurfaceVariant` = Zinc-400 (#A1A1AA)
+    *   `outline` = Zinc-700 (#3F3F46)
+*   **Charts:** Vico library with Indigo-500 bars, Zinc-400 labels, Zinc-700 grid lines on Zinc-800 backgrounds.
+*   **App Launcher Icon:** The application uses a custom app launcher icon matching the desktop logo. It specifies both legacy and adaptive versions. The adaptive icon utilizes a solid Zinc-900 background (`#18181B`) and a centered, transparent foreground logo scaled to fit within the safe zone (72dp on a 108dp canvas).
+
+### 7.12 Feature Sync Policy
+When a new feature is added to the desktop application, it must be evaluated for inclusion in the Android app:
+*   **Tablet/DeX mode:** Should include the feature if technically feasible on Android.
+*   **Phone mode:** Should include the feature if it works well on small screens; may omit with documented rationale.
+*   **Excluded features** (Ollama VLM, CLI, ExifTool, SMB paths) are permanently excluded regardless of desktop changes.
+*   Feature sync evaluations are documented in `ANDROID_DESIGN.md` §5 (Feature Mapping).
