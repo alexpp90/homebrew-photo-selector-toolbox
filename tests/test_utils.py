@@ -102,13 +102,14 @@ class TestGetExiftoolPath(unittest.TestCase):
 class TestResolvePath(unittest.TestCase):
     def test_local_path(self):
         """Tests that standard local paths are correctly converted to Path objects."""
-        path_str = "/tmp/test.jpg"
+        # Using native Path creation to ensure platform-independent comparison
+        path_str = str(Path("/tmp/test.jpg"))
         result = resolve_path(path_str)
         self.assertIsInstance(result, Path)
         self.assertEqual(str(result), path_str)
 
     @patch("sys.platform", "linux")
-    @patch("os.getuid", return_value=1000)
+    @patch("photo_selector_toolbox.utils.os.getuid", return_value=1000, create=True)
     def test_smb_linux(self, mock_getuid):
         """Tests SMB URL resolution to GVFS mount points on Linux."""
         path_str = "smb://myserver/myshare/path/to/image.jpg"
