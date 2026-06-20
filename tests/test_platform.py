@@ -5,10 +5,7 @@ Verifies that core modules import and function correctly on all platforms
 (Mac, Linux, Windows). Platform-specific tests use markers defined in
 conftest.py to skip automatically on the wrong OS.
 """
-import sys
-import os
 import pytest
-from pathlib import Path
 
 
 # ── Core import tests (all platforms) ────────────────────────────────
@@ -90,7 +87,6 @@ def test_long_path(tmp_path):
 @pytest.mark.linux_only
 def test_exiftool_binary_linux():
     """On Linux, exiftool might be in PATH or bundled."""
-    import shutil
     # Just verify the import works; exiftool may not be installed in CI
     from photo_selector_toolbox.readers.exiftool import ExifToolReader
     assert ExifToolReader is not None
@@ -99,7 +95,6 @@ def test_exiftool_binary_linux():
 @pytest.mark.mac_only
 def test_exiftool_binary_mac():
     """On macOS, exiftool might be in PATH or bundled."""
-    import shutil
     from photo_selector_toolbox.readers.exiftool import ExifToolReader
     assert ExifToolReader is not None
 

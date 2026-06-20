@@ -1,8 +1,6 @@
 import logging
 import threading
 import tkinter as tk
-from pathlib import Path
-from typing import List, Optional
 from tkinter import ttk
 from PIL import Image, ImageTk
 
@@ -242,7 +240,10 @@ class FullscreenViewer(tk.Toplevel):
         dialog.transient(self)
         dialog.grab_set()
 
-        msg = f"Are you sure you want to move '{self.path.name}' and related files to trash?\n\n(Press Delete again to confirm)"
+        msg = (
+            f"Are you sure you want to move '{self.path.name}' and related files to trash?\n\n"
+            "(Press Delete again to confirm)"
+        )
         ttk.Label(dialog, text=msg, justify="center", wraplength=350).pack(
             pady=(20, 10), padx=20
         )

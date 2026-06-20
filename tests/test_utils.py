@@ -254,7 +254,7 @@ class TestIsExcludedSubfolder(unittest.TestCase):
         # Specifically selected root
         root = Path("/Users/alex/Photos/Selection")
         self.assertFalse(is_excluded_subfolder(root / "img.jpg", root))
-        
+
         root2 = Path("/Users/alex/Photos/Selected")
         self.assertFalse(is_excluded_subfolder(root2 / "img.jpg", root2))
 
@@ -262,7 +262,7 @@ class TestIsExcludedSubfolder(unittest.TestCase):
         root = Path("/Users/alex/Photos")
         self.assertFalse(is_excluded_subfolder(root / "img.jpg", root))
         self.assertFalse(is_excluded_subfolder(root / "Vacation" / "img.jpg", root))
-        
+
         # Filename is 'Selection' but it's not a folder name in path
         self.assertFalse(is_excluded_subfolder(root / "Selection.jpg", root))
 

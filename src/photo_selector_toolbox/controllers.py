@@ -2,8 +2,8 @@ import logging
 import queue
 import threading
 import os
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from typing import Dict, Optional, Callable, List, Union
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Dict, Optional, Callable, List
 from pathlib import Path
 from PIL import Image
 
@@ -174,7 +174,9 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
 
     if builtin_to_compute:
         # Single image load → single grayscale conversion → all analyses
-        combined_results = photo_selector_toolbox.sharpness.calculate_all_scores(f, grid_size=grid_size, tools=builtin_to_compute)
+        combined_results = photo_selector_toolbox.sharpness.calculate_all_scores(
+            f, grid_size=grid_size, tools=builtin_to_compute
+        )
         for tool_name, val in combined_results.items():
             scores[tool_name] = val
             new_calculations[tool_name] = val

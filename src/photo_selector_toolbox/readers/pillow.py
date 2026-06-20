@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class PillowReader(ExifReader):
     """EXIF reader using Pillow library."""
-    
+
     def can_handle(self, path: Path) -> bool:
         return True
 
@@ -103,7 +103,7 @@ class PillowReader(ExifReader):
                     )
                 else:
                     available_keys_str = "\n  No known EXIF keys were found in this file."
-                
+
                 logger.debug(
                     f"\n--- Debugging (Pillow) failed extraction for: {path.name} ---\n"
                     f"  Raw Shutter Speed: {shutter_speed_raw!r} -> Parsed: {shutter_speed}\n"

@@ -18,12 +18,9 @@ from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.formatting import format_score, format_meta
-from photo_selector_toolbox.ollama_tool import load_config, save_config, OllamaAestheticTool
+from photo_selector_toolbox.ollama_tool import load_config, save_config
 from photo_selector_toolbox.utils import (
     is_excluded_subfolder,
-    calculate_dhash,
-    group_files_by_similarity,
-    select_representative,
     load_image_preview,
 )
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
@@ -267,7 +264,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.group_level_combo.pack(side="left", padx=(5, 5))
         self.group_level_combo.bind("<<ComboboxSelected>>", lambda e: self.on_group_similar_change())
-        
+
        # Set initial combobox state based on config
         if not self._is_grouping_enabled():
             self.group_level_combo.state(["disabled"])
@@ -337,7 +334,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
        # Grouping Progress (Hidden by default)
         self.group_progress_frame = ttk.Frame(self.progress_container)
-        
+
         self.group_status_lbl = ttk.Label(
             self.group_progress_frame, text="👥 Grouping: 0%"
         )
@@ -542,7 +539,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         ttk.Checkbutton(
             aesthetic_row, text="AI Aesthetic Evaluation (Ollama)", variable=self.tool_aesthetic_var
         ).pack(side="left", padx=5)
-        
+
         config_btn = ttk.Button(
             aesthetic_row, text="⚙️ Configure AI...", command=self.show_ollama_config_dialog, width=15
         )
@@ -584,23 +581,23 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
     def show_ollama_config_dialog(self):
         config = load_config()
-        
+
         dialog = tk.Toplevel(self)
         dialog.configure(bg="#18181B")
         dialog.title("Ollama Aesthetic Settings")
         dialog.transient(self.winfo_toplevel())
         dialog.grab_set()
-        
+
         # Title
         ttk.Label(
             dialog,
             text="🤖 Configure Ollama VLM Integration",
             font=("Helvetica", 12, "bold")
         ).pack(pady=10)
-        
+
         container = ttk.Frame(dialog, padding=15)
         container.pack(fill="both", expand=True)
-        
+
         # URL
         url_frame = ttk.Frame(container)
         url_frame.pack(fill="x", pady=5)
@@ -608,7 +605,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         url_var = tk.StringVar(value=config.get("ollama_url", ""))
         url_ent = ttk.Entry(url_frame, textvariable=url_var)
         url_ent.pack(side="left", fill="x", expand=True)
-        
+
         # Model
         model_frame = ttk.Frame(container)
         model_frame.pack(fill="x", pady=5)
@@ -616,12 +613,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         model_var = tk.StringVar(value=config.get("ollama_model", ""))
         model_ent = ttk.Entry(model_frame, textvariable=model_var)
         model_ent.pack(side="left", fill="x", expand=True)
-        
+
         # Prompt
         prompt_frame = ttk.Frame(container)
         prompt_frame.pack(fill="both", expand=True, pady=5)
         ttk.Label(prompt_frame, text="📝 Prompt:", width=15, anchor="w").pack(side="top", anchor="w", pady=(0, 2))
-        
+
         prompt_text = tk.Text(
             prompt_frame,
             height=5,
@@ -636,11 +633,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         prompt_text.pack(fill="both", expand=True)
         prompt_text.insert("1.0", config.get("ollama_prompt", ""))
-        
+
         # Status & Connection Test
         status_frame = ttk.LabelFrame(container, text="Connection Status", padding=8)
         status_frame.pack(fill="x", pady=10)
-        
+
         status_lbl = ttk.Label(
             status_frame,
             text="Click 'Test Connection' to check setup.",
@@ -648,7 +645,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             wraplength=480
         )
         status_lbl.pack(fill="x", pady=5)
-        
+
         def run_test():
             status_lbl.config(text="Connecting to Ollama...", foreground="blue")
             dialog.update_idletasks()
@@ -662,14 +659,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
-                
+
                 # Check for standard model match, e.g. "llava" matches "llava:latest" or "llava:7b"
                 matched = False
                 for m in models:
                     if m == model or m.split(":")[0] == model:
                         matched = True
                         break
-                
+
                 if matched:
                     status_lbl.config(
                         text=f"Success! Model '{model}' is running locally and ready for analysis.",
@@ -678,22 +675,33 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 else:
                     available = ", ".join(models) if models else "none"
                     status_lbl.config(
-                        text=f"Connected to Ollama, but model '{model}' is not pulled.\nAvailable models: {available}\nPlease run 'ollama pull {model}' in your terminal.",
+                        text=(
+                            f"Connected to Ollama, but model '{model}' is not pulled.\n"
+                            f"Available models: {available}\n"
+                            f"Please run 'ollama pull {model}' in your terminal."
+                        ),
                         foreground="orange"
                     )
             except Exception as e:
                 status_lbl.config(
-                    text=f"Cannot connect to Ollama at '{url}'.\nIs the service running? Install it from https://ollama.com.\nError: {e}",
+                    text=(
+                        f"Cannot connect to Ollama at '{url}'.\n"
+                        "Is the service running? Install it from https://ollama.com.\n"
+                        f"Error: {e}"
+                    ),
                     foreground="red"
                 )
-        
-        test_btn = ttk.Button(status_frame, text="🔌 Test Connection", command=lambda: threading.Thread(target=run_test, daemon=True).start())
+
+        test_btn = ttk.Button(
+            status_frame, text="🔌 Test Connection",
+            command=lambda: threading.Thread(target=run_test, daemon=True).start()
+        )
         test_btn.pack(anchor="e")
-        
+
         # Dialog Action Buttons
         btn_frame = ttk.Frame(dialog, padding=10)
         btn_frame.pack(fill="x")
-        
+
         def save_and_close():
             new_config = {
                 "ollama_url": url_var.get().strip(),
@@ -702,7 +710,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             }
             save_config(new_config)
             dialog.destroy()
-            
+
         ttk.Button(btn_frame, text="💾 Save Settings", command=save_and_close).pack(side="left", expand=True, padx=5)
         ttk.Button(btn_frame, text="❌ Cancel", command=dialog.destroy).pack(side="right", expand=True, padx=5)
 
@@ -1418,7 +1426,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             config["group_similar"] = False
             config["group_level"] = self.group_level_var.get()
             save_config(config)
-            
+
             self._last_applied_group_similar = False
             self.apply_grouping_and_refresh()
             return
@@ -1832,11 +1840,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 try:
                     idx = self.candidates.index(path)
                     is_selected = (selected_path == path)
-                    
+
                    # Update listbox text
                     self.candidate_listbox.delete(idx)
                     self.candidate_listbox.insert(idx, self._get_candidate_listbox_text(path))
-                    
+
                     if is_selected:
                         self.candidate_listbox.selection_set(idx)
                         self.update_metadata_label(path)
@@ -2006,7 +2014,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             for btn in ["del_btn", "focus_del_btn", "move_btn", "focus_move_btn", "copy_btn", "focus_copy_btn"]:
                 if hasattr(self, btn):
                     self._cached_buttons["action"].append(getattr(self, btn))
-            self._cached_all_buttons = self._cached_buttons["prev"] + self._cached_buttons["next"] + self._cached_buttons["action"]
+            self._cached_all_buttons = (
+                self._cached_buttons["prev"]
+                + self._cached_buttons["next"]
+                + self._cached_buttons["action"]
+            )
 
         sel = self.candidate_listbox.curselection()
         if not sel:
@@ -2174,7 +2186,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
     def _refresh_metadata_if_current(self, path):
         if self.panel_curr.path == path:
             self.update_metadata_label(path)
-        elif (hasattr(self, "panel_prev") and self.panel_prev.path == path) or (hasattr(self, "panel_next") and self.panel_next.path == path):
+        elif (
+            (hasattr(self, "panel_prev") and self.panel_prev.path == path)
+            or (hasattr(self, "panel_next") and self.panel_next.path == path)
+        ):
             if self.panel_curr.path:
                 self.update_metadata_label(self.panel_curr.path)
 
@@ -2274,7 +2289,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     text=f"{lbl_pfx}Shadow Clipping: {sd_str}"
                 )
                 self.focus_sd_lbl.pack(side="top", pady=(0, 5), anchor="w")
-            
+
             aesthetic_score = res.scores.get("aesthetic", "N/A")
             aesthetic_analysis = res.scores.get("aesthetic_analysis")
             if aesthetic_score != "N/A" and hasattr(self, "focus_aesthetic_lbl"):
@@ -2291,7 +2306,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_cat_lbl.pack(side="top", pady=5, anchor="w")
             self.focus_filename_lbl.config(text=current_path.name)
             self.focus_filename_lbl.pack(side="top", pady=5, anchor="w")
-            
+
             meta_txt = meta_str if is_testing else f"ℹ️ {meta_str}"
             self.focus_meta_lbl.config(text=meta_txt)
             self.focus_meta_lbl.pack(side="top", pady=5, anchor="w")
@@ -2336,7 +2351,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 aes_str += f" ({aes_analysis})"
             lbl_pfx = "" if is_testing else "🎨 "
             lines.append(f"{lbl_pfx}AI: {aes_str}")
-            
+
         meta_txt = meta_str if is_testing else f"ℹ️ {meta_str}"
         lines.append(meta_txt)
 
@@ -2349,7 +2364,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if not res:
             return
 
-        is_mocked = hasattr(get_exif_data, "assert_called_once_with") or type(get_exif_data).__name__ in ('MagicMock', 'Mock')
+        is_mocked = (
+            hasattr(get_exif_data, "assert_called_once_with")
+            or type(get_exif_data).__name__ in ('MagicMock', 'Mock')
+        )
 
         if res.exif is None:
             if sync or is_mocked:
@@ -2399,7 +2417,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             except Exception as e:
                                 logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                 prev_res.exif = ExifData()
-                            self._set_overlay_label(self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res)
+                            self._set_overlay_label(
+                                self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res
+                            )
                         else:
                             def load_prev_exif_async(p=prev_path, r=prev_res):
                                 try:
@@ -2412,9 +2432,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 r.exif = exif
                                 self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
                             threading.Thread(target=load_prev_exif_async, daemon=True).start()
-                            self._set_overlay_label(self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res)
+                            self._set_overlay_label(
+                                self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res
+                            )
                     else:
-                        self._set_overlay_label(self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res)
+                        self._set_overlay_label(
+                            self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res
+                        )
             else:
                 self.focus_prev_overlay.place_forget()
 
