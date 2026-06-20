@@ -21,6 +21,10 @@ from photo_selector_toolbox.formatting import format_score, format_meta
 from photo_selector_toolbox.ollama_tool import load_config, save_config
 from photo_selector_toolbox.utils import (
     is_excluded_subfolder,
+    get_excluded_folder_names,
+    calculate_dhash,
+    group_files_by_similarity,
+    select_representative,
     load_image_preview,
 )
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
@@ -1047,10 +1051,21 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS
 
         extensions = SUPPORTED_EXTENSIONS
-        files = [
-            f for f in p.rglob("*")
-            if f.suffix.lower() in extensions and not is_excluded_subfolder(f, p) and not f.name.startswith("._")
-        ]
+        excluded_names = get_excluded_folder_names()
+        files = []
+
+        for dirpath, dirnames, filenames in os.walk(p):
+            # Prune excluded directories in place
+            dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+
+            dp = Path(dirpath)
+            for f in filenames:
+                if f.startswith("._"):
+                    continue
+                file_path = dp / f
+                if file_path.suffix.lower() in extensions:
+                    files.append(file_path)
+
         files.sort(key=lambda x: x.name)
 
         if self.is_grouping:

@@ -106,7 +106,7 @@ class TestResolvePath(unittest.TestCase):
         path_str = str(Path("/tmp/test.jpg"))
         result = resolve_path(path_str)
         self.assertIsInstance(result, Path)
-        self.assertEqual(str(result), path_str)
+        self.assertEqual(result.as_posix(), "/tmp/test.jpg")
 
     @patch("sys.platform", "linux")
     @patch("photo_selector_toolbox.utils.os.getuid", return_value=1000, create=True)
