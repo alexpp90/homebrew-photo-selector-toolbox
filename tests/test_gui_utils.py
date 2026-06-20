@@ -39,7 +39,7 @@ def test_ask_directory_linux_with_zenity_success():
         # Check if the filename option is constructed correctly
         filename_arg = [arg for arg in called_args if arg.startswith("--filename=")]
         assert len(filename_arg) == 1
-        assert filename_arg[0].endswith("/start/")
+        assert filename_arg[0].endswith("/start/") or filename_arg[0].endswith("\\start\\")
         mock_ask.assert_not_called()
 
 

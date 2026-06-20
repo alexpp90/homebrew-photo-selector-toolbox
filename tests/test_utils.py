@@ -105,10 +105,10 @@ class TestResolvePath(unittest.TestCase):
         path_str = "/tmp/test.jpg"
         result = resolve_path(path_str)
         self.assertIsInstance(result, Path)
-        self.assertEqual(str(result), path_str)
+        self.assertEqual(result.as_posix(), "/tmp/test.jpg")
 
     @patch("sys.platform", "linux")
-    @patch("os.getuid", return_value=1000)
+    @patch("photo_selector_toolbox.utils.os.getuid", return_value=1000, create=True)
     def test_smb_linux(self, mock_getuid):
         """Tests SMB URL resolution to GVFS mount points on Linux."""
         path_str = "smb://myserver/myshare/path/to/image.jpg"
