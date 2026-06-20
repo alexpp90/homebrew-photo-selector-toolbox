@@ -15,6 +15,9 @@ import com.photoselectortoolbox.data.repository.CacheRepository
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
 import com.photoselectortoolbox.data.repository.ImageRepository
 import com.photoselectortoolbox.data.repository.SettingsRepository
+import com.photoselectortoolbox.data.source.googledrive.GoogleDriveAuth
+import com.photoselectortoolbox.data.source.googledrive.GoogleDriveClient
+import com.photoselectortoolbox.data.source.googledrive.GoogleDriveImageSource
 import com.photoselectortoolbox.domain.grouping.ImageGrouper
 import com.photoselectortoolbox.domain.usecase.MoveToSelectionUseCase
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
@@ -44,7 +47,9 @@ data class SelectorUiState(
     val error: String? = null,
     val showDeleteConfirmation: Boolean = false,
     val groupingEnabled: Boolean = false,
-    val groups: List<List<Int>> = emptyList()
+    val groups: List<List<Int>> = emptyList(),
+    val fullscreenButtonsEnabled: Boolean = true,
+    val fullscreenGestureAction: String = "copy",
 )
 
 @HiltViewModel
@@ -55,6 +60,8 @@ class SelectorViewModel @Inject constructor(
     private val cacheRepository: CacheRepository,
     private val settingsRepository: SettingsRepository,
     private val scoreDao: ScoreDao,
+    val driveAuth: GoogleDriveAuth,
+    val driveClient: GoogleDriveClient,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -86,6 +93,18 @@ class SelectorViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            settingsRepository.fullscreenButtonsEnabled.collect { enabled ->
+                _uiState.update { it.copy(fullscreenButtonsEnabled = enabled) }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.fullscreenGestureAction.collect { action ->
+                _uiState.update { it.copy(fullscreenGestureAction = action) }
+            }
+        }
+
+        viewModelScope.launch {
             settingsRepository.lastFolderUri.collect { uri ->
                 if (uri != null && _uiState.value.folderUri == null) {
                     selectFolder(Uri.parse(uri))
@@ -95,6 +114,13 @@ class SelectorViewModel @Inject constructor(
     }
 
     fun selectFolder(uri: Uri) {
+        // Handle Google Drive URIs
+        if (GoogleDriveImageSource.isDriveUri(uri)) {
+            val folderId = GoogleDriveImageSource.extractId(uri) ?: return
+            selectDriveFolder(folderId, "Google Drive")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -166,6 +192,51 @@ class SelectorViewModel @Inject constructor(
                 }
                 if (e is SecurityException) {
                     settingsRepository.setLastFolderUri(null)
+                }
+            }
+        }
+    }
+
+    /** Select a Google Drive folder by its Drive folder ID. */
+    fun selectDriveFolder(folderId: String, folderName: String) {
+        val driveUri = GoogleDriveImageSource.buildUri(folderId)
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    error = null,
+                    folderUri = driveUri.toString(),
+                    folderName = folderName,
+                )
+            }
+
+            settingsRepository.setLastFolderUri(driveUri.toString())
+
+            try {
+                imageRepository.discoverImages(driveUri).collect { images ->
+                    _uiState.update {
+                        it.copy(
+                            images = images,
+                            currentIndex = 0,
+                            isLoading = false,
+                        )
+                    }
+                    loadMetadataForActiveRange()
+                    val groupingEnabled = settingsRepository.groupingEnabled.first()
+                    val groupingLevel = settingsRepository.groupingLevel.first()
+                    if (groupingEnabled) {
+                        recomputeGroups(groupingLevel)
+                    } else {
+                        _uiState.update { it.copy(groups = emptyList()) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("SelectorViewModel", "Failed to load Drive folder $folderId", e)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = "Failed to load Google Drive images: ${e.message}",
+                    )
                 }
             }
         }
@@ -284,6 +355,27 @@ class SelectorViewModel @Inject constructor(
 
     fun dismissDeleteConfirmation() {
         _uiState.update { it.copy(showDeleteConfirmation = false) }
+    }
+
+    /**
+     * Called when the user swipes left to delete on the phone layout.
+     * If the file can be moved to trash (recoverable), deletes immediately.
+     * Otherwise shows the confirmation dialog.
+     */
+    fun deleteWithSwipe() {
+        val state = _uiState.value
+        if (state.images.isEmpty()) return
+
+        val currentImage = state.images[state.currentIndex]
+        val uri = Uri.parse(currentImage.uri)
+
+        if (imageRepository.canTrash(uri)) {
+            // Trash is available — delete immediately without confirmation
+            deleteCurrentImage()
+        } else {
+            // Permanent delete — require confirmation
+            showDeleteConfirmation()
+        }
     }
 
     fun deleteCurrentImage() {

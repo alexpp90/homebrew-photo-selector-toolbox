@@ -16,6 +16,7 @@ import javax.inject.Singleton
 
 interface LocalImageSource {
     fun discoverImages(folderUri: Uri): Flow<List<ImageItem>>
+    suspend fun getImageDimensions(uri: Uri): Pair<Int, Int>
 }
 
 @Singleton
@@ -49,6 +50,10 @@ class LocalImageSourceImpl @Inject constructor(
         val sorted = images.sortedBy { it.fileName.lowercase() }
         emit(sorted)
     }.flowOn(Dispatchers.IO)
+
+    override suspend fun getImageDimensions(uri: Uri): Pair<Int, Int> {
+        return readImageDimensions(uri)
+    }
 
     /**
      * Read width and height from image header only (no pixel decode).
@@ -90,17 +95,14 @@ class LocalImageSourceImpl @Inject constructor(
 
             if (extension !in SUPPORTED_EXTENSIONS) continue
 
-            // Read dimensions from image header (metadata only, fast)
-            val (w, h) = readImageDimensions(file.uri)
-
             val imageItem = ImageItem(
                 uri = file.uri.toString(),
                 fileName = fileName,
                 fileSize = file.length(),
                 lastModified = file.lastModified(),
                 mimeType = file.type,
-                imageWidth = w,
-                imageHeight = h,
+                imageWidth = 0,
+                imageHeight = 0,
             )
             results.add(imageItem)
         }

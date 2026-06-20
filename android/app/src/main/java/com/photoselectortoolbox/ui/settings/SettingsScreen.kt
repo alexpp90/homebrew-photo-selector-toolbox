@@ -1,5 +1,9 @@
 package com.photoselectortoolbox.ui.settings
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -24,9 +28,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -48,10 +50,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
+import androidx.compose.material.icons.filled.FolderOpen
 import com.photoselectortoolbox.ui.theme.ErrorRed
 import com.photoselectortoolbox.ui.theme.Indigo500
 import com.photoselectortoolbox.ui.theme.Zinc400
@@ -64,10 +68,25 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var editingFolderName by remember(uiState.selectionFolderName) {
         mutableStateOf(uiState.selectionFolderName)
+    }
+
+    // Folder picker for custom selection destination
+    val selectionFolderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri: Uri? ->
+        uri?.let {
+            // Persist permission
+            try {
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(it, takeFlags)
+            } catch (_: Exception) {}
+            viewModel.updatePhoneCollectionUri(it.toString())
+        }
     }
 
     if (showClearCacheDialog) {
@@ -113,9 +132,14 @@ fun SettingsScreen(
                     .padding(16.dp),
             ) {
                 Text(
-                    text = "Selection Folder Name",
+                    text = "Selection Subfolder Name",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Created inside the source folder by default",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
@@ -151,6 +175,27 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
+
+            // Custom selection destination
+            SettingsClickItem(
+                title = "Custom Selection Location",
+                description = if (uiState.phoneCollectionUri != null) {
+                    "Using custom folder"
+                } else {
+                    "Default: subfolder in source folder"
+                },
+                onClick = { selectionFolderPickerLauncher.launch(null) },
+                icon = Icons.Default.FolderOpen,
+                trailing = {
+                    if (uiState.phoneCollectionUri != null) {
+                        TextButton(onClick = { viewModel.updatePhoneCollectionUri(null) }) {
+                            Text("Reset", color = Indigo500)
+                        }
+                    }
+                },
+            )
 
             HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
 
@@ -294,24 +339,14 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- Phone Mode Section ---
-        SettingsSection(title = "Phone Mode") {
+        // --- Fullscreen Section ---
+        SettingsSection(title = "Fullscreen Viewer") {
             SettingsToggleItem(
-                title = "Sort by Orientation",
-                description = "Show landscape images first, then portrait",
-                checked = uiState.phoneSortByOrientation,
-                onCheckedChange = { viewModel.updatePhoneSortByOrientation(it) },
-                icon = Icons.Default.SwapVert,
-            )
-
-            HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
-
-            SettingsToggleItem(
-                title = "Delete Confirmation",
-                description = "Ask before deleting images on swipe",
-                checked = uiState.phoneDeleteConfirmEnabled,
-                onCheckedChange = { viewModel.updatePhoneDeleteConfirm(it) },
-                icon = Icons.Default.DeleteSweep,
+                title = "Show Fullscreen Action Buttons",
+                description = "Display delete, copy, and move buttons in fullscreen mode",
+                checked = uiState.fullscreenButtonsEnabled,
+                onCheckedChange = { viewModel.updateFullscreenButtonsEnabled(it) },
+                icon = Icons.Default.Info,
             )
 
             HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
@@ -322,13 +357,13 @@ fun SettingsScreen(
                     .padding(16.dp),
             ) {
                 Text(
-                    text = "Double-Tap Action",
+                    text = "Double-Tap Gesture Action",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                listOf("copy" to "Copy to Collection", "move" to "Move to Collection").forEach { (value, label) ->
+                listOf("copy" to "Copy to Selection", "move" to "Move to Selection").forEach { (value, label) ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -336,8 +371,8 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
-                            selected = uiState.phoneCollectionAction == value,
-                            onClick = { viewModel.updatePhoneCollectionAction(value) },
+                            selected = uiState.fullscreenGestureAction == value,
+                            onClick = { viewModel.updateFullscreenGestureAction(value) },
                             colors = RadioButtonDefaults.colors(
                                 selectedColor = Indigo500,
                                 unselectedColor = Zinc400,
@@ -393,7 +428,7 @@ fun SettingsScreen(
         SettingsSection(title = "About") {
             SettingsClickItem(
                 title = "Photo Selector Toolbox",
-                description = "Version 0.1.0",
+                description = "Version ${com.photoselectortoolbox.BuildConfig.VERSION_NAME}",
                 onClick = {},
                 icon = Icons.Default.Info,
             )
@@ -404,7 +439,8 @@ fun SettingsScreen(
                 title = "Source Code",
                 description = "View on GitHub",
                 onClick = {
-                    // Intent to open GitHub would be handled here
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/alexpp90/homebrew-photo-selector-toolbox"))
+                    context.startActivity(intent)
                 },
                 icon = Icons.Default.Code,
             )

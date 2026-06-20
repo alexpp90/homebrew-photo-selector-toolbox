@@ -1,4 +1,4 @@
-package com.photoselectortoolbox.ui.phonemode
+package com.phototok.ui.phonemode
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,10 +21,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -39,11 +40,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.photoselectortoolbox.ui.theme.Indigo500
-import com.photoselectortoolbox.ui.theme.Zinc700
-import com.photoselectortoolbox.ui.theme.Zinc800
-import com.photoselectortoolbox.ui.theme.Zinc900
-import com.photoselectortoolbox.ui.theme.Zinc950
+import com.phototok.ui.theme.Indigo500
+import com.phototok.ui.theme.Zinc700
+import com.phototok.ui.theme.Zinc800
+import com.phototok.ui.theme.Zinc900
+import com.phototok.ui.theme.Zinc950
 
 /**
  * Minimal landing screen for phone mode.
@@ -58,6 +59,12 @@ fun PhoneModeLanding(
     onSelectSource: (Uri) -> Unit,
     onSelectCollection: (Uri) -> Unit,
     onStart: () -> Unit,
+    fileTypeFilter: String = "all",
+    onFileTypeFilterChange: (String) -> Unit = {},
+    externalVolumes: List<com.phototok.data.source.ExternalVolume> = emptyList(),
+    onBrowseExternalVolume: (String) -> Unit = {},
+    onOpenGoogleDrive: () -> Unit = {},
+    isGoogleDriveSignedIn: Boolean = false,
 ) {
     val sourcePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -91,13 +98,13 @@ fun PhoneModeLanding(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Photo Selector",
+                text = "Photo-Tok",
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "Swipe through your photos",
+                text = "Swipe. Select. Snap.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.5f),
             )
@@ -113,6 +120,90 @@ fun PhoneModeLanding(
                 onClick = { sourcePickerLauncher.launch(null) },
             )
 
+            // External storage suggestion
+            if (externalVolumes.isNotEmpty() && !hasSourceFolder) {
+                Spacer(modifier = Modifier.height(8.dp))
+                externalVolumes.forEach { volume ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onBrowseExternalVolume(volume.path) },
+                        shape = RoundedCornerShape(14.dp),
+                        color = Indigo500.copy(alpha = 0.12f),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SdCard,
+                                contentDescription = null,
+                                tint = Indigo500,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = volume.description,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White,
+                                )
+                                Text(
+                                    text = "Tap to browse",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White.copy(alpha = 0.5f),
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = Zinc700,
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Google Drive option
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenGoogleDrive() },
+                shape = RoundedCornerShape(14.dp),
+                color = Indigo500.copy(alpha = 0.12f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cloud,
+                        contentDescription = null,
+                        tint = if (isGoogleDriveSignedIn) Indigo500 else Zinc700,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Google Drive",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = if (isGoogleDriveSignedIn) "Tap to browse folders" else "Sign in to browse",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.5f),
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = Zinc700,
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             // Collection target picker
@@ -123,6 +214,30 @@ fun PhoneModeLanding(
                 isSet = collectionFolderName.isNotEmpty(),
                 onClick = { collectionPickerLauncher.launch(null) },
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // File type filter
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = Zinc800,
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Text(
+                        text = "File Type",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.5f),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FileTypeFilterRow(
+                        selected = fileTypeFilter,
+                        onSelect = onFileTypeFilterChange,
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.weight(0.2f))
 

@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "PhotoSelectorToolbox"
 include(":app")
+include(":phototok")

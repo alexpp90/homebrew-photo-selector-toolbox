@@ -198,6 +198,9 @@ Phone mode may additionally omit:
 *   Focus Mode / side-by-side comparison view (not practical on small screens).
 *   Detailed EXIF metadata panel (accessible via tap-to-expand on phone).
 
+Phone Mode (Phone Tok) includes:
+*   **Picture Randomization:** A toggle in settings allows users to randomize the order of pictures shown in the viewer. Enabling this setting shuffles the loaded pictures and overrides orientation-based sorting.
+
 ### 7.4 Touch Interaction Patterns
 *   **Photo Navigation:** Horizontal swipe via HorizontalPager (phone) or tap on prev/next thumbnails (tablet).
 *   **Fullscreen Viewer:** Pinch-to-zoom, double-tap to toggle fit/100%, swipe-down to dismiss, horizontal swipe to navigate.

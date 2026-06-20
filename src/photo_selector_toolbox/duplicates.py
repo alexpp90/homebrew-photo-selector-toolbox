@@ -6,6 +6,7 @@ from pathlib import Path
 from send2trash import send2trash
 
 from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS
+from photo_selector_toolbox.config import load_config
 
 # Extend supported extensions for duplicates to include basic formats
 # not necessarily supported by the metadata analyzer (like GIF/BMP)
@@ -52,6 +53,13 @@ def find_duplicates(root_folder, callback=None):
     # Using a list to store all image paths first is fast enough for typical library sizes.
     # But checking size is also stat().
 
+    # Build excluded folder names from config (consistent with is_excluded_subfolder)
+    config = load_config()
+    excluded_names = {"selection", "selected"}
+    custom_folder = config.get("selection_folder", "Selection")
+    if custom_folder and not Path(str(custom_folder)).is_absolute():
+        excluded_names.add(Path(str(custom_folder)).name.lower())
+
     # Initial scan
     ext_tuple = tuple(IMAGE_EXTENSIONS)
 
@@ -67,7 +75,7 @@ def find_duplicates(root_folder, callback=None):
                             except OSError:
                                 pass
                     elif entry.is_dir(follow_symlinks=False):
-                        if entry.name.lower() not in ("selection", "selected"):
+                        if entry.name.lower() not in excluded_names:
                             _scan(entry.path)
         except OSError:
             pass

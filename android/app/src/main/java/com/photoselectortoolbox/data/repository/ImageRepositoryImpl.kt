@@ -9,6 +9,8 @@ import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.reader.AndroidExifReader
 import com.photoselectortoolbox.data.reader.MediaStoreReader
 import com.photoselectortoolbox.data.source.LocalImageSource
+import com.photoselectortoolbox.data.source.googledrive.GoogleDriveClient
+import com.photoselectortoolbox.data.source.googledrive.GoogleDriveImageSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -19,7 +21,9 @@ import javax.inject.Singleton
 class ImageRepositoryImpl @Inject constructor(
     private val localImageSource: LocalImageSource,
     private val androidExifReader: AndroidExifReader,
-    private val mediaStoreReader: MediaStoreReader
+    private val mediaStoreReader: MediaStoreReader,
+    private val driveImageSource: GoogleDriveImageSource,
+    private val driveClient: GoogleDriveClient,
 ) : ImageRepository {
 
     companion object {
@@ -41,10 +45,23 @@ class ImageRepositoryImpl @Inject constructor(
     }
 
     override fun discoverImages(folderUri: Uri): Flow<List<ImageItem>> {
+        if (GoogleDriveImageSource.isDriveUri(folderUri)) {
+            val folderId = GoogleDriveImageSource.extractId(folderUri) ?: return localImageSource.discoverImages(folderUri)
+            return driveImageSource.discoverImages(folderId)
+        }
         return localImageSource.discoverImages(folderUri)
     }
 
     override suspend fun getExifData(context: Context, uri: Uri): ExifData? {
+        // For Drive URIs, download to cache first then read EXIF from local file
+        if (GoogleDriveImageSource.isDriveUri(uri)) {
+            val fileId = GoogleDriveImageSource.extractId(uri) ?: return null
+            val cached = driveImageSource.ensureCached(fileId, fileId)
+                ?: return null
+            val localUri = Uri.fromFile(cached)
+            return androidExifReader.readExif(context, localUri)
+        }
+
         // Try the primary ExifInterface reader first
         val exifData = androidExifReader.readExif(context, uri)
         if (exifData != null) return exifData
@@ -53,8 +70,15 @@ class ImageRepositoryImpl @Inject constructor(
         return mediaStoreReader.readExif(context, uri)
     }
 
+    override fun canTrash(uri: Uri): Boolean =
+        GoogleDriveImageSource.isDriveUri(uri)
+
     override suspend fun deleteImage(context: Context, uri: Uri): Boolean =
         withContext(Dispatchers.IO) {
+            if (GoogleDriveImageSource.isDriveUri(uri)) {
+                val fileId = GoogleDriveImageSource.extractId(uri) ?: return@withContext false
+                return@withContext driveClient.trashFile(fileId)
+            }
             try {
                 val docFile = DocumentFile.fromSingleUri(context, uri)
                 docFile?.delete() ?: false
@@ -70,6 +94,10 @@ class ImageRepositoryImpl @Inject constructor(
         destFolderUri: Uri,
         sorting: Boolean
     ): Boolean = withContext(Dispatchers.IO) {
+        // Drive → Drive move
+        if (GoogleDriveImageSource.isDriveUri(sourceUri) && GoogleDriveImageSource.isDriveUri(destFolderUri)) {
+            return@withContext driveMoveCopy(sourceUri, destFolderUri, sorting, move = true)
+        }
         try {
             val copied = copyImageInternal(context, sourceUri, destFolderUri, sorting)
             if (copied) {
@@ -89,11 +117,48 @@ class ImageRepositoryImpl @Inject constructor(
         destFolderUri: Uri,
         sorting: Boolean
     ): Boolean = withContext(Dispatchers.IO) {
+        // Drive → Drive copy
+        if (GoogleDriveImageSource.isDriveUri(sourceUri) && GoogleDriveImageSource.isDriveUri(destFolderUri)) {
+            return@withContext driveMoveCopy(sourceUri, destFolderUri, sorting, move = false)
+        }
         try {
             copyImageInternal(context, sourceUri, destFolderUri, sorting)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy image: $sourceUri", e)
             false
+        }
+    }
+
+    /**
+     * Handle move/copy between Google Drive locations.
+     * Creates Selection/RAW/JPEG subfolders on Drive when sorting is enabled.
+     */
+    private suspend fun driveMoveCopy(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        move: Boolean,
+    ): Boolean {
+        val fileId = GoogleDriveImageSource.extractId(sourceUri) ?: return false
+        val destFolderId = GoogleDriveImageSource.extractId(destFolderUri) ?: return false
+
+        // Determine target folder (with optional sorting subfolders)
+        val targetFolderId = if (sorting) {
+            val selectionId = driveClient.findOrCreateFolder(destFolderId, SELECTION_FOLDER_NAME)
+                ?: return false
+            // We need the filename to determine the subfolder
+            // For simplicity, copy/move directly into Selection (subfolder sorting
+            // would need a filename lookup — skip for Drive for now)
+            selectionId
+        } else {
+            destFolderId
+        }
+
+        return if (move) {
+            // Drive move = update parents
+            driveClient.moveFile(fileId, destFolderId, targetFolderId)
+        } else {
+            driveClient.copyFile(fileId, targetFolderId) != null
         }
     }
 
@@ -169,5 +234,14 @@ class ImageRepositoryImpl @Inject constructor(
             }
             else -> selectionDir
         }
+    }
+
+    override suspend fun getImageDimensions(context: Context, uri: Uri): Pair<Int, Int> {
+        if (GoogleDriveImageSource.isDriveUri(uri)) {
+            val fileId = GoogleDriveImageSource.extractId(uri) ?: return Pair(0, 0)
+            val cached = driveImageSource.ensureCached(fileId, fileId) ?: return Pair(0, 0)
+            return localImageSource.getImageDimensions(Uri.fromFile(cached))
+        }
+        return localImageSource.getImageDimensions(uri)
     }
 }

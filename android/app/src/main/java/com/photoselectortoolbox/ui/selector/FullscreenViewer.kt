@@ -1,12 +1,18 @@
 package com.photoselectortoolbox.ui.selector
 
 import android.app.Activity
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,16 +26,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -57,9 +65,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -72,6 +80,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -81,6 +90,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.ui.components.ScoreChip
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -92,6 +105,9 @@ fun FullscreenViewer(
     onMoveToSelection: (Int) -> Unit,
     onCopyToSelection: (Int) -> Unit,
     windowSizeClass: WindowSizeClass,
+    onPageSelected: (Int) -> Unit = {},
+    fullscreenButtonsEnabled: Boolean = true,
+    fullscreenGestureAction: String = "copy",
 ) {
     val isExpanded = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
@@ -129,6 +145,9 @@ fun FullscreenViewer(
             onDelete = onDelete,
             onMoveToSelection = onMoveToSelection,
             onCopyToSelection = onCopyToSelection,
+            onPageSelected = onPageSelected,
+            fullscreenButtonsEnabled = fullscreenButtonsEnabled,
+            fullscreenGestureAction = fullscreenGestureAction,
         )
     }
 }
@@ -143,6 +162,9 @@ private fun FullscreenContent(
     onDelete: (Int) -> Unit,
     onMoveToSelection: (Int) -> Unit,
     onCopyToSelection: (Int) -> Unit,
+    onPageSelected: (Int) -> Unit,
+    fullscreenButtonsEnabled: Boolean,
+    fullscreenGestureAction: String,
 ) {
     val pagerState = rememberPagerState(
         initialPage = initialIndex,
@@ -154,17 +176,31 @@ private fun FullscreenContent(
     var showOverlay by remember { mutableStateOf(true) }
     var currentPageIndex by remember { mutableStateOf(initialIndex) }
 
-    // Track settled page
+    // Track settled page and sync back to caller/viewmodel
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collect { page ->
             currentPageIndex = page
+            onPageSelected(page)
+        }
+    }
+
+    // Sync from viewmodel changes (like deletion or key events shifting the index)
+    LaunchedEffect(initialIndex) {
+        if (pagerState.currentPage != initialIndex && initialIndex in images.indices) {
+            pagerState.scrollToPage(initialIndex)
         }
     }
 
     val currentImage = images.getOrNull(currentPageIndex)
 
-    // Vertical drag state for dismiss gesture
-    var verticalDragOffset by remember { mutableFloatStateOf(0f) }
+    // Collection flash feedback
+    var showCollectionFlash by remember { mutableStateOf(false) }
+    LaunchedEffect(showCollectionFlash) {
+        if (showCollectionFlash) {
+            delay(700)
+            showCollectionFlash = false
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -177,7 +213,7 @@ private fun FullscreenContent(
                         Key.Delete, Key.Backspace -> { onDelete(currentPageIndex); true }
                         Key.M -> { onMoveToSelection(currentPageIndex); true }
                         Key.C -> { onCopyToSelection(currentPageIndex); true }
-                        Key.DirectionLeft -> {
+                        Key.DirectionUp -> {
                             if (currentPageIndex > 0) {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(currentPageIndex - 1)
@@ -185,7 +221,7 @@ private fun FullscreenContent(
                             }
                             true
                         }
-                        Key.DirectionRight -> {
+                        Key.DirectionDown -> {
                             if (currentPageIndex < images.size - 1) {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(currentPageIndex + 1)
@@ -198,39 +234,32 @@ private fun FullscreenContent(
                 } else false
             },
     ) {
-        // Image pager with zoom support
-        HorizontalPager(
+        // Vertical Image pager with zoom & swipe support
+        VerticalPager(
             state = pagerState,
             userScrollEnabled = pagerScrollEnabled,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    translationY = verticalDragOffset
-                    alpha = 1f - (kotlin.math.abs(verticalDragOffset) / 1000f).coerceAtMost(0.5f)
-                }
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            if (kotlin.math.abs(verticalDragOffset) > 200f) {
-                                onDismiss()
-                            }
-                            verticalDragOffset = 0f
-                        },
-                        onDragCancel = { verticalDragOffset = 0f },
-                        onVerticalDrag = { _, dragAmount ->
-                            verticalDragOffset += dragAmount
-                        },
-                    )
-                },
+            modifier = Modifier.fillMaxSize(),
             key = { images[it].uri },
+            beyondViewportPageCount = 1,
         ) { page ->
-            ZoomableImage(
-                imageUri = images[page].uri,
-                contentDescription = images[page].fileName,
+            FullscreenImagePage(
+                image = images[page],
+                showOverlay = showOverlay,
                 onTap = { showOverlay = !showOverlay },
                 onZoomChanged = { isZoomed ->
                     pagerScrollEnabled = !isZoomed
-                }
+                },
+                onDelete = { onDelete(page) },
+                onDismiss = onDismiss,
+                onDoubleTap = {
+                    if (fullscreenGestureAction == "copy") {
+                        onCopyToSelection(page)
+                    } else {
+                        onMoveToSelection(page)
+                    }
+                    showCollectionFlash = true
+                },
+                isGestureEnabled = pagerScrollEnabled, // only enable swipes when not zoomed
             )
         }
 
@@ -249,44 +278,46 @@ private fun FullscreenContent(
                         .padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    FilledTonalIconButton(
-                        onClick = { onDelete(currentPageIndex) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.6f),
-                            contentColor = Color.White,
-                        ),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    }
+                    if (fullscreenButtonsEnabled) {
+                        FilledTonalIconButton(
+                            onClick = { onDelete(currentPageIndex) },
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = Color.Black.copy(alpha = 0.6f),
+                                contentColor = Color.White,
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
 
-                    FilledTonalIconButton(
-                        onClick = { onMoveToSelection(currentPageIndex) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.6f),
-                            contentColor = Color.White,
-                        ),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DriveFileMove,
-                            contentDescription = "Move to Selection",
-                        )
-                    }
+                        FilledTonalIconButton(
+                            onClick = { onMoveToSelection(currentPageIndex) },
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = Color.Black.copy(alpha = 0.6f),
+                                contentColor = Color.White,
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DriveFileMove,
+                                contentDescription = "Move to Selection",
+                            )
+                        }
 
-                    FilledTonalIconButton(
-                        onClick = { onCopyToSelection(currentPageIndex) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.6f),
-                            contentColor = Color.White,
-                        ),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy to Selection",
-                        )
+                        FilledTonalIconButton(
+                            onClick = { onCopyToSelection(currentPageIndex) },
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = Color.Black.copy(alpha = 0.6f),
+                                contentColor = Color.White,
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy to Selection",
+                            )
+                        }
                     }
 
                     FilledTonalIconButton(
@@ -403,6 +434,122 @@ private fun FullscreenContent(
                 )
             }
         }
+
+        // Collection flash (centered checkmark)
+        AnimatedVisibility(
+            visible = showCollectionFlash,
+            modifier = Modifier.align(Alignment.Center),
+            enter = scaleIn(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+            exit = scaleOut(tween(200)) + fadeOut(tween(200)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(com.photoselectortoolbox.ui.theme.SuccessGreen.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Added to selection",
+                    tint = Color.White,
+                    modifier = Modifier.size(44.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullscreenImagePage(
+    image: ImageItem,
+    showOverlay: Boolean,
+    onTap: () -> Unit,
+    onZoomChanged: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+    onDoubleTap: () -> Unit,
+    isGestureEnabled: Boolean,
+) {
+    var horizontalDragOffset by remember { mutableFloatStateOf(0f) }
+    var isZoomed by remember { mutableStateOf(false) }
+    val deleteThreshold = -200f
+    val dismissThreshold = 200f
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(isGestureEnabled, isZoomed) {
+                if (isGestureEnabled && !isZoomed) {
+                    detectTapGestures(
+                        onTap = { onTap() },
+                        onDoubleTap = { onDoubleTap() }
+                    )
+                }
+            }
+    ) {
+        // Horizontal offset and alpha applied to image container
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset { IntOffset(horizontalDragOffset.roundToInt(), 0) }
+                .graphicsLayer {
+                    if (isGestureEnabled && !isZoomed) {
+                        alpha = (1f - (abs(horizontalDragOffset) / 400f)).coerceIn(0.2f, 1f)
+                    }
+                }
+                .pointerInput(isGestureEnabled, isZoomed) {
+                    if (isGestureEnabled && !isZoomed) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (horizontalDragOffset < deleteThreshold) {
+                                    onDelete()
+                                } else if (horizontalDragOffset > dismissThreshold) {
+                                    onDismiss()
+                                }
+                                horizontalDragOffset = 0f
+                            },
+                            onDragCancel = { horizontalDragOffset = 0f },
+                            onHorizontalDrag = { _, dragAmount ->
+                                horizontalDragOffset += dragAmount
+                            }
+                        )
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            val parsedUri = remember(image.uri) { Uri.parse(image.uri) }
+            ZoomableImage(
+                imageUri = parsedUri.toString(),
+                contentDescription = image.fileName,
+                onTap = { onTap() },
+                onZoomChanged = { zoomed ->
+                    isZoomed = zoomed
+                    onZoomChanged(zoomed)
+                }
+            )
+        }
+
+        // Delete indicator (right edge, appears when swiping left)
+        if (isGestureEnabled && !isZoomed && horizontalDragOffset < -40f) {
+            val progress = (abs(horizontalDragOffset) / abs(deleteThreshold)).coerceIn(0f, 1f)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 24.dp)
+                    .size((48 + 16 * progress).dp)
+                    .clip(CircleShape)
+                    .background(com.photoselectortoolbox.ui.theme.ErrorRed.copy(alpha = 0.6f + 0.4f * progress)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = Color.White,
+                    modifier = Modifier.size((24 + 8 * progress).dp),
+                )
+            }
+        }
     }
 }
 
@@ -454,7 +601,7 @@ private fun ZoomableImage(
                             offset = Offset.Zero
                             isZoomed = false
                         } else {
-                            // Zoom to 100% (or 2.5x for usability)
+                            // Zoom to 2.5x for usability
                             scale = 2.5f
                             offset = Offset.Zero
                             isZoomed = true
@@ -465,8 +612,9 @@ private fun ZoomableImage(
             .transformable(state = transformState, enabled = scale > 1f),
         contentAlignment = Alignment.Center,
     ) {
+        val parsedUri = remember(imageUri) { Uri.parse(imageUri) }
         AsyncImage(
-            model = imageUri,
+            model = parsedUri,
             contentDescription = contentDescription,
             modifier = Modifier
                 .fillMaxSize()
@@ -480,3 +628,4 @@ private fun ZoomableImage(
         )
     }
 }
+

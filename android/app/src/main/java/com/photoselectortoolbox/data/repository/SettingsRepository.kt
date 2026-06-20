@@ -12,6 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,6 +41,9 @@ class SettingsRepository @Inject constructor(
         private val KEY_PHONE_SORT_BY_ORIENTATION = booleanPreferencesKey("phone_sort_by_orientation")
         private val KEY_PHONE_GESTURE_TUTORIAL_TS = longPreferencesKey("phone_gesture_tutorial_ts")
         private val KEY_PHONE_FORCE_MODE = stringPreferencesKey("phone_force_mode")
+        private val KEY_PHONE_FILE_TYPE_FILTER = stringPreferencesKey("phone_file_type_filter")
+        private val KEY_FULLSCREEN_BUTTONS_ENABLED = booleanPreferencesKey("fullscreen_buttons_enabled")
+        private val KEY_FULLSCREEN_GESTURE_ACTION = stringPreferencesKey("fullscreen_gesture_action")
 
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
         const val DEFAULT_SORTING_ENABLED = true
@@ -81,6 +85,14 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_ANALYSIS_THREAD_COUNT] ?: DEFAULT_ANALYSIS_THREAD_COUNT
     }
 
+    val fullscreenButtonsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FULLSCREEN_BUTTONS_ENABLED] ?: true
+    }
+
+    val fullscreenGestureAction: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FULLSCREEN_GESTURE_ACTION] ?: "copy"
+    }
+
     suspend fun setSelectionFolderName(name: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_SELECTION_FOLDER_NAME] = name
@@ -118,6 +130,18 @@ class SettingsRepository @Inject constructor(
     suspend fun setAnalysisThreadCount(count: Int) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ANALYSIS_THREAD_COUNT] = count.coerceIn(1, 4)
+        }
+    }
+
+    suspend fun setFullscreenButtonsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FULLSCREEN_BUTTONS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setFullscreenGestureAction(action: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FULLSCREEN_GESTURE_ACTION] = action
         }
     }
 
@@ -192,5 +216,37 @@ class SettingsRepository @Inject constructor(
             if (mode != null) prefs[KEY_PHONE_FORCE_MODE] = mode
             else prefs.remove(KEY_PHONE_FORCE_MODE)
         }
+    }
+
+    // ── File type filter ─────────────────────────────────────────────────
+
+    /** "all" (default), "raw", or "jpg" */
+    val phoneFileTypeFilter: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PHONE_FILE_TYPE_FILTER] ?: "all"
+    }
+
+    suspend fun setPhoneFileTypeFilter(filter: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_PHONE_FILE_TYPE_FILTER] = filter
+        }
+    }
+
+    // ── Per-folder last position ─────────────────────────────────────────
+
+    /**
+     * Persist the last viewed image index for a given folder URI.
+     * Key is derived by hashing the URI to keep preference keys short.
+     */
+    suspend fun setFolderLastPosition(folderUri: String, index: Int) {
+        val key = intPreferencesKey("folder_pos_${folderUri.hashCode()}")
+        context.dataStore.edit { prefs ->
+            prefs[key] = index
+        }
+    }
+
+    /** Retrieve the last viewed position for a folder. Returns 0 if none stored. */
+    suspend fun getFolderLastPosition(folderUri: String): Int {
+        val key = intPreferencesKey("folder_pos_${folderUri.hashCode()}")
+        return context.dataStore.data.map { prefs -> prefs[key] ?: 0 }.first()
     }
 }

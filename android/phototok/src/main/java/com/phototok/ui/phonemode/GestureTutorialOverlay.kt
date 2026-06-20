@@ -1,4 +1,4 @@
-package com.photoselectortoolbox.ui.phonemode
+package com.phototok.ui.phonemode
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -45,7 +45,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.photoselectortoolbox.ui.theme.Indigo500
+import com.phototok.ui.theme.Indigo500
 
 /**
  * Full-screen animated overlay that teaches the three phone-mode gestures.

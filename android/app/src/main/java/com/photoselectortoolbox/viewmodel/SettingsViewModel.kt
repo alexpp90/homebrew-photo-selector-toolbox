@@ -21,11 +21,9 @@ data class SettingsUiState(
     val groupingLevel: GroupingLevel = GroupingLevel.TIME_FILENAME,
     val analysisThreadCount: Int = 4,
     val cachedScoreCount: Int = 0,
-    // Phone mode
-    val phoneCollectionAction: String = "copy",
-    val phoneDeleteConfirmEnabled: Boolean = true,
-    val phoneSortByOrientation: Boolean = true,
     val phoneCollectionUri: String? = null,
+    val fullscreenButtonsEnabled: Boolean = true,
+    val fullscreenGestureAction: String = "copy",
 )
 
 @HiltViewModel
@@ -44,18 +42,19 @@ class SettingsViewModel @Inject constructor(
                 settingsRepository.sortingEnabled,
                 settingsRepository.groupingEnabled,
                 settingsRepository.groupingLevel,
-                settingsRepository.analysisThreadCount
-            ) { folderName, sorting, enabled, grouping, threadCount ->
+                settingsRepository.analysisThreadCount,
+                settingsRepository.fullscreenButtonsEnabled,
+                settingsRepository.fullscreenGestureAction
+            ) { arrays ->
                 SettingsUiState(
-                    selectionFolderName = folderName,
-                    sortingEnabled = sorting,
-                    groupingEnabled = enabled,
-                    groupingLevel = grouping,
-                    analysisThreadCount = threadCount,
+                    selectionFolderName = arrays[0] as String,
+                    sortingEnabled = arrays[1] as Boolean,
+                    groupingEnabled = arrays[2] as Boolean,
+                    groupingLevel = arrays[3] as GroupingLevel,
+                    analysisThreadCount = arrays[4] as Int,
+                    fullscreenButtonsEnabled = arrays[5] as Boolean,
+                    fullscreenGestureAction = arrays[6] as String,
                     cachedScoreCount = _uiState.value.cachedScoreCount,
-                    phoneCollectionAction = _uiState.value.phoneCollectionAction,
-                    phoneDeleteConfirmEnabled = _uiState.value.phoneDeleteConfirmEnabled,
-                    phoneSortByOrientation = _uiState.value.phoneSortByOrientation,
                     phoneCollectionUri = _uiState.value.phoneCollectionUri,
                 )
             }.collect { newState ->
@@ -63,36 +62,14 @@ class SettingsViewModel @Inject constructor(
             }
         }
 
-        // Observe phone-mode settings separately to keep combine arity manageable
         viewModelScope.launch {
-            combine(
-                settingsRepository.phoneCollectionAction,
-                settingsRepository.phoneDeleteConfirmEnabled,
-                settingsRepository.phoneSortByOrientation,
-                settingsRepository.phoneCollectionUri,
-            ) { action, confirm, sortOrientation, collectionUri ->
-                PhoneSettings(action, confirm, sortOrientation, collectionUri)
-            }.collect { ps ->
-                _uiState.update {
-                    it.copy(
-                        phoneCollectionAction = ps.action,
-                        phoneDeleteConfirmEnabled = ps.confirm,
-                        phoneSortByOrientation = ps.sortOrientation,
-                        phoneCollectionUri = ps.collectionUri,
-                    )
-                }
+            settingsRepository.phoneCollectionUri.collect { uri ->
+                _uiState.update { it.copy(phoneCollectionUri = uri) }
             }
         }
 
         refreshCachedScoreCount()
     }
-
-    private data class PhoneSettings(
-        val action: String,
-        val confirm: Boolean,
-        val sortOrientation: Boolean,
-        val collectionUri: String?,
-    )
 
     fun updateSelectionFolder(name: String) {
         val trimmed = name.trim()
@@ -138,20 +115,16 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun updatePhoneCollectionAction(action: String) {
-        viewModelScope.launch { settingsRepository.setPhoneCollectionAction(action) }
-    }
-
-    fun updatePhoneDeleteConfirm(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setPhoneDeleteConfirmEnabled(enabled) }
-    }
-
-    fun updatePhoneSortByOrientation(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setPhoneSortByOrientation(enabled) }
-    }
-
     fun updatePhoneCollectionUri(uri: String?) {
         viewModelScope.launch { settingsRepository.setPhoneCollectionUri(uri) }
+    }
+
+    fun updateFullscreenButtonsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setFullscreenButtonsEnabled(enabled) }
+    }
+
+    fun updateFullscreenGestureAction(action: String) {
+        viewModelScope.launch { settingsRepository.setFullscreenGestureAction(action) }
     }
 
     private fun refreshCachedScoreCount() {
