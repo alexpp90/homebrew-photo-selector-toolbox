@@ -59,7 +59,7 @@ class OllamaAestheticTool(AnalysisTool):
             rgb_img = load_image_preview(filepath, max_size=(400, 400))
             if rgb_img is None:
                 raise RuntimeError("load_image_preview returned None")
-                
+
             buffer = io.BytesIO()
             rgb_img.save(buffer, format="JPEG", quality=85)
             img_bytes = buffer.getvalue()
@@ -78,7 +78,7 @@ class OllamaAestheticTool(AnalysisTool):
             "images": [img_b64],
             "stream": False,
         }
-        
+
         try:
             req = urllib.request.Request(
                 url,
@@ -117,6 +117,6 @@ class OllamaAestheticTool(AnalysisTool):
             analysis_tag = match_analysis.group(1).strip()
             if len(analysis_tag) > 30:
                 analysis_tag = analysis_tag[:27] + "..."
-        
+
         return score, analysis_tag
 

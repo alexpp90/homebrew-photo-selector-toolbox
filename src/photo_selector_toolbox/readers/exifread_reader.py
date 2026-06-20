@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class ExifReadReader(ExifReader):
     """EXIF reader using exifread library."""
-    
+
     def can_handle(self, path: Path) -> bool:
         from photo_selector_toolbox.reader import FORCE_EXIFTOOL_EXTENSIONS
         return path.suffix.lower() in FORCE_EXIFTOOL_EXTENSIONS

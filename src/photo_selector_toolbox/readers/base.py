@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class ExifReader(ABC):
     """Base class for EXIF extraction strategies."""
-    
+
     @abstractmethod
     def can_handle(self, path: Path) -> bool:
         """Whether this reader supports the given file type."""

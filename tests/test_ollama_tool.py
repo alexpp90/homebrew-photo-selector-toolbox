@@ -50,7 +50,7 @@ def dummy_image_file(tmp_path):
 def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock Ollama HTTP response payload
     mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."}
-    
+
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
     mock_response.__enter__.return_value = mock_response
@@ -92,7 +92,7 @@ def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_d
     assert tag == "Sharp"
     req = mock_urlopen.call_args[0][0]
     assert req.full_url == "http://192.168.1.50:11434/api/generate"
-    
+
     # Assert JSON payload parameters match config
     body = json.loads(req.data.decode("utf-8"))
     assert body["model"] == "qwen-vl"
@@ -115,7 +115,7 @@ def test_ollama_tool_connection_error(mock_urlopen, dummy_image_file, temp_confi
 def test_ollama_tool_parsing_error(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with no float scores in text
     mock_resp_payload = {"response": "This is a photo of a sunset, it looks great but I can't give a number."}
-    
+
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
     mock_response.__enter__.return_value = mock_response
@@ -133,7 +133,8 @@ def test_load_config_migration(temp_config_dir):
     old_prompt = (
         "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
         "Consider composition, lighting, focus, and subject. "
-        "Provide your reasoning in one short sentence, then end your response with the score in the format [SCORE: X.Y]."
+        "Provide your reasoning in one short sentence, then end your response "
+        "with the score in the format [SCORE: X.Y]."
     )
     old_config = {
         "ollama_url": "http://localhost:11434",
@@ -172,10 +173,12 @@ def test_load_config_migration(temp_config_dir):
         "- 1.0 - 3.0: Very poor (blurry, out of focus, extremely poor lighting/exposure, or no clear subject).\n"
         "- 4.0 - 6.0: Average (acceptable quality but has noticeable flaws in composition, lighting, or sharpness).\n"
         "- 7.0 - 8.0: Good (sharp, well-composed, appealing lighting/subject).\n"
-        "- 9.0 - 10.0: Outstanding (perfect exposure/lighting, creative composition, excellent sharpness, professional grade).\n\n"
+        "- 9.0 - 10.0: Outstanding (perfect exposure/lighting, creative composition, "
+        "excellent sharpness, professional grade).\n\n"
         "Start your response in this exact format:\n"
         "[SCORE: X.Y] [ANALYSIS: tag]\n"
-        "where tag is exactly a 1 or 2 word description of the main reason (e.g. 'Blurry', 'Good composition', 'Under-exposed', 'Great lighting', 'Soft focus', 'Well-composed'). "
+        "where tag is exactly a 1 or 2 word description of the main reason "
+        "(e.g. 'Blurry', 'Good composition', 'Under-exposed', 'Great lighting', 'Soft focus', 'Well-composed'). "
         "Follow it with a short sentence explaining your reasoning."
     )
     old_config_3 = {
@@ -188,7 +191,7 @@ def test_load_config_migration(temp_config_dir):
 
     loaded_3 = load_config()
     assert loaded_3["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
-    
+
     # Verify that it is also written back to disk
     with open(ot.CONFIG_FILE, "r", encoding="utf-8") as f:
         on_disk = json.load(f)
@@ -199,7 +202,7 @@ def test_load_config_migration(temp_config_dir):
 def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with SCORE but no ANALYSIS tag
     mock_resp_payload = {"response": "The aesthetic quality score of this photo is 8.5."}
-    
+
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
     mock_response.__enter__.return_value = mock_response

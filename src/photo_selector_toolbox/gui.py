@@ -368,7 +368,10 @@ class ImageLibraryStatistics(ttk.Frame):
 
         desc_lbl = ttk.Label(
             self.overview_frame,
-            text="Analyze and visualize focal lengths, aperture, shutter speeds, ISO levels, and lens usage across your photo library.",
+            text=(
+                "Analyze and visualize focal lengths, aperture, shutter speeds, "
+                "ISO levels, and lens usage across your photo library."
+            ),
             font=("Helvetica", 10),
             wraplength=600,
             justify="left",
@@ -385,7 +388,8 @@ class ImageLibraryStatistics(ttk.Frame):
             "1. Images Folder: Select the root directory containing your JPEG, RAW, or other image files.",
             "2. Output Folder: Choose a directory where the generated statistics plots will be saved.",
             "3. Analyze: Click the 'Analyze' button to start scanning subdirectories.",
-            "4. View Results: Results will appear in real-time. Review logs or click individual plot tabs once complete.",
+            "4. View Results: Results will appear in real-time. "
+            "Review logs or click individual plot tabs once complete.",
         ]
         for step in steps:
             lbl = ttk.Label(card, text=step, padding=2)
@@ -707,7 +711,10 @@ class DuplicateFinder(ttk.Frame):
         # Initial Empty State Card
         self.empty_state_lbl = ttk.Label(
             self.scrollable_frame,
-            text="No duplicates searched yet.\n\nSelect a folder above and click 'Find Duplicates' to scan for exact matches.",
+            text=(
+                "No duplicates searched yet.\n\n"
+                "Select a folder above and click 'Find Duplicates' to scan for exact matches."
+            ),
             font=("Helvetica", 11),
             justify="center",
             padding=40,
@@ -1706,7 +1713,11 @@ class MainApp(tk.Tk):
                             r.exif.lens or "",
                         ]
                     writer.writerow(row)
-            messagebox.showinfo("Export", f"Exported {len(sharpness_frame.scan_results)} results to:\n{filepath}", parent=self)
+            messagebox.showinfo(
+                "Export",
+                f"Exported {len(sharpness_frame.scan_results)} results to:\n{filepath}",
+                parent=self
+            )
         except Exception as e:
             messagebox.showerror("Export Failed", f"Failed to export: {e}", parent=self)
 

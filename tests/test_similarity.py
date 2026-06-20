@@ -46,7 +46,8 @@ def test_group_files_by_similarity():
     files_map = {
         Path("img1.jpg"): ScanResult(Path("img1.jpg"), scores={"dhash": "0000000000000000"}),
         Path("img2.jpg"): ScanResult(Path("img2.jpg"), scores={"dhash": "0000000000000001"}), # diff 1
-        Path("img3.jpg"): ScanResult(Path("img3.jpg"), scores={"dhash": "0000000000000003"}), # diff 1 (total diff 2 from prev)
+        # diff 1 (total diff 2 from prev)
+        Path("img3.jpg"): ScanResult(Path("img3.jpg"), scores={"dhash": "0000000000000003"}),
         Path("img4.jpg"): ScanResult(Path("img4.jpg"), scores={"dhash": "ffffffffffffffff"}), # diff 64
         Path("img5.jpg"): ScanResult(Path("img5.jpg"), scores={"dhash": "f000000000000000"}), # diff 4
     }
@@ -91,16 +92,26 @@ def test_gui_grouping_toggle(mock_load, monkeypatch):
     tool = SharpnessTool(root)
    # Set grouping level to Time + Fast Similarity which uses dhash
     tool.group_level_var.set("Time + Fast Similarity")
-    
+
    # Mock files with matching prefixes
     files = [Path("DSC_0001.JPG"), Path("DSC_0002.JPG"), Path("DSC_0003.JPG")]
     tool.sorted_files = files.copy()
     tool.candidates = files.copy()
-    
+
     tool.files_map = {
-        Path("DSC_0001.JPG"): ScanResult(Path("DSC_0001.JPG"), scores={"dhash": "0000000000000000", "dhash_8": "0000000000000000", "sharpness": 10.0}),
-        Path("DSC_0002.JPG"): ScanResult(Path("DSC_0002.JPG"), scores={"dhash": "0000000000000001", "dhash_8": "0000000000000001", "sharpness": 50.0}), # b is sharpest representative
-        Path("DSC_0003.JPG"): ScanResult(Path("DSC_0003.JPG"), scores={"dhash": "0000000000000002", "dhash_8": "0000000000000002", "sharpness": 20.0}),
+        Path("DSC_0001.JPG"): ScanResult(
+            Path("DSC_0001.JPG"),
+            scores={"dhash": "0000000000000000", "dhash_8": "0000000000000000", "sharpness": 10.0},
+        ),
+        # b is sharpest representative
+        Path("DSC_0002.JPG"): ScanResult(
+            Path("DSC_0002.JPG"),
+            scores={"dhash": "0000000000000001", "dhash_8": "0000000000000001", "sharpness": 50.0},
+        ),
+        Path("DSC_0003.JPG"): ScanResult(
+            Path("DSC_0003.JPG"),
+            scores={"dhash": "0000000000000002", "dhash_8": "0000000000000002", "sharpness": 20.0},
+        ),
     }
 
    # By default, Group Similar is off
@@ -131,7 +142,7 @@ def test_gui_grouping_toggle(mock_load, monkeypatch):
     tool.execute_delete(Path("DSC_0002.JPG"), 0)
     assert len(tool.image_groups) == 1
     assert tool.image_groups[0].representative == Path("DSC_0003.JPG")
-    
+
     root.destroy()
 
 
@@ -177,7 +188,7 @@ def test_group_files_by_similarity_time_fast():
         Path("DSC_0002.JPG"),
         Path("DSC_0003.JPG"),
     ]
-    
+
    # DSC_0001 and DSC_0002: similar (diff 1)
    # DSC_0002 and DSC_0003: not similar (diff 64)
     files_map = {
@@ -185,7 +196,7 @@ def test_group_files_by_similarity_time_fast():
         Path("DSC_0002.JPG"): ScanResult(Path("DSC_0002.JPG"), scores={"dhash_8": "0000000000000001"}),
         Path("DSC_0003.JPG"): ScanResult(Path("DSC_0003.JPG"), scores={"dhash_8": "ffffffffffffffff"}),
     }
-    
+
     mtimes = {
         Path("DSC_0001.JPG"): 1000.0,
         Path("DSC_0002.JPG"): 1010.0, # diff 10s <= 30s
@@ -209,15 +220,24 @@ def test_group_files_by_similarity_detailed():
         Path("DSC_0002.JPG"),
         Path("DSC_0003.JPG"),
     ]
-    
+
    # DSC_0001 and DSC_0002: similar (diff 1)
    # DSC_0002 and DSC_0003: not similar (diff 64)
     files_map = {
-        Path("DSC_0001.JPG"): ScanResult(Path("DSC_0001.JPG"), scores={"dhash_16": "0000000000000000000000000000000000000000000000000000000000000000"}),
-        Path("DSC_0002.JPG"): ScanResult(Path("DSC_0002.JPG"), scores={"dhash_16": "0000000000000000000000000000000000000000000000000000000000000001"}),
-        Path("DSC_0003.JPG"): ScanResult(Path("DSC_0003.JPG"), scores={"dhash_16": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}),
+        Path("DSC_0001.JPG"): ScanResult(
+            Path("DSC_0001.JPG"),
+            scores={"dhash_16": "0000000000000000000000000000000000000000000000000000000000000000"},
+        ),
+        Path("DSC_0002.JPG"): ScanResult(
+            Path("DSC_0002.JPG"),
+            scores={"dhash_16": "0000000000000000000000000000000000000000000000000000000000000001"},
+        ),
+        Path("DSC_0003.JPG"): ScanResult(
+            Path("DSC_0003.JPG"),
+            scores={"dhash_16": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+        ),
     }
-    
+
     mtimes = {
         Path("DSC_0001.JPG"): 1000.0,
         Path("DSC_0002.JPG"): 1010.0, # diff 10s <= 30s
@@ -308,7 +328,7 @@ def test_gui_grouping_cancellation(monkeypatch):
     assert tool.is_grouping is False
     assert tool.group_similar_var.get() is False
     assert tool.group_level_var.get() == "Time & Filename"
-    
+
    # Verify widgets were re-enabled
     tool.group_similar_chk.state.assert_any_call(["!disabled"])
     tool.scan_options_btn.state.assert_any_call(["!disabled"])

@@ -1,6 +1,7 @@
 package com.photoselectortoolbox.data.source
 
 import android.content.Context
+import android.os.Build
 import android.os.Environment
 import android.os.storage.StorageManager
 import android.os.storage.StorageVolume
@@ -43,7 +44,11 @@ class ExternalStorageDetector @Inject constructor(
                 ) continue
 
                 val description = volume.getDescription(context) ?: "External Storage"
-                val directory = volume.directory ?: continue
+                val directory = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    volume.directory
+                } else {
+                    null
+                } ?: continue
 
                 results.add(
                     ExternalVolume(

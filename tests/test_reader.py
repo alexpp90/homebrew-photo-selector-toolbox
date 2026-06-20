@@ -111,7 +111,10 @@ def test_get_exif_data_exiftool_general_error(image_dir, caplog):
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    assert any("exiftool failed on test.dng: Mocked general error for exiftool" in record.message for record in caplog.records)
+    assert any(
+        "exiftool failed on test.dng: Mocked general error for exiftool" in record.message
+        for record in caplog.records
+    )
     assert result is None
 
 
@@ -137,7 +140,10 @@ def test_get_exif_data_exifread_general_error(image_dir, caplog):
     with patch("builtins.__import__", side_effect=mock_import):
         result = get_exif_data(p, debug=True)
 
-    assert any("exifread failed on test.dng: Mocked general error for exifread" in record.message for record in caplog.records)
+    assert any(
+        "exifread failed on test.dng: Mocked general error for exifread" in record.message
+        for record in caplog.records
+    )
     assert result is None
 
 
