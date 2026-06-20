@@ -95,6 +95,7 @@ fun PhoneModeViewer(
     onAddToCollection: () -> Unit,
     onRequestDelete: () -> Unit,
     showExifOverlay: Boolean = true,
+    showPageCounter: Boolean = true,
 ) {
     if (images.isEmpty()) return
 
@@ -153,6 +154,7 @@ fun PhoneModeViewer(
                 totalCount = images.size,
                 isOrientationDivider = portraitSectionStart in 1 until images.size && page == portraitSectionStart,
                 showExifOverlay = showExifOverlay,
+                showPageCounter = showPageCounter,
                 hudAlpha = hudAlpha,
                 onDoubleTap = {
                     onAddToCollection()
@@ -204,6 +206,7 @@ private fun ImagePage(
     totalCount: Int,
     isOrientationDivider: Boolean,
     showExifOverlay: Boolean,
+    showPageCounter: Boolean,
     hudAlpha: Float,
     onDoubleTap: () -> Unit,
     onSingleTap: () -> Unit,
@@ -426,26 +429,28 @@ private fun ImagePage(
         }
 
         // ── Page counter (pill badge, bottom-end) ────────────────────
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = 16.dp, bottom = 100.dp)
-                .graphicsLayer { alpha = hudAlpha },
-            shape = RoundedCornerShape(50),
-            color = colors.surfaceContainerHigh.copy(alpha = 0.8f),
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                colors.outline.copy(alpha = 0.2f),
-            ),
-        ) {
-            Text(
-                text = "${pageIndex + 1} / $totalCount",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-            )
+        if (showPageCounter && hudAlpha > 0f) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 100.dp)
+                    .graphicsLayer { alpha = hudAlpha },
+                shape = RoundedCornerShape(50),
+                color = colors.surfaceContainerHigh.copy(alpha = 0.8f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    colors.outline.copy(alpha = 0.2f),
+                ),
+            ) {
+                Text(
+                    text = "${pageIndex + 1} / $totalCount",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                )
+            }
         }
     }
 }
