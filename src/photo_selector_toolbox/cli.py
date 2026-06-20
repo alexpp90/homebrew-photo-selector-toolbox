@@ -12,7 +12,7 @@ from photo_selector_toolbox import __version__
 from photo_selector_toolbox.reader import get_exif_data, SUPPORTED_EXTENSIONS
 from photo_selector_toolbox.analyzer import analyze_data, analyze_data_json
 from photo_selector_toolbox.visualizer import create_plots
-from photo_selector_toolbox.utils import is_excluded_subfolder, get_excluded_folder_names
+from photo_selector_toolbox.utils import get_excluded_folder_names
 
 
 def main():

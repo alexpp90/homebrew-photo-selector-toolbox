@@ -1141,7 +1141,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             ).start()
 
     def _preload_all_metadata_and_dhashes(self, paths):
-        from photo_selector_toolbox.utils import calculate_dhash
         from photo_selector_toolbox.cache import ScoreCache
         cache = ScoreCache()
 
@@ -1496,7 +1495,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.log(f"Starting similarity analysis for series grouping on {len(missing)} files...")
 
         def run_calc():
-            from photo_selector_toolbox.utils import calculate_dhash
             from photo_selector_toolbox.cache import ScoreCache
             cache = ScoreCache()
 
@@ -1614,10 +1612,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         sort_by = self.sort_by_var.get()
 
         if self._is_grouping_enabled():
-            from photo_selector_toolbox.utils import (
-                group_files_by_similarity,
-            )
-           # Ensure grouping is done on alphabetically name-sorted files
+            # Ensure grouping is done on alphabetically name-sorted files
             base_files_sorted = sorted(base_files, key=lambda x: x.name.lower())
             raw_groups = group_files_by_similarity(
                 base_files_sorted,
@@ -1639,7 +1634,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     g_files.sort(key=lambda x: self._get_sort_key(x, sort_by, is_descending))
 
                # Representative is chosen using select_representative (sharpest image)
-                from photo_selector_toolbox.utils import select_representative
                 rep = select_representative(g_files, self.files_map)
                 is_expanded = old_expanded.get(rep, False)
 
@@ -2608,7 +2602,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     group.files.remove(path)
                     if path == group.representative:
                         if group.files:
-                            from photo_selector_toolbox.utils import select_representative
                             group.representative = select_representative(group.files, self.files_map)
                     break
             self.image_groups = [g for g in self.image_groups if g.files]
@@ -2791,7 +2784,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     group.files.remove(path)
                     if path == group.representative:
                         if group.files:
-                            from photo_selector_toolbox.utils import select_representative
                             group.representative = select_representative(group.files, self.files_map)
                     break
             self.image_groups = [g for g in self.image_groups if g.files]
