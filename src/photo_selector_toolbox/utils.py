@@ -45,9 +45,19 @@ def resolve_path(path_str: str | Path) -> Path:
         # Unquote to handle spaces (%20)
         full_path_decoded = urllib.parse.unquote(full_path)
 
-        # Split into share and relative path
-        # full_path_decoded starts with /, e.g. /private/Bilder_Alben
-        parts = full_path_decoded.strip("/").split("/", 1)
+        # Use os.path.normpath to logically resolve path components
+        normalized_path = os.path.normpath(full_path_decoded)
+
+        # Ensure the normalized path is absolute (starts with /) before splitting
+        if not normalized_path.startswith("/"):
+            normalized_path = "/" + normalized_path
+
+        parts = normalized_path.strip("/").split("/", 1)
+
+        # If there are no parts, we don't have a valid share name
+        if not parts or not parts[0]:
+            return Path(path_str)
+
         share_name = parts[0]
         remainder = parts[1] if len(parts) > 1 else ""
 
