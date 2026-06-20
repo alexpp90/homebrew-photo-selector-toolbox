@@ -224,7 +224,22 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.cancel_btn.pack(pady=10)
 
     def setup_review_ui(self):
-       # Folder selection at the top of review_frame
+        """Setup the actual Photo Selector UI inside self.review_frame."""
+        # Make main layout resizable
+        self.review_frame.columnconfigure(0, weight=1)
+        self.review_frame.rowconfigure(0, weight=1)
+
+        self._setup_folder_controls()
+
+        # Layout: Left Sidebar (List), Right Main (Preview)
+        self.paned = ttk.PanedWindow(self.review_frame, orient="horizontal")
+        self.paned.pack(fill="both", expand=True)
+
+        self._setup_sidebar()
+        self._setup_main_preview()
+
+    def _setup_folder_controls(self):
+        # Folder selection at the top of review_frame
         folder_frame = ttk.Frame(self.review_frame, padding=10)
         folder_frame.pack(fill="x")
 
@@ -236,7 +251,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             side="left", padx=5
         )
 
-       # Row 2: Controls (File Type, Grouping, Sorting)
+        # Row 2: Controls (File Type, Grouping, Sorting)
         controls_row_frame = ttk.Frame(folder_frame)
         controls_row_frame.pack(fill="x", side="top")
 
@@ -269,11 +284,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.group_level_combo.pack(side="left", padx=(5, 5))
         self.group_level_combo.bind("<<ComboboxSelected>>", lambda e: self.on_group_similar_change())
 
-       # Set initial combobox state based on config
+        # Set initial combobox state based on config
         if not self._is_grouping_enabled():
             self.group_level_combo.state(["disabled"])
 
-       # Sorting Controls
+        # Sorting Controls
         ttk.Label(controls_row_frame, text="↕ Sort By:").pack(side="left", padx=(15, 5))
         self.sort_by_var = tk.StringVar(value="File Name")
         self.sort_by_combo = ttk.Combobox(
@@ -304,25 +319,22 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.sort_order_combo.pack(side="left", padx=5)
         self.sort_order_combo.bind("<<ComboboxSelected>>", self.on_sort_change)
 
-       # Layout: Left Sidebar (List), Right Main (Preview)
-        self.paned = ttk.PanedWindow(self.review_frame, orient="horizontal")
-        self.paned.pack(fill="both", expand=True)
-
-       # Sidebar
+    def _setup_sidebar(self):
+        # Sidebar
         self.sidebar = ttk.Frame(self.paned, width=250, padding=5)
         self.paned.add(self.sidebar, weight=1)
 
         ttk.Label(self.sidebar, text="🖼️ Images").pack(pady=5)
 
-       # Scan button
+        # Scan button
         self.scan_options_btn = ttk.Button(self.sidebar, text="⚡ Scan for Sharpness/Noise...")
         self.scan_options_btn.pack(fill="x", pady=5)
 
-       # Progress Container (holds scan and grouping progress bars)
+        # Progress Container (holds scan and grouping progress bars)
         self.progress_container = ttk.Frame(self.sidebar)
         self.progress_container.pack(fill="x")
 
-       # Scan Progress (Visible during review)
+        # Scan Progress (Visible during review)
         self.scan_progress_frame = ttk.Frame(self.progress_container)
         self.scan_progress_frame.pack(fill="x", pady=(0, 10))
 
@@ -336,7 +348,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.review_progress_bar.pack(fill="x")
 
-       # Grouping Progress (Hidden by default)
+        # Grouping Progress (Hidden by default)
         self.group_progress_frame = ttk.Frame(self.progress_container)
 
         self.group_status_lbl = ttk.Label(
@@ -356,7 +368,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.update_scan_button_state()
 
-       # Scrollbar and Listbox
+        # Scrollbar and Listbox
         sb = ttk.Scrollbar(self.sidebar)
         sb.pack(side="right", fill="y")
 
@@ -384,28 +396,29 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.candidate_listbox.bind("<<ListboxSelect>>", self.on_candidate_select)
         self.candidate_listbox.bind("<Double-Button-1>", self.on_listbox_double_click)
 
-       # Main Preview Area
+    def _setup_main_preview(self):
+        # Main Preview Area
         self.preview_area = ttk.Frame(self.paned, padding=10)
         self.paned.add(self.preview_area, weight=4)
 
-       # --- Top Container: Main Candidate + Controls ---
+        # --- Top Container: Main Candidate + Controls ---
         self.top_container = ttk.Frame(self.preview_area)
         self.top_container.pack(side="top", fill="both", expand=True, pady=(0, 10))
 
-       # Grid Layout for Top Container (Image Left, Controls Right)
+        # Grid Layout for Top Container (Image Left, Controls Right)
         self.top_container.columnconfigure(0, weight=3) # Image Left
         self.top_container.columnconfigure(1, weight=1) # Controls Right
 
-       # Current Candidate (Left)
+        # Current Candidate (Left)
         self.panel_curr = self.create_image_panel(self.top_container, "📄 Current Image")
-       # Using sticky="nsew" so it expands and centers properly if window shrinks
+        # Using sticky="nsew" so it expands and centers properly if window shrinks
         self.panel_curr.grid(row=0, column=0, padx=10, sticky="nsew")
 
-       # Info & Actions (Right)
+        # Info & Actions (Right)
         self.info_frame = ttk.Frame(self.top_container, padding=5)
         self.info_frame.grid(row=0, column=1, sticky="ns", padx=10)
 
-       # Metadata Label
+        # Metadata Label
         self.meta_lbl = ttk.Label(
             self.info_frame,
             text="",
@@ -415,7 +428,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.meta_lbl.pack(pady=10, anchor="w")
 
-       # Buttons (Vertical Stack)
+        # Buttons (Vertical Stack)
         btn_frame = ttk.Frame(self.info_frame)
         btn_frame.pack(pady=10, fill="x")
 
@@ -459,11 +472,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
 
-       # --- Bottom Container: Neighbors ---
+        # --- Bottom Container: Neighbors ---
         self.bottom_container = ttk.Frame(self.preview_area)
         self.bottom_container.pack(side="bottom", fill="both", expand=True, ipady=5)
 
-       # Neighbors
+        # Neighbors
         self.panel_prev = self.create_image_panel(
             self.bottom_container, "◀ Previous Image"
         )
