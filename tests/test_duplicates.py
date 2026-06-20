@@ -137,3 +137,13 @@ def test_get_file_hash_oserror(mock_open):
     mock_open.side_effect = OSError("Permission denied")
     h = get_file_hash("dummy_path")
     assert h is None
+
+
+def test_find_duplicates_non_existent():
+    assert find_duplicates("/nonexistent/folder/path") == []
+
+
+@patch("os.scandir", side_effect=OSError("Access denied"))
+def test_find_duplicates_scandir_oserror(mock_scandir, tmp_path):
+    assert find_duplicates(tmp_path) == []
+

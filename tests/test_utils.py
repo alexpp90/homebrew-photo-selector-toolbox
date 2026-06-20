@@ -219,6 +219,85 @@ class TestLoadImagePreview(unittest.TestCase):
         self.assertEqual(result, mock_img)
 
     @patch('photo_selector_toolbox.utils.Image.open')
+    @patch('photo_selector_toolbox.utils.rawpy.imread')
+    def test_raw_image_with_jpeg_thumb(self, mock_imread, mock_open):
+        """Test loading a RAW image with an embedded JPEG thumbnail."""
+        mock_raw = MagicMock()
+        mock_imread.return_value = mock_raw
+        mock_raw.__enter__.return_value = mock_raw
+
+        mock_thumb = MagicMock()
+        mock_thumb.format = 1  # Let's say rawpy.ThumbFormat.JPEG is 1
+        mock_thumb.data = b"fake_jpeg_data"
+        mock_raw.extract_thumb.return_value = mock_thumb
+
+        # Mock rawpy.ThumbFormat.JPEG
+        with patch('photo_selector_toolbox.utils.rawpy.ThumbFormat') as mock_thumb_format:
+            mock_thumb_format.JPEG = 1
+
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_open.return_value = mock_img
+
+            path = Path('test.arw')
+            result = load_image_preview(path)
+
+            self.assertEqual(result, mock_img)
+            mock_raw.extract_thumb.assert_called_once()
+            mock_open.assert_called_once()
+
+    @patch('photo_selector_toolbox.utils.Image.fromarray')
+    @patch('photo_selector_toolbox.utils.rawpy.imread')
+    def test_raw_image_with_bitmap_thumb(self, mock_imread, mock_fromarray):
+        """Test loading a RAW image with an embedded BITMAP thumbnail."""
+        mock_raw = MagicMock()
+        mock_imread.return_value = mock_raw
+        mock_raw.__enter__.return_value = mock_raw
+
+        mock_thumb = MagicMock()
+        mock_thumb.format = 2  # Let's say rawpy.ThumbFormat.BITMAP is 2
+        mock_thumb.data = b"fake_bitmap_data"
+        mock_raw.extract_thumb.return_value = mock_thumb
+
+        # Mock rawpy.ThumbFormat.BITMAP
+        with patch('photo_selector_toolbox.utils.rawpy.ThumbFormat') as mock_thumb_format:
+            mock_thumb_format.JPEG = 1
+            mock_thumb_format.BITMAP = 2
+
+            mock_img = MagicMock()
+            mock_img.convert.return_value = mock_img
+            mock_fromarray.return_value = mock_img
+
+            path = Path('test.arw')
+            result = load_image_preview(path)
+
+            self.assertEqual(result, mock_img)
+            mock_raw.extract_thumb.assert_called_once()
+            mock_fromarray.assert_called_once_with(b"fake_bitmap_data")
+
+    @patch('photo_selector_toolbox.utils.Image.fromarray')
+    @patch('photo_selector_toolbox.utils.rawpy.imread')
+    def test_raw_image_thumb_exception(self, mock_imread, mock_fromarray):
+        """Test loading a RAW image when thumb extraction raises an exception, falling back to postprocess."""
+        mock_raw = MagicMock()
+        mock_imread.return_value = mock_raw
+        mock_raw.__enter__.return_value = mock_raw
+        mock_raw.extract_thumb.side_effect = Exception("No thumb")
+
+        mock_rgb = MagicMock()
+        mock_raw.postprocess.return_value = mock_rgb
+
+        mock_img = MagicMock()
+        mock_img.copy.return_value = mock_img
+        mock_fromarray.return_value = mock_img
+
+        path = Path('test.arw')
+        result = load_image_preview(path)
+
+        self.assertEqual(result, mock_img)
+        mock_raw.postprocess.assert_called_once()
+
+    @patch('photo_selector_toolbox.utils.Image.open')
     def test_exception_handling(self, mock_open):
         """Test that None is returned on common image loading exceptions."""
         mock_open.side_effect = OSError("File not found or access denied")
@@ -266,6 +345,36 @@ class TestIsExcludedSubfolder(unittest.TestCase):
 
         # Filename is 'Selection' but it's not a folder name in path
         self.assertFalse(is_excluded_subfolder(root / "Selection.jpg", root))
+
+    def test_not_relative_path(self):
+        root = Path("/Users/alex/Photos")
+        self.assertFalse(is_excluded_subfolder(Path("/different/path/img.jpg"), root))
+
+
+class TestCreatePlaceholderImage(unittest.TestCase):
+    def test_create_placeholder_image(self):
+        from photo_selector_toolbox.utils import create_placeholder_image
+        # Verify it generates a valid PIL Image of correct dimensions
+        img = create_placeholder_image(200, 100, "Test Placeholder")
+        self.assertEqual(img.size, (200, 100))
+        self.assertEqual(img.mode, "RGB")
+
+
+class TestGetExcludedFolderNames(unittest.TestCase):
+    @patch("photo_selector_toolbox.ollama_tool.load_config")
+    def test_get_excluded_folder_names_success(self, mock_load_config):
+        from photo_selector_toolbox.utils import get_excluded_folder_names
+        mock_load_config.return_value = {"selection_folder": "MySelection"}
+        names = get_excluded_folder_names()
+        self.assertIn("myselection", names)
+        self.assertIn("selection", names)
+        self.assertIn("selected", names)
+
+    @patch("photo_selector_toolbox.ollama_tool.load_config", side_effect=Exception("Failed to load config"))
+    def test_get_excluded_folder_names_error(self, mock_load_config):
+        from photo_selector_toolbox.utils import get_excluded_folder_names
+        names = get_excluded_folder_names()
+        self.assertEqual(names, {"selection", "selected"})
 
 
 if __name__ == "__main__":
