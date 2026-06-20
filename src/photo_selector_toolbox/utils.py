@@ -45,9 +45,21 @@ def resolve_path(path_str: str | Path) -> Path:
         # Unquote to handle spaces (%20)
         full_path_decoded = urllib.parse.unquote(full_path)
 
-        # Split into share and relative path
-        # full_path_decoded starts with /, e.g. /private/Bilder_Alben
-        parts = full_path_decoded.strip("/").split("/", 1)
+        # Use posixpath.normpath to logically resolve path components
+        # cross-platform since URLs always use forward slashes
+        import posixpath
+        normalized_path = posixpath.normpath(full_path_decoded)
+
+        # Ensure the normalized path is absolute (starts with /) before splitting
+        if not normalized_path.startswith("/"):
+            normalized_path = "/" + normalized_path
+
+        parts = normalized_path.strip("/").split("/", 1)
+
+        # If there are no parts, we don't have a valid share name
+        if not parts or not parts[0]:
+            return Path(path_str)
+
         share_name = parts[0]
         remainder = parts[1] if len(parts) > 1 else ""
 
@@ -313,6 +325,25 @@ def load_image_preview(
         return None
 
 
+def get_excluded_folder_names() -> Set[str]:
+    """
+    Returns a set of lowercased folder names that should be excluded from scanning.
+    Loads the custom selection folder from the configuration.
+    """
+    excluded_names = {"selection", "selected"}
+    try:
+        from photo_selector_toolbox.ollama_tool import load_config
+
+        config = load_config()
+        custom_folder = config.get("selection_folder", "Selection")
+        custom_path = Path(custom_folder)
+        if not custom_path.is_absolute():
+            excluded_names.add(custom_path.name.lower())
+    except Exception:
+        pass
+    return excluded_names
+
+
 def is_excluded_subfolder(
     file_path: Path,
     root_path: Path,
@@ -333,17 +364,7 @@ def is_excluded_subfolder(
     try:
         relative = file_path.relative_to(root_path)
         if excluded_names is None:
-            excluded_names = {"selection", "selected"}
-            try:
-                from photo_selector_toolbox.ollama_tool import load_config
-
-                config = load_config()
-                custom_folder = config.get("selection_folder", "Selection")
-                custom_path = Path(custom_folder)
-                if not custom_path.is_absolute():
-                    excluded_names.add(custom_path.name.lower())
-            except Exception:
-                pass
+            excluded_names = get_excluded_folder_names()
 
         # Check all parts of the relative path except the last one (the filename)
         for part in relative.parts[:-1]:

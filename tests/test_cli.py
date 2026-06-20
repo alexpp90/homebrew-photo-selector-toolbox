@@ -84,3 +84,53 @@ def test_main_success(capsys, tmp_path):
 
     mock_analyze.assert_called_once_with([fake_metadata, fake_metadata])
     mock_create_plots.assert_called_once_with([fake_metadata, fake_metadata], out_dir, show_plots=True)
+
+
+def test_main_success_json(capsys, tmp_path):
+    """Test a successful run outputting metadata as JSON."""
+    img_path = tmp_path / "test.jpg"
+    img_path.touch()
+
+    from photo_selector_toolbox.models import ExifData
+    fake_metadata = ExifData(aperture=2.8, shutter_speed=0.01)
+
+    args = [
+        "cli.py",
+        str(tmp_path),
+        "--format", "json"
+    ]
+
+    with patch.object(sys, "argv", args):
+        with patch("photo_selector_toolbox.cli.get_exif_data", return_value=fake_metadata):
+            with patch(
+                "photo_selector_toolbox.cli.analyze_data_json",
+                return_value={"test": "data"}
+            ) as mock_analyze_json:
+                main()
+
+    captured = capsys.readouterr()
+    assert "test" in captured.out
+    mock_analyze_json.assert_called_once()
+
+
+def test_main_success_csv(capsys, tmp_path):
+    """Test a successful run outputting metadata as CSV."""
+    img_path = tmp_path / "test.jpg"
+    img_path.touch()
+
+    from photo_selector_toolbox.models import ExifData
+    fake_metadata = ExifData(aperture=2.8, shutter_speed=0.01)
+    fake_metadata._filepath = img_path
+
+    args = [
+        "cli.py",
+        str(tmp_path),
+        "--format", "csv"
+    ]
+
+    with patch.object(sys, "argv", args):
+        with patch("photo_selector_toolbox.cli.get_exif_data", return_value=fake_metadata):
+            main()
+
+    captured = capsys.readouterr()
+    assert "filename,shutter_speed,aperture,iso,focal_length,focal_length_35mm,lens" in captured.out

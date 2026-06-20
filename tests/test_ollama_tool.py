@@ -216,3 +216,39 @@ def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_conf
     assert score == 8.5
     assert tag == "N/A"
 
+
+def test_add_get_recent_folders(temp_config_dir):
+    from photo_selector_toolbox.config import add_recent_folder, get_recent_folders
+    add_recent_folder("/some/path/1")
+    add_recent_folder("/some/path/2")
+    add_recent_folder("/some/path/1")  # duplicate
+
+    folders = get_recent_folders()
+    assert folders == ["/some/path/1", "/some/path/2"]
+
+
+def test_is_ollama_url_external(temp_config_dir):
+    from photo_selector_toolbox.config import is_ollama_url_external
+    assert not is_ollama_url_external("http://localhost:11434")
+    assert not is_ollama_url_external("http://127.0.0.1:11434")
+    assert is_ollama_url_external("http://192.168.1.100:11434")
+    assert not is_ollama_url_external(None)  # loads from config, which defaults to localhost (False)
+
+
+@patch("builtins.open", side_effect=OSError("Read-only file system"))
+def test_load_save_config_error(mock_open, temp_config_dir):
+    from photo_selector_toolbox.config import load_config, save_config
+    # Force exceptions
+    cfg = load_config()
+    assert cfg == DEFAULT_CONFIG
+    save_config(cfg)
+
+
+@patch("os.chmod", side_effect=OSError("Not supported"))
+def test_set_secure_permissions_error(mock_chmod, temp_config_dir):
+    from pathlib import Path
+    from photo_selector_toolbox.config import _set_secure_permissions
+    # Should not raise exception
+    _set_secure_permissions(Path("/tmp/fake_config_file"))
+
+

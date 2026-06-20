@@ -165,3 +165,78 @@ def test_score_cache_clear(tmp_path):
 
     assert cache.get_scores(p1) == {}
     assert cache.get_scores(p2) == {}
+
+
+def test_score_cache_error_handling(tmp_path):
+    """Test that DB errors are caught and handled gracefully in all database methods."""
+    import sqlite3
+    from unittest.mock import patch
+    import pytest
+
+    db_file = tmp_path / "test_error_cache.db"
+
+    # Pre-create the cache so it doesn't fail immediately in __init__
+    cache = ScoreCache(db_file)
+
+    p1 = Path("/tmp/err_img1.jpg")
+
+    with patch("sqlite3.connect") as mock_connect:
+        # Make the connection context manager throw an exception
+        mock_connect.side_effect = sqlite3.Error("Mock DB Error")
+
+        # 1. test get_scores error
+        with patch("photo_selector_toolbox.cache.logger.warning") as mock_warning:
+            result = cache.get_scores(p1)
+            assert result == {}
+            mock_warning.assert_called_once_with(
+                "Error reading from score cache: Mock DB Error"
+            )
+
+        # 2. test set_scores error
+        with patch("photo_selector_toolbox.cache.logger.warning") as mock_warning:
+            cache.set_scores(p1, {"sharpness": 10.0})
+            mock_warning.assert_called_once_with(
+                "Error writing to score cache: Mock DB Error"
+            )
+
+        # 3. test get_multiple_scores error
+        with patch("photo_selector_toolbox.cache.logger.warning") as mock_warning:
+            result = cache.get_multiple_scores([p1])
+            assert result == {}
+            mock_warning.assert_called_once_with(
+                "Error bulk reading from score cache: Mock DB Error"
+            )
+
+        # 4. test set_multiple_scores error
+        with patch("photo_selector_toolbox.cache.logger.warning") as mock_warning:
+            cache.set_multiple_scores({p1: {"sharpness": 10.0}})
+            mock_warning.assert_called_once_with(
+                "Error bulk writing to score cache: Mock DB Error"
+            )
+
+        # 5. test clear_cache error
+        with patch("photo_selector_toolbox.cache.logger.error") as mock_error:
+            with pytest.raises(sqlite3.Error):
+                cache.clear_cache()
+            mock_error.assert_called_once_with(
+                "Failed to clear score cache: Mock DB Error"
+            )
+
+        # 6. test _init_db error
+        with patch("photo_selector_toolbox.cache.logger.error") as mock_error:
+            cache._init_db()
+            mock_error.assert_called_once_with(
+                "Failed to initialize score cache database: Mock DB Error"
+            )
+
+        # 7. test _prune error
+        # _prune expects a connection object, not going to open one so we can just pass a dummy one
+        # To make it throw exception, we mock conn.execute inside _prune
+        mock_conn = mock_connect.return_value
+        mock_conn.execute.side_effect = sqlite3.Error("Mock Prune DB Error")
+
+        with patch("photo_selector_toolbox.cache.logger.warning") as mock_warning:
+            cache._prune(mock_conn)
+            mock_warning.assert_called_once_with(
+                "Error pruning score cache database: Mock Prune DB Error"
+            )

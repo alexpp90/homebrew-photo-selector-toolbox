@@ -12,7 +12,7 @@ from photo_selector_toolbox import __version__
 from photo_selector_toolbox.reader import get_exif_data, SUPPORTED_EXTENSIONS
 from photo_selector_toolbox.analyzer import analyze_data, analyze_data_json
 from photo_selector_toolbox.visualizer import create_plots
-from photo_selector_toolbox.utils import is_excluded_subfolder
+from photo_selector_toolbox.utils import get_excluded_folder_names
 
 
 def main():
@@ -76,21 +76,20 @@ def main():
 
     print(f"Scanning for images in '{root_path}'...")
 
-    # Pre-compute excluded folder names once for performance
-    from photo_selector_toolbox.config import load_config
-    config = load_config()
-    excluded_names = {"selection", "selected"}
-    custom_folder = config.get("selection_folder", "Selection")
-    if custom_folder and not Path(str(custom_folder)).is_absolute():
-        excluded_names.add(Path(str(custom_folder)).name.lower())
+    excluded_names = get_excluded_folder_names()
+    image_files = []
 
-    image_files = [
-        f
-        for f in root_path.rglob("*")
-        if f.suffix.lower() in SUPPORTED_EXTENSIONS
-        and not is_excluded_subfolder(f, root_path, excluded_names=excluded_names)
-        and not f.name.startswith("._")
-    ]
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        # Prune excluded directories in place
+        dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+
+        dp = Path(dirpath)
+        for f in filenames:
+            if f.startswith("._"):
+                continue
+            file_path = dp / f
+            if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+                image_files.append(file_path)
 
     if not image_files:
         print("No supported image files found.")
