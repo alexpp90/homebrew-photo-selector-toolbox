@@ -51,15 +51,6 @@ class ScreenTest {
         assertEquals("Settings", Screen.Settings.label)
     }
 
-    @Test
-    fun `PhoneMode is not in Screen all`() {
-        assertFalse(Screen.all.contains(Screen.PhoneMode))
-    }
-
-    @Test
-    fun `PhoneMode has its own route`() {
-        assertEquals("phone_mode", Screen.PhoneMode.route)
-    }
 
     @Test
     fun `Screen all order is Selector, Statistics, Duplicates, Settings`() {

@@ -53,3 +53,13 @@ markers = [
   "gui_required: skip when no display is available",
 ]
 
+[tool.coverage.run]
+source = ["photo_selector_toolbox"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.",
+  "if TYPE_CHECKING:",
+]
+

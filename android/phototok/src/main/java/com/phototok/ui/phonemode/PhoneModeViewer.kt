@@ -1,4 +1,4 @@
-package com.photoselectortoolbox.ui.phonemode
+package com.phototok.ui.phonemode
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -53,11 +53,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.photoselectortoolbox.data.model.ExifData
-import com.photoselectortoolbox.data.model.ImageItem
-import com.photoselectortoolbox.ui.theme.ErrorRed
-import com.photoselectortoolbox.ui.theme.Indigo500
-import com.photoselectortoolbox.ui.theme.SuccessGreen
+import com.phototok.data.model.ExifData
+import com.phototok.data.model.ImageItem
+import com.phototok.ui.theme.ErrorRed
+import com.phototok.ui.theme.Indigo500
+import com.phototok.ui.theme.SuccessGreen
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -79,6 +79,7 @@ fun PhoneModeViewer(
     onNavigate: (Int) -> Unit,
     onAddToCollection: () -> Unit,
     onRequestDelete: () -> Unit,
+    showExifOverlay: Boolean = true,
 ) {
     if (images.isEmpty()) return
 
@@ -126,6 +127,7 @@ fun PhoneModeViewer(
                 pageIndex = page,
                 totalCount = images.size,
                 isOrientationDivider = portraitSectionStart in 1 until images.size && page == portraitSectionStart,
+                showExifOverlay = showExifOverlay,
                 onDoubleTap = {
                     onAddToCollection()
                     showCollectionFlash = true
@@ -170,6 +172,7 @@ private fun ImagePage(
     pageIndex: Int,
     totalCount: Int,
     isOrientationDivider: Boolean,
+    showExifOverlay: Boolean,
     onDoubleTap: () -> Unit,
     onSwipeLeftDelete: () -> Unit,
 ) {
@@ -212,8 +215,9 @@ private fun ImagePage(
                 },
             contentAlignment = Alignment.Center,
         ) {
+            val parsedUri = remember(image.uri) { android.net.Uri.parse(image.uri) }
             AsyncImage(
-                model = image.uri,
+                model = parsedUri,
                 contentDescription = image.fileName,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
@@ -276,15 +280,17 @@ private fun ImagePage(
         }
 
         // EXIF overlay (bottom-start)
-        image.exifData?.let { exif ->
-            ExifOverlay(
-                exif = exif,
-                fileName = image.fileName,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .navigationBarsPadding()
-                    .padding(12.dp),
-            )
+        if (showExifOverlay) {
+            image.exifData?.let { exif ->
+                ExifOverlay(
+                    exif = exif,
+                    fileName = image.fileName,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .navigationBarsPadding()
+                        .padding(12.dp),
+                )
+            }
         }
 
         // Page counter (bottom-end)

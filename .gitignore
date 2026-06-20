@@ -34,3 +34,13 @@ android/app/schemas/
 
 # OS files
 .DS_Store
+
+# Scratch and debug files
+scratch_*.py
+
+# Audit reports
+Photo_Selector_Toolbox_Audit_Report.docx
+
+# Kotlin compiler sessions/temp files
+android/.kotlin/
+

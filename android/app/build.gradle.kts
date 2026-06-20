@@ -127,6 +127,11 @@ dependencies {
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
+    // Google Play Services (Google Sign-In for Drive)
+    implementation(libs.play.services.auth)
+    implementation(libs.kotlinx.coroutines.play.services)
+
+
     // Coil (image loading)
     implementation(libs.coil.compose)
 

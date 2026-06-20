@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photoselectortoolbox.ui.components.EmptyStateCard
+import com.photoselectortoolbox.ui.components.ProgressIndicatorBar
 import com.photoselectortoolbox.ui.theme.Indigo500
 import com.photoselectortoolbox.ui.theme.Zinc800
 import com.photoselectortoolbox.viewmodel.StatisticsViewModel
@@ -70,18 +71,17 @@ fun StatisticsScreen(
             }
 
             uiState.isLoading -> {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        color = Indigo500,
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Analyzing ${uiState.imageCount} images...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ProgressIndicatorBar(
+                        progress = uiState.scanProgress,
+                        statusText = uiState.progressText,
+                        isIndeterminate = uiState.scanProgress == 0f,
+                        modifier = Modifier.fillMaxWidth(0.6f)
                     )
                 }
             }

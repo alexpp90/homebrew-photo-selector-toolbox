@@ -81,8 +81,11 @@ jobs:
           sudo apt-get install -y xvfb
           Xvfb :99 -screen 0 1024x768x24 &
 
+      - name: Lint
+        run: poetry run flake8 src/ tests/ --count --show-source --statistics
+
       - name: Run tests
-        run: poetry run pytest --tb=short -q --junitxml=test-results.xml
+        run: poetry run pytest --tb=short -q --junitxml=test-results.xml --cov=photo_selector_toolbox --cov-report=xml --cov-fail-under=60
         env:
           DISPLAY: ${{ runner.os == 'Linux' && ':99' || '' }}
 
@@ -92,4 +95,12 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}
           path: test-results.xml
+          if-no-files-found: ignore
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage.xml
           if-no-files-found: ignore

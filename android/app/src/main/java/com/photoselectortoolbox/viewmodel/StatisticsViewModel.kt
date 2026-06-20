@@ -35,7 +35,9 @@ data class StatisticsUiState(
     val isoDistribution: Map<String, Int> = emptyMap(),
     val focalLengthDistribution: Map<String, Int> = emptyMap(),
     val lensDistribution: Map<String, Int> = emptyMap(),
-    val error: String? = null
+    val error: String? = null,
+    val scanProgress: Float = 0f,
+    val progressText: String = "",
 )
 
 @HiltViewModel
@@ -86,6 +88,8 @@ class StatisticsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isLoading = true,
+                    scanProgress = 0f,
+                    progressText = "Discovering files...",
                     error = null,
                     shutterSpeedDistribution = emptyMap(),
                     apertureDistribution = emptyMap(),
@@ -99,19 +103,34 @@ class StatisticsViewModel @Inject constructor(
                 val uri = Uri.parse(folderUri)
                 val images = imageRepository.discoverImages(uri).first()
 
-                _uiState.update { it.copy(imageCount = images.size) }
+                _uiState.update {
+                    it.copy(
+                        imageCount = images.size,
+                        progressText = "Preparing analysis..."
+                    )
+                }
 
+                val processedCount = java.util.concurrent.atomic.AtomicInteger(0)
                 val exifDataList = withContext(Dispatchers.IO) {
                     coroutineScope {
                         val semaphore = Semaphore(8)
                         images.map { image ->
                             async {
                                 semaphore.withPermit {
-                                    try {
+                                    val exif = try {
                                         imageRepository.getExifData(context, Uri.parse(image.uri))
                                     } catch (e: Exception) {
                                         null
                                     }
+                                    val count = processedCount.incrementAndGet()
+                                    val progress = count.toFloat() / images.size.toFloat()
+                                    _uiState.update {
+                                        it.copy(
+                                            scanProgress = progress,
+                                            progressText = "Analyzing metadata ($count/${images.size})"
+                                        )
+                                    }
+                                    exif
                                 }
                             }
                         }.mapNotNull { it.await() }

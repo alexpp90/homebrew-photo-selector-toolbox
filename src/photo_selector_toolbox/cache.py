@@ -5,6 +5,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
+from photo_selector_toolbox.config import _set_secure_permissions
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_PATH: Optional[Path] = None
@@ -35,7 +37,7 @@ class ScoreCache:
             if _DEFAULT_DB_PATH is not None:
                 db_path = _DEFAULT_DB_PATH
             else:
-                from photo_selector_toolbox.ollama_tool import CONFIG_DIR
+                from photo_selector_toolbox.config import CONFIG_DIR
 
                 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
                 db_path = CONFIG_DIR / "scores_cache.db"
@@ -60,6 +62,17 @@ class ScoreCache:
                     "CREATE INDEX IF NOT EXISTS idx_last_used ON image_cache(last_used)"
                 )
                 conn.commit()
+            _set_secure_permissions(self.db_path)
+        except sqlite3.DatabaseError as e:
+            logger.error(
+                f"Score cache database is corrupted or inaccessible: {e}. "
+                f"Attempting to recreate at {self.db_path}"
+            )
+            try:
+                self.db_path.unlink(missing_ok=True)
+                self._init_db()
+            except Exception as e2:
+                logger.error(f"Failed to recreate score cache database: {e2}")
         except Exception as e:
             logger.error(f"Failed to initialize score cache database: {e}")
 

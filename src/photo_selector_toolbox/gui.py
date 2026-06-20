@@ -1213,6 +1213,68 @@ class CollectionSettingsDialog(tk.Toplevel):
             messagebox.showerror("Error", f"Failed to save settings: {e}", parent=self)
 
 
+class KeyboardShortcutsDialog(tk.Toplevel):
+    """Dialog showing all keyboard shortcuts."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Keyboard Shortcuts")
+        self.geometry("500x520")
+        self.configure(bg="#18181B")
+        self.transient(parent)
+        self.grab_set()
+
+        # Make it centered
+        self.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - 500) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - 520) // 2
+        self.geometry(f"+{x}+{y}")
+
+        frame = ttk.Frame(self, padding=20)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(frame, text="Keyboard Shortcuts", style="Header.TLabel").pack(anchor="w", pady=(0, 15))
+
+        shortcuts = [
+            ("Navigation", [
+                ("Left / Right Arrow", "Previous / Next image"),
+                ("Up / Down Arrow", "Previous / Next image (alternate)"),
+                ("Home / End", "First / Last image"),
+            ]),
+            ("Review Actions", [
+                ("M", "Move to Selection folder"),
+                ("C", "Copy to Selection folder"),
+                ("Delete / Backspace", "Delete current image"),
+                ("F", "Toggle Focus mode"),
+                ("Escape", "Exit Focus mode / Cancel"),
+            ]),
+            ("Fullscreen Viewer", [
+                ("N", "Next image"),
+                ("P", "Previous image"),
+                ("Delete", "Delete image"),
+                ("M", "Move to Selection"),
+                ("C", "Copy to Selection"),
+                ("Escape", "Close viewer"),
+                ("Mouse wheel", "Zoom in/out"),
+            ]),
+            ("Application", [
+                ("Ctrl+O / Cmd+O", "Open folder"),
+                ("Ctrl+Z / Cmd+Z", "Undo last action"),
+                ("F1", "Show this help"),
+            ]),
+        ]
+
+        for section_title, items in shortcuts:
+            ttk.Label(frame, text=section_title, style="Title.TLabel").pack(anchor="w", pady=(10, 5))
+            for key, desc in items:
+                row = ttk.Frame(frame)
+                row.pack(fill="x", pady=1)
+                ttk.Label(row, text=key, width=25, style="Muted.TLabel").pack(side="left")
+                ttk.Label(row, text=desc).pack(side="left")
+
+        ttk.Button(frame, text="Close", command=self.destroy).pack(pady=(15, 0))
+
+
 class MainApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -1271,37 +1333,80 @@ class MainApp(tk.Tk):
         # Setup top menu bar
         self.menubar = tk.Menu(self)
 
-        # Tools Menu
-        self.tools_menu = tk.Menu(self.menubar, tearoff=0)
-        self.tools_menu.add_command(
-            label="Photo Selector",
-            command=lambda: self.show_frame("SharpnessTool"),
+        # File Menu
+        self.file_menu = tk.Menu(self.menubar, tearoff=0)
+        self.file_menu.add_command(
+            label="Open Folder...",
+            command=self._open_folder_from_menu,
+            accelerator="Ctrl+O" if sys.platform != "darwin" else "Cmd+O",
         )
-        self.tools_menu.add_command(
-            label="Image Library Statistics",
-            command=lambda: self.show_frame("ImageLibraryStatistics"),
+        # Recent folders submenu
+        self.recent_menu = tk.Menu(self.file_menu, tearoff=0)
+        self.file_menu.add_cascade(label="Recent Folders", menu=self.recent_menu)
+        self._update_recent_menu()
+        self.file_menu.add_separator()
+        self.file_menu.add_command(
+            label="Export Statistics as CSV...",
+            command=self._export_csv,
         )
-        self.tools_menu.add_command(
-            label="Duplicate Finder",
-            command=lambda: self.show_frame("DuplicateFinder"),
+        self.file_menu.add_separator()
+        if sys.platform != "darwin":
+            self.file_menu.add_command(label="Quit", command=self.quit, accelerator="Ctrl+Q")
+        self.menubar.add_cascade(label="File", menu=self.file_menu)
+
+        # Edit Menu
+        self.edit_menu = tk.Menu(self.menubar, tearoff=0)
+        self.edit_menu.add_command(
+            label="Undo",
+            command=self._undo_last_action,
+            accelerator="Ctrl+Z" if sys.platform != "darwin" else "Cmd+Z",
+            state="disabled",
         )
-        self.tools_menu.add_separator()
-        self.tools_menu.add_command(
+        self.edit_menu.add_separator()
+        self.edit_menu.add_command(
             label="Collection Settings...",
             command=self.show_collection_config,
         )
-        self.tools_menu.add_command(
+        self.edit_menu.add_command(
             label="Clear Cached Scores...",
             command=self.clear_cached_scores,
         )
-        self.menubar.add_cascade(label="Tools", menu=self.tools_menu)
+        self.menubar.add_cascade(label="Edit", menu=self.edit_menu)
+
+        # View Menu
+        self.view_menu = tk.Menu(self.menubar, tearoff=0)
+        self.view_menu.add_command(
+            label="Photo Selector",
+            command=lambda: self.show_frame("SharpnessTool"),
+        )
+        self.view_menu.add_command(
+            label="Image Library Statistics",
+            command=lambda: self.show_frame("ImageLibraryStatistics"),
+        )
+        self.view_menu.add_command(
+            label="Duplicate Finder",
+            command=lambda: self.show_frame("DuplicateFinder"),
+        )
+        self.menubar.add_cascade(label="View", menu=self.view_menu)
 
         # Help Menu
         self.help_menu = tk.Menu(self.menubar, tearoff=0)
+        self.help_menu.add_command(
+            label="Keyboard Shortcuts",
+            command=self._show_keyboard_shortcuts,
+            accelerator="F1",
+        )
+        self.help_menu.add_separator()
         self.help_menu.add_command(label="About", command=self.show_about)
         self.menubar.add_cascade(label="Help", menu=self.help_menu)
 
         self.config(menu=self.menubar)
+
+        # Keyboard shortcut bindings
+        modifier = "Command" if sys.platform == "darwin" else "Control"
+        self.bind_all(f"<{modifier}-o>", lambda e: self._open_folder_from_menu())
+        self.bind_all(f"<{modifier}-z>", lambda e: self._undo_last_action())
+        self.bind_all("<F1>", lambda e: self._show_keyboard_shortcuts())
 
         self.frames = {}
 
@@ -1495,6 +1600,119 @@ class MainApp(tk.Tk):
                 messagebox.showerror(
                     "Error", f"Failed to clear score cache: {e}", parent=self
                 )
+
+    # --- Undo stack ---
+    _undo_stack = []  # List of (description, undo_callable) tuples
+
+    @classmethod
+    def push_undo(cls, description: str, undo_fn):
+        """Push an undoable action. Called from SharpnessTool file operations."""
+        cls._undo_stack.append((description, undo_fn))
+
+    def _undo_last_action(self):
+        if not self._undo_stack:
+            messagebox.showinfo("Undo", "Nothing to undo.", parent=self)
+            return
+        description, undo_fn = self._undo_stack.pop()
+        try:
+            undo_fn()
+            messagebox.showinfo("Undo", f"Undone: {description}", parent=self)
+        except Exception as e:
+            messagebox.showerror("Undo Failed", f"Could not undo '{description}': {e}", parent=self)
+        # Update menu state
+        self.edit_menu.entryconfig("Undo", state="normal" if self._undo_stack else "disabled")
+
+    def _open_folder_from_menu(self):
+        """Open folder dialog and pass to the active SharpnessTool."""
+        from photo_selector_toolbox.gui_utils import ask_directory
+        folder = ask_directory(parent=self)
+        if folder:
+            sharpness_frame = self.frames.get("SharpnessTool")
+            if sharpness_frame:
+                sharpness_frame.folder_var.set(folder)
+                # Add to recent folders
+                from photo_selector_toolbox.config import add_recent_folder
+                add_recent_folder(folder)
+                self._update_recent_menu()
+
+    def _update_recent_menu(self):
+        """Rebuild the Recent Folders submenu from config."""
+        self.recent_menu.delete(0, "end")
+        from photo_selector_toolbox.config import get_recent_folders
+        folders = get_recent_folders()
+        if not folders:
+            self.recent_menu.add_command(label="(No recent folders)", state="disabled")
+            return
+        for folder in folders:
+            self.recent_menu.add_command(
+                label=folder,
+                command=lambda f=folder: self._open_recent_folder(f),
+            )
+        self.recent_menu.add_separator()
+        self.recent_menu.add_command(label="Clear Recent", command=self._clear_recent_folders)
+
+    def _open_recent_folder(self, folder_path):
+        sharpness_frame = self.frames.get("SharpnessTool")
+        if sharpness_frame:
+            sharpness_frame.folder_var.set(folder_path)
+
+    def _clear_recent_folders(self):
+        from photo_selector_toolbox.config import load_config, save_config
+        config = load_config()
+        config["recent_folders"] = []
+        save_config(config)
+        self._update_recent_menu()
+
+    def _export_csv(self):
+        """Export current statistics/scan results as CSV."""
+        from tkinter import filedialog
+        sharpness_frame = self.frames.get("SharpnessTool")
+        if not sharpness_frame or not sharpness_frame.scan_results:
+            messagebox.showinfo("Export", "No scan results to export. Run a scan first.", parent=self)
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            parent=self,
+            title="Export Scan Results as CSV",
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+        )
+        if not filepath:
+            return
+
+        try:
+            import csv
+            with open(filepath, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                # Header
+                score_keys = set()
+                for r in sharpness_frame.scan_results:
+                    score_keys.update(r.scores.keys())
+                score_keys = sorted(score_keys)
+                header = ["filename", "path"] + score_keys
+                if sharpness_frame.scan_results[0].exif:
+                    header += ["shutter_speed", "aperture", "iso", "focal_length", "lens"]
+                writer.writerow(header)
+
+                for r in sharpness_frame.scan_results:
+                    row = [r.path.name, str(r.path)]
+                    row += [r.scores.get(k, "N/A") for k in score_keys]
+                    if r.exif:
+                        row += [
+                            r.exif.shutter_speed or "",
+                            r.exif.aperture or "",
+                            r.exif.iso or "",
+                            r.exif.focal_length or "",
+                            r.exif.lens or "",
+                        ]
+                    writer.writerow(row)
+            messagebox.showinfo("Export", f"Exported {len(sharpness_frame.scan_results)} results to:\n{filepath}", parent=self)
+        except Exception as e:
+            messagebox.showerror("Export Failed", f"Failed to export: {e}", parent=self)
+
+    def _show_keyboard_shortcuts(self):
+        """Show a dialog listing all keyboard shortcuts."""
+        KeyboardShortcutsDialog(self)
 
 
 def main():
