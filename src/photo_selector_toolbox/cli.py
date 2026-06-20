@@ -71,10 +71,10 @@ def main():
     output_path = Path(args.output)
 
     if not root_path.is_dir():
-        print(f"Error: Folder not found at '{root_path}'", file=sys.stderr)
+        print(f"Error: Folder not found at '{root_path}'")
         return
 
-    print(f"Scanning for images in '{root_path}'...", file=sys.stderr)
+    print(f"Scanning for images in '{root_path}'...")
 
     # Pre-compute excluded folder names once for performance
     from photo_selector_toolbox.config import load_config
@@ -93,10 +93,10 @@ def main():
     ]
 
     if not image_files:
-        print("No supported image files found.", file=sys.stderr)
+        print("No supported image files found.")
         return
 
-    print(f"Found {len(image_files)} image files. Extracting metadata...", file=sys.stderr)
+    print(f"Found {len(image_files)} image files. Extracting metadata...")
 
     # Parallelize EXIF extraction
     all_metadata = []
@@ -114,7 +114,7 @@ def main():
                 pbar.update(1)
 
     if not all_metadata:
-        print("Could not extract any valid EXIF metadata from the found images.", file=sys.stderr)
+        print("Could not extract any valid EXIF metadata from the found images.")
         return
 
     # Output based on format

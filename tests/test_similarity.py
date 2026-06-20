@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 from PIL import Image
 from unittest import mock
@@ -10,7 +9,7 @@ from photo_selector_toolbox.utils import (
     select_representative,
 )
 from photo_selector_toolbox.models import ScanResult
-from photo_selector_toolbox.sharpness_gui import SharpnessTool, ImageGroup
+from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
 
 def test_calculate_dhash():

@@ -1,7 +1,7 @@
 import logging
 from collections import Counter
 import statistics
-from typing import Any, Dict, List
+from typing import Any, Dict
 from photo_selector_toolbox.utils import aggregate_focal_lengths
 from photo_selector_toolbox.models import ExifData
 
@@ -10,10 +10,12 @@ logger = logging.getLogger(__name__)
 
 def analyze_data(data: list[ExifData]):
     """Prints a formatted statistical summary of the metadata to stdout."""
+    logger.info("Total images with EXIF data analyzed: %d", len(data))
     print("\n--- Image Metadata Analysis ---")
     print(f"Total images with EXIF data analyzed: {len(data)}")
 
     if not data:
+        logger.info("No data to analyze")
         print("No data to analyze.")
         return
 
@@ -59,8 +61,10 @@ def analyze_data(data: list[ExifData]):
     print("\n--- Most Common Settings ---")
 
     print("\nTop 5 Lenses:")
+    logger.info("Top 5 Lenses:")
     lenses = get_values("Lens")
     for name, count in Counter(lenses).most_common(5):
+        logger.info("  %s: %d", name, count)
         print(f"  {name}: {count}")
 
     print("\n\nTop Focal Lengths (mm):")
@@ -89,6 +93,7 @@ def analyze_data(data: list[ExifData]):
 
     for (ap, fl), count in Counter(combinations).most_common(25):
         fl_str = f"{int(fl)}" if fl.is_integer() else f"{fl:.1f}"
+        logger.info("  f/%s @ %smm: %d", ap, fl_str, count)
         print(f"  f/{ap} @ {fl_str}mm: {count}")
 
     print("\n\nTop 5 Apertures (f-stop):")
@@ -98,9 +103,11 @@ def analyze_data(data: list[ExifData]):
         print(f"  {ap}: {count}")
 
     print("\n\nTop 5 ISOs:")
+    logger.info("Top 5 ISOs:")
     isos = get_values("ISO")
     isos_display = [int(iso) if iso.is_integer() else iso for iso in isos]
     for iso, count in Counter(isos_display).most_common(5):
+        logger.info("  %s: %d", iso, count)
         print(f"  {iso}: {count}")
     print("\n----------------------------")
 

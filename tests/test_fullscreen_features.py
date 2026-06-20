@@ -380,10 +380,9 @@ def test_fullscreen_viewer_metadata_display():
         assert "shadow" in viewer.metric_labels
         assert "aesthetic" in viewer.metric_labels
 
-        # Verify config calls on path update
         with (
             patch.object(viewer.meta_filename_lbl, "config") as mock_filename_config,
-            patch.object(viewer.meta_exposure_lbl, "config") as mock_exposure_config,
+            patch.object(viewer.meta_exposure_lbl, "config"),
         ):
             viewer.load_new_path(Path("other_image.jpg"))
             mock_filename_config.assert_called_with(text="other_image.jpg")

@@ -2,8 +2,8 @@ import logging
 import queue
 import threading
 import os
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from typing import Dict, Optional, Callable, List, Union
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Dict, Optional, Callable, List
 from pathlib import Path
 from PIL import Image
 

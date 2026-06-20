@@ -1,4 +1,4 @@
-from photo_selector_toolbox.readers.base import read_exif
+from photo_selector_toolbox.readers.base import read_exif  # noqa: F401
 from photo_selector_toolbox.readers.exiftool import ExifToolReader
 from photo_selector_toolbox.readers.exifread_reader import ExifReadReader
 from photo_selector_toolbox.readers.pillow import PillowReader

@@ -1,4 +1,3 @@
-import sys
 from unittest.mock import patch, MagicMock
 from photo_selector_toolbox.gui_utils import ask_directory
 

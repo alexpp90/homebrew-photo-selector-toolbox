@@ -18,12 +18,9 @@ from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.formatting import format_score, format_meta
-from photo_selector_toolbox.ollama_tool import load_config, save_config, OllamaAestheticTool
+from photo_selector_toolbox.ollama_tool import load_config, save_config
 from photo_selector_toolbox.utils import (
     is_excluded_subfolder,
-    calculate_dhash,
-    group_files_by_similarity,
-    select_representative,
     load_image_preview,
 )
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController

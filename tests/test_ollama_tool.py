@@ -1,6 +1,5 @@
 import json
 import urllib.error
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
@@ -17,7 +16,10 @@ import photo_selector_toolbox.ollama_tool as ot
 @pytest.fixture
 def temp_config_dir(tmp_path):
     """Fixture to mock CONFIG_DIR and CONFIG_FILE to a temporary path."""
-    with patch.object(ot, "CONFIG_DIR", tmp_path), \
+    import photo_selector_toolbox.config as cfg_mod
+    with patch.object(cfg_mod, "CONFIG_DIR", tmp_path), \
+         patch.object(cfg_mod, "CONFIG_FILE", tmp_path / "settings.json"), \
+         patch.object(ot, "CONFIG_DIR", tmp_path), \
          patch.object(ot, "CONFIG_FILE", tmp_path / "settings.json"):
         yield tmp_path
 

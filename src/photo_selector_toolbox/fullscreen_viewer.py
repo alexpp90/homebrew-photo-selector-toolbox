@@ -1,8 +1,6 @@
 import logging
 import threading
 import tkinter as tk
-from pathlib import Path
-from typing import List, Optional
 from tkinter import ttk
 from PIL import Image, ImageTk
 

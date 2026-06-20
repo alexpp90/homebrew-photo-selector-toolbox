@@ -7,8 +7,8 @@ import urllib.error
 import io
 import threading
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
-from PIL import Image
+from typing import Any, Tuple
+
 
 from photo_selector_toolbox.tools import AnalysisTool, ToolRegistry
 from photo_selector_toolbox.utils import load_image_preview

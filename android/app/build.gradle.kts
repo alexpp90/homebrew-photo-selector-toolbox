@@ -9,12 +9,12 @@ plugins {
 
 android {
     namespace = "com.photoselectortoolbox"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.photoselectortoolbox"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
 
@@ -71,6 +71,10 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            // Preserve 16 KB page alignment of native .so files (required for Android 15+)
+            useLegacyPackaging = false
         }
     }
 }

@@ -93,9 +93,6 @@ def _set_secure_permissions(path: Path) -> None:
 
 def load_config() -> Dict[str, Union[str, bool, List[str]]]:
     """Loads settings.json config file, creating it with defaults if it doesn't exist."""
-    import sys
-    if "pytest" in sys.modules and CONFIG_DIR == Path.home() / ".photo_selector_toolbox":
-        return DEFAULT_CONFIG.copy()
     try:
         if not CONFIG_DIR.exists():
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)

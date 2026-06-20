@@ -385,7 +385,6 @@ def test_mac_metadata_ignored():
 
 def test_throttled_listbox_updates():
     from photo_selector_toolbox.sharpness_gui import SharpnessTool
-    from photo_selector_toolbox.models import ScanResult
     from pathlib import Path
 
     parent = MagicMock()
