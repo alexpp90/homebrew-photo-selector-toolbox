@@ -11,38 +11,41 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Indigo500,
-    onPrimary = Color.White,
-    primaryContainer = Indigo600,
-    onPrimaryContainer = Zinc50,
-    secondary = Zinc600,
-    onSecondary = Zinc50,
-    secondaryContainer = Zinc700,
-    onSecondaryContainer = Zinc200,
-    tertiary = Indigo400,
-    onTertiary = Color.White,
-    tertiaryContainer = Indigo700,
-    onTertiaryContainer = Zinc100,
-    surface = Zinc900,
-    onSurface = Zinc50,
-    surfaceVariant = Zinc800,
-    onSurfaceVariant = Zinc400,
-    surfaceContainerLowest = Zinc950,
-    surfaceContainerLow = Zinc900,
-    surfaceContainer = Zinc800,
-    surfaceContainerHigh = Zinc700,
-    surfaceContainerHighest = Zinc600,
-    outline = Zinc700,
-    outlineVariant = Zinc600,
-    background = Zinc900,
-    onBackground = Zinc50,
-    error = ErrorRed,
-    onError = Color.White,
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    inverseSurface = Zinc100,
-    inverseOnSurface = Zinc900,
-    inversePrimary = Indigo700,
+    primary = PtPrimary,
+    onPrimary = PtOnPrimary,
+    primaryContainer = PtPrimaryContainer,
+    onPrimaryContainer = PtOnPrimaryContainer,
+    inversePrimary = PtInversePrimary,
+    secondary = PtSecondary,
+    onSecondary = PtOnSecondary,
+    secondaryContainer = PtSecondaryContainer,
+    onSecondaryContainer = PtOnSecondaryContainer,
+    tertiary = PtTertiary,
+    onTertiary = PtOnTertiary,
+    tertiaryContainer = PtTertiaryContainer,
+    onTertiaryContainer = PtOnTertiaryContainer,
+    surface = PtSurface,
+    onSurface = PtOnSurface,
+    surfaceVariant = PtSurfaceVariant,
+    onSurfaceVariant = PtOnSurfaceVariant,
+    surfaceTint = PtSurfaceTint,
+    surfaceContainerLowest = PtSurfaceContainerLowest,
+    surfaceContainerLow = PtSurfaceContainerLow,
+    surfaceContainer = PtSurfaceContainer,
+    surfaceContainerHigh = PtSurfaceContainerHigh,
+    surfaceContainerHighest = PtSurfaceContainerHighest,
+    surfaceBright = PtSurfaceBright,
+    surfaceDim = PtSurfaceDim,
+    outline = PtOutline,
+    outlineVariant = PtOutlineVariant,
+    background = PtBackground,
+    onBackground = PtOnBackground,
+    error = PtError,
+    onError = PtOnError,
+    errorContainer = PtErrorContainer,
+    onErrorContainer = PtOnErrorContainer,
+    inverseSurface = PtInverseSurface,
+    inverseOnSurface = PtInverseOnSurface,
     scrim = Color.Black,
 )
 
@@ -54,8 +57,8 @@ fun PhotoTokTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = Zinc950.toArgb()
-            window.navigationBarColor = Zinc950.toArgb()
+            window.statusBarColor = PtSurfaceContainerLowest.toArgb()
+            window.navigationBarColor = PtSurfaceContainerLowest.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = false

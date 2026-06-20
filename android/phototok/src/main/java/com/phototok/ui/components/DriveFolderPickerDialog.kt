@@ -37,13 +37,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.phototok.data.source.googledrive.DriveFile
 import com.phototok.data.source.googledrive.GoogleDriveClient
-import com.phototok.ui.theme.Indigo500
-import com.phototok.ui.theme.Zinc800
+// Colors sourced from MaterialTheme.colorScheme at call sites
 
 private data class BreadcrumbEntry(val id: String, val name: String)
 
@@ -95,7 +93,7 @@ fun DriveFolderPickerDialog(
                     Icon(
                         imageVector = Icons.Default.Cloud,
                         contentDescription = null,
-                        tint = Indigo500,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -115,7 +113,7 @@ fun DriveFolderPickerDialog(
                         Box(
                             modifier = Modifier.fillMaxWidth().height(200.dp),
                             contentAlignment = Alignment.Center,
-                        ) { CircularProgressIndicator(color = Indigo500) }
+                        ) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
                     }
                     error != null -> {
                         Box(
@@ -154,7 +152,7 @@ fun DriveFolderPickerDialog(
                                         .padding(vertical = 10.dp, horizontal = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Icon(Icons.Default.Folder, null, tint = Indigo500.copy(alpha = 0.7f), modifier = Modifier.size(24.dp))
+                                    Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f), modifier = Modifier.size(24.dp))
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(folder.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
@@ -167,13 +165,13 @@ fun DriveFolderPickerDialog(
         confirmButton = {
             Button(
                 onClick = { onFolderSelected(currentFolder.id, currentFolder.name) },
-                colors = ButtonDefaults.buttonColors(containerColor = Indigo500, contentColor = Color.White),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
             ) { Text("Select This Folder") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
-        containerColor = Zinc800,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(16.dp),
     )
 }
