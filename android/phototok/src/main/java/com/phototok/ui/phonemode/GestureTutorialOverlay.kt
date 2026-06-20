@@ -100,40 +100,85 @@ fun GestureTutorialOverlay(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 // ── Gesture cards ────────────────────────────────────
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    GestureCard(
-                        icon = Icons.Default.SwapVert,
-                        title = "Swipe Up/Down",
-                        description = "Browse through your photos",
-                        iconTint = colors.primary,
-                        circleBorder = colors.primary.copy(alpha = 0.2f),
-                        circleFill = colors.primary.copy(alpha = 0.1f),
-                        animationType = GestureAnimation.VERTICAL,
-                        animDelay = 0,
-                    )
-                    GestureCard(
-                        icon = Icons.Default.TouchApp,
-                        title = "Double Tap",
-                        description = "Add to your collection",
-                        iconTint = colors.primary,
-                        circleBorder = colors.primary.copy(alpha = 0.2f),
-                        circleFill = colors.primary.copy(alpha = 0.1f),
-                        animationType = GestureAnimation.DOUBLE_TAP,
-                        animDelay = 500,
-                    )
-                    GestureCard(
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        title = "Swipe Left",
-                        description = "Delete photo",
-                        iconTint = colors.error,
-                        circleBorder = colors.error.copy(alpha = 0.2f),
-                        circleFill = colors.error.copy(alpha = 0.1f),
-                        animationType = GestureAnimation.SWIPE_LEFT,
-                        animDelay = 1000,
-                    )
+                val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+                if (isLandscape) {
+                    Row(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        GestureCard(
+                            icon = Icons.Default.SwapVert,
+                            title = "Swipe Up/Down",
+                            description = "Browse through photos",
+                            iconTint = colors.primary,
+                            circleBorder = colors.primary.copy(alpha = 0.2f),
+                            circleFill = colors.primary.copy(alpha = 0.1f),
+                            animationType = GestureAnimation.VERTICAL,
+                            animDelay = 0,
+                            modifier = Modifier.weight(1f),
+                        )
+                        GestureCard(
+                            icon = Icons.Default.TouchApp,
+                            title = "Double Tap",
+                            description = "Add to collection",
+                            iconTint = colors.primary,
+                            circleBorder = colors.primary.copy(alpha = 0.2f),
+                            circleFill = colors.primary.copy(alpha = 0.1f),
+                            animationType = GestureAnimation.DOUBLE_TAP,
+                            animDelay = 500,
+                            modifier = Modifier.weight(1f),
+                        )
+                        GestureCard(
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            title = "Swipe Left",
+                            description = "Delete photo",
+                            iconTint = colors.error,
+                            circleBorder = colors.error.copy(alpha = 0.2f),
+                            circleFill = colors.error.copy(alpha = 0.1f),
+                            animationType = GestureAnimation.SWIPE_LEFT,
+                            animDelay = 1000,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        GestureCard(
+                            icon = Icons.Default.SwapVert,
+                            title = "Swipe Up/Down",
+                            description = "Browse through your photos",
+                            iconTint = colors.primary,
+                            circleBorder = colors.primary.copy(alpha = 0.2f),
+                            circleFill = colors.primary.copy(alpha = 0.1f),
+                            animationType = GestureAnimation.VERTICAL,
+                            animDelay = 0,
+                        )
+                        GestureCard(
+                            icon = Icons.Default.TouchApp,
+                            title = "Double Tap",
+                            description = "Add to your collection",
+                            iconTint = colors.primary,
+                            circleBorder = colors.primary.copy(alpha = 0.2f),
+                            circleFill = colors.primary.copy(alpha = 0.1f),
+                            animationType = GestureAnimation.DOUBLE_TAP,
+                            animDelay = 500,
+                        )
+                        GestureCard(
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            title = "Swipe Left",
+                            description = "Delete photo",
+                            iconTint = colors.error,
+                            circleBorder = colors.error.copy(alpha = 0.2f),
+                            circleFill = colors.error.copy(alpha = 0.1f),
+                            animationType = GestureAnimation.SWIPE_LEFT,
+                            animDelay = 1000,
+                        )
+                    }
                 }
 
                 // ── Sticky bottom "Got it" button with gradient ──────
@@ -196,13 +241,14 @@ private fun GestureCard(
     circleFill: Color,
     animationType: GestureAnimation,
     animDelay: Int,
+    modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
 
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color.Transparent,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(
                 brush = Brush.linearGradient(

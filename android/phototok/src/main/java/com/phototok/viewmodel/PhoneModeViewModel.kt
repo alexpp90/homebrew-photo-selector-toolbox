@@ -418,6 +418,10 @@ class PhoneModeViewModel @Inject constructor(
         _uiState.update { it.copy(error = null) }
     }
 
+    fun setError(message: String) {
+        _uiState.update { it.copy(error = message) }
+    }
+
     // ── Gesture tutorial ──────────────────────────────────────────────────
 
     private fun checkGestureTutorial() {
