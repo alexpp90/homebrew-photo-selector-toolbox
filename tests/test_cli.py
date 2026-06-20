@@ -102,7 +102,10 @@ def test_main_success_json(capsys, tmp_path):
 
     with patch.object(sys, "argv", args):
         with patch("photo_selector_toolbox.cli.get_exif_data", return_value=fake_metadata):
-            with patch("photo_selector_toolbox.cli.analyze_data_json", return_value={"test": "data"}) as mock_analyze_json:
+            with patch(
+                "photo_selector_toolbox.cli.analyze_data_json",
+                return_value={"test": "data"}
+            ) as mock_analyze_json:
                 main()
 
     captured = capsys.readouterr()
