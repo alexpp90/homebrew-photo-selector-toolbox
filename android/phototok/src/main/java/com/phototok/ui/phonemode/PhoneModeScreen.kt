@@ -6,31 +6,22 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.phototok.ui.components.DriveFolderPickerDialog
+import com.phototok.ui.components.BottomNavBar
+import com.phototok.ui.components.NavTab
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +29,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -50,21 +40,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.phototok.ui.settings.SettingsScreen
-import com.phototok.ui.theme.Indigo500
-import com.phototok.ui.theme.Zinc700
-import com.phototok.ui.theme.Zinc800
-import com.phototok.ui.theme.Zinc900
 import com.phototok.viewmodel.PhoneModeViewModel
 
 /**
  * Root composable for the phone-mode experience.
- * Shows either the landing screen (folder selection) or the full-screen viewer.
+ * Integrates top app bar, bottom nav, and content (landing or viewer).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,9 +58,12 @@ fun PhoneModeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val colors = MaterialTheme.colorScheme
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showDrivePicker by remember { mutableStateOf(false) }
+
+    val isViewing = uiState.images.isNotEmpty()
 
     // Google Sign-In launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
@@ -118,7 +106,7 @@ fun PhoneModeScreen(
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmDelete() }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text("Delete", color = colors.error)
                 }
             },
             dismissButton = {
@@ -126,7 +114,7 @@ fun PhoneModeScreen(
                     Text("Cancel")
                 }
             },
-            containerColor = Zinc800,
+            containerColor = colors.surfaceContainerHigh,
         )
     }
 
@@ -135,13 +123,22 @@ fun PhoneModeScreen(
         ModalBottomSheet(
             onDismissRequest = { showSettingsSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Zinc900,
+            containerColor = colors.surfaceContainerLow,
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 16.dp, bottom = 8.dp)
+                        .size(width = 32.dp, height = 4.dp)
+                        .background(colors.outlineVariant, RoundedCornerShape(50)),
+                )
+            },
         ) {
             SettingsScreen(
                 onChangeSourceFolder = {
                     showSettingsSheet = false
                     folderPickerLauncher.launch(null)
-                }
+                },
             )
         }
     }
@@ -159,8 +156,8 @@ fun PhoneModeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (uiState.images.isEmpty()) {
-            // Landing screen
+        // ── Content ──────────────────────────────────────────────
+        if (!isViewing) {
             PhoneModeLanding(
                 sourceFolderName = uiState.sourceFolderName,
                 collectionFolderName = uiState.collectionFolderName,
@@ -189,7 +186,6 @@ fun PhoneModeScreen(
                 isGoogleDriveSignedIn = viewModel.driveAuth.isSignedIn,
             )
         } else {
-            // Full-screen viewer
             PhoneModeViewer(
                 images = uiState.images,
                 currentIndex = uiState.currentIndex,
@@ -200,74 +196,62 @@ fun PhoneModeScreen(
                 showExifOverlay = uiState.showExifOverlay,
             )
 
-            // Subtle floating settings button at top right
-            IconButton(
-                onClick = { showSettingsSheet = true },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(16.dp)
-                    .background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                    .size(40.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Settings",
-                    tint = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            // Gesture tutorial overlay (on top of everything)
+            // Gesture tutorial overlay
             GestureTutorialOverlay(
                 visible = uiState.showGestureTutorial,
                 onDismiss = viewModel::dismissGestureTutorial,
             )
         }
 
-        // Snackbar
+        // ── Top app bar ──────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Photo-Tok",
+                style = MaterialTheme.typography.titleLarge,
+                color = colors.primary,
+                fontWeight = FontWeight.Bold,
+            )
+            IconButton(
+                onClick = { showSettingsSheet = true },
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = colors.onSurfaceVariant,
+                )
+            }
+        }
+
+        // ── Bottom nav bar ───────────────────────────────────────
+        BottomNavBar(
+            activeTab = if (isViewing) NavTab.Cards else NavTab.Sources,
+            onTabSelected = { tab ->
+                when (tab) {
+                    NavTab.Sources -> {
+                        if (isViewing) viewModel.goBackToLanding()
+                    }
+                    NavTab.Cards -> { /* already viewing or no-op */ }
+                    NavTab.History -> { /* placeholder for future */ }
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+
+        // ── Snackbar ─────────────────────────────────────────────
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp),
+                .padding(bottom = 80.dp),
         )
-    }
-}
-
-
-
-/**
- * Row of filter chips for RAW / JPG / Both selection.
- */
-@Composable
-fun FileTypeFilterRow(
-    selected: String,
-    onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.padding(bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        listOf("all" to "Both", "raw" to "RAW", "jpg" to "JPG").forEach { (value, label) ->
-            FilterChip(
-                selected = selected == value,
-                onClick = { onSelect(value) },
-                label = {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Indigo500,
-                    selectedLabelColor = Color.White,
-                    containerColor = Color.White.copy(alpha = 0.15f),
-                    labelColor = Color.White.copy(alpha = 0.8f),
-                ),
-                border = null,
-            )
-        }
     }
 }
