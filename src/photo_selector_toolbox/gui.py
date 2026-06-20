@@ -23,6 +23,7 @@ from photo_selector_toolbox.utils import (
     resolve_path,
     load_image_preview,
     is_excluded_subfolder,
+    get_excluded_folder_names,
 )
 from photo_selector_toolbox.visualizer import (
     get_shutter_speed_plot,
@@ -535,12 +536,20 @@ class ImageLibraryStatistics(ttk.Frame):
             ):
                 is_excluded_subfolder.return_value = False
 
-            image_files = [
-                f
-                for f in root_path.rglob("*")
-                if f.suffix.lower() in SUPPORTED_EXTENSIONS
-                and not is_excluded_subfolder(f, root_path)
-            ]
+            excluded_names = get_excluded_folder_names()
+            image_files = []
+
+            for dirpath, dirnames, filenames in os.walk(root_path):
+                # Prune excluded directories in place
+                dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+
+                dp = Path(dirpath)
+                for f in filenames:
+                    if f.startswith("._"):
+                        continue
+                    file_path = dp / f
+                    if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+                        image_files.append(file_path)
 
             if not image_files:
                 logger.info("No supported image files found.")

@@ -9,7 +9,7 @@ from tqdm import tqdm
 from photo_selector_toolbox.reader import get_exif_data, SUPPORTED_EXTENSIONS
 from photo_selector_toolbox.analyzer import analyze_data
 from photo_selector_toolbox.visualizer import create_plots
-from photo_selector_toolbox.utils import is_excluded_subfolder
+from photo_selector_toolbox.utils import is_excluded_subfolder, get_excluded_folder_names
 
 
 def main():
@@ -54,13 +54,20 @@ def main():
     ):
         is_excluded_subfolder.return_value = False
 
-    image_files = [
-        f
-        for f in root_path.rglob("*")
-        if f.suffix.lower() in SUPPORTED_EXTENSIONS
-        and not is_excluded_subfolder(f, root_path)
-        and not f.name.startswith("._")
-    ]
+    excluded_names = get_excluded_folder_names()
+    image_files = []
+
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        # Prune excluded directories in place
+        dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+
+        dp = Path(dirpath)
+        for f in filenames:
+            if f.startswith("._"):
+                continue
+            file_path = dp / f
+            if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+                image_files.append(file_path)
 
     if not image_files:
         print("No supported image files found.")
