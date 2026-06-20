@@ -45,8 +45,10 @@ def resolve_path(path_str: str | Path) -> Path:
         # Unquote to handle spaces (%20)
         full_path_decoded = urllib.parse.unquote(full_path)
 
-        # Use os.path.normpath to logically resolve path components
-        normalized_path = os.path.normpath(full_path_decoded)
+        # Use posixpath.normpath to logically resolve path components
+        # cross-platform since URLs always use forward slashes
+        import posixpath
+        normalized_path = posixpath.normpath(full_path_decoded)
 
         # Ensure the normalized path is absolute (starts with /) before splitting
         if not normalized_path.startswith("/"):

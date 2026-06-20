@@ -115,7 +115,7 @@ class TestResolvePath(unittest.TestCase):
         path_str = "smb://myserver/myshare/path/to/image.jpg"
         result = resolve_path(path_str)
         expected = Path("/run/user/1000/gvfs/smb-share:server=myserver,share=myshare/path/to/image.jpg")
-        self.assertEqual(result, expected)
+        self.assertEqual(str(result), str(expected))
 
     @patch("sys.platform", "darwin")
     def test_smb_macos(self):
@@ -123,7 +123,7 @@ class TestResolvePath(unittest.TestCase):
         path_str = "smb://myserver/myshare/path/to/image.jpg"
         result = resolve_path(path_str)
         expected = Path("/Volumes/myshare/path/to/image.jpg")
-        self.assertEqual(result, expected)
+        self.assertEqual(str(result), str(expected))
 
     @patch("sys.platform", "win32")
     def test_smb_windows_fallback(self):
@@ -131,7 +131,7 @@ class TestResolvePath(unittest.TestCase):
         path_str = "smb://myserver/myshare/path/to/image.jpg"
         result = resolve_path(path_str)
         # On non-linux/non-darwin, it should return Path(path_str)
-        self.assertEqual(result, Path(path_str))
+        self.assertEqual(str(result), str(Path(path_str)))
 
     @patch("sys.platform", "darwin")
     def test_smb_url_decoding(self):
@@ -139,13 +139,13 @@ class TestResolvePath(unittest.TestCase):
         path_str = "smb://myserver/share%20with%20space/file%20name.jpg"
         result = resolve_path(path_str)
         expected = Path("/Volumes/share with space/file name.jpg")
-        self.assertEqual(result, expected)
+        self.assertEqual(str(result), str(expected))
 
     def test_smb_no_path(self):
         """Tests handling of SMB URLs with no path component."""
         path_str = "smb://myserver"
         result = resolve_path(path_str)
-        self.assertEqual(result, Path(path_str))
+        self.assertEqual(str(result), str(Path(path_str)))
 
 
 class TestLoadImagePreview(unittest.TestCase):
