@@ -1,14 +1,17 @@
-import pytest
-from unittest.mock import patch, MagicMock
 import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Save original modules to prevent test pollution
 original_modules = {}
+
 
 @pytest.fixture(scope="module", autouse=True)
 def mock_sys_modules():
     existing_modules = set(sys.modules.keys())
     import importlib
+
     modules_to_mock = [
         "rawpy",
         "photo_selector_toolbox.controllers",
@@ -43,13 +46,12 @@ def mock_sys_modules():
 
     # Pop any newly imported photo_selector_toolbox modules imported during mock session to prevent pollution
     to_pop = [
-        m for m in list(sys.modules.keys())
+        m
+        for m in list(sys.modules.keys())
         if m.startswith("photo_selector_toolbox") and m not in existing_modules
     ]
     for m in to_pop:
         sys.modules.pop(m, None)
-
-
 
 
 @pytest.fixture(autouse=True)
@@ -58,6 +60,7 @@ def mock_sharpness_gui_deps():
         def __init__(self, var):
             self.var = var
             self.return_value = None
+
         def __call__(self):
             if self.return_value is not None:
                 return self.return_value
@@ -67,6 +70,7 @@ def mock_sharpness_gui_deps():
         def __init__(self, value=None):
             self._val = value
             self.get = DummyGet(self)
+
         def set(self, val):
             self._val = val
 
@@ -122,6 +126,8 @@ def test_sharpness_tool_init():
 
 
 def test_sharpness_tool_filtering():
+    from pathlib import Path
+
     from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
     parent = MagicMock()
@@ -136,9 +142,20 @@ def test_sharpness_tool_filtering():
         tool.update = MagicMock()
         tool.folder_var.get.return_value = "/mock/folder"
 
-        walk_return = [("/mock/folder", [], ["img1.jpg", "img2.arw", "img3.jpg", "img4.png"])]
-        with patch("os.walk", return_value=walk_return):
-            with patch("photo_selector_toolbox.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}):
+        test_files = [
+            Path("/mock/folder/img1.jpg"),
+            Path("/mock/folder/img2.arw"),
+            Path("/mock/folder/img3.jpg"),
+            Path("/mock/folder/img4.png"),
+        ]
+
+        with patch(
+            "photo_selector_toolbox.sharpness_gui.Path.rglob", return_value=test_files
+        ):
+            with patch(
+                "photo_selector_toolbox.reader.SUPPORTED_EXTENSIONS",
+                {".jpg", ".arw", ".png"},
+            ):
                 tool._load_folder_contents("/mock/folder")
 
                 # Check sorted_files and candidates initially contain everything
@@ -189,8 +206,8 @@ def test_update_scan_button_state_no_recreation():
 
 def test_get_candidate_listbox_text():
     import sys
-    from unittest.mock import patch, MagicMock
     from pathlib import Path
+    from unittest.mock import MagicMock, patch
 
     # Temporarily restore real models module to construct ScanResult properly
     orig_models = original_modules.get("photo_selector_toolbox.models")
@@ -203,13 +220,15 @@ def test_get_candidate_listbox_text():
 
     try:
         import photo_selector_toolbox.sharpness_gui as sg
-        from photo_selector_toolbox.sharpness_gui import SharpnessTool
         from photo_selector_toolbox.models import ScanResult
+        from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
         # Override format_score in the sharpness_gui module namespace
         original_format_score = sg.format_score
         sg.format_score = lambda val, **kwargs: (
-            "N/A" if val is None or val == "N/A" else (f"{val:.1f}" if isinstance(val, float) else str(val))
+            "N/A"
+            if val is None or val == "N/A"
+            else (f"{val:.1f}" if isinstance(val, float) else str(val))
         )
 
         parent = MagicMock()
@@ -232,7 +251,9 @@ def test_get_candidate_listbox_text():
                 assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5)"
 
                 # Test case 3: Sharpness and Noise calculated
-                tool.files_map[path] = ScanResult(path=path, score=42.5, noise_score=1.2)
+                tool.files_map[path] = ScanResult(
+                    path=path, score=42.5, noise_score=1.2
+                )
                 assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5, 1.2)"
 
                 # Test case 4: Sharpness, Noise, and Highlight/Shadow clipping calculated
@@ -240,7 +261,10 @@ def test_get_candidate_listbox_text():
                 res.scores["highlight_clipping"] = 0.5
                 res.scores["shadow_clipping"] = 1.0
                 tool.files_map[path] = res
-                assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5, 1.2, 0.5%, 1.0%)"
+                assert (
+                    tool._get_candidate_listbox_text(path)
+                    == "img1.jpg (42.5, 1.2, 0.5%, 1.0%)"
+                )
         finally:
             sg.format_score = original_format_score
     finally:
@@ -253,8 +277,8 @@ def test_get_candidate_listbox_text():
 
 def test_update_metadata_label_loads_exif():
     import sys
-    from unittest.mock import patch, MagicMock
     from pathlib import Path
+    from unittest.mock import MagicMock, patch
 
     # Temporarily restore real models, reader, and formatting modules to test properly
     orig_models = original_modules.get("photo_selector_toolbox.models")
@@ -280,10 +304,10 @@ def test_update_metadata_label_loads_exif():
         sys.modules.pop("photo_selector_toolbox.formatting", None)
 
     try:
-        from photo_selector_toolbox.formatting import format_score, format_meta
         import photo_selector_toolbox.sharpness_gui as sg
+        from photo_selector_toolbox.formatting import format_meta, format_score
+        from photo_selector_toolbox.models import ExifData, ScanResult
         from photo_selector_toolbox.sharpness_gui import SharpnessTool
-        from photo_selector_toolbox.models import ScanResult, ExifData
 
         # Save original formatters and inject real ones
         orig_sg_format_score = sg.format_score
@@ -298,7 +322,9 @@ def test_update_metadata_label_loads_exif():
             with (
                 patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
                 patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
-                patch("photo_selector_toolbox.sharpness_gui.get_exif_data") as mock_get_exif,
+                patch(
+                    "photo_selector_toolbox.sharpness_gui.get_exif_data"
+                ) as mock_get_exif,
             ):
                 tool = SharpnessTool(parent)
                 tool.meta_lbl = MagicMock()
@@ -308,7 +334,9 @@ def test_update_metadata_label_loads_exif():
                 tool.files_map[path] = res
 
                 # Mock get_exif_data to return a valid ExifData
-                mock_exif = ExifData(iso=100.0, shutter_speed=0.005, aperture=2.8, focal_length=50.0)
+                mock_exif = ExifData(
+                    iso=100.0, shutter_speed=0.005, aperture=2.8, focal_length=50.0
+                )
                 mock_get_exif.return_value = mock_exif
 
                 tool.update_metadata_label(path)
@@ -343,8 +371,12 @@ def test_update_metadata_label_loads_exif():
         else:
             sys.modules.pop("photo_selector_toolbox.formatting", None)
 
+
 def test_mac_metadata_ignored():
+    from pathlib import Path
+
     from photo_selector_toolbox.sharpness_gui import SharpnessTool
+
     parent = MagicMock()
     parent.register = MagicMock()
 
@@ -357,9 +389,19 @@ def test_mac_metadata_ignored():
         tool.update = MagicMock()
         tool.folder_var.get.return_value = "/mock/folder"
 
-        walk_return = [("/mock/folder", [], ["img1.jpg", "._img1.jpg", "img2.arw", "._img2.arw"])]
-        with patch("os.walk", return_value=walk_return):
-            with patch("photo_selector_toolbox.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw"}):
+        test_files = [
+            Path("/mock/folder/img1.jpg"),
+            Path("/mock/folder/._img1.jpg"),
+            Path("/mock/folder/img2.arw"),
+            Path("/mock/folder/._img2.arw"),
+        ]
+
+        with patch(
+            "photo_selector_toolbox.sharpness_gui.Path.rglob", return_value=test_files
+        ):
+            with patch(
+                "photo_selector_toolbox.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw"}
+            ):
                 tool._load_folder_contents("/mock/folder")
 
                 # Check sorted_files and candidates ignore dot_underscore
@@ -370,8 +412,10 @@ def test_mac_metadata_ignored():
 
 
 def test_throttled_listbox_updates():
-    from photo_selector_toolbox.sharpness_gui import SharpnessTool
     from pathlib import Path
+
+    from photo_selector_toolbox.models import ScanResult
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
     parent = MagicMock()
     parent.register = MagicMock()
@@ -419,9 +463,10 @@ def test_throttled_listbox_updates():
 
 
 def test_sorting_flat_list():
-    from photo_selector_toolbox.sharpness_gui import SharpnessTool
-    from photo_selector_toolbox.models import ScanResult
     from pathlib import Path
+
+    from photo_selector_toolbox.models import ScanResult
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
     parent = MagicMock()
     parent.register = MagicMock()
@@ -463,9 +508,10 @@ def test_sorting_flat_list():
 
 
 def test_sorting_na_scores():
-    from photo_selector_toolbox.sharpness_gui import SharpnessTool
-    from photo_selector_toolbox.models import ScanResult
     from pathlib import Path
+
+    from photo_selector_toolbox.models import ScanResult
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
     parent = MagicMock()
     parent.register = MagicMock()
@@ -507,9 +553,10 @@ def test_sorting_na_scores():
 
 
 def test_sorting_grouped_list():
-    from photo_selector_toolbox.sharpness_gui import SharpnessTool
-    from photo_selector_toolbox.models import ScanResult
     from pathlib import Path
+
+    from photo_selector_toolbox.models import ScanResult
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
     parent = MagicMock()
     parent.register = MagicMock()
@@ -517,7 +564,7 @@ def test_sorting_grouped_list():
     with (
         patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
         patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
-        patch("photo_selector_toolbox.sharpness_gui.group_files_by_similarity") as mock_group,
+        patch("photo_selector_toolbox.utils.group_files_by_similarity") as mock_group,
     ):
         tool = SharpnessTool(parent)
         tool.candidate_listbox = MagicMock()
@@ -530,10 +577,10 @@ def test_sorting_grouped_list():
 
         tool.sorted_files = [path1, path2, path3, path4]
         tool.files_map = {
-            path1: ScanResult(path=path1, score=100.0), # Group A
-            path2: ScanResult(path=path2, score=400.0), # Group A
-            path3: ScanResult(path=path3, score=500.0), # Group B
-            path4: ScanResult(path=path4, score=200.0), # Group B
+            path1: ScanResult(path=path1, score=100.0),  # Group A
+            path2: ScanResult(path=path2, score=400.0),  # Group A
+            path3: ScanResult(path=path3, score=500.0),  # Group B
+            path4: ScanResult(path=path4, score=200.0),  # Group B
         }
 
         # Group A has path1 & path2
@@ -553,19 +600,11 @@ def test_sorting_grouped_list():
         assert tool.candidates == [path3, path2]
 
         # Let's expand both groups to check internal sorting
-        tool.image_groups[0].expanded = True # Group B
-        tool.image_groups[1].expanded = True # Group A
+        tool.image_groups[0].expanded = True  # Group B
+        tool.image_groups[1].expanded = True  # Group A
         tool.apply_grouping_and_refresh()
 
         # Candidates should be:
         # Group B: rep (path3), followed by other member (path4)
         # Group A: rep (path2), followed by other member (path1)
         assert tool.candidates == [path3, path4, path2, path1]
-
-
-
-
-
-
-
-

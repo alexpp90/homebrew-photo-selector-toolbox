@@ -1,15 +1,16 @@
+import os
+import subprocess
+import sys
 import webbrowser
-from pathlib import Path
-from typing import Optional, List
 from collections import Counter
+from pathlib import Path
+from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from photo_selector_toolbox.utils import aggregate_focal_lengths
-
-
 from photo_selector_toolbox.models import ExifData
+from photo_selector_toolbox.utils import aggregate_focal_lengths
 
 
 def _open_file_for_user(filepath: Path):

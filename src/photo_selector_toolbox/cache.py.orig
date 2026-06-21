@@ -153,11 +153,13 @@ class ScoreCache:
                 # Bulk update last_used for matches
                 if results:
                     matched_fps = [str(p.resolve()) for p in results.keys()]
-                    update_data = [(now, fp) for fp in matched_fps]
-                    conn.executemany(
-                        "UPDATE image_cache SET last_used = ? WHERE filepath = ?",
-                        update_data,
-                    )
+                    for i in range(0, len(matched_fps), chunk_size):
+                        chunk = matched_fps[i : i + chunk_size]
+                        placeholders = ",".join("?" for _ in chunk)
+                        conn.execute(
+                            f"UPDATE image_cache SET last_used = ? WHERE filepath IN ({placeholders})",
+                            [now] + chunk,
+                        )
                     conn.commit()
         except Exception as e:
             logger.warning(f"Error bulk reading from score cache: {e}")

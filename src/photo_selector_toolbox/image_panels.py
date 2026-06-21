@@ -1,10 +1,15 @@
 import logging
-from PIL import Image, ImageTk
+import threading
+import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
 
+from PIL import Image, ImageTk
+
+from photo_selector_toolbox.formatting import format_meta, format_score
 # Local imports
-from photo_selector_toolbox.utils import load_image_preview, create_placeholder_image
-from photo_selector_toolbox.formatting import format_score
+from photo_selector_toolbox.utils import (create_placeholder_image,
+                                          load_image_preview)
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +28,7 @@ class ImagePanelsMixin:
         )  # Stop the label from resizing the container
 
         # Image Label (Placeholder)
-        lbl = ttk.Label(img_container, text="No Image", anchor="center", cursor="hand2")
+        lbl = ttk.Label(img_container, text="No Image", anchor="center")
         lbl.place(relx=0.5, rely=0.5, anchor="center")
 
         # Details
@@ -287,7 +292,12 @@ class ImagePanelsMixin:
         n_img = get_image(next_path, size_next)
 
         # Update UI in main thread
-        self.parent.after(0, lambda: self.update_panels_final(p_img, c_img, n_img, prev_path, curr_path, next_path))
+        self.parent.after(
+            0,
+            lambda: self.update_panels_final(
+                p_img, c_img, n_img, prev_path, curr_path, next_path
+            ),
+        )
 
     def update_panels_final(self, p_img, c_img, n_img, prev_path, curr_path, next_path):
         if (
@@ -340,7 +350,11 @@ class ImagePanelsMixin:
                     if w < 10 or h < 10:
                         w, h = 400, 300
                     p_name = panel.path.name if panel.path else "No Image Selected"
-                    p_text = f"Preview Unavailable: {p_name}" if panel.path else "No Image Selected"
+                    p_text = (
+                        f"Preview Unavailable: {p_name}"
+                        if panel.path
+                        else "No Image Selected"
+                    )
                     placeholder_img = create_placeholder_image(w, h, p_text)
                     tk_img = ImageTk.PhotoImage(placeholder_img)
                     lbl.config(image=tk_img, text="")

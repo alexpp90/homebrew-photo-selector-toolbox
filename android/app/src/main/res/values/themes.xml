@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Base application theme — actual theming is handled by Jetpack Compose Material 3 -->
-    <style name="Theme.PhotoSelectorToolbox" parent="android:Theme.DeviceDefault.NoActionBar" />
-</resources>

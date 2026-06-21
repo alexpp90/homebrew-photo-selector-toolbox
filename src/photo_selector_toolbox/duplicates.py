@@ -3,10 +3,10 @@ import os
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
 from send2trash import send2trash
 
 from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS
-from photo_selector_toolbox.config import load_config
 
 # Extend supported extensions for duplicates to include basic formats
 # not necessarily supported by the metadata analyzer (like GIF/BMP)
@@ -53,13 +53,6 @@ def find_duplicates(root_folder, callback=None):
     # Using a list to store all image paths first is fast enough for typical library sizes.
     # But checking size is also stat().
 
-    # Build excluded folder names from config (consistent with is_excluded_subfolder)
-    config = load_config()
-    excluded_names = {"selection", "selected"}
-    custom_folder = config.get("selection_folder", "Selection")
-    if custom_folder and not Path(str(custom_folder)).is_absolute():
-        excluded_names.add(Path(str(custom_folder)).name.lower())
-
     # Initial scan
     ext_tuple = tuple(IMAGE_EXTENSIONS)
 
@@ -68,14 +61,16 @@ def find_duplicates(root_folder, callback=None):
             with os.scandir(path) as it:
                 for entry in it:
                     if entry.is_file():
-                        if entry.name.lower().endswith(ext_tuple) and not entry.name.startswith("._"):
+                        if entry.name.lower().endswith(
+                            ext_tuple
+                        ) and not entry.name.startswith("._"):
                             try:
                                 s = entry.stat().st_size
                                 size_groups[s].append(Path(entry.path))
                             except OSError:
                                 pass
                     elif entry.is_dir(follow_symlinks=False):
-                        if entry.name.lower() not in excluded_names:
+                        if entry.name.lower() not in ("selection", "selected"):
                             _scan(entry.path)
         except OSError:
             pass

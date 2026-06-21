@@ -1,7 +1,9 @@
-import timeit
 import tempfile
+import timeit
 from pathlib import Path
+
 from photo_selector_toolbox.sharpness import find_related_files
+
 
 def setup_test_env(num_files=10000):
     temp_dir = tempfile.TemporaryDirectory()
@@ -19,6 +21,7 @@ def setup_test_env(num_files=10000):
 
     return temp_dir, base_path, target_stem
 
+
 def run_benchmark():
     num_files = 10000
     print(f"Setting up directory with {num_files} files...")
@@ -30,13 +33,16 @@ def run_benchmark():
 
     # Run the function a few times
     iterations = 50
-    total_time = timeit.timeit(lambda: find_related_files(target_file), number=iterations)
+    total_time = timeit.timeit(
+        lambda: find_related_files(target_file), number=iterations
+    )
 
-    avg_time = (total_time / iterations) * 1000 # in ms
+    avg_time = (total_time / iterations) * 1000  # in ms
     print(f"Average time per call: {avg_time:.2f} ms")
 
     temp_dir.cleanup()
     return avg_time
+
 
 if __name__ == "__main__":
     run_benchmark()

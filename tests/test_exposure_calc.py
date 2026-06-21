@@ -1,13 +1,13 @@
 from pathlib import Path
 from unittest.mock import patch
-import numpy as np
+
 import cv2
-from photo_selector_toolbox.sharpness import (
-    calculate_highlight_clipping,
-    calculate_shadow_clipping,
-    HighlightClippingTool,
-    ShadowClippingTool,
-)
+import numpy as np
+
+from photo_selector_toolbox.sharpness import (HighlightClippingTool,
+                                              ShadowClippingTool,
+                                              calculate_highlight_clipping,
+                                              calculate_shadow_clipping)
 from photo_selector_toolbox.tools import ToolRegistry
 
 
@@ -66,7 +66,9 @@ def test_tool_registry():
     assert sd_tool_class is ShadowClippingTool
 
     # Verify analyze method
-    with patch("photo_selector_toolbox.sharpness.calculate_highlight_clipping") as mock_hl:
+    with patch(
+        "photo_selector_toolbox.sharpness.calculate_highlight_clipping"
+    ) as mock_hl:
         mock_hl.return_value = 5.5
         hl_tool = HighlightClippingTool()
         assert hl_tool.analyze(Path("dummy.jpg")) == 5.5

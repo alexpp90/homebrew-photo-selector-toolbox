@@ -1,5 +1,6 @@
 import warnings
 from pathlib import Path
+
 from photo_selector_toolbox.models import ExifData
 from photo_selector_toolbox.readers import read_exif
 
@@ -9,8 +10,18 @@ warnings.filterwarnings("ignore", "(Possibly )?corrupt EXIF data", UserWarning)
 
 # Canonical raw format extensions - single source of truth
 RAW_EXTENSIONS = {
-    ".arw", ".nef", ".cr2", ".dng", ".raw",
-    ".cr3", ".raf", ".orf", ".rw2", ".pef", ".srw", ".sr2",
+    ".arw",
+    ".nef",
+    ".cr2",
+    ".dng",
+    ".raw",
+    ".cr3",
+    ".raf",
+    ".orf",
+    ".rw2",
+    ".pef",
+    ".srw",
+    ".sr2",
 }
 
 # Extensions that should be processed with ExifTool if available, as they often contain

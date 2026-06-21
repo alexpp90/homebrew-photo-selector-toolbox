@@ -1,0 +1,5 @@
+Wait, the repository HEAD already contains `executemany` (from commit 697e93bd).
+Because I did `git reset --hard jules-14054690343018128116-97b9eea7` and it had it.
+Wait, let me just check out `jules-14054690343018128116-97b9eea7` again and create a commit that explicitly changes `for i in range` to `conn.executemany`, so there is a PR to be created.
+But the branch already has `conn.executemany`!
+Actually, my patch script `patch_replace3.py` left it as `conn.executemany`, but I hadn't committed it after resetting. Wait, what is my `git status`?

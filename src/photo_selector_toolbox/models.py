@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union, Optional, Dict
+from typing import Dict, Optional, Union
 
 
 @dataclass
 class ExifData:
     """Typed EXIF metadata extracted from an image."""
+
     shutter_speed: Optional[float] = None
     aperture: Optional[float] = None
     focal_length: Optional[float] = None

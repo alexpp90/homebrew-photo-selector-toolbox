@@ -1,4 +1,4 @@
-from photo_selector_toolbox.formatting import format_score, format_meta
+from photo_selector_toolbox.formatting import format_meta, format_score
 
 
 def test_format_score():

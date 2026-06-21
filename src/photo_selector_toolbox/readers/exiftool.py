@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+
 from photo_selector_toolbox.models import ExifData
 from photo_selector_toolbox.readers.base import ExifReader
 from photo_selector_toolbox.utils import get_exiftool_path
@@ -14,6 +15,7 @@ class ExifToolReader(ExifReader):
     def can_handle(self, path: Path) -> bool:
         # Avoid top-level import to prevent circular dependency
         from photo_selector_toolbox.reader import FORCE_EXIFTOOL_EXTENSIONS
+
         return path.suffix.lower() in FORCE_EXIFTOOL_EXTENSIONS
 
     def read(self, path: Path, debug: bool = False) -> Optional[ExifData]:
@@ -65,9 +67,13 @@ class ExifToolReader(ExifReader):
                     aperture = parse_val(data.get("Composite:Aperture"))
                     iso_val = data.get("Composite:ISO") or data.get("EXIF:ISO")
                     iso = parse_val(iso_val)
-                    fl_val = data.get("Composite:FocalLength") or data.get("EXIF:FocalLength")
+                    fl_val = data.get("Composite:FocalLength") or data.get(
+                        "EXIF:FocalLength"
+                    )
                     focal_length = parse_val(fl_val)
-                    fl35_val = data.get("Composite:FocalLength35efl") or data.get("EXIF:FocalLengthIn35mmFormat")
+                    fl35_val = data.get("Composite:FocalLength35efl") or data.get(
+                        "EXIF:FocalLengthIn35mmFormat"
+                    )
                     focal_length_35 = parse_val(fl35_val)
 
                     is_fallback = False
@@ -86,7 +92,9 @@ class ExifToolReader(ExifReader):
                         v is not None
                         for v in [shutter_speed, aperture, focal_length, iso]
                     ):
-                        logger.debug(f"Successfully processed {path.name} with exiftool.")
+                        logger.debug(
+                            f"Successfully processed {path.name} with exiftool."
+                        )
                         return ExifData(
                             shutter_speed=shutter_speed,
                             aperture=aperture,

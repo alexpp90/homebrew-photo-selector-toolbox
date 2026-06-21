@@ -1,251 +1,214 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
-import threading
-from photo_selector_toolbox.gui_utils import ask_directory
+import logging
 import queue
 import sys
-import logging
-from dataclasses import dataclass
+import threading
+import tkinter as tk
+import traceback
 from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
+
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image, ImageTk
-import os
-import concurrent.futures
-import multiprocessing
 
 logger = logging.getLogger(__name__)
 
+from photo_selector_toolbox.analyzer import analyze_data
+from photo_selector_toolbox.duplicates import find_duplicates, move_to_trash
 # Use a relative import or absolute based on package structure
 # Assuming this runs as a module
-from photo_selector_toolbox.reader import get_exif_data, SUPPORTED_EXTENSIONS
-from photo_selector_toolbox.analyzer import analyze_data
-from photo_selector_toolbox.utils import (
-    resolve_path,
-    load_image_preview,
-    is_excluded_subfolder,
-    get_excluded_folder_names,
-)
-from photo_selector_toolbox.visualizer import (
-    get_shutter_speed_plot,
-    get_aperture_plot,
-    get_iso_plot,
-    get_focal_length_plot,
-    get_lens_plot,
-    get_combination_plot,
-    get_equivalent_focal_length_plot,
-    get_apsc_equivalent_focal_length_plot,
-)
-from photo_selector_toolbox.duplicates import find_duplicates, move_to_trash
+from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS, get_exif_data
 from photo_selector_toolbox.sharpness_gui import SharpnessTool
-from photo_selector_toolbox.ollama_tool import load_config, save_config
-from photo_selector_toolbox.cache import ScoreCache
+from photo_selector_toolbox.utils import (is_excluded_subfolder,
+                                          load_image_preview, resolve_path)
+from photo_selector_toolbox.visualizer import (
+    get_aperture_plot, get_apsc_equivalent_focal_length_plot,
+    get_combination_plot, get_equivalent_focal_length_plot,
+    get_focal_length_plot, get_iso_plot, get_lens_plot, get_shutter_speed_plot)
 
 
-@dataclass
-class ThemeColors:
-    bg_dark: str = "#18181B"
-    bg_panel: str = "#27272A"
-    bg_hover: str = "#3F3F46"
-    fg_light: str = "#FAFAFA"
-    fg_muted: str = "#A1A1AA"
-    accent_blue: str = "#6366F1"
-    accent_hover: str = "#4F46E5"
-    border_color: str = "#3F3F46"
+def apply_dark_theme(root):
+    style = ttk.Style()
+    style.theme_use("clam")
 
+    # Define color palette: dark backgrounds & Indigo accents matching logo/banner
+    bg_dark = "#18181B"  # Zinc-900 (main window)
+    bg_panel = "#27272A"  # Zinc-800 (containers, boxes)
+    bg_hover = "#3F3F46"  # Zinc-700
+    fg_light = "#FAFAFA"  # Zinc-50 (headings/main text)
+    fg_muted = "#A1A1AA"  # Zinc-400 (secondary text)
+    accent_blue = "#6366F1"  # Indigo-500 (active buttons/highlight border)
+    accent_hover = "#4F46E5"  # Indigo-600
+    border_color = "#3F3F46"  # Zinc-700
 
-def _configure_base_styles(style: ttk.Style, colors: ThemeColors) -> None:
+    # Base styling
     style.configure(
         ".",
-        background=colors.bg_dark,
-        foreground=colors.fg_light,
-        bordercolor=colors.border_color,
+        background=bg_dark,
+        foreground=fg_light,
+        bordercolor=border_color,
         font=("Helvetica", 10),
     )
 
+    # TFrame
+    style.configure("TFrame", background=bg_dark)
 
-def _configure_container_styles(style: ttk.Style, colors: ThemeColors) -> None:
-    style.configure("TFrame", background=colors.bg_dark)
+    # TLabelframe
     style.configure(
         "TLabelframe",
-        background=colors.bg_dark,
-        foreground=colors.fg_light,
-        bordercolor=colors.border_color,
+        background=bg_dark,
+        foreground=fg_light,
+        bordercolor=border_color,
         padding=10,
     )
     style.configure(
         "TLabelframe.Label",
-        background=colors.bg_dark,
-        foreground=colors.fg_light,
+        background=bg_dark,
+        foreground=fg_light,
         font=("Helvetica", 10, "bold"),
     )
 
-    style.configure(
-        "TNotebook",
-        background=colors.bg_dark,
-        bordercolor=colors.border_color,
-        tabmargins=[2, 5, 2, 0],
-    )
-    style.configure(
-        "TNotebook.Tab",
-        background=colors.bg_panel,
-        foreground=colors.fg_muted,
-        bordercolor=colors.border_color,
-        padding=[14, 6],
-        font=("Helvetica", 9, "bold"),
-        focuscolor=colors.accent_blue,
-    )
-    style.map(
-        "TNotebook.Tab",
-        background=[("selected", colors.bg_dark), ("active", colors.bg_hover)],
-        foreground=[("selected", colors.accent_blue), ("active", colors.fg_light)],
-    )
-
-    style.configure(
-        "MetaPanel.TFrame", background=colors.bg_panel, bordercolor=colors.border_color
-    )
-
-
-def _configure_typography_styles(style: ttk.Style, colors: ThemeColors) -> None:
-    style.configure("TLabel", background=colors.bg_dark, foreground=colors.fg_light)
+    # TLabel
+    style.configure("TLabel", background=bg_dark, foreground=fg_light)
     style.configure("Title.TLabel", font=("Helvetica", 12, "bold"))
     style.configure(
-        "Header.TLabel", font=("Helvetica", 14, "bold"), foreground=colors.fg_light
+        "Header.TLabel", font=("Helvetica", 14, "bold"), foreground=fg_light
     )
-    style.configure("Muted.TLabel", foreground=colors.fg_muted, font=("Helvetica", 9))
+    style.configure("Muted.TLabel", foreground=fg_muted, font=("Helvetica", 9))
 
-    style.configure(
-        "MetaPanel.TLabel", background=colors.bg_panel, foreground=colors.fg_light
-    )
-    style.configure(
-        "MetaPanelTitle.TLabel",
-        background=colors.bg_panel,
-        foreground=colors.fg_light,
-        font=("Helvetica", 12, "bold"),
-    )
-    style.configure(
-        "MetaPanelExposure.TLabel",
-        background=colors.bg_panel,
-        foreground=colors.fg_light,
-        font=("Helvetica", 10),
-    )
-    style.configure(
-        "MetaPanelLens.TLabel",
-        background=colors.bg_panel,
-        foreground=colors.fg_light,
-        font=("Helvetica", 9, "italic"),
-    )
-
-
-def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
+    # TButton
     style.configure(
         "TButton",
-        background=colors.bg_panel,
-        foreground=colors.fg_light,
-        bordercolor=colors.border_color,
+        background=bg_panel,
+        foreground=fg_light,
+        bordercolor=border_color,
         borderwidth=1,
-        focuscolor=colors.accent_blue,
+        focuscolor="",
         padding=[12, 6],
     )
     style.map(
         "TButton",
-        background=[("active", colors.bg_hover), ("disabled", colors.bg_dark)],
-        foreground=[("active", colors.fg_light), ("disabled", colors.fg_muted)],
-        bordercolor=[("focus", colors.accent_blue)],
+        background=[("active", bg_hover), ("disabled", bg_dark)],
+        foreground=[("active", fg_light), ("disabled", fg_muted)],
     )
 
+    # Primary Button Accent
     style.configure(
         "Primary.TButton",
-        background=colors.accent_blue,
+        background=accent_blue,
         foreground="#FFFFFF",
-        bordercolor=colors.accent_blue,
+        bordercolor=accent_blue,
         borderwidth=1,
-        focuscolor="#FFFFFF",
+        focuscolor="",
         padding=[12, 6],
     )
     style.map(
         "Primary.TButton",
-        background=[("active", colors.accent_hover), ("disabled", colors.bg_dark)],
-        foreground=[("active", "#FFFFFF"), ("disabled", colors.fg_muted)],
-        bordercolor=[("focus", "#FFFFFF")],
+        background=[("active", accent_hover), ("disabled", bg_dark)],
+        foreground=[("active", "#FFFFFF"), ("disabled", fg_muted)],
     )
 
-    style.configure(
-        "TCheckbutton",
-        background=colors.bg_dark,
-        foreground=colors.fg_light,
-        focuscolor=colors.accent_blue,
-    )
-    style.map(
-        "TCheckbutton",
-        background=[("active", colors.bg_dark), ("disabled", colors.bg_dark)],
-        foreground=[("active", colors.fg_light), ("disabled", colors.fg_muted)],
-    )
-
-
-def _configure_input_styles(style: ttk.Style, colors: ThemeColors) -> None:
+    # TEntry
     style.configure(
         "TEntry",
-        fieldbackground=colors.bg_panel,
-        foreground=colors.fg_light,
-        bordercolor=colors.border_color,
-        lightcolor=colors.bg_panel,
-        darkcolor=colors.bg_panel,
+        fieldbackground=bg_panel,
+        foreground=fg_light,
+        bordercolor=border_color,
+        lightcolor=bg_panel,
+        darkcolor=bg_panel,
         padding=4,
     )
     style.map(
         "TEntry",
-        bordercolor=[("focus", colors.accent_blue)],
-        lightcolor=[("focus", colors.accent_blue)],
-        darkcolor=[("focus", colors.accent_blue)],
+        bordercolor=[("focus", accent_blue)],
+        lightcolor=[("focus", accent_blue)],
+        darkcolor=[("focus", accent_blue)],
     )
 
+    # TNotebook
+    style.configure(
+        "TNotebook",
+        background=bg_dark,
+        bordercolor=border_color,
+        tabmargins=[2, 5, 2, 0],
+    )
+    style.configure(
+        "TNotebook.Tab",
+        background=bg_panel,
+        foreground=fg_muted,
+        bordercolor=border_color,
+        padding=[14, 6],
+        font=("Helvetica", 9, "bold"),
+    )
+    style.map(
+        "TNotebook.Tab",
+        background=[("selected", bg_dark), ("active", bg_hover)],
+        foreground=[("selected", accent_blue), ("active", fg_light)],
+    )
+
+    # TProgressbar
     style.configure(
         "TProgressbar",
-        background=colors.accent_blue,
-        troughcolor=colors.bg_panel,
-        bordercolor=colors.border_color,
+        background=accent_blue,
+        troughcolor=bg_panel,
+        bordercolor=border_color,
         thickness=10,
     )
 
+    # TCombobox
     style.configure(
         "TCombobox",
-        fieldbackground=colors.bg_panel,
-        background=colors.bg_dark,
-        foreground=colors.fg_light,
-        bordercolor=colors.border_color,
-        arrowcolor=colors.fg_light,
+        fieldbackground=bg_panel,
+        background=bg_dark,
+        foreground=fg_light,
+        bordercolor=border_color,
+        arrowcolor=fg_light,
     )
     style.map(
         "TCombobox",
-        fieldbackground=[("readonly", colors.bg_panel)],
-        foreground=[("readonly", colors.fg_light)],
-        bordercolor=[("focus", colors.accent_blue)],
-        lightcolor=[("focus", colors.accent_blue)],
-        darkcolor=[("focus", colors.accent_blue)],
+        fieldbackground=[("readonly", bg_panel)],
+        foreground=[("readonly", fg_light)],
     )
 
+    # TCheckbutton
+    style.configure(
+        "TCheckbutton", background=bg_dark, foreground=fg_light, focuscolor=""
+    )
+    style.map(
+        "TCheckbutton",
+        background=[("active", bg_dark), ("disabled", bg_dark)],
+        foreground=[("active", fg_light), ("disabled", fg_muted)],
+    )
 
-def apply_dark_theme(root: tk.Tk) -> None:
-    style = ttk.Style(root)
-    if "clam" in style.theme_names():
-        style.theme_use("clam")
-
-    colors = ThemeColors()
-
-    _configure_base_styles(style, colors)
-    _configure_container_styles(style, colors)
-    _configure_typography_styles(style, colors)
-    _configure_button_styles(style, colors)
-    _configure_input_styles(style, colors)
+    # Custom styles for FullscreenViewer Floating Meta Panel
+    style.configure("MetaPanel.TFrame", background=bg_panel, bordercolor=border_color)
+    style.configure("MetaPanel.TLabel", background=bg_panel, foreground=fg_light)
+    style.configure(
+        "MetaPanelTitle.TLabel",
+        background=bg_panel,
+        foreground=fg_light,
+        font=("Helvetica", 12, "bold"),
+    )
+    style.configure(
+        "MetaPanelExposure.TLabel",
+        background=bg_panel,
+        foreground=fg_light,
+        font=("Helvetica", 10),
+    )
+    style.configure(
+        "MetaPanelLens.TLabel",
+        background=bg_panel,
+        foreground=fg_light,
+        font=("Helvetica", 9, "italic"),
+    )
 
     # Configure native menus globally
-    root.option_add("*Menu.background", colors.bg_panel)
-    root.option_add("*Menu.foreground", colors.fg_light)
-    root.option_add("*Menu.activeBackground", colors.accent_blue)
+    root.option_add("*Menu.background", bg_panel)
+    root.option_add("*Menu.foreground", fg_light)
+    root.option_add("*Menu.activeBackground", accent_blue)
     root.option_add("*Menu.activeForeground", "#FFFFFF")
 
     # Set root window color
-    root.configure(bg=colors.bg_dark)
+    root.configure(bg=bg_dark)
 
 
 def apply_dark_theme_to_fig(fig):
@@ -369,10 +332,7 @@ class ImageLibraryStatistics(ttk.Frame):
 
         desc_lbl = ttk.Label(
             self.overview_frame,
-            text=(
-                "Analyze and visualize focal lengths, aperture, shutter speeds, "
-                "ISO levels, and lens usage across your photo library."
-            ),
+            text="Analyze and visualize focal lengths, aperture, shutter speeds, ISO levels, and lens usage across your photo library.",
             font=("Helvetica", 10),
             wraplength=600,
             justify="left",
@@ -389,8 +349,7 @@ class ImageLibraryStatistics(ttk.Frame):
             "1. Images Folder: Select the root directory containing your JPEG, RAW, or other image files.",
             "2. Output Folder: Choose a directory where the generated statistics plots will be saved.",
             "3. Analyze: Click the 'Analyze' button to start scanning subdirectories.",
-            "4. View Results: Results will appear in real-time. "
-            "Review logs or click individual plot tabs once complete.",
+            "4. View Results: Results will appear in real-time. Review logs or click individual plot tabs once complete.",
         ]
         for step in steps:
             lbl = ttk.Label(card, text=step, padding=2)
@@ -442,14 +401,12 @@ class ImageLibraryStatistics(ttk.Frame):
         self.plot_tabs = {}
 
     def browse_root_folder(self):
-        initial = self.root_folder_var.get()
-        folder = ask_directory(parent=self, title="Select Image Library Root Folder", initialdir=initial)
+        folder = filedialog.askdirectory()
         if folder:
             self.root_folder_var.set(folder)
 
     def browse_output_folder(self):
-        initial = self.output_folder_var.get()
-        folder = ask_directory(parent=self, title="Select Output Folder for Plots", initialdir=initial)
+        folder = filedialog.askdirectory()
         if folder:
             self.output_folder_var.set(folder)
 
@@ -540,20 +497,12 @@ class ImageLibraryStatistics(ttk.Frame):
             ):
                 is_excluded_subfolder.return_value = False
 
-            excluded_names = get_excluded_folder_names()
-            image_files = []
-
-            for dirpath, dirnames, filenames in os.walk(root_path):
-                # Prune excluded directories in place
-                dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-
-                dp = Path(dirpath)
-                for f in filenames:
-                    if f.startswith("._"):
-                        continue
-                    file_path = dp / f
-                    if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
-                        image_files.append(file_path)
+            image_files = [
+                f
+                for f in root_path.rglob("*")
+                if f.suffix.lower() in SUPPORTED_EXTENSIONS
+                and not is_excluded_subfolder(f, root_path)
+            ]
 
             if not image_files:
                 logger.info("No supported image files found.")
@@ -563,6 +512,8 @@ class ImageLibraryStatistics(ttk.Frame):
             logger.info(f"Found {total_files} image files. Extracting metadata...")
 
             all_metadata = []
+            import concurrent.futures
+            import os
 
             # Determine thread count: use at most 8 threads to balance performance and overhead
             max_workers = min(8, (os.cpu_count() or 1) + 4)
@@ -720,10 +671,7 @@ class DuplicateFinder(ttk.Frame):
         # Initial Empty State Card
         self.empty_state_lbl = ttk.Label(
             self.scrollable_frame,
-            text=(
-                "No duplicates searched yet.\n\n"
-                "Select a folder above and click 'Find Duplicates' to scan for exact matches."
-            ),
+            text="No duplicates searched yet.\n\nSelect a folder above and click 'Find Duplicates' to scan for exact matches.",
             font=("Helvetica", 11),
             justify="center",
             padding=40,
@@ -741,8 +689,7 @@ class DuplicateFinder(ttk.Frame):
         ).pack(side="right")
 
     def browse_root_folder(self):
-        initial = self.root_folder_var.get()
-        folder = ask_directory(parent=self, title="Select Folder to Scan for Duplicates", initialdir=initial)
+        folder = filedialog.askdirectory()
         if folder:
             self.root_folder_var.set(folder)
 
@@ -798,7 +745,9 @@ class DuplicateFinder(ttk.Frame):
                         pass
                 return None
 
+            import concurrent.futures
             # Determine thread count: use at most 8 threads to balance performance and overhead
+            import os
 
             max_workers = min(8, (os.cpu_count() or 1) + 4)
             with concurrent.futures.ThreadPoolExecutor(
@@ -1043,17 +992,16 @@ class AboutDialog(tk.Toplevel):
 
         # Center the dialog relative to parent
         self.update_idletasks()
-        width = max(450, int(self.winfo_reqwidth()))
-        height = max(350, int(self.winfo_reqheight()))
-
         parent_width = parent.winfo_width()
         parent_height = parent.winfo_height()
         parent_x = parent.winfo_rootx()
         parent_y = parent.winfo_rooty()
 
-        x = parent_x + (parent_width - width) // 2
-        y = parent_y + (parent_height - height) // 2
-        self.geometry(f"{width}x{height}+{x}+{y}")
+        width = self.winfo_width()
+        height = self.winfo_height()
+        x = parent_x + (parent_width // 2) - (width // 2)
+        y = parent_y + (parent_height // 2) - (height // 2)
+        self.geometry(f"+{x}+{y}")
 
         # Escape key close
         self.bind("<Escape>", lambda e: self.destroy())
@@ -1071,6 +1019,8 @@ class CollectionSettingsDialog(tk.Toplevel):
         self.grab_set()
 
         # Load existing config
+        from photo_selector_toolbox.ollama_tool import load_config, save_config
+
         self.config_data = load_config()
 
         # Variables
@@ -1183,24 +1133,22 @@ class CollectionSettingsDialog(tk.Toplevel):
 
         # Center the dialog relative to parent
         self.update_idletasks()
-        width = max(480, int(self.winfo_reqwidth()))
-        height = max(280, int(self.winfo_reqheight()))
-
         parent_width = parent.winfo_width()
         parent_height = parent.winfo_height()
         parent_x = parent.winfo_rootx()
         parent_y = parent.winfo_rooty()
 
-        x = parent_x + (parent_width - width) // 2
-        y = parent_y + (parent_height - height) // 2
+        width = 460
+        height = self.winfo_reqheight()
+        x = parent_x + (parent_width // 2) - (width // 2)
+        y = parent_y + (parent_height // 2) - (height // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
 
         # Escape key close
         self.bind("<Escape>", lambda e: self.destroy())
 
     def browse_folder(self):
-        initial = self.selection_folder_var.get()
-        folder = ask_directory(parent=self, title="Select Selection Destination Folder", initialdir=initial)
+        folder = filedialog.askdirectory(parent=self)
         if folder:
             self.selection_folder_var.set(folder)
 
@@ -1209,6 +1157,8 @@ class CollectionSettingsDialog(tk.Toplevel):
         self.separate_var.set(True)
 
     def save_settings(self):
+        from photo_selector_toolbox.ollama_tool import save_config
+
         folder_val = self.selection_folder_var.get().strip()
         if not folder_val:
             messagebox.showerror(
@@ -1227,68 +1177,6 @@ class CollectionSettingsDialog(tk.Toplevel):
             self.destroy()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save settings: {e}", parent=self)
-
-
-class KeyboardShortcutsDialog(tk.Toplevel):
-    """Dialog showing all keyboard shortcuts."""
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title("Keyboard Shortcuts")
-        self.geometry("500x520")
-        self.configure(bg="#18181B")
-        self.transient(parent)
-        self.grab_set()
-
-        # Make it centered
-        self.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() - 500) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - 520) // 2
-        self.geometry(f"+{x}+{y}")
-
-        frame = ttk.Frame(self, padding=20)
-        frame.pack(fill="both", expand=True)
-
-        ttk.Label(frame, text="Keyboard Shortcuts", style="Header.TLabel").pack(anchor="w", pady=(0, 15))
-
-        shortcuts = [
-            ("Navigation", [
-                ("Left / Right Arrow", "Previous / Next image"),
-                ("Up / Down Arrow", "Previous / Next image (alternate)"),
-                ("Home / End", "First / Last image"),
-            ]),
-            ("Review Actions", [
-                ("M", "Move to Selection folder"),
-                ("C", "Copy to Selection folder"),
-                ("Delete / Backspace", "Delete current image"),
-                ("F", "Toggle Focus mode"),
-                ("Escape", "Exit Focus mode / Cancel"),
-            ]),
-            ("Fullscreen Viewer", [
-                ("N", "Next image"),
-                ("P", "Previous image"),
-                ("Delete", "Delete image"),
-                ("M", "Move to Selection"),
-                ("C", "Copy to Selection"),
-                ("Escape", "Close viewer"),
-                ("Mouse wheel", "Zoom in/out"),
-            ]),
-            ("Application", [
-                ("Ctrl+O / Cmd+O", "Open folder"),
-                ("Ctrl+Z / Cmd+Z", "Undo last action"),
-                ("F1", "Show this help"),
-            ]),
-        ]
-
-        for section_title, items in shortcuts:
-            ttk.Label(frame, text=section_title, style="Title.TLabel").pack(anchor="w", pady=(10, 5))
-            for key, desc in items:
-                row = ttk.Frame(frame)
-                row.pack(fill="x", pady=1)
-                ttk.Label(row, text=key, width=25, style="Muted.TLabel").pack(side="left")
-                ttk.Label(row, text=desc).pack(side="left")
-
-        ttk.Button(frame, text="Close", command=self.destroy).pack(pady=(15, 0))
 
 
 class MainApp(tk.Tk):
@@ -1349,80 +1237,37 @@ class MainApp(tk.Tk):
         # Setup top menu bar
         self.menubar = tk.Menu(self)
 
-        # File Menu
-        self.file_menu = tk.Menu(self.menubar, tearoff=0)
-        self.file_menu.add_command(
-            label="Open Folder...",
-            command=self._open_folder_from_menu,
-            accelerator="Ctrl+O" if sys.platform != "darwin" else "Cmd+O",
-        )
-        # Recent folders submenu
-        self.recent_menu = tk.Menu(self.file_menu, tearoff=0)
-        self.file_menu.add_cascade(label="Recent Folders", menu=self.recent_menu)
-        self._update_recent_menu()
-        self.file_menu.add_separator()
-        self.file_menu.add_command(
-            label="Export Statistics as CSV...",
-            command=self._export_csv,
-        )
-        self.file_menu.add_separator()
-        if sys.platform != "darwin":
-            self.file_menu.add_command(label="Quit", command=self.quit, accelerator="Ctrl+Q")
-        self.menubar.add_cascade(label="File", menu=self.file_menu)
-
-        # Edit Menu
-        self.edit_menu = tk.Menu(self.menubar, tearoff=0)
-        self.edit_menu.add_command(
-            label="Undo",
-            command=self._undo_last_action,
-            accelerator="Ctrl+Z" if sys.platform != "darwin" else "Cmd+Z",
-            state="disabled",
-        )
-        self.edit_menu.add_separator()
-        self.edit_menu.add_command(
-            label="Collection Settings...",
-            command=self.show_collection_config,
-        )
-        self.edit_menu.add_command(
-            label="Clear Cached Scores...",
-            command=self.clear_cached_scores,
-        )
-        self.menubar.add_cascade(label="Edit", menu=self.edit_menu)
-
-        # View Menu
-        self.view_menu = tk.Menu(self.menubar, tearoff=0)
-        self.view_menu.add_command(
+        # Tools Menu
+        self.tools_menu = tk.Menu(self.menubar, tearoff=0)
+        self.tools_menu.add_command(
             label="Photo Selector",
             command=lambda: self.show_frame("SharpnessTool"),
         )
-        self.view_menu.add_command(
+        self.tools_menu.add_command(
             label="Image Library Statistics",
             command=lambda: self.show_frame("ImageLibraryStatistics"),
         )
-        self.view_menu.add_command(
+        self.tools_menu.add_command(
             label="Duplicate Finder",
             command=lambda: self.show_frame("DuplicateFinder"),
         )
-        self.menubar.add_cascade(label="View", menu=self.view_menu)
+        self.tools_menu.add_separator()
+        self.tools_menu.add_command(
+            label="Collection Settings...",
+            command=self.show_collection_config,
+        )
+        self.tools_menu.add_command(
+            label="Clear Cached Scores...",
+            command=self.clear_cached_scores,
+        )
+        self.menubar.add_cascade(label="Tools", menu=self.tools_menu)
 
         # Help Menu
         self.help_menu = tk.Menu(self.menubar, tearoff=0)
-        self.help_menu.add_command(
-            label="Keyboard Shortcuts",
-            command=self._show_keyboard_shortcuts,
-            accelerator="F1",
-        )
-        self.help_menu.add_separator()
         self.help_menu.add_command(label="About", command=self.show_about)
         self.menubar.add_cascade(label="Help", menu=self.help_menu)
 
         self.config(menu=self.menubar)
-
-        # Keyboard shortcut bindings
-        modifier = "Command" if sys.platform == "darwin" else "Control"
-        self.bind_all(f"<{modifier}-o>", lambda e: self._open_folder_from_menu())
-        self.bind_all(f"<{modifier}-z>", lambda e: self._undo_last_action())
-        self.bind_all("<F1>", lambda e: self._show_keyboard_shortcuts())
 
         self.frames = {}
 
@@ -1598,6 +1443,8 @@ class MainApp(tk.Tk):
             parent=self,
         ):
             try:
+                from photo_selector_toolbox.cache import ScoreCache
+
                 cache = ScoreCache()
                 cache.clear_cache()
 
@@ -1616,123 +1463,6 @@ class MainApp(tk.Tk):
                 messagebox.showerror(
                     "Error", f"Failed to clear score cache: {e}", parent=self
                 )
-
-    # --- Undo stack ---
-    _undo_stack = []  # List of (description, undo_callable) tuples
-
-    @classmethod
-    def push_undo(cls, description: str, undo_fn):
-        """Push an undoable action. Called from SharpnessTool file operations."""
-        cls._undo_stack.append((description, undo_fn))
-
-    def _undo_last_action(self):
-        if not self._undo_stack:
-            messagebox.showinfo("Undo", "Nothing to undo.", parent=self)
-            return
-        description, undo_fn = self._undo_stack.pop()
-        try:
-            undo_fn()
-            messagebox.showinfo("Undo", f"Undone: {description}", parent=self)
-        except Exception as e:
-            messagebox.showerror("Undo Failed", f"Could not undo '{description}': {e}", parent=self)
-        # Update menu state
-        self.edit_menu.entryconfig("Undo", state="normal" if self._undo_stack else "disabled")
-
-    def _open_folder_from_menu(self):
-        """Open folder dialog and pass to the active SharpnessTool."""
-        from photo_selector_toolbox.gui_utils import ask_directory
-        folder = ask_directory(parent=self)
-        if folder:
-            sharpness_frame = self.frames.get("SharpnessTool")
-            if sharpness_frame:
-                sharpness_frame.folder_var.set(folder)
-                # Add to recent folders
-                from photo_selector_toolbox.config import add_recent_folder
-                add_recent_folder(folder)
-                self._update_recent_menu()
-
-    def _update_recent_menu(self):
-        """Rebuild the Recent Folders submenu from config."""
-        self.recent_menu.delete(0, "end")
-        from photo_selector_toolbox.config import get_recent_folders
-        folders = get_recent_folders()
-        if not folders:
-            self.recent_menu.add_command(label="(No recent folders)", state="disabled")
-            return
-        for folder in folders:
-            self.recent_menu.add_command(
-                label=folder,
-                command=lambda f=folder: self._open_recent_folder(f),
-            )
-        self.recent_menu.add_separator()
-        self.recent_menu.add_command(label="Clear Recent", command=self._clear_recent_folders)
-
-    def _open_recent_folder(self, folder_path):
-        sharpness_frame = self.frames.get("SharpnessTool")
-        if sharpness_frame:
-            sharpness_frame.folder_var.set(folder_path)
-
-    def _clear_recent_folders(self):
-        from photo_selector_toolbox.config import load_config, save_config
-        config = load_config()
-        config["recent_folders"] = []
-        save_config(config)
-        self._update_recent_menu()
-
-    def _export_csv(self):
-        """Export current statistics/scan results as CSV."""
-        from tkinter import filedialog
-        sharpness_frame = self.frames.get("SharpnessTool")
-        if not sharpness_frame or not sharpness_frame.scan_results:
-            messagebox.showinfo("Export", "No scan results to export. Run a scan first.", parent=self)
-            return
-
-        filepath = filedialog.asksaveasfilename(
-            parent=self,
-            title="Export Scan Results as CSV",
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-        )
-        if not filepath:
-            return
-
-        try:
-            import csv
-            with open(filepath, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                # Header
-                score_keys = set()
-                for r in sharpness_frame.scan_results:
-                    score_keys.update(r.scores.keys())
-                score_keys = sorted(score_keys)
-                header = ["filename", "path"] + score_keys
-                if sharpness_frame.scan_results[0].exif:
-                    header += ["shutter_speed", "aperture", "iso", "focal_length", "lens"]
-                writer.writerow(header)
-
-                for r in sharpness_frame.scan_results:
-                    row = [r.path.name, str(r.path)]
-                    row += [r.scores.get(k, "N/A") for k in score_keys]
-                    if r.exif:
-                        row += [
-                            r.exif.shutter_speed or "",
-                            r.exif.aperture or "",
-                            r.exif.iso or "",
-                            r.exif.focal_length or "",
-                            r.exif.lens or "",
-                        ]
-                    writer.writerow(row)
-            messagebox.showinfo(
-                "Export",
-                f"Exported {len(sharpness_frame.scan_results)} results to:\n{filepath}",
-                parent=self
-            )
-        except Exception as e:
-            messagebox.showerror("Export Failed", f"Failed to export: {e}", parent=self)
-
-    def _show_keyboard_shortcuts(self):
-        """Show a dialog listing all keyboard shortcuts."""
-        KeyboardShortcutsDialog(self)
 
 
 def main():
@@ -1753,5 +1483,4 @@ def main():
 
 
 if __name__ == "__main__":
-    multiprocessing.freeze_support()
     main()

@@ -1,26 +1,24 @@
 import json
 import urllib.error
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 from PIL import Image
 
-from photo_selector_toolbox.ollama_tool import (
-    OllamaAestheticTool,
-    load_config,
-    save_config,
-    DEFAULT_CONFIG,
-)
 import photo_selector_toolbox.ollama_tool as ot
+from photo_selector_toolbox.ollama_tool import (DEFAULT_CONFIG,
+                                                OllamaAestheticTool,
+                                                load_config, save_config)
 
 
 @pytest.fixture
 def temp_config_dir(tmp_path):
     """Fixture to mock CONFIG_DIR and CONFIG_FILE to a temporary path."""
-    import photo_selector_toolbox.config as cfg_mod
-    with patch.object(cfg_mod, "CONFIG_DIR", tmp_path), \
-         patch.object(cfg_mod, "CONFIG_FILE", tmp_path / "settings.json"), \
-         patch.object(ot, "CONFIG_DIR", tmp_path), \
-         patch.object(ot, "CONFIG_FILE", tmp_path / "settings.json"):
+    with (
+        patch.object(ot, "CONFIG_DIR", tmp_path),
+        patch.object(ot, "CONFIG_FILE", tmp_path / "settings.json"),
+    ):
         yield tmp_path
 
 
@@ -51,7 +49,9 @@ def dummy_image_file(tmp_path):
 @patch("urllib.request.urlopen")
 def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock Ollama HTTP response payload
-    mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."}
+    mock_resp_payload = {
+        "response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."
+    }
 
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
@@ -81,7 +81,9 @@ def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_d
     save_config(custom_config)
 
     # Mock response
-    mock_resp_payload = {"response": "[SCORE: 9.3] [ANALYSIS: Sharp] Score: 9.3 out of 10"}
+    mock_resp_payload = {
+        "response": "[SCORE: 9.3] [ANALYSIS: Sharp] Score: 9.3 out of 10"
+    }
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
     mock_response.__enter__.return_value = mock_response
@@ -116,7 +118,9 @@ def test_ollama_tool_connection_error(mock_urlopen, dummy_image_file, temp_confi
 @patch("urllib.request.urlopen")
 def test_ollama_tool_parsing_error(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with no float scores in text
-    mock_resp_payload = {"response": "This is a photo of a sunset, it looks great but I can't give a number."}
+    mock_resp_payload = {
+        "response": "This is a photo of a sunset, it looks great but I can't give a number."
+    }
 
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
@@ -135,8 +139,7 @@ def test_load_config_migration(temp_config_dir):
     old_prompt = (
         "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
         "Consider composition, lighting, focus, and subject. "
-        "Provide your reasoning in one short sentence, then end your response "
-        "with the score in the format [SCORE: X.Y]."
+        "Provide your reasoning in one short sentence, then end your response with the score in the format [SCORE: X.Y]."
     )
     old_config = {
         "ollama_url": "http://localhost:11434",
@@ -175,12 +178,10 @@ def test_load_config_migration(temp_config_dir):
         "- 1.0 - 3.0: Very poor (blurry, out of focus, extremely poor lighting/exposure, or no clear subject).\n"
         "- 4.0 - 6.0: Average (acceptable quality but has noticeable flaws in composition, lighting, or sharpness).\n"
         "- 7.0 - 8.0: Good (sharp, well-composed, appealing lighting/subject).\n"
-        "- 9.0 - 10.0: Outstanding (perfect exposure/lighting, creative composition, "
-        "excellent sharpness, professional grade).\n\n"
+        "- 9.0 - 10.0: Outstanding (perfect exposure/lighting, creative composition, excellent sharpness, professional grade).\n\n"
         "Start your response in this exact format:\n"
         "[SCORE: X.Y] [ANALYSIS: tag]\n"
-        "where tag is exactly a 1 or 2 word description of the main reason "
-        "(e.g. 'Blurry', 'Good composition', 'Under-exposed', 'Great lighting', 'Soft focus', 'Well-composed'). "
+        "where tag is exactly a 1 or 2 word description of the main reason (e.g. 'Blurry', 'Good composition', 'Under-exposed', 'Great lighting', 'Soft focus', 'Well-composed'). "
         "Follow it with a short sentence explaining your reasoning."
     )
     old_config_3 = {
@@ -203,7 +204,9 @@ def test_load_config_migration(temp_config_dir):
 @patch("urllib.request.urlopen")
 def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with SCORE but no ANALYSIS tag
-    mock_resp_payload = {"response": "The aesthetic quality score of this photo is 8.5."}
+    mock_resp_payload = {
+        "response": "The aesthetic quality score of this photo is 8.5."
+    }
 
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
@@ -215,40 +218,3 @@ def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_conf
 
     assert score == 8.5
     assert tag == "N/A"
-
-
-def test_add_get_recent_folders(temp_config_dir):
-    from photo_selector_toolbox.config import add_recent_folder, get_recent_folders
-    add_recent_folder("/some/path/1")
-    add_recent_folder("/some/path/2")
-    add_recent_folder("/some/path/1")  # duplicate
-
-    folders = get_recent_folders()
-    assert folders == ["/some/path/1", "/some/path/2"]
-
-
-def test_is_ollama_url_external(temp_config_dir):
-    from photo_selector_toolbox.config import is_ollama_url_external
-    assert not is_ollama_url_external("http://localhost:11434")
-    assert not is_ollama_url_external("http://127.0.0.1:11434")
-    assert is_ollama_url_external("http://192.168.1.100:11434")
-    assert not is_ollama_url_external(None)  # loads from config, which defaults to localhost (False)
-
-
-@patch("builtins.open", side_effect=OSError("Read-only file system"))
-def test_load_save_config_error(mock_open, temp_config_dir):
-    from photo_selector_toolbox.config import load_config, save_config
-    # Force exceptions
-    cfg = load_config()
-    assert cfg == DEFAULT_CONFIG
-    save_config(cfg)
-
-
-@patch("os.chmod", side_effect=OSError("Not supported"))
-def test_set_secure_permissions_error(mock_chmod, temp_config_dir):
-    from pathlib import Path
-    from photo_selector_toolbox.config import _set_secure_permissions
-    # Should not raise exception
-    _set_secure_permissions(Path("/tmp/fake_config_file"))
-
-

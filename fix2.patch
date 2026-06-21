@@ -1,0 +1,20 @@
+--- src/photo_selector_toolbox/cache.py
++++ src/photo_selector_toolbox/cache.py
+@@ -153,12 +153,10 @@
+                 # Bulk update last_used for matches
+                 if results:
+                     matched_fps = [str(p.resolve()) for p in results.keys()]
+-                    for i in range(0, len(matched_fps), chunk_size):
+-                        chunk = matched_fps[i : i + chunk_size]
+-                        placeholders = ",".join("?" for _ in chunk)
+-                        conn.execute(
+-                            f"UPDATE image_cache SET last_used = ? WHERE filepath IN ({placeholders})",
+-                            [now] + chunk,
+-                        )
++                    update_data = [(now, fp) for fp in matched_fps]
++                    conn.executemany(
++                        "UPDATE image_cache SET last_used = ? WHERE filepath = ?",
++                        update_data,
++                    )
+                     conn.commit()
+         except Exception as e:

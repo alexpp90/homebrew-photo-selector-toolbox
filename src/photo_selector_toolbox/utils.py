@@ -1,14 +1,15 @@
+import functools
+import logging
+import os
 import shutil
 import sys
-import os
-import urllib.parse  # Intentionally retained: required for parsing smb URLs in resolve_path
-import logging
-import functools
-from pathlib import Path
+import urllib.parse
 from collections import Counter
-from typing import List, Set, Tuple, Optional
-from PIL import Image
+from pathlib import Path
+from typing import List, Optional, Set, Tuple
+
 import numpy as np
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -45,21 +46,9 @@ def resolve_path(path_str: str | Path) -> Path:
         # Unquote to handle spaces (%20)
         full_path_decoded = urllib.parse.unquote(full_path)
 
-        # Use posixpath.normpath to logically resolve path components
-        # cross-platform since URLs always use forward slashes
-        import posixpath
-        normalized_path = posixpath.normpath(full_path_decoded)
-
-        # Ensure the normalized path is absolute (starts with /) before splitting
-        if not normalized_path.startswith("/"):
-            normalized_path = "/" + normalized_path
-
-        parts = normalized_path.strip("/").split("/", 1)
-
-        # If there are no parts, we don't have a valid share name
-        if not parts or not parts[0]:
-            return Path(path_str)
-
+        # Split into share and relative path
+        # full_path_decoded starts with /, e.g. /private/Bilder_Alben
+        parts = full_path_decoded.strip("/").split("/", 1)
         share_name = parts[0]
         remainder = parts[1] if len(parts) > 1 else ""
 
@@ -304,7 +293,7 @@ def load_image_preview(
                         rgb = raw.postprocess(
                             use_camera_wb=True, bright=1.0, half_size=not full_res
                         )
-                        img = Image.fromarray(rgb).copy()
+                        img = Image.fromarray(rgb)
             except (rawpy.LibRawError, OSError, ValueError) as e:
                 # Catch common rawpy failures and fall through to Pillow
                 logger.debug("rawpy failed to load %s: %s", path, e)
@@ -323,25 +312,6 @@ def load_image_preview(
         # Catch common image loading/processing errors
         logger.warning(f"Failed to load image preview for {path}: {e}")
         return None
-
-
-def get_excluded_folder_names() -> Set[str]:
-    """
-    Returns a set of lowercased folder names that should be excluded from scanning.
-    Loads the custom selection folder from the configuration.
-    """
-    excluded_names = {"selection", "selected"}
-    try:
-        from photo_selector_toolbox.ollama_tool import load_config
-
-        config = load_config()
-        custom_folder = config.get("selection_folder", "Selection")
-        custom_path = Path(custom_folder)
-        if not custom_path.is_absolute():
-            excluded_names.add(custom_path.name.lower())
-    except Exception:
-        pass
-    return excluded_names
 
 
 def is_excluded_subfolder(
@@ -364,7 +334,17 @@ def is_excluded_subfolder(
     try:
         relative = file_path.relative_to(root_path)
         if excluded_names is None:
-            excluded_names = get_excluded_folder_names()
+            excluded_names = {"selection", "selected"}
+            try:
+                from photo_selector_toolbox.ollama_tool import load_config
+
+                config = load_config()
+                custom_folder = config.get("selection_folder", "Selection")
+                custom_path = Path(custom_folder)
+                if not custom_path.is_absolute():
+                    excluded_names.add(custom_path.name.lower())
+            except Exception:
+                pass
 
         # Check all parts of the relative path except the last one (the filename)
         for part in relative.parts[:-1]:
@@ -428,15 +408,14 @@ def group_files_by_similarity(
         return []
 
     import re
-    import os
 
     def get_name_prefix(name: str) -> str:
-        stem = name.rsplit(".", 1)[0]
+        stem = Path(name).stem
         return re.sub(r"\d+$", "", stem)
 
     def get_mtime(p: Path) -> float:
         try:
-            return os.stat(p).st_mtime
+            return p.stat().st_mtime
         except OSError:
             return 0.0
 

@@ -20,27 +20,5 @@ dist/
 *.spec
 src/photo_selector_toolbox/bin/
 
-# Android
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-android/.idea/
-android/app/schemas/
-*.apk
-*.aab
-*.jks
-*.keystore
-
 # OS files
 .DS_Store
-
-# Scratch and debug files
-scratch_*.py
-
-# Audit reports
-Photo_Selector_Toolbox_Audit_Report.docx
-
-# Kotlin compiler sessions/temp files
-android/.kotlin/
-

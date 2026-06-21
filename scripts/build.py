@@ -1,12 +1,13 @@
 import os
-import sys
-import shutil
-import tarfile
-import zipfile
-import urllib.request
 import platform
+import shutil
 import subprocess
+import sys
+import tarfile
+import urllib.request
+import zipfile
 from pathlib import Path
+
 from generate_notices import generate_notices
 
 # Constants
@@ -16,6 +17,7 @@ SF_BASE_URL = "https://sourceforge.net/projects/exiftool/files"
 PROJECT_ROOT = Path(__file__).parent.parent
 BIN_DIR = PROJECT_ROOT / "src" / "photo_selector_toolbox" / "bin"
 
+
 def download_file(url, dest_path):
     print(f"Downloading {url}...")
     try:
@@ -23,10 +25,11 @@ def download_file(url, dest_path):
     except Exception as e:
         print(f"Error downloading with urllib: {e}")
         try:
-             subprocess.run(["wget", url, "-O", str(dest_path)], check=True)
+            subprocess.run(["wget", url, "-O", str(dest_path)], check=True)
         except Exception as e2:
-             print(f"Download failed with wget too: {e2}")
-             sys.exit(1)
+            print(f"Download failed with wget too: {e2}")
+            sys.exit(1)
+
 
 def setup_exiftool():
     # Clean bin dir first
@@ -44,14 +47,8 @@ def setup_exiftool():
         download_file(url, dest)
 
         print("Extracting...")
-        with zipfile.ZipFile(dest, 'r') as zip_ref:
-            # Secure extraction to prevent Zip Slip
-            for member in zip_ref.infolist():
-                target_path = (BIN_DIR / member.filename).resolve()
-                if os.path.commonpath([BIN_DIR.resolve(), target_path]) != str(BIN_DIR.resolve()):
-                    print(f"Warning: Skipping {member.filename} (Zip Slip vulnerability detected)")
-                    continue
-                zip_ref.extract(member, BIN_DIR)
+        with zipfile.ZipFile(dest, "r") as zip_ref:
+            zip_ref.extractall(BIN_DIR)
 
         found_exe = False
         for root, dirs, files in os.walk(BIN_DIR):
@@ -83,16 +80,7 @@ def setup_exiftool():
         print("Extracting...")
         # Use simple extraction
         with tarfile.open(dest, "r:gz") as tar:
-            if hasattr(tarfile, 'data_filter'):
-                tar.extractall(BIN_DIR, filter='data')
-            else:
-                # Secure extraction to prevent Tar Slip on older Python versions
-                for member in tar.getmembers():
-                    target_path = (BIN_DIR / member.name).resolve()
-                    if os.path.commonpath([BIN_DIR.resolve(), target_path]) != str(BIN_DIR.resolve()):
-                        print(f"Warning: Skipping {member.name} (Tar Slip vulnerability detected)")
-                        continue
-                    tar.extract(member, BIN_DIR)
+            tar.extractall(BIN_DIR)
 
         # Check what we have
         extracted_dirs = [p for p in BIN_DIR.iterdir() if p.is_dir()]
@@ -136,24 +124,28 @@ def setup_exiftool():
 
     print(f"Exiftool setup complete in {BIN_DIR}")
 
+
 def run_pyinstaller(target):
     sep = ";" if platform.system() == "Windows" else ":"
     src_data = "src/photo_selector_toolbox/bin"
     dst_data = "."
     add_data_arg = f"{src_data}{sep}{dst_data}"
 
-    name_map = {
-        "analyzer": "photo-selector-toolbox",
-        "gui": "Photo Selector Toolbox"
-    }
+    name_map = {"analyzer": "photo-selector-toolbox", "gui": "Photo Selector Toolbox"}
     app_name = name_map.get(target, f"photo-selector-{target}")
 
     cmd = [
-        "poetry", "run", "pyinstaller",
-        "--name", app_name,
-        "--paths", "src",
-        "--distpath", "dist",
-        "--add-data", add_data_arg,
+        "poetry",
+        "run",
+        "pyinstaller",
+        "--name",
+        app_name,
+        "--paths",
+        "src",
+        "--distpath",
+        "dist",
+        "--add-data",
+        add_data_arg,
         "--clean",
         "--noconfirm",
     ]
@@ -177,17 +169,14 @@ def run_pyinstaller(target):
 
         # Set executable icon
         if platform.system() == "Windows":
-             cmd.extend(["--icon", "assets/logo.ico"])
+            cmd.extend(["--icon", "assets/logo.ico"])
         elif platform.system() == "Darwin":
-             cmd.extend(["--icon", "assets/logo.icns"])
+            cmd.extend(["--icon", "assets/logo.icns"])
         else:
-             # Linux .desktop files handle icons, but we can set window icon in code.
-             pass
+            # Linux .desktop files handle icons, but we can set window icon in code.
+            pass
 
-        cmd.extend([
-            "--windowed",
-            "src/photo_selector_toolbox/gui.py"
-        ])
+        cmd.extend(["--windowed", "src/photo_selector_toolbox/gui.py"])
     else:
         cmd.append("src/photo_selector_toolbox/cli.py")
 
@@ -199,7 +188,11 @@ def run_pyinstaller(target):
         app_path = Path("dist") / "Photo Selector Toolbox.app"
         if app_path.exists():
             print(f"Signing {app_path} with ad-hoc signature...")
-            subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app_path)], check=True)
+            subprocess.run(
+                ["codesign", "--force", "--deep", "--sign", "-", str(app_path)],
+                check=True,
+            )
+
 
 def generate_icons_if_possible():
     # Only try generating icons on Linux, or if explicit env var is set.
@@ -213,6 +206,7 @@ def generate_icons_if_possible():
     try:
         sys.path.append(str(Path(__file__).parent))
         from generate_icons import generate_icons
+
         print("Generating icons...")
         return generate_icons()
     except (ImportError, OSError) as e:
@@ -222,6 +216,7 @@ def generate_icons_if_possible():
     except Exception as e:
         print(f"Warning: Unexpected error during icon generation: {e}")
         return False
+
 
 def main():
     generate_icons_if_possible()
@@ -248,6 +243,7 @@ def main():
         print("Licenses copied.")
     else:
         print("Warning: dist/ directory not found. Licenses were not copied.")
+
 
 if __name__ == "__main__":
     main()

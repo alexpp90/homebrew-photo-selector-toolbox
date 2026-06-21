@@ -1,11 +1,14 @@
 import logging
 from pathlib import Path
 from typing import Optional
-from PIL import Image, ExifTags
+
+from PIL import ExifTags, Image
+
 from photo_selector_toolbox.models import ExifData
 from photo_selector_toolbox.readers.base import ExifReader
 
 logger = logging.getLogger(__name__)
+
 
 class PillowReader(ExifReader):
     """EXIF reader using Pillow library."""
@@ -60,7 +63,9 @@ class PillowReader(ExifReader):
                     return float(num) / float(den)
                 if isinstance(value, bytes):
                     try:
-                        return float(value.strip(b"\x00").decode("utf-8", errors="ignore"))
+                        return float(
+                            value.strip(b"\x00").decode("utf-8", errors="ignore")
+                        )
                     except (ValueError, UnicodeDecodeError):
                         return None
                 try:
@@ -96,13 +101,23 @@ class PillowReader(ExifReader):
                 available_keys_str = ""
                 if exif_data:
                     import textwrap
-                    available_keys = ", ".join(sorted([str(k) for k in exif_data.keys()]))
+
+                    available_keys = ", ".join(
+                        sorted([str(k) for k in exif_data.keys()])
+                    )
                     available_keys_str = (
-                        "\n  Available EXIF keys found in this file (merged):\n" +
-                        textwrap.fill(available_keys, width=80, initial_indent="    ", subsequent_indent="    ")
+                        "\n  Available EXIF keys found in this file (merged):\n"
+                        + textwrap.fill(
+                            available_keys,
+                            width=80,
+                            initial_indent="    ",
+                            subsequent_indent="    ",
+                        )
                     )
                 else:
-                    available_keys_str = "\n  No known EXIF keys were found in this file."
+                    available_keys_str = (
+                        "\n  No known EXIF keys were found in this file."
+                    )
 
                 logger.debug(
                     f"\n--- Debugging (Pillow) failed extraction for: {path.name} ---\n"

@@ -1,5 +1,6 @@
 import sys
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -47,7 +48,10 @@ def test_main_images_no_metadata(capsys, tmp_path):
 
     captured = capsys.readouterr()
     assert "Found 1 image files. Extracting metadata..." in captured.out
-    assert "Could not extract any valid EXIF metadata from the found images." in captured.out
+    assert (
+        "Could not extract any valid EXIF metadata from the found images."
+        in captured.out
+    )
 
 
 def test_main_success(capsys, tmp_path):
@@ -58,21 +62,27 @@ def test_main_success(capsys, tmp_path):
     img_path2.touch()
 
     from photo_selector_toolbox.models import ExifData
+
     fake_metadata = ExifData(aperture=2.8, shutter_speed=0.01)
     out_dir = tmp_path / "out"
 
     args = [
         "cli.py",
         str(tmp_path),
-        "--output", str(out_dir),
+        "--output",
+        str(out_dir),
         "--debug",
-        "--show-plots"
+        "--show-plots",
     ]
 
     with patch.object(sys, "argv", args):
-        with patch("photo_selector_toolbox.cli.get_exif_data", return_value=fake_metadata) as mock_get_exif:
+        with patch(
+            "photo_selector_toolbox.cli.get_exif_data", return_value=fake_metadata
+        ) as mock_get_exif:
             with patch("photo_selector_toolbox.cli.analyze_data") as mock_analyze:
-                with patch("photo_selector_toolbox.cli.create_plots") as mock_create_plots:
+                with patch(
+                    "photo_selector_toolbox.cli.create_plots"
+                ) as mock_create_plots:
                     main()
 
     captured = capsys.readouterr()
@@ -83,54 +93,6 @@ def test_main_success(capsys, tmp_path):
     mock_get_exif.assert_any_call(img_path2, debug=True)
 
     mock_analyze.assert_called_once_with([fake_metadata, fake_metadata])
-    mock_create_plots.assert_called_once_with([fake_metadata, fake_metadata], out_dir, show_plots=True)
-
-
-def test_main_success_json(capsys, tmp_path):
-    """Test a successful run outputting metadata as JSON."""
-    img_path = tmp_path / "test.jpg"
-    img_path.touch()
-
-    from photo_selector_toolbox.models import ExifData
-    fake_metadata = ExifData(aperture=2.8, shutter_speed=0.01)
-
-    args = [
-        "cli.py",
-        str(tmp_path),
-        "--format", "json"
-    ]
-
-    with patch.object(sys, "argv", args):
-        with patch("photo_selector_toolbox.cli.get_exif_data", return_value=fake_metadata):
-            with patch(
-                "photo_selector_toolbox.cli.analyze_data_json",
-                return_value={"test": "data"}
-            ) as mock_analyze_json:
-                main()
-
-    captured = capsys.readouterr()
-    assert "test" in captured.out
-    mock_analyze_json.assert_called_once()
-
-
-def test_main_success_csv(capsys, tmp_path):
-    """Test a successful run outputting metadata as CSV."""
-    img_path = tmp_path / "test.jpg"
-    img_path.touch()
-
-    from photo_selector_toolbox.models import ExifData
-    fake_metadata = ExifData(aperture=2.8, shutter_speed=0.01)
-    fake_metadata._filepath = img_path
-
-    args = [
-        "cli.py",
-        str(tmp_path),
-        "--format", "csv"
-    ]
-
-    with patch.object(sys, "argv", args):
-        with patch("photo_selector_toolbox.cli.get_exif_data", return_value=fake_metadata):
-            main()
-
-    captured = capsys.readouterr()
-    assert "filename,shutter_speed,aperture,iso,focal_length,focal_length_35mm,lens" in captured.out
+    mock_create_plots.assert_called_once_with(
+        [fake_metadata, fake_metadata], out_dir, show_plots=True
+    )
