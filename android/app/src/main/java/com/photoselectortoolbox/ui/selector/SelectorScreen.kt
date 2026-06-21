@@ -182,8 +182,9 @@ fun SelectorScreen(
             viewModel.driveAuth.handleSignInResult(account)
             // After sign-in, show the Drive folder picker
             showDrivePicker = true
-        } catch (_: Exception) {
-            // Sign-in cancelled or failed
+        } catch (e: Exception) {
+            android.util.Log.e("SelectorScreen", "Google Sign-In failed", e)
+            viewModel.setError("Google Sign-In failed: ${e.message}")
         }
     }
 

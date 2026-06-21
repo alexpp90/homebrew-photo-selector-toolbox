@@ -58,6 +58,7 @@ class GoogleDriveImageSource @Inject constructor(
 
         val images = driveFiles
             .filter { !it.isFolder }
+            .filter { !it.name.startsWith(".") }
             .filter { hasImageExtension(it.name) }
             .map { driveFile ->
                 ImageItem(

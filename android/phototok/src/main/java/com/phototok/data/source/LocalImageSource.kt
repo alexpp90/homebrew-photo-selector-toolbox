@@ -91,6 +91,7 @@ class LocalImageSourceImpl @Inject constructor(
             if (!file.isFile) continue
 
             val fileName = file.name ?: continue
+            if (fileName.startsWith(".")) continue
             val extension = fileName.substringAfterLast('.', "").lowercase()
 
             if (extension !in SUPPORTED_EXTENSIONS) continue

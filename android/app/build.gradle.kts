@@ -19,6 +19,10 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "com.photoselectortoolbox.HiltTestRunner"
+
+        ndk {
+            abiFilters.addAll(setOf("arm64-v8a", "x86_64"))
+        }
     }
 
     signingConfigs {
@@ -45,9 +49,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            ndk {
-                abiFilters += "arm64-v8a"
-            }
         }
         debug {
             isMinifyEnabled = false

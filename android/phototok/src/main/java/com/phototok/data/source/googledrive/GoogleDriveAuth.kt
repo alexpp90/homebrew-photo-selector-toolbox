@@ -84,9 +84,11 @@ class GoogleDriveAuth @Inject constructor(
     suspend fun getAccessToken(): String? = withContext(Dispatchers.IO) {
         val account = _signedInAccount.value ?: return@withContext null
         try {
+            val accountName = account.email ?: return@withContext null
+            val googleAccount = account.account ?: android.accounts.Account(accountName, "com.google")
             val token = com.google.android.gms.auth.GoogleAuthUtil.getToken(
                 context,
-                account.account!!,
+                googleAccount,
                 "oauth2:$SCOPE_DRIVE $SCOPE_DRIVE_FILE"
             )
             token
