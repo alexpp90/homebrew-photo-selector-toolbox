@@ -142,7 +142,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 
 ### 5.2 Release Management
 *   **Permissions:** GitHub Actions require `permissions: contents: write` to allow the workflow to create and update releases.
-*   **Publishing Strategy:** The project utilizes `softprops/action-gh-release` to automatically publish artifacts to the `nightly` tag on every push to the `main` branch.
+*   **Publishing Strategy:** The project utilizes `softprops/action-gh-release` to automatically publish artifacts (both desktop archives and Android release APK/AAB) to the `nightly` tag on every push to the `main` branch, and to the stable release tag on every tag push matching `v*`.
 *   **Changelog and Upcoming Changes:** All notable changes must be documented in a central `CHANGELOG.md` file in the root of the project using the Keep a Changelog format. Changes implemented in development between releases must be documented under an `[Upcoming]` section.
 *   **GitHub Release Preservation:** Every tagged stable release (tags matching `v*`) must be published as a new GitHub Release and preserved indefinitely. No old releases or release assets may be pruned or deleted from the GitHub Releases page.
 *   **Older Version Access Documentation:** The `README.md` must maintain up-to-date instructions on how to access and install older versions of the standalone executables and the Homebrew Casks.
@@ -246,11 +246,11 @@ All analysis algorithms must produce equivalent results to the desktop Python im
 
 ### 7.10 Android Build & CI
 *   **Build System:** Gradle with Kotlin DSL and version catalog (`gradle/libs.versions.toml`).
-*   **CI Workflow:** `.github/workflows/build-android.yml` — runs on `ubuntu-latest` with JDK 17. Triggers on pushes to `main` and PRs modifying `android/**`. Runs lint and unit tests before building. Produces signed APK and AAB.
+*   **CI Workflow:** `.github/workflows/build-android.yml` — runs on `ubuntu-latest` with JDK 17. Triggers on pushes to `main`, tags matching `v*`, and PRs modifying `android/**`. Runs lint and unit tests before building. Produces signed APK and AAB.
 *   **Artifact Naming:** `photo-selector-toolbox-android-release.apk` and `photo-selector-toolbox-android-release.aab`.
 *   **R8 Optimization:** Release builds enable R8 full mode with minification and resource shrinking. OpenCV native libraries excluded from stripping.
 *   **ABI Filter:** Release APKs include only `arm64-v8a` (covers Galaxy S25 Ultra and Tab S11 Ultra).
-*   **Signing:** Debug uses default keystore. Release signing is configured in `build.gradle.kts` dynamically using environment variables (`KEYSTORE_FILE`, `STORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`) populated by the CI environment to package properly signed release artifacts.
+*   **Signing:** Debug uses default keystore. Release signing is configured in `build.gradle.kts` dynamically using environment variables (`KEYSTORE_FILE`, `STORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`) populated by the CI environment. In GitHub Actions CI, the keystore file is decoded from a base64 string secret `ANDROID_KEYSTORE_FILE` into a temporary file in the workspace before compilation to package properly signed release artifacts.
 *   **Firebase App Distribution:** Release builds pushed to the `main` branch are automatically uploaded to Firebase App Distribution for over-the-air tester updates.
 
 ### 7.11 Android Visual Theme
