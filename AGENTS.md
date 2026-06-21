@@ -7,24 +7,31 @@ Welcome to the Photo Selector Toolbox project. When modifying this codebase, you
 3. **Consistency:** Ensure that any code changes you make perfectly align with the rules specified in `REQUIREMENTS.md` unless the user explicitly instructs you to change those rules.
 4. **Testing Context:** Review the testing and headless execution requirements in `REQUIREMENTS.md` (e.g., using `xvfb-run`) when running tests or debugging GUI components.
 
-## Project Platforms
+## Three Independent Solutions
 
-This project targets **two platforms** that share the same repository:
+This project targets **three independent solutions** that share the same repository:
 
-| Platform | Root Directory | Tech Stack | Primary Target |
-|----------|---------------|------------|----------------|
-| **Desktop (macOS/Linux/Windows)** | `src/` | Python + Tkinter | Desktop workstations |
-| **Android** | `android/` | Kotlin + Jetpack Compose | Samsung DeX / large tablets (primary), phones (secondary) |
+| Solution | Code Directory / Module | Tech Stack | Primary Target |
+|----------|--------------------------|------------|----------------|
+| **Desktop** | `src/` (Python) | Python + Tkinter | Desktop workstations (macOS, Linux, Windows) |
+| **Android Desktop** | `android/app/` (Kotlin) | Jetpack Compose + Room + OpenCV + Vico | Samsung DeX, large tablets (≥840dp), Chromebooks |
+| **Android Phone** | `android/phototok/` (Kotlin) | Jetpack Compose + DataStore (lightweight) | Mobile phone form factor (<600dp), portrait only |
 
-The platforms share photographic domain knowledge and algorithmic specifications but have **independent implementations** optimized for their respective environments. The Android version deliberately deviates from desktop UX where touch interaction patterns, battery constraints, or mobile usage workflows demand it.
+The solutions share high-level photographic domain concepts (like EXIF contracts and image score descriptions) but have **independent implementations** optimized for their respective environments and UX models. 
 
-### Feature Sync Policy
+### Feature Sync & Coordination Policy
 
-When a new feature is added to either platform, the coordinator must evaluate whether it should also be added to the other platform. Desktop features are the superset; Android tablet/DeX mode should match desktop feature parity where feasible. Android phone mode may omit features that don't work well on small screens. The **Local AI (Ollama VLM)** feature is **excluded from Android** entirely due to battery and compute constraints.
+When a new feature is requested, the coordinator must evaluate which of the three solutions is the target (single target, multiple targets, or all three). 
+- **Single Target**: Delegate exclusively to the subagents responsible for that specific solution. Do not modify or inject code into the other solutions.
+- **Multiple/All Targets**: Split the task into distinct, independent subtasks, one for each targeted solution. Tailor the implementation to each solution's technology stack and UX guidelines. Do not force identical code or structures when they do not make sense for the target platform (e.g., Android Phone has a gesture-first interface while Desktop has a menu-driven interface).
+- **Feature Feasibility & Exclusions**:
+  - **Local AI (Ollama VLM)**: Desktop-only due to mobile computing constraints.
+  - **OpenCV Analysis & Room DB Cache & Vico Charts**: Supported on Desktop and Android Desktop, but excluded from Android Phone to keep the application lightweight.
+  - **Picture Shuffling/Randomization**: Android Phone only (built into the Settings of the phone client).
 
 ## Multi-Agent System
 
-This project uses a multi-agent system with **9 specialized subagents** organized into two platform groups plus shared consultants. The coordinator (default agent) automatically delegates work to the appropriate subagent based on the task and target platform.
+This project uses a multi-agent system with **9 specialized subagents** organized into platform groups plus shared consultants. The coordinator (default agent) automatically delegates work to the appropriate subagent based on the task and target solution.
 
 ### Agent Roster
 
@@ -41,28 +48,26 @@ This project uses a multi-agent system with **9 specialized subagents** organize
 
 | Agent | Scope | Config File |
 |-------|-------|-------------|
-| **`@android_ui_agent`** | Jetpack Compose UI: all files under `android/app/src/main/.../ui/`, adaptive layouts, Material 3 theming, navigation, gesture handling | `.gemini/agents/android_ui_agent.md` |
-| **`@android_core_agent`** | Android data & domain layers: `android/app/src/main/.../data/`, `android/app/src/main/.../domain/`, EXIF extraction, image analysis algorithms, Room database, repositories | `.gemini/agents/android_core_agent.md` |
-| **`@android_build_agent`** | Android build: `android/build.gradle.kts`, `android/app/build.gradle.kts`, `android/gradle/`, GitHub Actions Android workflow, signing, ProGuard/R8 | `.gemini/agents/android_build_agent.md` |
+| **`@android_ui_agent`** | Jetpack Compose UI: All files under `android/app/src/main/.../ui/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/ui/` (Android Phone) | `.gemini/agents/android_ui_agent.md` |
+| **`@android_core_agent`** | Android data & domain layers: `android/app/src/main/.../data/`, `android/app/src/main/.../domain/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/data/`, `android/phototok/src/main/java/com/phototok/viewmodel/` (Android Phone) | `.gemini/agents/android_core_agent.md` |
+| **`@android_build_agent`** | Android build: `android/build.gradle.kts`, `android/app/build.gradle.kts`, `android/phototok/build.gradle.kts`, `android/settings.gradle.kts`, `android/gradle/`, GitHub Actions Android workflows, ProGuard/R8 | `.gemini/agents/android_build_agent.md` |
 
 #### Shared Consultant Agents (Cross-Platform)
 
 | Agent | Scope | Config File |
 |-------|-------|-------------|
 | **`@photo_researcher_agent`** | Photographic science, image quality metrics, aesthetics, and requirement elucidation. Consulted by both desktop and Android agents. | `.gemini/agents/photo_researcher_agent.md` |
-| **`@ux_agent`** | Professional design, UX flow, user patterns, and flow analysis. Provides platform-specific design guidance for both desktop (mouse/keyboard) and Android (touch/gesture). | `.gemini/agents/ux_agent.md` |
+| **`@ux_agent`** | Professional design, UX flows, ergonomics, and pattern analysis. Provides solution-specific design guidance (Desktop mouse/keyboard vs. Android Desktop tablet/DeX multi-pane vs. Android Phone portrait/touch-first). | `.gemini/agents/ux_agent.md` |
 
 ### Coordinator Behavior
 
 The coordinator agent (default) handles:
 
-- **Auto-delegation:** Analyzes incoming requests and routes work to the appropriate subagent based on which files and platform are affected. If a task spans multiple agents' scopes or platforms, the coordinator breaks it into subtasks and delegates each part.
-- **Platform detection:** Determines whether a task targets desktop, Android, or both based on file paths, feature descriptions, and explicit user instructions. Tasks affecting `android/` go to Android agents; tasks affecting `src/` go to desktop agents.
-- **Parallel platform work:** When a feature should be implemented on both platforms, the coordinator delegates to the respective platform agents independently. Each platform agent implements the feature in the idiomatic way for its stack.
-- **Consultation on vagueness:** If a request is vague, subjective, or requires deep photographic domain knowledge, the coordinator consults `@photo_researcher_agent` first. If a request involves user workflows or styling, the coordinator consults `@ux_agent` — specifying the target platform so UX guidance is platform-appropriate.
-- **Feature sync checks:** After implementing a feature on one platform, the coordinator evaluates whether the feature should be synced to the other platform and creates follow-up tasks if so.
-- **Requirements maintenance:** After every change that modifies behavior, the coordinator ensures `REQUIREMENTS.md` is reviewed and updated to stay consistent with the codebase.
-- **Cross-agent coordination:** When changes in one agent's scope affect another (e.g., a backend algorithm change that impacts both desktop GUI and Android UI), the coordinator ensures all affected agents are informed and aligned.
+- **Target Solution Detection**: Evaluates which file paths, modules, or description clauses are affected. Files under `src/` or `tests/` belong to Desktop; files under `android/app/` belong to Android Desktop; files under `android/phototok/` belong to Android Phone.
+- **Auto-delegation**: Automatically routes work to the appropriate subagents. When a task spans multiple solutions, the coordinator breaks it down into subtasks and delegates each portion.
+- **Consultation on Vagueness**: Consults `@photo_researcher_agent` for photographic science, and `@ux_agent` for visual styling and interaction flows (always specifying which of the 3 target solutions is being worked on).
+- **Requirements Maintenance**: Reviews and updates `REQUIREMENTS.md` after any change that modifies behavior, ensuring it stays consistent.
+- **Cross-agent Alignment**: Coordinates between backend/core algorithms and GUI/UI view updates.
 
 ### Delegation Rules
 
@@ -72,16 +77,18 @@ The coordinator agent (default) handles:
 - Changes to **desktop tests, coverage, or test infrastructure** → `@test_agent`
 - Changes to **desktop build scripts, CI/CD, dependencies, or packaging** → `@build_agent`
 
-#### Android
-- Changes to **Compose UI, adaptive layouts, navigation, or gestures** → `@android_ui_agent`
-- Changes to **Android data models, EXIF extraction, image analysis, Room DB, or repositories** → `@android_core_agent`
-- Changes to **Android Gradle build, CI workflow, signing, or ProGuard** → `@android_build_agent`
+#### Android Desktop
+- Changes to **Compose UI, navigation rail, widescreen layouts, tablet components** → `@android_ui_agent` (Scope: `android/app/.../ui`)
+- Changes to **Room DB caching, OpenCV image analysis, WorkManager, usecases, domain** → `@android_core_agent` (Scope: `android/app/.../data`, `android/app/.../domain`)
 
-#### Cross-Platform
-- **Vague requirements, research on photographic algorithms, or artistic/composition specifications** → `@photo_researcher_agent`
-- **UI/UX design, visual styling guidelines, layout ergonomics, or user pattern analysis** → `@ux_agent` (specify platform context)
-- **Cross-cutting changes** (e.g., algorithm change affecting both platforms) → Coordinator splits into subtasks and delegates to each relevant agent
-- **New feature implementation** → Coordinator delegates to the primary platform's agents, then evaluates sync to the other platform
+#### Android Phone
+- Changes to **compact Compose UI, swipe navigation, gesture tutorial, PhoneModeScreen** → `@android_ui_agent` (Scope: `android/phototok/.../ui`)
+- Changes to **DataStore preferences, phone viewmodels, lightweight EXIF strategy** → `@android_core_agent` (Scope: `android/phototok/.../data`, `android/phototok/.../viewmodel`)
+
+#### Cross-Platform & Build
+- Changes to **Android Gradle build files, CI workflow, or ProGuard rules** → `@android_build_agent`
+- Research on **algorithms, raw files, or metadata standards** → `@photo_researcher_agent`
+- Custom **UX mockups, ergonomic analysis, or layout wireframes** → `@ux_agent` (requires target solution context)
 
 ### Shared Skills
 
