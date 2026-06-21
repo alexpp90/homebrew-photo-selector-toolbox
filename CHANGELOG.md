@@ -5,19 +5,26 @@ All notable changes to the Photo Selector Toolbox project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-- Added Homebrew Formula support for stable and nightly releases (`photo-selector-toolbox` and `photo-selector-toolbox@nightly`), allowing installation on Linux and macOS (CLI-only).
-- Updated GitHub Actions build workflow to automatically compute SHA256 hashes and update both Cask and Formula files for stable/nightly releases.
-- Implemented `scripts/update_formula.py` to automate version and checksum updates.
-- Added `scripts/install-linux.sh` installer script for Linux environments.
+## [0.2.0] - 2026-06-21
 
-- Refactored `OllamaAestheticTool` to return a tuple containing the float score and a parsed one or two-word analysis reason tag.
-- Added a calibration scale to the default Ollama prompt to reduce score randomness.
-- Updated prompt migration logic to migrate legacy default prompts to the new default calibrated prompt.
-- Updated Standard Mode metadata panel, Focus Mode panel, and Fullscreen Viewer metadata overlay to display the aesthetic tag in parentheses next to the score.
-- Optimized RAW image preview loading by extracting embedded camera JPEGs using `rawpy`'s `extract_thumb()`, avoiding expensive sensor demosaicing.
-- Introduced three configurable grouping levels (Time & Filename, Time + Fast Similarity, Detailed Similarity) with a 30s timeframe.
-- Optimized grouping visual similarity calculations by restricting dHash checks only to temporal candidate files (burst candidates), reducing image loading by up to 90% in large directories.
-- Added GUI Combobox next to the grouping checkbox to select active level, with disabled state synchronization and persistent settings storage.
+### Added
+- **Android Platform & Google Drive Integration:**
+  - Full Google Drive file browsing, silent sign-in sync, and folder picking on both Android Phone (`phototok`) and Tablet/Desktop (`app`) clients.
+  - Custom `gdrive://` URI schema implementation in Coil (`DriveCoilFetcher`) to handle background downloading and caching.
+  - Support for discovering RAW files (e.g., `.CR2`, `.NEF`) on Google Drive by fallback mapping of `application/octet-stream` MIME types with supported image extensions.
+  - Detailed error stream diagnostics logging for Google Drive REST API calls (debugging 403 Forbidden and other network issues).
+  - Native 16KB page size alignment compatibility on Android 16+ devices, using NDK 28's precompiled `libc++_shared.so` binaries and restricting default ABI filters to 64-bit architectures (`arm64-v8a` and `x86_64`).
+- **Desktop Features & Distribution:**
+  - Three configurable grouping levels (Time & Filename, Time + Fast Similarity, Detailed Similarity) with a persistent GUI selector.
+  - Calibrated Ollama VLM prompt structure and aesthetic reason tag extraction display.
+  - Homebrew Formula support for stable and nightly CLI-only builds (`photo-selector-toolbox` and `photo-selector-toolbox@nightly`) for macOS and Linux.
+  - Added Linux installation shell script `scripts/install-linux.sh`.
+
+### Changed & Optimized
+- Optimized visual similarity grouping by restricting dHash checks to temporal burst candidates (reducing image loading by up to 90% in large folders).
+- Optimized raw image preview loading on desktop using embedded JPEG camera thumbnail extraction.
+- Automatic filtering to exclude hidden files and macOS Apple Double metadata files (starting with `.`) during both local and Google Drive image discovery.
+- Automated version and checksum updates in GitHub Actions build workflows for Homebrew tap files.
 
 ---
 

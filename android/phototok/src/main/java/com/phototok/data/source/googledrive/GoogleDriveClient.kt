@@ -74,8 +74,8 @@ class GoogleDriveClient @Inject constructor(
     ) {
         var pageToken: String? = null
         do {
-            // Query for images and folders (to recurse into)
-            val mimeFilter = IMAGE_MIME_TYPES.joinToString(" or ") { "mimeType='$it'" }
+            // Query for images, generic octet-streams, and folders (to recurse into)
+            val mimeFilter = (IMAGE_MIME_TYPES + "application/octet-stream").joinToString(" or ") { "mimeType='$it'" }
             val query = "'$folderId' in parents and trashed=false and ($mimeFilter or mimeType='${DriveFile.MIME_FOLDER}')"
             val fields = "nextPageToken,files(id,name,mimeType,size,modifiedTime,imageMediaMetadata/width,imageMediaMetadata/height)"
 
@@ -376,7 +376,8 @@ class GoogleDriveClient @Inject constructor(
                 val body = conn.inputStream.bufferedReader().readText()
                 JSONObject(body)
             } else {
-                Log.e(TAG, "HTTP ${conn.responseCode}: ${conn.responseMessage}")
+                val errorBody = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "HTTP ${conn.responseCode}: ${conn.responseMessage} - Body: $errorBody")
                 null
             }
         } catch (e: Exception) {

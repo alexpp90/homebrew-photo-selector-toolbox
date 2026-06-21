@@ -512,6 +512,10 @@ class SelectorViewModel @Inject constructor(
         _uiState.update { it.copy(error = null) }
     }
 
+    fun setError(message: String) {
+        _uiState.update { it.copy(error = message) }
+    }
+
     private suspend fun recomputeGroups(level: GroupingLevel) {
         val images = _uiState.value.images
         if (images.isEmpty()) {
