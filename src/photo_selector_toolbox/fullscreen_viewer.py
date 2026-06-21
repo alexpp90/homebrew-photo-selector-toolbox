@@ -647,36 +647,35 @@ class FullscreenViewer(tk.Toplevel):
             self.meta_sep.pack(side="top", fill="x", pady=6, after=self.meta_exposure_lbl)
         else:
             self.meta_sep.pack_forget()
+    def _get_scan_result(self):
+        res = None
+        if hasattr(self.parent, "files_map") and isinstance(self.parent.files_map, dict):
+            res = self.parent.files_map.get(self.path)
+        if not res:
+            res = ScanResult(self.path)
+        return res
+
+    def _ensure_exif_data(self, res, is_mock):
+        if not is_mock and res.exif is None:
+            try:
+                exif = get_exif_data(self.path)
+                if exif and type(exif).__name__ == "ExifData":
+                    res.exif = exif
+                else:
+                    res.exif = ExifData()
+            except Exception as e:
+                logger.debug(f"Failed to load EXIF data dynamically in fullscreen: {e}")
+                res.exif = ExifData()
+        return None if is_mock else res.exif
+
     def update_metadata(self):
         if not hasattr(self, "meta_panel") or not self.meta_panel:
             return
 
         try:
-            # Check if parent has files_map and it's a dict
-            res = None
-            if hasattr(self.parent, "files_map") and isinstance(self.parent.files_map, dict):
-                res = self.parent.files_map.get(self.path)
-
-            if not res:
-                # Fallback scan result if not found
-                res = ScanResult(self.path)
-
-            # Determine if res is a Mock object under testing
+            res = self._get_scan_result()
             is_mock = type(res).__name__ in ("MagicMock", "Mock")
-
-            # Ensure EXIF is loaded if it is None (skip for mocks to avoid mock issues)
-            if not is_mock and res.exif is None:
-                try:
-                    exif = get_exif_data(self.path)
-                    if exif and type(exif).__name__ == "ExifData":
-                        res.exif = exif
-                    else:
-                        res.exif = ExifData()
-                except Exception as e:
-                    logger.debug(f"Failed to load EXIF data dynamically in fullscreen: {e}")
-                    res.exif = ExifData()
-
-            exif = None if is_mock else res.exif
+            exif = self._ensure_exif_data(res, is_mock)
             is_testing = type(self.parent).__name__ in ("MagicMock", "Mock")
 
             # Format and update basic labels
