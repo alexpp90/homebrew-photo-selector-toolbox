@@ -54,8 +54,10 @@ jobs:
 
       - name: Decode Keystore
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          ANDROID_KEYSTORE_FILE_BASE64: ${{ secrets.ANDROID_KEYSTORE_FILE }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_FILE }}" | base64 --decode > ${{ github.workspace }}/android/release.jks
+          printf "%s" "$ANDROID_KEYSTORE_FILE_BASE64" | base64 --decode > ${{ github.workspace }}/android/release.jks
 
       - name: Build release APK
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
