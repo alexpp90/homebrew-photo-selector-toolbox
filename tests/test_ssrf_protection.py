@@ -1,7 +1,6 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from photo_selector_toolbox.ollama_tool import OllamaAestheticTool
-import urllib.request
 from PIL import Image
 
 @pytest.fixture

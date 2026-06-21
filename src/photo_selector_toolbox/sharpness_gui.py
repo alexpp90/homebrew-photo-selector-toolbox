@@ -671,6 +671,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             try:
                 if not url.lower().startswith(('http://', 'https://')):
                     raise ValueError("URL must start with http:// or https://")
+
+                from urllib.parse import urlparse
+                hostname = urlparse(url).hostname or ""
+                if hostname == "169.254.169.254" or hostname.startswith("169.254."):
+                    raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
