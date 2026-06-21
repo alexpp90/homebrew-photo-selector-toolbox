@@ -248,35 +248,29 @@ def apply_dark_theme(root: tk.Tk) -> None:
     root.configure(bg=colors.bg_dark)
 
 
-def _apply_axis_styles(ax, bg_panel, border_color, fg_light):
-    ax.set_facecolor(bg_panel)
-    for spine in ["bottom", "top", "left", "right"]:
-        ax.spines[spine].set_color(border_color)
-    ax.tick_params(colors=fg_light, which="both")
-    ax.yaxis.label.set_color(fg_light)
-    ax.xaxis.label.set_color(fg_light)
-    ax.title.set_color(fg_light)
-    ax.grid(True, color=border_color, linestyle="--", alpha=0.5)
-
-
-def _apply_bar_styles(ax, bar_color):
-    for container in ax.containers:
-        for child in container.get_children():
-            if hasattr(child, "set_facecolor"):
-                child.set_facecolor(bar_color)
-
-
 def apply_dark_theme_to_fig(fig):
     bg_dark = "#18181B"
     bg_panel = "#27272A"
     border_color = "#3F3F46"
     fg_light = "#F4F4F5"
-    bar_color = "#6366F1"
 
     fig.patch.set_facecolor(bg_dark)
     for ax in fig.axes:
-        _apply_axis_styles(ax, bg_panel, border_color, fg_light)
-        _apply_bar_styles(ax, bar_color)
+        ax.set_facecolor(bg_panel)
+        ax.spines["bottom"].set_color(border_color)
+        ax.spines["top"].set_color(border_color)
+        ax.spines["left"].set_color(border_color)
+        ax.spines["right"].set_color(border_color)
+        ax.tick_params(colors=fg_light, which="both")
+        ax.yaxis.label.set_color(fg_light)
+        ax.xaxis.label.set_color(fg_light)
+        ax.title.set_color(fg_light)
+        ax.grid(True, color=border_color, linestyle="--", alpha=0.5)
+        # Update colors for bars
+        for container in ax.containers:
+            for child in container.get_children():
+                if hasattr(child, "set_facecolor"):
+                    child.set_facecolor("#6366F1")
 
 
 class QueueHandler(logging.Handler):
