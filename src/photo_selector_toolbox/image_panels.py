@@ -23,7 +23,7 @@ class ImagePanelsMixin:
         )  # Stop the label from resizing the container
 
         # Image Label (Placeholder)
-        lbl = ttk.Label(img_container, text="No Image", anchor="center")
+        lbl = ttk.Label(img_container, text="No Image", anchor="center", cursor="hand2")
         lbl.place(relx=0.5, rely=0.5, anchor="center")
 
         # Details
