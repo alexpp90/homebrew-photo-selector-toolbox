@@ -156,3 +156,15 @@ def test_open_file_for_user_whitelist(mock_webbrowser):
     test_path = Path("test_file.txt")
     _open_file_for_user(test_path)
     mock_webbrowser.assert_not_called()
+
+@patch("photo_selector_toolbox.visualizer.webbrowser.open")
+@patch("builtins.print")
+def test_open_file_for_user_exception(mock_print, mock_webbrowser):
+    """Test that _open_file_for_user handles exceptions gracefully."""
+    mock_webbrowser.side_effect = Exception("Test exception")
+    test_path = Path("test_file.png")
+
+    _open_file_for_user(test_path)
+
+    mock_print.assert_any_call(f"Could not open file '{test_path}'. Please open it manually.")
+    mock_print.assert_any_call("Error: Test exception")
