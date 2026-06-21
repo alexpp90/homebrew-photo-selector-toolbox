@@ -3,9 +3,7 @@ name: Android Build
 on:
   push:
     branches: [main]
-    paths:
-      - 'android/**'
-      - '.github/workflows/build-android.yml'
+    tags: [ "v*" ]
   pull_request:
     branches: [main]
     paths:
@@ -54,25 +52,37 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
+      - name: Decode Keystore
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_FILE }}" | base64 --decode > ${{ github.workspace }}/android/release.jks
+
       - name: Build release APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         working-directory: android
         run: ./gradlew assembleRelease
         env:
-          KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_FILE }}
+          KEYSTORE_FILE: ${{ github.workspace }}/android/release.jks
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
 
       - name: Build release AAB
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         working-directory: android
         run: ./gradlew bundleRelease
         env:
-          KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_FILE }}
+          KEYSTORE_FILE: ${{ github.workspace }}/android/release.jks
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+
+      - name: Prepare Release Assets
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        run: |
+          mkdir -p android/release-assets
+          cp android/app/build/outputs/apk/release/*.apk android/release-assets/photo-selector-toolbox-android-release.apk
+          cp android/app/build/outputs/bundle/release/*.aab android/release-assets/photo-selector-toolbox-android-release.aab
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -81,11 +91,11 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
 
       - name: Upload release APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-release
-          path: android/app/build/outputs/apk/release/*.apk
+          path: android/release-assets/photo-selector-toolbox-android-release.apk
 
       - name: Upload to Firebase App Distribution
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -94,22 +104,20 @@ jobs:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
           groups: testers
-          file: android/app/build/outputs/apk/release/*.apk
+          file: android/release-assets/photo-selector-toolbox-android-release.apk
 
       - name: Upload release AAB
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-release-aab
-          path: android/app/build/outputs/bundle/release/*.aab
+          path: android/release-assets/photo-selector-toolbox-android-release.aab
 
-      - name: Publish nightly release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Publish Release Assets
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: nightly
-          name: Nightly Build
-          prerelease: true
-          files: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/bundle/release/*.aab
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          files: android/release-assets/*
