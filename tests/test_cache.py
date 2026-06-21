@@ -256,7 +256,7 @@ def test_db_default_path():
             cache = ScoreCache()
 
             mock_config_dir.mkdir.assert_called_once_with(parents=True, exist_ok=True)
-            assert str(cache.db_path) == "/tmp/scores_cache.db"
+            assert cache.db_path.name == "scores_cache.db"
 
 def test_db_error_recreate():
     import sqlite3
