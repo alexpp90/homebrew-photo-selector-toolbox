@@ -2,8 +2,8 @@ import base64
 import json
 import logging
 import re
-import urllib.request
-import urllib.error
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 import io
 import threading
 from pathlib import Path
@@ -68,7 +68,7 @@ class OllamaAestheticTool(AnalysisTool):
             raise RuntimeError(f"Failed to process image bytes: {e}")
 
         # 2. Query Ollama REST API
-        if not ollama_url.lower().startswith(('http://', 'https://')):
+        if not ollama_url.lower().startswith(("http://", "https://")):
             raise RuntimeError("Ollama URL must start with http:// or https://")
 
         url = f"{ollama_url.rstrip('/')}/api/generate"
@@ -80,7 +80,7 @@ class OllamaAestheticTool(AnalysisTool):
         }
 
         try:
-            req = urllib.request.Request(
+            req = Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
@@ -88,10 +88,10 @@ class OllamaAestheticTool(AnalysisTool):
             )
             # Serialize requests to avoid overloading local Ollama server
             with self._lock:
-                with urllib.request.urlopen(req, timeout=60) as response:
+                with urlopen(req, timeout=60) as response:
                     res_data = json.loads(response.read().decode("utf-8"))
                     response_text = res_data.get("response", "")
-        except urllib.error.URLError as e:
+        except URLError as e:
             raise RuntimeError(
                 f"Ollama server connection error at {ollama_url}. Is Ollama running? ({e})"
             )
@@ -99,19 +99,25 @@ class OllamaAestheticTool(AnalysisTool):
             raise RuntimeError(f"Ollama API request failed: {e}")
 
         # 3. Parse score and analysis tag from output
-        match_score = re.search(r"\[SCORE:\s*(\d+(?:\.\d+)?)\]", response_text, re.IGNORECASE)
+        match_score = re.search(
+            r"\[SCORE:\s*(\d+(?:\.\d+)?)\]", response_text, re.IGNORECASE
+        )
         if match_score:
             score = float(match_score.group(1))
         else:
             # Fallback to parsing first numeric score found
             matches = re.findall(r"\d+(?:\.\d+)?", response_text)
             if not matches:
-                raise RuntimeError(f"Could not parse a numeric score from Ollama output: '{response_text}'")
+                raise RuntimeError(
+                    f"Could not parse a numeric score from Ollama output: '{response_text}'"
+                )
             score = float(matches[0])
 
         score = max(1.0, min(10.0, score))
 
-        match_analysis = re.search(r"\[ANALYSIS:\s*([^\]]+)\]", response_text, re.IGNORECASE)
+        match_analysis = re.search(
+            r"\[ANALYSIS:\s*([^\]]+)\]", response_text, re.IGNORECASE
+        )
         analysis_tag = "N/A"
         if match_analysis:
             analysis_tag = match_analysis.group(1).strip()
@@ -119,4 +125,3 @@ class OllamaAestheticTool(AnalysisTool):
                 analysis_tag = analysis_tag[:27] + "..."
 
         return score, analysis_tag
-

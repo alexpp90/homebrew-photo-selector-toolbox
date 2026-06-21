@@ -1,5 +1,5 @@
 import json
-import urllib.error
+from urllib.error import URLError
 from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
@@ -17,10 +17,13 @@ import photo_selector_toolbox.ollama_tool as ot
 def temp_config_dir(tmp_path):
     """Fixture to mock CONFIG_DIR and CONFIG_FILE to a temporary path."""
     import photo_selector_toolbox.config as cfg_mod
-    with patch.object(cfg_mod, "CONFIG_DIR", tmp_path), \
-         patch.object(cfg_mod, "CONFIG_FILE", tmp_path / "settings.json"), \
-         patch.object(ot, "CONFIG_DIR", tmp_path), \
-         patch.object(ot, "CONFIG_FILE", tmp_path / "settings.json"):
+
+    with (
+        patch.object(cfg_mod, "CONFIG_DIR", tmp_path),
+        patch.object(cfg_mod, "CONFIG_FILE", tmp_path / "settings.json"),
+        patch.object(ot, "CONFIG_DIR", tmp_path),
+        patch.object(ot, "CONFIG_FILE", tmp_path / "settings.json"),
+    ):
         yield tmp_path
 
 
@@ -48,10 +51,12 @@ def dummy_image_file(tmp_path):
     return img_path
 
 
-@patch("urllib.request.urlopen")
+@patch("photo_selector_toolbox.ollama_tool.urlopen")
 def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock Ollama HTTP response payload
-    mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."}
+    mock_resp_payload = {
+        "response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."
+    }
 
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
@@ -70,7 +75,7 @@ def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     assert req.method == "POST"
 
 
-@patch("urllib.request.urlopen")
+@patch("photo_selector_toolbox.ollama_tool.urlopen")
 def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_dir):
     # Setup custom configuration
     custom_config = {
@@ -81,7 +86,9 @@ def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_d
     save_config(custom_config)
 
     # Mock response
-    mock_resp_payload = {"response": "[SCORE: 9.3] [ANALYSIS: Sharp] Score: 9.3 out of 10"}
+    mock_resp_payload = {
+        "response": "[SCORE: 9.3] [ANALYSIS: Sharp] Score: 9.3 out of 10"
+    }
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
     mock_response.__enter__.return_value = mock_response
@@ -101,10 +108,10 @@ def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_d
     assert body["prompt"] == "Rate the aesthetics of the photo. Score: "
 
 
-@patch("urllib.request.urlopen")
+@patch("photo_selector_toolbox.ollama_tool.urlopen")
 def test_ollama_tool_connection_error(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock connection failure (URLError)
-    mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
+    mock_urlopen.side_effect = URLError("Connection refused")
 
     tool = OllamaAestheticTool()
     with pytest.raises(RuntimeError) as exc_info:
@@ -113,10 +120,12 @@ def test_ollama_tool_connection_error(mock_urlopen, dummy_image_file, temp_confi
     assert "Ollama server connection error" in str(exc_info.value)
 
 
-@patch("urllib.request.urlopen")
+@patch("photo_selector_toolbox.ollama_tool.urlopen")
 def test_ollama_tool_parsing_error(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with no float scores in text
-    mock_resp_payload = {"response": "This is a photo of a sunset, it looks great but I can't give a number."}
+    mock_resp_payload = {
+        "response": "This is a photo of a sunset, it looks great but I can't give a number."
+    }
 
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
@@ -200,10 +209,12 @@ def test_load_config_migration(temp_config_dir):
     assert on_disk["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
 
 
-@patch("urllib.request.urlopen")
+@patch("photo_selector_toolbox.ollama_tool.urlopen")
 def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with SCORE but no ANALYSIS tag
-    mock_resp_payload = {"response": "The aesthetic quality score of this photo is 8.5."}
+    mock_resp_payload = {
+        "response": "The aesthetic quality score of this photo is 8.5."
+    }
 
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
@@ -219,6 +230,7 @@ def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_conf
 
 def test_add_get_recent_folders(temp_config_dir):
     from photo_selector_toolbox.config import add_recent_folder, get_recent_folders
+
     add_recent_folder("/some/path/1")
     add_recent_folder("/some/path/2")
     add_recent_folder("/some/path/1")  # duplicate
@@ -229,15 +241,19 @@ def test_add_get_recent_folders(temp_config_dir):
 
 def test_is_ollama_url_external(temp_config_dir):
     from photo_selector_toolbox.config import is_ollama_url_external
+
     assert not is_ollama_url_external("http://localhost:11434")
     assert not is_ollama_url_external("http://127.0.0.1:11434")
     assert is_ollama_url_external("http://192.168.1.100:11434")
-    assert not is_ollama_url_external(None)  # loads from config, which defaults to localhost (False)
+    assert not is_ollama_url_external(
+        None
+    )  # loads from config, which defaults to localhost (False)
 
 
 @patch("builtins.open", side_effect=OSError("Read-only file system"))
 def test_load_save_config_error(mock_open, temp_config_dir):
     from photo_selector_toolbox.config import load_config, save_config
+
     # Force exceptions
     cfg = load_config()
     assert cfg == DEFAULT_CONFIG
@@ -248,7 +264,6 @@ def test_load_save_config_error(mock_open, temp_config_dir):
 def test_set_secure_permissions_error(mock_chmod, temp_config_dir):
     from pathlib import Path
     from photo_selector_toolbox.config import _set_secure_permissions
+
     # Should not raise exception
     _set_secure_permissions(Path("/tmp/fake_config_file"))
-
-
