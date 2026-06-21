@@ -273,7 +273,7 @@ def test_db_error_recreate():
 
         with patch("photo_selector_toolbox.cache.logger.error") as mock_error:
             with patch("pathlib.Path.unlink") as mock_unlink:
-                cache = ScoreCache(db_file)
+                ScoreCache(db_file)
 
                 mock_unlink.assert_called_once_with(missing_ok=True)
                 mock_error.assert_any_call(
@@ -296,7 +296,7 @@ def test_db_error_recreate_fail():
             with patch("pathlib.Path.unlink") as mock_unlink:
                 mock_unlink.side_effect = Exception("Unlink failed")
 
-                cache = ScoreCache(db_file)
+                ScoreCache(db_file)
 
                 mock_unlink.assert_called_once_with(missing_ok=True)
                 mock_error.assert_any_call(
@@ -304,7 +304,7 @@ def test_db_error_recreate_fail():
                     f"Attempting to recreate at {db_file}"
                 )
                 mock_error.assert_any_call(
-                    f"Failed to recreate score cache database: Unlink failed"
+                    "Failed to recreate score cache database: Unlink failed"
                 )
 
 def test_db_empty_cases(tmp_path):
