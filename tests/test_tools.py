@@ -138,3 +138,23 @@ def test_tool_registry_register_and_retrieve():
     assert instance.name == "register_mock"
     assert instance.display_name == "Register Mock Tool"
     assert instance.analyze(Path("dummy.jpg")) == "register_mock_result"
+
+def test_tool_registry_override():
+    """Test that registering a tool with an existing name overrides the previous one."""
+    class FirstTool(AnalysisTool):
+        name = "override_tool"
+        display_name = "First"
+        def analyze(self, filepath: Path, **kwargs: Any) -> Any:
+            return "first"
+
+    class SecondTool(AnalysisTool):
+        name = "override_tool"
+        display_name = "Second"
+        def analyze(self, filepath: Path, **kwargs: Any) -> Any:
+            return "second"
+
+    ToolRegistry.register(FirstTool)
+    assert ToolRegistry.get("override_tool") is FirstTool
+
+    ToolRegistry.register(SecondTool)
+    assert ToolRegistry.get("override_tool") is SecondTool
