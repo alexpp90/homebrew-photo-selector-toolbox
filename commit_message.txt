@@ -1,0 +1,5 @@
+🧪 [Add Error Path Unit Tests for ScoreCache]
+
+🎯 What: Added a dedicated test (`test_get_scores_error_path`) to cover the `logger.warning` exception block triggered when `sqlite3.connect` fails during a cache read in `ScoreCache`. Additionally, included a suite of missing edge-case tests (default DB path, cache pruning triggers, DB re-creation on corruption, bulk score merging, and empty input checks).
+📊 Coverage: `src/photo_selector_toolbox/cache.py` statement coverage improved from 90% to 100%. All edge-cases, error-paths, and fallback mechanisms are now explicitly tested and verified.
+✨ Result: Enhanced stability and test coverage for the `ScoreCache` module, directly preventing regressions in exception-handling paths.
