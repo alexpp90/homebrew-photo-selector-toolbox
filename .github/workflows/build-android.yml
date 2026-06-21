@@ -53,18 +53,22 @@ jobs:
         run: ./gradlew assembleDebug
 
       - name: Decode Keystore
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && secrets.ANDROID_KEYSTORE_FILE != ''
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         env:
           ANDROID_KEYSTORE_FILE_BASE64: ${{ secrets.ANDROID_KEYSTORE_FILE }}
         run: |
-          printf "%s" "$ANDROID_KEYSTORE_FILE_BASE64" | base64 --decode > ${{ github.workspace }}/android/release.jks
+          if [ -n "$ANDROID_KEYSTORE_FILE_BASE64" ]; then
+            printf "%s" "$ANDROID_KEYSTORE_FILE_BASE64" | base64 --decode > ${{ github.workspace }}/android/release.jks
+            echo "KEYSTORE_FILE=${{ github.workspace }}/android/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "Keystore secret is empty, skipping decoding and signing config."
+          fi
 
       - name: Build release APK
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         working-directory: android
         run: ./gradlew assembleRelease
         env:
-          KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_FILE != '' && format('{0}/android/release.jks', github.workspace) || '' }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -74,7 +78,6 @@ jobs:
         working-directory: android
         run: ./gradlew bundleRelease
         env:
-          KEYSTORE_FILE: ${{ secrets.ANDROID_KEYSTORE_FILE != '' && format('{0}/android/release.jks', github.workspace) || '' }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
