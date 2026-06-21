@@ -243,6 +243,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         folder_frame = ttk.Frame(self.review_frame, padding=10)
         folder_frame.pack(fill="x")
 
+        self._setup_folder_browser(folder_frame)
+
+        # Row 2: Controls (File Type, Grouping, Sorting)
+        controls_row_frame = ttk.Frame(folder_frame)
+        controls_row_frame.pack(fill="x", side="top")
+
+        self._setup_filtering_controls(folder_frame, controls_row_frame)
+        self._setup_sorting_controls(controls_row_frame)
+
+    def _setup_folder_browser(self, folder_frame):
         ttk.Label(folder_frame, text="📂 Images Folder:").pack(side="left", padx=5)
         ttk.Entry(folder_frame, textvariable=self.folder_var, width=50).pack(
             side="left", fill="x", expand=True, padx=5
@@ -251,10 +261,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             side="left", padx=5
         )
 
-        # Row 2: Controls (File Type, Grouping, Sorting)
-        controls_row_frame = ttk.Frame(folder_frame)
-        controls_row_frame.pack(fill="x", side="top")
-
+    def _setup_filtering_controls(self, folder_frame, controls_row_frame):
         ttk.Label(controls_row_frame, text="📂 File Type:").pack(side="left", padx=5)
         self.file_type_combo = ttk.Combobox(
             controls_row_frame,
@@ -288,6 +295,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if not self._is_grouping_enabled():
             self.group_level_combo.state(["disabled"])
 
+    def _setup_sorting_controls(self, controls_row_frame):
         # Sorting Controls
         ttk.Label(controls_row_frame, text="↕ Sort By:").pack(side="left", padx=(15, 5))
         self.sort_by_var = tk.StringVar(value="File Name")
@@ -318,7 +326,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.sort_order_combo.pack(side="left", padx=5)
         self.sort_order_combo.bind("<<ComboboxSelected>>", self.on_sort_change)
-
     def _setup_sidebar(self):
         # Sidebar
         self.sidebar = ttk.Frame(self.paned, width=250, padding=5)
@@ -330,6 +337,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.scan_options_btn = ttk.Button(self.sidebar, text="⚡ Scan for Sharpness/Noise...")
         self.scan_options_btn.pack(fill="x", pady=5)
 
+        self._setup_sidebar_progress()
+        self._setup_sidebar_listbox()
+
+    def _setup_sidebar_progress(self):
         # Progress Container (holds scan and grouping progress bars)
         self.progress_container = ttk.Frame(self.sidebar)
         self.progress_container.pack(fill="x")
@@ -368,6 +379,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.update_scan_button_state()
 
+    def _setup_sidebar_listbox(self):
         # Scrollbar and Listbox
         sb = ttk.Scrollbar(self.sidebar)
         sb.pack(side="right", fill="y")
@@ -395,12 +407,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.candidate_listbox.bind("<<ListboxSelect>>", self.on_candidate_select)
         self.candidate_listbox.bind("<Double-Button-1>", self.on_listbox_double_click)
-
     def _setup_main_preview(self):
         # Main Preview Area
         self.preview_area = ttk.Frame(self.paned, padding=10)
         self.paned.add(self.preview_area, weight=4)
 
+        self._setup_main_candidate_view()
+        self._setup_neighbor_views()
+
+    def _setup_main_candidate_view(self):
         # --- Top Container: Main Candidate + Controls ---
         self.top_container = ttk.Frame(self.preview_area)
         self.top_container.pack(side="top", fill="both", expand=True, pady=(0, 10))
@@ -472,6 +487,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
 
+    def _setup_neighbor_views(self):
         # --- Bottom Container: Neighbors ---
         self.bottom_container = ttk.Frame(self.preview_area)
         self.bottom_container.pack(side="bottom", fill="both", expand=True, ipady=5)
@@ -484,8 +500,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.panel_next = self.create_image_panel(self.bottom_container, "Next Image ▶")
         self.panel_next.pack(side="right", fill="both", expand=True, padx=2)
-
-
     def show_scan_dialog(self):
         # Ensure a folder is selected first
         folder = self.folder_var.get()
