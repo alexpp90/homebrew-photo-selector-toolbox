@@ -147,3 +147,33 @@ def test_find_duplicates_non_existent():
 def test_find_duplicates_scandir_oserror(mock_scandir, tmp_path):
     assert find_duplicates(tmp_path) == []
 
+
+def test_find_duplicates_stat_oserror(tmp_path):
+    # Create two files with same ext
+    (tmp_path / "a.jpg").write_bytes(b"content")
+    (tmp_path / "b.jpg").write_bytes(b"content")
+
+    # Mock stat to raise OSError
+    with patch("os.DirEntry.stat", side_effect=OSError("Access denied")):
+        res = find_duplicates(tmp_path)
+
+    assert res == []
+
+
+def test_find_duplicates_scandir_inner_oserror(tmp_path):
+    # Create an inner directory
+    inner_dir = tmp_path / "inner"
+    inner_dir.mkdir()
+
+    # We want os.scandir to succeed on tmp_path, but raise OSError on tmp_path / "inner"
+    original_scandir = __import__("os").scandir
+
+    def mock_scandir_func(path):
+        if str(path).endswith("inner"):
+            raise OSError("Access denied")
+        return original_scandir(path)
+
+    with patch("os.scandir", side_effect=mock_scandir_func):
+        res = find_duplicates(tmp_path)
+
+    assert res == []
