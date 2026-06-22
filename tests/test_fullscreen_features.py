@@ -623,3 +623,21 @@ def test_move_to_selection_with_lightroom_edit():
             mock_dirs["RAW"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
             mock_jpg.rename.assert_called_once_with(mock_dirs["JPEG"].__truediv__.return_value)
             mock_edit_tif.rename.assert_called_once_with(mock_dirs["RAW"].__truediv__.return_value)
+
+def test_fullscreen_viewer_update_metadata_error_path():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test_image.jpg")
+    file_list = [path]
+    parent.files_map = {}
+
+    with (
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer._update_basic_labels") as mock_update,
+        patch("photo_selector_toolbox.fullscreen_viewer.logger.debug") as mock_logger,
+    ):
+        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        mock_update.side_effect = Exception("Test Exception")
+        viewer.update_metadata()
+        mock_logger.assert_any_call("Error updating metadata overlay in fullscreen: Test Exception")
