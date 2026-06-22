@@ -1705,15 +1705,22 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.log_queue.put(msg)
 
     def update_log_view(self):
+        # Performance optimization: Batch tk.Text insertions
+        # Updating the tk.Text widget state and inserting line-by-line in a loop
+        # causes massive UI thread overhead. We batch the queue items and do a
+        # single bulk string insertion to keep the UI smooth during high log volume.
+        messages = []
         try:
             while True:
-                msg = self.log_queue.get_nowait()
-                self.log_text.config(state="normal")
-                self.log_text.insert("end", msg + "\n")
-                self.log_text.see("end")
-                self.log_text.config(state="disabled")
+                messages.append(self.log_queue.get_nowait())
         except queue.Empty:
             pass
+
+        if messages:
+            self.log_text.config(state="normal")
+            self.log_text.insert("end", "".join(msg + "\n" for msg in messages))
+            self.log_text.see("end")
+            self.log_text.config(state="disabled")
 
         if self.is_scanning:
             self.after(100, self.update_log_view)

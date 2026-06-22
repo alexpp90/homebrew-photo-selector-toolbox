@@ -4,3 +4,6 @@
 ## 2025-02-18 - Single-Pass Metadata Extraction in Analyzer
 **Learning:** The previous implementation of `analyze_data` and `analyze_data_json` performed multiple redundant iterations over the entire dataset using list comprehensions (`get_values` with `getattr`), resulting in an O(M*N) complexity overhead.
 **Action:** Replace multiple sequential loops over the same array with a single-pass extraction helper. Utilizing direct attribute access instead of `getattr` inside a single loop provides significant performance boosts when extracting attributes from hundreds of thousands of objects.
+## 2025-02-19 - Batching UI Thread Updates in Tkinter
+**Learning:** Calling `config` and `insert` on a `tk.Text` widget individually for every single message from a background queue in a `while` loop blocks the main UI thread during periods of high log volume, causing the application to hang.
+**Action:** Always batch background queue data into memory (e.g., a Python list) and update Tkinter widgets with a single bulk string insertion (`"".join()`) to drastically minimize UI thread overhead.
