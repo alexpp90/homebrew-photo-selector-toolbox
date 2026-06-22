@@ -669,6 +669,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             url = url_var.get().strip()
             model = model_var.get().strip()
             try:
+                # SECURITY MITIGATION: SSRF (Server-Side Request Forgery) Prevention
+                # Enforce strict URL scheme validation (HTTP/HTTPS only) before making
+                # external requests. This prevents attackers from supplying malicious
+                # schemes like `file://` to read local system files (LFI) or other
+                # dangerous protocols.
                 if not url.lower().startswith(('http://', 'https://')):
                     raise ValueError("URL must start with http:// or https://")
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")

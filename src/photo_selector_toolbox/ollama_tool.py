@@ -68,6 +68,11 @@ class OllamaAestheticTool(AnalysisTool):
             raise RuntimeError(f"Failed to process image bytes: {e}")
 
         # 2. Query Ollama REST API
+        # SECURITY MITIGATION: SSRF (Server-Side Request Forgery) Prevention
+        # Enforce strict URL scheme validation (HTTP/HTTPS only) before making
+        # external requests. This prevents attackers from supplying malicious
+        # schemes like `file://` to read local system files (LFI) or other
+        # dangerous protocols.
         if not ollama_url.lower().startswith(('http://', 'https://')):
             raise RuntimeError("Ollama URL must start with http:// or https://")
 
