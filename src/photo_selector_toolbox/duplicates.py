@@ -6,7 +6,7 @@ from pathlib import Path
 from send2trash import send2trash
 
 from photo_selector_toolbox.reader import SUPPORTED_EXTENSIONS
-from photo_selector_toolbox.config import load_config
+
 
 # Extend supported extensions for duplicates to include basic formats
 # not necessarily supported by the metadata analyzer (like GIF/BMP)
@@ -54,11 +54,8 @@ def find_duplicates(root_folder, callback=None):
     # But checking size is also stat().
 
     # Build excluded folder names from config (consistent with is_excluded_subfolder)
-    config = load_config()
-    excluded_names = {"selection", "selected"}
-    custom_folder = config.get("selection_folder", "Selection")
-    if custom_folder and not Path(str(custom_folder)).is_absolute():
-        excluded_names.add(Path(str(custom_folder)).name.lower())
+    from photo_selector_toolbox.utils import get_excluded_folder_names
+    excluded_names = get_excluded_folder_names()
 
     # Initial scan
     ext_tuple = tuple(IMAGE_EXTENSIONS)

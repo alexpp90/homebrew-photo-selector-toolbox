@@ -325,10 +325,12 @@ def load_image_preview(
         return None
 
 
-def get_excluded_folder_names() -> Set[str]:
+@functools.lru_cache(maxsize=1)
+def get_excluded_folder_names() -> frozenset:
     """
-    Returns a set of lowercased folder names that should be excluded from scanning.
+    Returns a frozenset of lowercased folder names that should be excluded from scanning.
     Loads the custom selection folder from the configuration.
+    Cached to ensure it is strictly pre-calculated once for optimized O(1) lookups.
     """
     excluded_names = {"selection", "selected"}
     try:
@@ -341,7 +343,7 @@ def get_excluded_folder_names() -> Set[str]:
             excluded_names.add(custom_path.name.lower())
     except Exception:
         pass
-    return excluded_names
+    return frozenset(excluded_names)
 
 
 def is_excluded_subfolder(
