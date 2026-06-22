@@ -25,7 +25,7 @@ def download_file(url, dest_path):
 
     fallback_urls = [
         url,
-        f"https://github.com/exiftool/exiftool/archive/refs/tags/{EXIFTOOL_VERSION}.tar.gz",
+        f"https://github.com/exiftool/exiftool/archive/refs/tags/{EXIFTOOL_VERSION}.zip" if filename.endswith(".zip") else f"https://github.com/exiftool/exiftool/archive/refs/tags/{EXIFTOOL_VERSION}.tar.gz",
         f"https://cpan.metacpan.org/authors/id/E/EX/EXIFTOOL/Image-ExifTool-{EXIFTOOL_VERSION}.tar.gz" if 'tar.gz' in filename else f"https://exiftool.org/{filename}",
         f"https://exiftool.org/{filename}"
     ]
