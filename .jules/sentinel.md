@@ -10,3 +10,8 @@
 **Vulnerability:** Fixing Path Traversal by resolving path segments must account for cross-platform differences. Using `os.path.normpath` on URLs (which are always `/` delimited) while running on Windows translates forward slashes into backslashes (`\`). This can break subsequent path parsing logic that splits by `/`.
 **Learning:** For resolving parsed network URLs or URIs specifically, standard `os.path.normpath` should be avoided if platform-agnostic output is needed.
 **Prevention:** Use `posixpath.normpath()` directly when working with URLs or paths that must explicitly preserve the POSIX standard forward slash representation across all operating systems.
+
+## 2024-06-22 - Disable allowBackup in AndroidManifest.xml
+**Vulnerability:** Android App allowBackup is set to true in AndroidManifest.xml.
+**Learning:** Having allowBackup="true" allows anyone with physical access or ADB access to extract the application's data, which may contain sensitive information.
+**Prevention:** Explicitly set android:allowBackup="false" in the AndroidManifest.xml to disable ADB backup functionality unless specifically required and secured.
