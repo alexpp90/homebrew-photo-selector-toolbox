@@ -1,9 +1,7 @@
 import time
-import os
-from pathlib import Path
-from photo_selector_toolbox.controllers import ScanController
 from photo_selector_toolbox.models import ScanResult
 from concurrent.futures import ProcessPoolExecutor
+from benchmarks.utils import setup_test_images
 
 def dummy_progress(res, i, total):
     pass
@@ -14,21 +12,6 @@ def dummy_finished():
 def log(msg):
     pass
 
-def setup_test_images():
-    import cv2
-    import numpy as np
-
-    test_dir = Path("benchmarks/test_images")
-    test_dir.mkdir(parents=True, exist_ok=True)
-
-    files = []
-    for i in range(20):
-        filepath = test_dir / f"test_{i}.jpg"
-        if not filepath.exists():
-            img = np.random.randint(0, 256, (1000, 1000, 3), dtype=np.uint8)
-            cv2.imwrite(str(filepath), img)
-        files.append(filepath)
-    return files
 
 def process_file(f, grid_size, tools):
     from photo_selector_toolbox.sharpness import calculate_sharpness, calculate_noise
@@ -47,7 +30,6 @@ def process_file(f, grid_size, tools):
 def main():
     files = setup_test_images()
 
-    controller = ScanController()
     tools = {"sharpness": True, "noise": True}
 
     start = time.time()

@@ -44,3 +44,7 @@ Photo_Selector_Toolbox_Audit_Report.docx
 # Kotlin compiler sessions/temp files
 android/.kotlin/
 
+
+# Benchmark test data
+benchmarks/test_images/
+benchmarks/test_data_duplicates/
