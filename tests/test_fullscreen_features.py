@@ -623,3 +623,49 @@ def test_move_to_selection_with_lightroom_edit():
             mock_dirs["RAW"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
             mock_jpg.rename.assert_called_once_with(mock_dirs["JPEG"].__truediv__.return_value)
             mock_edit_tif.rename.assert_called_once_with(mock_dirs["RAW"].__truediv__.return_value)
+
+def test_fullscreen_viewer_metadata_error_handling():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    path = Path("test_image.jpg")
+
+    class DummyScanResult:
+        def __init__(self):
+            self.exif = None
+            self.sharpness = 0.5
+            self.noise = 0.5
+            self.highlight = 0.5
+            self.shadow = 0.5
+            self.aesthetic = 0.5
+            self.score = 0.5
+            self.noise_score = 0.5
+            self.highlight_score = 0.5
+            self.shadow_score = 0.5
+            self.aesthetic_score = 0.5
+            self.scores = {}
+
+    dummy_res = DummyScanResult()
+
+    class FakeParent:
+        pass
+
+    fake_parent = FakeParent()
+    fake_parent.files_map = {path: dummy_res}
+
+    viewer = MagicMock()
+    viewer.path = path
+    viewer.parent = fake_parent
+
+    # By mocking out photo_selector_toolbox.fullscreen_viewer.ExifData we control exactly what goes into dummy_res.exif
+    class MockExifData:
+        pass
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.get_exif_data", side_effect=Exception("Test Exif Error")):
+        with patch("photo_selector_toolbox.fullscreen_viewer.ExifData", return_value=MockExifData()):
+            with patch("photo_selector_toolbox.fullscreen_viewer.logger.debug") as mock_logger:
+                FullscreenViewer.update_metadata(viewer)
+
+                mock_logger.assert_any_call("Failed to load EXIF data dynamically in fullscreen: Test Exif Error")
+
+                assert dummy_res.exif is not None
+                assert type(dummy_res.exif).__name__ == "MockExifData"
