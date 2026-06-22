@@ -252,3 +252,13 @@ def test_set_secure_permissions_error(mock_chmod, temp_config_dir):
     _set_secure_permissions(Path("/tmp/fake_config_file"))
 
 
+@patch("os.chmod")
+def test_set_secure_permissions_success(mock_chmod, temp_config_dir):
+    from pathlib import Path
+    import stat
+    from photo_selector_toolbox.config import _set_secure_permissions
+
+    test_path = Path("/tmp/fake_config_file")
+    _set_secure_permissions(test_path)
+
+    mock_chmod.assert_called_once_with(test_path, stat.S_IRUSR | stat.S_IWUSR)
