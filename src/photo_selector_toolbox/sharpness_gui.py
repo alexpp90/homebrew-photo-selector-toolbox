@@ -1502,12 +1502,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             hash_size = 8 if level == "Time + Fast Similarity" else 16
             hash_key = "dhash_8" if level == "Time + Fast Similarity" else "dhash_16"
 
+            cached_all = cache.get_multiple_scores(missing)
+
             for idx, path in enumerate(missing):
                 if self.grouping_stop_event.is_set():
                     self.parent.after(0, self._handle_grouping_cancelled)
                     return
                 try:
-                    cached = cache.get_scores(path)
+                    cached = cached_all.get(path, {})
                     dhash_val = cached.get(hash_key)
                    # Fallback for dhash_8 to old "dhash" key
                     if dhash_val is None and hash_key == "dhash_8":
