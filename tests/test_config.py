@@ -1,6 +1,5 @@
-import json
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 
 from photo_selector_toolbox.config import (
@@ -8,8 +7,6 @@ from photo_selector_toolbox.config import (
     save_config,
     is_ollama_url_external,
     DEFAULT_CONFIG,
-    CONFIG_DIR,
-    CONFIG_FILE,
 )
 
 @pytest.fixture
