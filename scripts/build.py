@@ -18,15 +18,42 @@ BIN_DIR = PROJECT_ROOT / "src" / "photo_selector_toolbox" / "bin"
 
 def download_file(url, dest_path):
     print(f"Downloading {url}...")
-    try:
-        urllib.request.urlretrieve(url, dest_path)
-    except Exception as e:
-        print(f"Error downloading with urllib: {e}")
+    import time
+
+    # Create fallback URLs (e.g. GitHub mirror or CPAN mirror)
+    filename = url.split('/')[-2] if 'download' in url else url.split('/')[-1]
+
+    fallback_urls = [
+        url,
+        f"https://github.com/exiftool/exiftool/archive/refs/tags/{EXIFTOOL_VERSION}.tar.gz",
+        f"https://cpan.metacpan.org/authors/id/E/EX/EXIFTOOL/Image-ExifTool-{EXIFTOOL_VERSION}.tar.gz" if 'tar.gz' in filename else f"https://exiftool.org/{filename}",
+        f"https://exiftool.org/{filename}"
+    ]
+
+    for fallback_url in fallback_urls:
+        print(f"Trying URL: {fallback_url}")
+        for attempt in range(2):
+            try:
+                # Add dummy User-Agent to bypass SourceForge 403 Forbidden errors
+                req = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+                with urllib.request.urlopen(req, timeout=30) as response, open(dest_path, 'wb') as out_file:
+                    shutil.copyfileobj(response, out_file)
+                print("Download successful.")
+                return
+            except Exception as e:
+                print(f"Attempt {attempt + 1} failed for {fallback_url}: {e}")
+                time.sleep(2)
+
+        print(f"urllib failed for {fallback_url}, trying wget...")
         try:
-             subprocess.run(["wget", url, "-O", str(dest_path)], check=True)
+            subprocess.run(["wget", "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "--tries=2", "--waitretry=3", fallback_url, "-O", str(dest_path)], check=True)
+            print("Download successful with wget.")
+            return
         except Exception as e2:
-             print(f"Download failed with wget too: {e2}")
-             sys.exit(1)
+            print(f"Download failed with wget too for {fallback_url}: {e2}")
+
+    print("All download attempts failed across all mirrors.")
+    sys.exit(1)
 
 def setup_exiftool():
     # Clean bin dir first
