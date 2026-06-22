@@ -1,17 +1,12 @@
-import json
-import os
 import stat
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 from photo_selector_toolbox.config import (
     _set_secure_permissions,
     load_config,
     save_config,
     DEFAULT_CONFIG,
-    CONFIG_FILE,
 )
 
 
