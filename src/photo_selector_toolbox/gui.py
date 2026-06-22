@@ -1275,7 +1275,6 @@ class KeyboardShortcutsDialog(tk.Toplevel):
             ]),
             ("Application", [
                 ("Ctrl+O / Cmd+O", "Open folder"),
-                ("Ctrl+Z / Cmd+Z", "Undo last action"),
                 ("F1", "Show this help"),
             ]),
         ]
@@ -1372,13 +1371,6 @@ class MainApp(tk.Tk):
 
         # Edit Menu
         self.edit_menu = tk.Menu(self.menubar, tearoff=0)
-        self.edit_menu.add_command(
-            label="Undo",
-            command=self._undo_last_action,
-            accelerator="Ctrl+Z" if sys.platform != "darwin" else "Cmd+Z",
-            state="disabled",
-        )
-        self.edit_menu.add_separator()
         self.edit_menu.add_command(
             label="Collection Settings...",
             command=self.show_collection_config,
@@ -1617,26 +1609,6 @@ class MainApp(tk.Tk):
                     "Error", f"Failed to clear score cache: {e}", parent=self
                 )
 
-    # --- Undo stack ---
-    _undo_stack = []  # List of (description, undo_callable) tuples
-
-    @classmethod
-    def push_undo(cls, description: str, undo_fn):
-        """Push an undoable action. Called from SharpnessTool file operations."""
-        cls._undo_stack.append((description, undo_fn))
-
-    def _undo_last_action(self):
-        if not self._undo_stack:
-            messagebox.showinfo("Undo", "Nothing to undo.", parent=self)
-            return
-        description, undo_fn = self._undo_stack.pop()
-        try:
-            undo_fn()
-            messagebox.showinfo("Undo", f"Undone: {description}", parent=self)
-        except Exception as e:
-            messagebox.showerror("Undo Failed", f"Could not undo '{description}': {e}", parent=self)
-        # Update menu state
-        self.edit_menu.entryconfig("Undo", state="normal" if self._undo_stack else "disabled")
 
     def _open_folder_from_menu(self):
         """Open folder dialog and pass to the active SharpnessTool."""
