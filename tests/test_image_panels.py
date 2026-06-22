@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import MagicMock, patch
 from PIL import Image
 from photo_selector_toolbox.image_panels import ImagePanelsMixin
