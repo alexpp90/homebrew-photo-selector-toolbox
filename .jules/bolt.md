@@ -1,6 +1,3 @@
-## 2025-02-18 - String Slicing and OS Calls vs Pathlib Overheads
-**Learning:** In loops over files (e.g. grouping UI lists), instantiating `pathlib.Path` objects just to call `.stem` or `p.stat().st_mtime` adds massive cumulative performance overhead compared to basic string manipulation (`name.rsplit(".", 1)[0]`) and `os.stat`. Additionally, wrapping a function in `@functools.lru_cache` provides zero benefit if the input parameter is always unique across the list iteration (e.g., unique full file names passed to `get_name_prefix`), merely adding cache management overhead.
-**Action:** When working with thousands of files inside loops, bypass `pathlib` for lightweight extraction and stick to `os` and `str` methods. Always ensure that functions marked with `lru_cache` actually receive overlapping input values before adding the decorator.
-## 2025-02-18 - Single-Pass Metadata Extraction in Analyzer
-**Learning:** The previous implementation of `analyze_data` and `analyze_data_json` performed multiple redundant iterations over the entire dataset using list comprehensions (`get_values` with `getattr`), resulting in an O(M*N) complexity overhead.
-**Action:** Replace multiple sequential loops over the same array with a single-pass extraction helper. Utilizing direct attribute access instead of `getattr` inside a single loop provides significant performance boosts when extracting attributes from hundreds of thousands of objects.
+## 2025-02-23 - Fix N+1 Query in dHash Preloading
+**Learning:** Calling SQLite caching queries individually inside a preloading loop causes an N+1 query performance issue and introduces unnecessary overhead per file.
+**Action:** Use batch processing functions like `get_multiple_scores` before entering loops to load data into memory once, retrieving items directly from the dictionary, changing lookup from O(N*DB_latency) to O(1) dictionary lookups.
