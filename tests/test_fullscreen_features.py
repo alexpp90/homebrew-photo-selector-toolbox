@@ -278,16 +278,60 @@ def test_fullscreen_viewer_init_and_delete():
         assert "<c>" in viewer.bindings
         assert "<C>" in viewer.bindings
 
-        # Test confirm_delete_image creates dialog
+        # Test confirm_delete_image behavior
         with (
             patch("photo_selector_toolbox.fullscreen_viewer.tk.Toplevel") as mock_toplevel,
+            patch("photo_selector_toolbox.fullscreen_viewer.ttk.Button") as mock_button,
+            patch.object(viewer, "execute_delete_current") as mock_execute_delete,
         ):
+            # Test No Path logic
+            viewer.path = None
+            viewer.confirm_delete_image()
+            mock_toplevel.assert_not_called()
+
+            # Reset path
+            viewer.path = path
+
             # mock_toplevel will return a mock dialog
             mock_dialog = MagicMock()
+            mock_dialog.winfo_exists.return_value = True
             mock_toplevel.return_value = mock_dialog
+
+            # Capture button commands
+            button_kwargs = []
+            def button_side_effect(*args, **kwargs):
+                button_kwargs.append(kwargs)
+                return MagicMock()
+            mock_button.side_effect = button_side_effect
 
             viewer.confirm_delete_image()
             mock_toplevel.assert_called_once_with(viewer)
+
+            # Verify bindings
+            mock_dialog.bind.assert_any_call("<Delete>", button_kwargs[0]["command"])
+            mock_dialog.bind.assert_any_call("<BackSpace>", button_kwargs[0]["command"])
+            mock_dialog.bind.assert_any_call("<Escape>", button_kwargs[1]["command"])
+
+            # Test multiple dialogs prevention
+            viewer.confirm_delete_image()
+            # Call count should still be 1
+            assert mock_toplevel.call_count == 1
+
+            # Test Confirm Command
+            confirm_cmd = button_kwargs[0]["command"]
+            confirm_cmd()
+            mock_dialog.destroy.assert_called_once()
+            mock_execute_delete.assert_called_once()
+
+            # Reset mocks
+            mock_dialog.destroy.reset_mock()
+            mock_execute_delete.reset_mock()
+
+            # Test Cancel Command
+            cancel_cmd = button_kwargs[1]["command"]
+            cancel_cmd()
+            mock_dialog.destroy.assert_called_once()
+            mock_execute_delete.assert_not_called()
 
 
 def test_move_to_selection():
