@@ -623,3 +623,30 @@ def test_move_to_selection_with_lightroom_edit():
             mock_dirs["RAW"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
             mock_jpg.rename.assert_called_once_with(mock_dirs["JPEG"].__truediv__.return_value)
             mock_edit_tif.rename.assert_called_once_with(mock_dirs["RAW"].__truediv__.return_value)
+
+def test_fullscreen_viewer_redraw_error_path():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test_image.jpg")
+    file_list = [path]
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"), \
+         patch("photo_selector_toolbox.fullscreen_viewer.logger.error") as mock_logger_error:
+
+        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer.pil_image = MagicMock()
+        viewer.pil_image.width = 100
+        viewer.pil_image.height = 100
+        viewer.pil_image.crop.side_effect = Exception("Test redraw error")
+
+        viewer.scale = 1.0
+        viewer.offset_x = 0
+        viewer.offset_y = 0
+        viewer.winfo_width = MagicMock(return_value=100)
+        viewer.winfo_height = MagicMock(return_value=100)
+        viewer.canvas = MagicMock()
+
+        viewer.redraw()
+
+        mock_logger_error.assert_called_once_with("Redraw error: Test redraw error")
