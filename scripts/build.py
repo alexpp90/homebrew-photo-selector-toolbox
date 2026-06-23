@@ -19,14 +19,19 @@ BIN_DIR = PROJECT_ROOT / "src" / "photo_selector_toolbox" / "bin"
 def download_file(url, dest_path):
     print(f"Downloading {url}...")
     try:
-        urllib.request.urlretrieve(url, dest_path)
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0'}
+        )
+        with urllib.request.urlopen(req) as response, open(dest_path, 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
     except Exception as e:
         print(f"Error downloading with urllib: {e}")
         try:
-             subprocess.run(["wget", url, "-O", str(dest_path)], check=True)
+            subprocess.run(["curl", "-L", url, "-o", str(dest_path)], check=True)
         except Exception as e2:
-             print(f"Download failed with wget too: {e2}")
-             sys.exit(1)
+            print(f"Download failed with curl too: {e2}")
+            sys.exit(1)
 
 def setup_exiftool():
     # Clean bin dir first
@@ -177,12 +182,12 @@ def run_pyinstaller(target):
 
         # Set executable icon
         if platform.system() == "Windows":
-             cmd.extend(["--icon", "assets/logo.ico"])
+            cmd.extend(["--icon", "assets/logo.ico"])
         elif platform.system() == "Darwin":
-             cmd.extend(["--icon", "assets/logo.icns"])
+            cmd.extend(["--icon", "assets/logo.icns"])
         else:
-             # Linux .desktop files handle icons, but we can set window icon in code.
-             pass
+            # Linux .desktop files handle icons, but we can set window icon in code.
+            pass
 
         cmd.extend([
             "--windowed",
