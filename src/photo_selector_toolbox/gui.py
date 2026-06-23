@@ -98,6 +98,8 @@ def _configure_container_styles(style: ttk.Style, colors: ThemeColors) -> None:
         "TNotebook.Tab",
         background=[("selected", colors.bg_dark), ("active", colors.bg_hover)],
         foreground=[("selected", colors.accent_blue), ("active", colors.fg_light)],
+        lightcolor=[("focus", colors.accent_blue)],
+        darkcolor=[("focus", colors.accent_blue)],
     )
 
     style.configure(
