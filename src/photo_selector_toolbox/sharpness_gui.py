@@ -1144,6 +1144,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         from photo_selector_toolbox.cache import ScoreCache
         cache = ScoreCache()
 
+        # Batch load scores to prevent N+1 query problem
+        cached_scores_batch = cache.get_multiple_scores(paths)
+
         for path in paths:
             if self.stop_event.is_set():
                 break
@@ -1168,8 +1171,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
            # 2. Preload/Calculate dHash
             if "dhash_8" not in res.scores:
                 try:
-                   # Check cache first
-                    cached = cache.get_scores(path)
+                   # Check cache first using batched results
+                    cached = cached_scores_batch.get(path, {})
                     dhash_val = cached.get("dhash_8") or cached.get("dhash")
                     if dhash_val is not None:
                         res.scores["dhash_8"] = dhash_val
@@ -1498,6 +1501,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             from photo_selector_toolbox.cache import ScoreCache
             cache = ScoreCache()
 
+            # Batch load scores to prevent N+1 query problem
+            cached_scores_batch = cache.get_multiple_scores(missing)
+
             total = len(missing)
             hash_size = 8 if level == "Time + Fast Similarity" else 16
             hash_key = "dhash_8" if level == "Time + Fast Similarity" else "dhash_16"
@@ -1507,7 +1513,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     self.parent.after(0, self._handle_grouping_cancelled)
                     return
                 try:
-                    cached = cache.get_scores(path)
+                    cached = cached_scores_batch.get(path, {})
                     dhash_val = cached.get(hash_key)
                    # Fallback for dhash_8 to old "dhash" key
                     if dhash_val is None and hash_key == "dhash_8":
