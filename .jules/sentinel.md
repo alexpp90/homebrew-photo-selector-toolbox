@@ -10,3 +10,7 @@
 **Vulnerability:** Fixing Path Traversal by resolving path segments must account for cross-platform differences. Using `os.path.normpath` on URLs (which are always `/` delimited) while running on Windows translates forward slashes into backslashes (`\`). This can break subsequent path parsing logic that splits by `/`.
 **Learning:** For resolving parsed network URLs or URIs specifically, standard `os.path.normpath` should be avoided if platform-agnostic output is needed.
 **Prevention:** Use `posixpath.normpath()` directly when working with URLs or paths that must explicitly preserve the POSIX standard forward slash representation across all operating systems.
+## 2024-05-18 - Prevent Command Injection in subprocess calls
+**Vulnerability:** Constructing command arguments via string interpolation (e.g., `cmd.append(f"--title={title}")`) when using `subprocess.run` (even with `shell=False`) allows a malicious user to inject arbitrary flags if the input begins with a hyphen.
+**Learning:** `shell=False` prevents shell operator injection (like `|` or `&&`), but it does NOT prevent flag injection within the specific executable being called if arguments are concatenated.
+**Prevention:** Always append command line flags and their corresponding values as separate, adjacent list items (e.g., `cmd.extend(["--title", title])`) to ensure the subprocess parser strictly interprets the value as an argument rather than a new flag.
