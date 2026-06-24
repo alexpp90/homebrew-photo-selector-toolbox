@@ -4,3 +4,6 @@
 ## 2025-02-18 - Single-Pass Metadata Extraction in Analyzer
 **Learning:** The previous implementation of `analyze_data` and `analyze_data_json` performed multiple redundant iterations over the entire dataset using list comprehensions (`get_values` with `getattr`), resulting in an O(M*N) complexity overhead.
 **Action:** Replace multiple sequential loops over the same array with a single-pass extraction helper. Utilizing direct attribute access instead of `getattr` inside a single loop provides significant performance boosts when extracting attributes from hundreds of thousands of objects.
+## 2025-02-18 - Eliminating N+1 Caching Lookups
+**Learning:** In the image grouping and preloading loops (`_preload_all_metadata_and_dhashes` and `run_calc`), retrieving cached metadata scores inside a loop with `cache.get_scores(path)` triggers N sequential DB reads, significantly reducing UI responsiveness for large folders.
+**Action:** Always utilize `cache.get_multiple_scores(paths)` outside of iteration blocks to batch-fetch data. Perform local dictionary lookups on the resulting pre-fetched map inside the loop (`cached_scores.get(path, {})`) to drop lookup overhead from O(N) database transactions to O(1) in-memory checks.

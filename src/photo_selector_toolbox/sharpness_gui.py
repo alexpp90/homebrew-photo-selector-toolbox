@@ -1144,6 +1144,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         from photo_selector_toolbox.cache import ScoreCache
         cache = ScoreCache()
 
+        # Batch fetch all cached scores for paths to prevent N+1 query bottleneck
+        cached_scores = cache.get_multiple_scores(paths)
+
         for path in paths:
             if self.stop_event.is_set():
                 break
@@ -1169,7 +1172,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if "dhash_8" not in res.scores:
                 try:
                    # Check cache first
-                    cached = cache.get_scores(path)
+                    cached = cached_scores.get(path, {})
                     dhash_val = cached.get("dhash_8") or cached.get("dhash")
                     if dhash_val is not None:
                         res.scores["dhash_8"] = dhash_val
@@ -1502,12 +1505,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             hash_size = 8 if level == "Time + Fast Similarity" else 16
             hash_key = "dhash_8" if level == "Time + Fast Similarity" else "dhash_16"
 
+            # Batch fetch all cached scores for missing paths to prevent N+1 query bottleneck
+            cached_scores = cache.get_multiple_scores(missing)
+
             for idx, path in enumerate(missing):
                 if self.grouping_stop_event.is_set():
                     self.parent.after(0, self._handle_grouping_cancelled)
                     return
                 try:
-                    cached = cache.get_scores(path)
+                    cached = cached_scores.get(path, {})
                     dhash_val = cached.get(hash_key)
                    # Fallback for dhash_8 to old "dhash" key
                     if dhash_val is None and hash_key == "dhash_8":
