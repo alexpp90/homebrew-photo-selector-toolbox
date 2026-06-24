@@ -953,6 +953,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             background="black",
             foreground="white",
             padding=(4, 2),
+            cursor="hand2",
         )
         self.focus_prev_overlay.place(relx=0.0, rely=0.0, anchor="nw")
         self.focus_prev_overlay.bind(
@@ -981,6 +982,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             background="black",
             foreground="white",
             padding=(4, 2),
+            cursor="hand2",
         )
         self.focus_next_overlay.place(relx=0.0, rely=0.0, anchor="nw")
         self.focus_next_overlay.bind(
