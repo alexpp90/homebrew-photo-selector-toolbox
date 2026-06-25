@@ -543,6 +543,8 @@ class ImageLibraryStatistics(ttk.Frame):
             excluded_names = get_excluded_folder_names()
             image_files = []
 
+            ext_tuple = tuple(SUPPORTED_EXTENSIONS)
+
             for dirpath, dirnames, filenames in os.walk(root_path):
                 # Prune excluded directories in place
                 dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
@@ -551,9 +553,8 @@ class ImageLibraryStatistics(ttk.Frame):
                 for f in filenames:
                     if f.startswith("._"):
                         continue
-                    file_path = dp / f
-                    if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
-                        image_files.append(file_path)
+                    if f.lower().endswith(ext_tuple):
+                        image_files.append(dp / f)
 
             if not image_files:
                 logger.info("No supported image files found.")

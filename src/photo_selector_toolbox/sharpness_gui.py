@@ -1067,6 +1067,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         excluded_names = get_excluded_folder_names()
         files = []
 
+        ext_tuple = tuple(extensions)
+
         for dirpath, dirnames, filenames in os.walk(p):
             # Prune excluded directories in place
             dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
@@ -1075,9 +1077,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             for f in filenames:
                 if f.startswith("._"):
                     continue
-                file_path = dp / f
-                if file_path.suffix.lower() in extensions:
-                    files.append(file_path)
+                if f.lower().endswith(ext_tuple):
+                    files.append(dp / f)
 
         files.sort(key=lambda x: x.name)
 
