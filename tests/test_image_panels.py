@@ -271,7 +271,7 @@ def test_load_images_background(mock_gui_deps):
     # Mock load_image_preview for path2
     mock_gui_deps["load_image_preview"].side_effect = lambda p, max_size: "loaded_img" if p == path2 else None
 
-    # Note: image loading code uses copy and thumbnail, so we mock those methods on strings for simplicity or mock object
+    # Note: image loading code uses copy and thumbnail
     img_mock = MagicMock()
     img_mock.copy.return_value = img_mock
     host.cache_manager.get_preview.side_effect = lambda p: img_mock if p == path1 else None
@@ -313,9 +313,9 @@ def test_refresh_active_view(mock_gui_deps):
         p.img_container.winfo_width.return_value = 200
         p.img_container.winfo_height.return_value = 200
 
-    for l in [host.focus_prev_lbl, host.focus_curr_lbl, host.focus_next_lbl]:
-        l.container.winfo_width.return_value = 200
-        l.container.winfo_height.return_value = 200
+    for lbl in [host.focus_prev_lbl, host.focus_curr_lbl, host.focus_next_lbl]:
+        lbl.container.winfo_width.return_value = 200
+        lbl.container.winfo_height.return_value = 200
 
     # Test focus mode
     host.focus_mode = True
@@ -445,9 +445,9 @@ def test_refresh_active_view_missing_images(mock_gui_deps):
 
     # Test focus mode
     host.focus_mode = True
-    for l in [host.focus_prev_lbl, host.focus_curr_lbl, host.focus_next_lbl]:
-        l.container.winfo_width.return_value = 5
-        l.container.winfo_height.return_value = 5
+    for lbl in [host.focus_prev_lbl, host.focus_curr_lbl, host.focus_next_lbl]:
+        lbl.container.winfo_width.return_value = 5
+        lbl.container.winfo_height.return_value = 5
 
     host.refresh_active_view()
     mock_gui_deps["create_placeholder_image"].assert_called()
