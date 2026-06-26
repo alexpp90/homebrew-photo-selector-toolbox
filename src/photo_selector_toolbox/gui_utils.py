@@ -29,13 +29,13 @@ def ask_directory(parent=None, title=None, initialdir=None):
 
         cmd = ["zenity", "--file-selection", "--directory"]
         if title:
-            cmd.append(f"--title={title}")
+            cmd.extend(["--title", title])
 
         if initialdir:
             initialdir_str = str(Path(initialdir).absolute())
             if not initialdir_str.endswith(os.sep):
                 initialdir_str += os.sep
-            cmd.append(f"--filename={initialdir_str}")
+            cmd.extend(["--filename", initialdir_str])
 
         try:
             if toplevel:

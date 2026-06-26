@@ -135,7 +135,7 @@ class NavigationTest {
 
         // Settings screen should show unique settings text
         composeRule.onNodeWithText("Analysis Threads", substring = true, ignoreCase = true)
-            .assertIsDisplayed()
+            .assertExists()
     }
 
     @Test

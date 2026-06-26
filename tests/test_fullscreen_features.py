@@ -278,16 +278,60 @@ def test_fullscreen_viewer_init_and_delete():
         assert "<c>" in viewer.bindings
         assert "<C>" in viewer.bindings
 
-        # Test confirm_delete_image creates dialog
+        # Test confirm_delete_image behavior
         with (
             patch("photo_selector_toolbox.fullscreen_viewer.tk.Toplevel") as mock_toplevel,
+            patch("photo_selector_toolbox.fullscreen_viewer.ttk.Button") as mock_button,
+            patch.object(viewer, "execute_delete_current") as mock_execute_delete,
         ):
+            # Test No Path logic
+            viewer.path = None
+            viewer.confirm_delete_image()
+            mock_toplevel.assert_not_called()
+
+            # Reset path
+            viewer.path = path
+
             # mock_toplevel will return a mock dialog
             mock_dialog = MagicMock()
+            mock_dialog.winfo_exists.return_value = True
             mock_toplevel.return_value = mock_dialog
+
+            # Capture button commands
+            button_kwargs = []
+            def button_side_effect(*args, **kwargs):
+                button_kwargs.append(kwargs)
+                return MagicMock()
+            mock_button.side_effect = button_side_effect
 
             viewer.confirm_delete_image()
             mock_toplevel.assert_called_once_with(viewer)
+
+            # Verify bindings
+            mock_dialog.bind.assert_any_call("<Delete>", button_kwargs[0]["command"])
+            mock_dialog.bind.assert_any_call("<BackSpace>", button_kwargs[0]["command"])
+            mock_dialog.bind.assert_any_call("<Escape>", button_kwargs[1]["command"])
+
+            # Test multiple dialogs prevention
+            viewer.confirm_delete_image()
+            # Call count should still be 1
+            assert mock_toplevel.call_count == 1
+
+            # Test Confirm Command
+            confirm_cmd = button_kwargs[0]["command"]
+            confirm_cmd()
+            mock_dialog.destroy.assert_called_once()
+            mock_execute_delete.assert_called_once()
+
+            # Reset mocks
+            mock_dialog.destroy.reset_mock()
+            mock_execute_delete.reset_mock()
+
+            # Test Cancel Command
+            cancel_cmd = button_kwargs[1]["command"]
+            cancel_cmd()
+            mock_dialog.destroy.assert_called_once()
+            mock_execute_delete.assert_not_called()
 
 
 def test_move_to_selection():
@@ -623,3 +667,94 @@ def test_move_to_selection_with_lightroom_edit():
             mock_dirs["RAW"].mkdir.assert_called_once_with(parents=True, exist_ok=True)
             mock_jpg.rename.assert_called_once_with(mock_dirs["JPEG"].__truediv__.return_value)
             mock_edit_tif.rename.assert_called_once_with(mock_dirs["RAW"].__truediv__.return_value)
+
+def test_fullscreen_viewer_update_metadata_error_path():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test_image.jpg")
+    file_list = [path]
+    parent.files_map = {}
+
+    with (
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer._update_basic_labels") as mock_update,
+        patch("photo_selector_toolbox.fullscreen_viewer.logger.debug") as mock_logger,
+    ):
+        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        mock_update.side_effect = Exception("Test Exception")
+        viewer.update_metadata()
+        mock_logger.assert_any_call("Error updating metadata overlay in fullscreen: Test Exception")
+
+def test_fullscreen_viewer_redraw_error_path():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test_image.jpg")
+    file_list = [path]
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"), \
+         patch("photo_selector_toolbox.fullscreen_viewer.logger.error") as mock_logger_error:
+
+        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer.pil_image = MagicMock()
+        viewer.pil_image.width = 100
+        viewer.pil_image.height = 100
+        viewer.pil_image.crop.side_effect = Exception("Test redraw error")
+
+        viewer.scale = 1.0
+        viewer.offset_x = 0
+        viewer.offset_y = 0
+        viewer.winfo_width = MagicMock(return_value=100)
+        viewer.winfo_height = MagicMock(return_value=100)
+        viewer.canvas = MagicMock()
+
+        viewer.redraw()
+
+        mock_logger_error.assert_called_once_with("Redraw error: Test redraw error")
+
+def test_fullscreen_viewer_metadata_error_handling():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    path = Path("test_image.jpg")
+
+    class DummyScanResult:
+        def __init__(self):
+            self.exif = None
+            self.sharpness = 0.5
+            self.noise = 0.5
+            self.highlight = 0.5
+            self.shadow = 0.5
+            self.aesthetic = 0.5
+            self.score = 0.5
+            self.noise_score = 0.5
+            self.highlight_score = 0.5
+            self.shadow_score = 0.5
+            self.aesthetic_score = 0.5
+            self.scores = {}
+
+    dummy_res = DummyScanResult()
+
+    class FakeParent:
+        pass
+
+    fake_parent = FakeParent()
+    fake_parent.files_map = {path: dummy_res}
+
+    viewer = MagicMock()
+    viewer.path = path
+    viewer.parent = fake_parent
+
+    # By mocking out photo_selector_toolbox.fullscreen_viewer.ExifData we control exactly what goes into dummy_res.exif
+    class MockExifData:
+        pass
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.get_exif_data", side_effect=Exception("Test Exif Error")):
+        with patch("photo_selector_toolbox.fullscreen_viewer.ExifData", return_value=MockExifData()):
+            with patch("photo_selector_toolbox.fullscreen_viewer.logger.debug") as mock_logger:
+                FullscreenViewer.update_metadata(viewer)
+
+                mock_logger.assert_any_call("Failed to load EXIF data dynamically in fullscreen: Test Exif Error")
+
+                assert dummy_res.exif is not None
+                assert type(dummy_res.exif).__name__ == "MockExifData"

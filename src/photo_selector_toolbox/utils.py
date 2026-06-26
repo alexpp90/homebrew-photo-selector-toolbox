@@ -1,7 +1,7 @@
 import shutil
 import sys
 import os
-import urllib.parse  # Intentionally retained: required for parsing smb URLs in resolve_path
+from urllib.parse import urlparse, unquote
 import logging
 import functools
 from pathlib import Path
@@ -34,7 +34,7 @@ def resolve_path(path_str: str | Path) -> Path:
     # Check if it looks like an SMB URL
     if path_str.startswith("smb://"):
         # Parse the URL
-        parsed = urllib.parse.urlparse(path_str)
+        parsed = urlparse(path_str)
         server = parsed.hostname
         # Path usually comes as '/share/folder/file'
         # We need to strip the leading slash to split easily, but keep it for logic
@@ -43,7 +43,7 @@ def resolve_path(path_str: str | Path) -> Path:
             return Path(path_str)  # Should probably just return as is if malformed
 
         # Unquote to handle spaces (%20)
-        full_path_decoded = urllib.parse.unquote(full_path)
+        full_path_decoded = unquote(full_path)
 
         # Use posixpath.normpath to logically resolve path components
         # cross-platform since URLs always use forward slashes
@@ -325,10 +325,12 @@ def load_image_preview(
         return None
 
 
-def get_excluded_folder_names() -> Set[str]:
+@functools.lru_cache(maxsize=1)
+def get_excluded_folder_names() -> frozenset:
     """
-    Returns a set of lowercased folder names that should be excluded from scanning.
+    Returns a frozenset of lowercased folder names that should be excluded from scanning.
     Loads the custom selection folder from the configuration.
+    Cached to ensure it is strictly pre-calculated once for optimized O(1) lookups.
     """
     excluded_names = {"selection", "selected"}
     try:
@@ -341,7 +343,7 @@ def get_excluded_folder_names() -> Set[str]:
             excluded_names.add(custom_path.name.lower())
     except Exception:
         pass
-    return excluded_names
+    return frozenset(excluded_names)
 
 
 def is_excluded_subfolder(

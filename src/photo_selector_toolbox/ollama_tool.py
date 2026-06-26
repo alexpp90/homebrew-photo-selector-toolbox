@@ -3,7 +3,7 @@ import json
 import logging
 import re
 import urllib.request
-import urllib.error
+from urllib.error import URLError
 import io
 import threading
 from pathlib import Path
@@ -71,6 +71,11 @@ class OllamaAestheticTool(AnalysisTool):
         if not ollama_url.lower().startswith(('http://', 'https://')):
             raise RuntimeError("Ollama URL must start with http:// or https://")
 
+        from urllib.parse import urlparse
+        hostname = urlparse(ollama_url).hostname or ""
+        if hostname == "169.254.169.254" or hostname.startswith("169.254."):
+            raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
+
         url = f"{ollama_url.rstrip('/')}/api/generate"
         payload = {
             "model": model_name,
@@ -91,7 +96,7 @@ class OllamaAestheticTool(AnalysisTool):
                 with urllib.request.urlopen(req, timeout=60) as response:
                     res_data = json.loads(response.read().decode("utf-8"))
                     response_text = res_data.get("response", "")
-        except urllib.error.URLError as e:
+        except URLError as e:
             raise RuntimeError(
                 f"Ollama server connection error at {ollama_url}. Is Ollama running? ({e})"
             )

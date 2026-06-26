@@ -105,12 +105,11 @@ def get_iso_plot(data: List[ExifData]) -> Optional[Figure]:
 
 
 def get_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
-    values = [d.focal_length for d in data if d.focal_length is not None]
-    if not values:
-        return None
-
+    values = (d.focal_length for d in data if d.focal_length is not None)
     # Use aggregation logic
     aggregated_fls = aggregate_focal_lengths(values)
+    if not aggregated_fls:
+        return None
 
     # Sort by the representative value (sort_key) to ensure X-axis is ordered
     aggregated_fls.sort(key=lambda x: x[2])
