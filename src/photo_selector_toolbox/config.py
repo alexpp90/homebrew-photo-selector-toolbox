@@ -135,7 +135,7 @@ def save_config(config: Dict[str, Union[str, bool, List[str]]]) -> None:
 def add_recent_folder(folder_path: str) -> None:
     """Adds a folder to the recent folders list (most recent first, max 10)."""
     config = load_config()
-    recent = list(config.get("recent_folders", [])) # type: ignore
+    recent = list(config.get("recent_folders", []))
 
     # Remove if already present, then prepend
     folder_str = str(folder_path)
@@ -150,17 +150,16 @@ def add_recent_folder(folder_path: str) -> None:
 def get_recent_folders() -> List[str]:
     """Returns the list of recently opened folders."""
     config = load_config()
-    return list(config.get("recent_folders", [])) # type: ignore
+    return list(config.get("recent_folders", []))
 
 
 def is_ollama_url_external(url: Optional[str] = None) -> bool:
     """Check if the Ollama URL points to a non-localhost address."""
     if url is None:
         config = load_config()
-        url = str(config.get("ollama_url", DEFAULT_CONFIG["ollama_url"]))
+        url = config.get("ollama_url", DEFAULT_CONFIG["ollama_url"])
     try:
         from urllib.parse import urlparse
-
         parsed = urlparse(url)
         hostname = parsed.hostname or ""
         return hostname not in ("localhost", "127.0.0.1", "::1", "0.0.0.0")
