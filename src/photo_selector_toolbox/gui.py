@@ -98,6 +98,8 @@ def _configure_container_styles(style: ttk.Style, colors: ThemeColors) -> None:
         "TNotebook.Tab",
         background=[("selected", colors.bg_dark), ("active", colors.bg_hover)],
         foreground=[("selected", colors.accent_blue), ("active", colors.fg_light)],
+        lightcolor=[("focus", colors.accent_blue)],
+        darkcolor=[("focus", colors.accent_blue)],
     )
 
     style.configure(
@@ -543,6 +545,9 @@ class ImageLibraryStatistics(ttk.Frame):
             excluded_names = get_excluded_folder_names()
             image_files = []
 
+            # Pre-compute tuple of extensions for fast string matching
+            supported_exts_tuple = tuple(SUPPORTED_EXTENSIONS)
+
             for dirpath, dirnames, filenames in os.walk(root_path):
                 # Prune excluded directories in place
                 dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
@@ -551,9 +556,8 @@ class ImageLibraryStatistics(ttk.Frame):
                 for f in filenames:
                     if f.startswith("._"):
                         continue
-                    file_path = dp / f
-                    if file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
-                        image_files.append(file_path)
+                    if f.lower().endswith(supported_exts_tuple):
+                        image_files.append(dp / f)
 
             if not image_files:
                 logger.info("No supported image files found.")
@@ -1275,7 +1279,6 @@ class KeyboardShortcutsDialog(tk.Toplevel):
             ]),
             ("Application", [
                 ("Ctrl+O / Cmd+O", "Open folder"),
-                ("Ctrl+Z / Cmd+Z", "Undo last action"),
                 ("F1", "Show this help"),
             ]),
         ]
@@ -1373,13 +1376,6 @@ class MainApp(tk.Tk):
         # Edit Menu
         self.edit_menu = tk.Menu(self.menubar, tearoff=0)
         self.edit_menu.add_command(
-            label="Undo",
-            command=self._undo_last_action,
-            accelerator="Ctrl+Z" if sys.platform != "darwin" else "Cmd+Z",
-            state="disabled",
-        )
-        self.edit_menu.add_separator()
-        self.edit_menu.add_command(
             label="Collection Settings...",
             command=self.show_collection_config,
         )
@@ -1421,7 +1417,6 @@ class MainApp(tk.Tk):
         # Keyboard shortcut bindings
         modifier = "Command" if sys.platform == "darwin" else "Control"
         self.bind_all(f"<{modifier}-o>", lambda e: self._open_folder_from_menu())
-        self.bind_all(f"<{modifier}-z>", lambda e: self._undo_last_action())
         self.bind_all("<F1>", lambda e: self._show_keyboard_shortcuts())
 
         self.frames = {}
@@ -1616,27 +1611,6 @@ class MainApp(tk.Tk):
                 messagebox.showerror(
                     "Error", f"Failed to clear score cache: {e}", parent=self
                 )
-
-    # --- Undo stack ---
-    _undo_stack = []  # List of (description, undo_callable) tuples
-
-    @classmethod
-    def push_undo(cls, description: str, undo_fn):
-        """Push an undoable action. Called from SharpnessTool file operations."""
-        cls._undo_stack.append((description, undo_fn))
-
-    def _undo_last_action(self):
-        if not self._undo_stack:
-            messagebox.showinfo("Undo", "Nothing to undo.", parent=self)
-            return
-        description, undo_fn = self._undo_stack.pop()
-        try:
-            undo_fn()
-            messagebox.showinfo("Undo", f"Undone: {description}", parent=self)
-        except Exception as e:
-            messagebox.showerror("Undo Failed", f"Could not undo '{description}': {e}", parent=self)
-        # Update menu state
-        self.edit_menu.entryconfig("Undo", state="normal" if self._undo_stack else "disabled")
 
     def _open_folder_from_menu(self):
         """Open folder dialog and pass to the active SharpnessTool."""

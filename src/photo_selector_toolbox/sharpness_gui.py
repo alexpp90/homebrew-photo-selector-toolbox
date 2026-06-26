@@ -103,6 +103,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.bind_all("<Right>", self.on_right_key)
         self.bind_all("<Delete>", self.on_delete_key)
         self.bind_all("<BackSpace>", self.on_delete_key)
+        self.bind_all("<m>", self.on_move_key)
+        self.bind_all("<M>", self.on_move_key)
+        self.bind_all("<c>", self.on_copy_key)
+        self.bind_all("<C>", self.on_copy_key)
 
     def _resolve_widget(self, widget_val):
         if isinstance(widget_val, str):
@@ -174,6 +178,28 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
             return
         self.delete_current_candidate()
+
+    def on_move_key(self, event):
+        widget = self._resolve_widget(event.widget)
+        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
+            return
+        # Don't trigger if user is typing in a text entry
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+            return
+        if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
+            return
+        self.move_current_to_selection()
+
+    def on_copy_key(self, event):
+        widget = self._resolve_widget(event.widget)
+        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
+            return
+        # Don't trigger if user is typing in a text entry
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+            return
+        if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
+            return
+        self.copy_current_to_selection()
 
     def setup_ui(self):
 
@@ -671,6 +697,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             try:
                 if not url.lower().startswith(('http://', 'https://')):
                     raise ValueError("URL must start with http:// or https://")
+
+                from urllib.parse import urlparse
+                hostname = urlparse(url).hostname or ""
+                if hostname == "169.254.169.254" or hostname.startswith("169.254."):
+                    raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
@@ -953,6 +985,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             background="black",
             foreground="white",
             padding=(4, 2),
+            cursor="hand2",
         )
         self.focus_prev_overlay.place(relx=0.0, rely=0.0, anchor="nw")
         self.focus_prev_overlay.bind(
@@ -981,6 +1014,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             background="black",
             foreground="white",
             padding=(4, 2),
+            cursor="hand2",
         )
         self.focus_next_overlay.place(relx=0.0, rely=0.0, anchor="nw")
         self.focus_next_overlay.bind(
@@ -1065,6 +1099,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         extensions = SUPPORTED_EXTENSIONS
         excluded_names = get_excluded_folder_names()
+        # Pre-compute tuple of extensions for fast string matching
+        exts_tuple = tuple(extensions)
         files = []
 
         for dirpath, dirnames, filenames in os.walk(p):
@@ -1075,9 +1111,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             for f in filenames:
                 if f.startswith("._"):
                     continue
-                file_path = dp / f
-                if file_path.suffix.lower() in extensions:
-                    files.append(file_path)
+                if f.lower().endswith(exts_tuple):
+                    files.append(dp / f)
 
         files.sort(key=lambda x: x.name)
 
@@ -1144,6 +1179,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         from photo_selector_toolbox.cache import ScoreCache
         cache = ScoreCache()
 
+        # Batch fetch all cached scores for paths to prevent N+1 query bottleneck
+        cached_scores = cache.get_multiple_scores(paths)
+
         for path in paths:
             if self.stop_event.is_set():
                 break
@@ -1169,7 +1207,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if "dhash_8" not in res.scores:
                 try:
                    # Check cache first
-                    cached = cache.get_scores(path)
+                    cached = cached_scores.get(path, {})
                     dhash_val = cached.get("dhash_8") or cached.get("dhash")
                     if dhash_val is not None:
                         res.scores["dhash_8"] = dhash_val
@@ -1502,12 +1540,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             hash_size = 8 if level == "Time + Fast Similarity" else 16
             hash_key = "dhash_8" if level == "Time + Fast Similarity" else "dhash_16"
 
+            # Batch fetch all cached scores for missing paths to prevent N+1 query bottleneck
+            cached_scores = cache.get_multiple_scores(missing)
+
             for idx, path in enumerate(missing):
                 if self.grouping_stop_event.is_set():
                     self.parent.after(0, self._handle_grouping_cancelled)
                     return
                 try:
-                    cached = cache.get_scores(path)
+                    cached = cached_scores.get(path, {})
                     dhash_val = cached.get(hash_key)
                    # Fallback for dhash_8 to old "dhash" key
                     if dhash_val is None and hash_key == "dhash_8":
@@ -1705,15 +1746,18 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.log_queue.put(msg)
 
     def update_log_view(self):
+        messages = []
         try:
             while True:
-                msg = self.log_queue.get_nowait()
-                self.log_text.config(state="normal")
-                self.log_text.insert("end", msg + "\n")
-                self.log_text.see("end")
-                self.log_text.config(state="disabled")
+                messages.append(self.log_queue.get_nowait())
         except queue.Empty:
             pass
+
+        if messages:
+            self.log_text.config(state="normal")
+            self.log_text.insert("end", "".join(msg + "\n" for msg in messages))
+            self.log_text.see("end")
+            self.log_text.config(state="disabled")
 
         if self.is_scanning:
             self.after(100, self.update_log_view)
@@ -2769,7 +2813,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             err_msg = "\n".join([f"{f.name}: {e}" for f, e in failed_files])
             messagebox.showerror("Move Failed", f"Failed to move some files:\n{err_msg}")
             # If the main file failed to move, do not remove from internal list
-            if any(f == path for f, _ in failed_files):
+            failed_paths = {f for f, _ in failed_files}
+            if path in failed_paths:
                 return
 
        # Update UI lists

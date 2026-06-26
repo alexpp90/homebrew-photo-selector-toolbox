@@ -364,6 +364,7 @@ class TestGetExcludedFolderNames(unittest.TestCase):
     @patch("photo_selector_toolbox.ollama_tool.load_config")
     def test_get_excluded_folder_names_success(self, mock_load_config):
         from photo_selector_toolbox.utils import get_excluded_folder_names
+        get_excluded_folder_names.cache_clear()
         mock_load_config.return_value = {"selection_folder": "MySelection"}
         names = get_excluded_folder_names()
         self.assertIn("myselection", names)
@@ -373,6 +374,7 @@ class TestGetExcludedFolderNames(unittest.TestCase):
     @patch("photo_selector_toolbox.ollama_tool.load_config", side_effect=Exception("Failed to load config"))
     def test_get_excluded_folder_names_error(self, mock_load_config):
         from photo_selector_toolbox.utils import get_excluded_folder_names
+        get_excluded_folder_names.cache_clear()
         names = get_excluded_folder_names()
         self.assertEqual(names, {"selection", "selected"})
 

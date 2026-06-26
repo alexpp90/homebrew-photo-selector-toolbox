@@ -11,7 +11,7 @@ from generate_notices import generate_notices
 
 # Constants
 EXIFTOOL_VERSION = "13.59"
-SF_BASE_URL = "https://sourceforge.net/projects/exiftool/files"
+SF_BASE_URL = "https://downloads.sourceforge.net/project/exiftool"
 
 PROJECT_ROOT = Path(__file__).parent.parent
 BIN_DIR = PROJECT_ROOT / "src" / "photo_selector_toolbox" / "bin"
@@ -19,14 +19,19 @@ BIN_DIR = PROJECT_ROOT / "src" / "photo_selector_toolbox" / "bin"
 def download_file(url, dest_path):
     print(f"Downloading {url}...")
     try:
-        urllib.request.urlretrieve(url, dest_path)
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        )
+        with urllib.request.urlopen(req) as response, open(dest_path, 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
     except Exception as e:
         print(f"Error downloading with urllib: {e}")
         try:
-             subprocess.run(["wget", url, "-O", str(dest_path)], check=True)
+            subprocess.run(["curl", "-L", url, "-o", str(dest_path)], check=True)
         except Exception as e2:
-             print(f"Download failed with wget too: {e2}")
-             sys.exit(1)
+            print(f"Download failed with curl too: {e2}")
+            sys.exit(1)
 
 def setup_exiftool():
     # Clean bin dir first
@@ -38,7 +43,7 @@ def setup_exiftool():
 
     if system == "Windows":
         filename = f"exiftool-{EXIFTOOL_VERSION}_64.zip"
-        url = f"{SF_BASE_URL}/{filename}/download"
+        url = f"{SF_BASE_URL}/{filename}"
         dest = BIN_DIR / filename
 
         download_file(url, dest)
@@ -76,7 +81,7 @@ def setup_exiftool():
 
     elif system in ["Linux", "Darwin"]:
         filename = f"Image-ExifTool-{EXIFTOOL_VERSION}.tar.gz"
-        url = f"{SF_BASE_URL}/{filename}/download"
+        url = f"{SF_BASE_URL}/{filename}"
         dest = BIN_DIR / filename
 
         download_file(url, dest)
