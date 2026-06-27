@@ -35,6 +35,9 @@ android/app/schemas/
 # OS files
 .DS_Store
 
+# Visual test diffs (generated on failure, not committed)
+tests/visual/diffs/*.png
+
 # Scratch and debug files
 scratch_*.py
 

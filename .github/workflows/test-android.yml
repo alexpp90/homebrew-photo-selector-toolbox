@@ -13,6 +13,10 @@ on:
       - '.github/workflows/test-android.yml'
   workflow_dispatch:
 
+concurrency:
+  group: test-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ── JVM unit tests (no emulator needed) ─────────────────────────
   unit-tests:
