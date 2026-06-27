@@ -10,12 +10,9 @@ To generate/update baselines:
 Baselines are committed to the repo under tests/visual/baselines/.
 """
 
-import sys
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
-from tests.visual.conftest import (
+from .conftest import (
     capture_widget_screenshot,
     assert_screenshot_matches,
 )
@@ -40,10 +37,6 @@ class TestMainAppVisual:
     def test_main_app_initial_layout(self, visual_root):
         """Verify the main window renders with sidebar, menu bar,
         and the default frame visible."""
-        from photo_selector_toolbox.gui import (
-            MainApp, Sidebar, apply_dark_theme, ThemeColors,
-        )
-        import tkinter as tk
         from tkinter import ttk
 
         root = visual_root
@@ -80,7 +73,6 @@ class TestImageLibraryStatisticsVisual:
     def test_statistics_empty_state(self, visual_root):
         """The statistics panel in its initial empty state."""
         from photo_selector_toolbox.gui import ImageLibraryStatistics
-        import tkinter as tk
 
         root = visual_root
         _apply_theme(root)
@@ -95,7 +87,6 @@ class TestImageLibraryStatisticsVisual:
     def test_statistics_with_progress(self, visual_root):
         """The statistics panel while an analysis is in progress."""
         from photo_selector_toolbox.gui import ImageLibraryStatistics
-        import tkinter as tk
 
         root = visual_root
         _apply_theme(root)
@@ -127,7 +118,6 @@ class TestDuplicateFinderVisual:
     def test_duplicate_finder_empty_state(self, visual_root):
         """The duplicate finder in its initial empty state."""
         from photo_selector_toolbox.gui import DuplicateFinder
-        import tkinter as tk
 
         root = visual_root
         _apply_theme(root)
@@ -149,7 +139,6 @@ class TestAboutDialogVisual:
     def test_about_dialog_layout(self, visual_root):
         """The About dialog renders with version info and links."""
         from photo_selector_toolbox.gui import AboutDialog
-        import tkinter as tk
 
         root = visual_root
         _apply_theme(root)
@@ -171,7 +160,6 @@ class TestThemeConsistency:
 
     def test_button_styles(self, visual_root):
         """All button variants render with correct styling."""
-        import tkinter as tk
         from tkinter import ttk
 
         root = visual_root
@@ -203,7 +191,6 @@ class TestThemeConsistency:
 
     def test_label_styles(self, visual_root):
         """All label variants render with correct font and colour."""
-        import tkinter as tk
         from tkinter import ttk
 
         root = visual_root
@@ -267,7 +254,6 @@ class TestThemeConsistency:
 
     def test_labelframe_nesting(self, visual_root):
         """LabelFrame panels nest correctly with theme colours."""
-        import tkinter as tk
         from tkinter import ttk
 
         root = visual_root

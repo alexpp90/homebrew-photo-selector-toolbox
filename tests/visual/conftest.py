@@ -132,10 +132,9 @@ def assert_screenshot_matches(
             includeAA=True,
         )
     except ImportError:
-        # Fallback: simple pixel comparison without pixelmatch
         import numpy as np
-        arr_a = __import__("numpy").array(screenshot_rgba)
-        arr_b = __import__("numpy").array(baseline_rgba)
+        arr_a = np.array(screenshot_rgba)
+        arr_b = np.array(baseline_rgba)
         num_diff = int((arr_a != arr_b).any(axis=-1).sum())
         diff_img = None
 
