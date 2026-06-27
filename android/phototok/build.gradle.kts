@@ -26,12 +26,13 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_FILE")
+            // App-scoped env vars so each app uses its own upload key (full isolation).
+            val keystorePath = System.getenv("PHOTOTOK_KEYSTORE_FILE")
             if (!keystorePath.isNullOrEmpty()) {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("STORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+                storePassword = System.getenv("PHOTOTOK_STORE_PASSWORD")
+                keyAlias = System.getenv("PHOTOTOK_KEY_ALIAS")
+                keyPassword = System.getenv("PHOTOTOK_KEY_PASSWORD")
             }
         }
     }
@@ -40,7 +41,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            val keystorePath = System.getenv("KEYSTORE_FILE")
+            val keystorePath = System.getenv("PHOTOTOK_KEYSTORE_FILE")
             if (!keystorePath.isNullOrEmpty()) {
                 signingConfig = signingConfigs.getByName("release")
             }

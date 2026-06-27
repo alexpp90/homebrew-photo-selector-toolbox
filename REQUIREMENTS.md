@@ -252,14 +252,16 @@ All analysis algorithms must produce equivalent results to the desktop Python im
     *   **Photo Tok (`:phototok`):** `phototok-android-release.apk` and `phototok-android-release.aab`.
 *   **R8 Optimization:** Release builds enable R8 full mode with minification and resource shrinking. OpenCV native libraries excluded from stripping.
 *   **ABI Filter:** Release APKs include only `arm64-v8a` (covers Galaxy S25 Ultra and Tab S11 Ultra).
-*   **Signing:** Debug uses default keystore. Release signing is configured in `build.gradle.kts` dynamically using environment variables (`KEYSTORE_FILE`, `STORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`) populated by the CI environment. In GitHub Actions CI, the keystore file is decoded from a base64 string secret `ANDROID_KEYSTORE_FILE` into a temporary file in the workspace before compilation to package properly signed release artifacts.
-*   **Firebase App Distribution:** Release builds pushed to the `main` branch are automatically uploaded to Firebase App Distribution for over-the-air tester updates, using the distinct hardcoded App IDs:
-    *   **Photo Selector Toolbox:** `1:211786657248:android:8c889798b3318b40f68f85`
-    *   **Photo Tok:** `1:211786657248:android:27e94ef870600f10f68f85`
-    Both distribution pipelines target the `testers` group and utilize the shared Firebase credential secret.
-*   **Google Play Publishing:** Release builds (AABs) triggered by pushes to `main` or release tags (starting with `v*`) are automatically published to the Google Play Store's **internal testing track** using the `GP_SERVICE_ACCOUNT_JSON` repository secret. The packages and target track are:
-    *   **Photo Selector Toolbox (`:app`):** Package `com.photoselectortoolbox` to the `internal` track.
-    *   **Photo Tok (`:phototok`):** Package `com.phototok` to the `internal` track.
+*   **Cloud Project Isolation:** Each app is fully isolated — its own Google Cloud / Firebase project, OAuth consent screen + Android OAuth client, signing key, service accounts, and CI secrets. Nothing is shared between `:app` and `:phototok`. This allows the apps to diverge independently (different API access, scopes, release cadence, ownership) without coupling. See `ANDROID_CLOUD_SETUP.md` for the full rationale and `ANDROID_CLOUD_SETUP_INSTRUCTIONS.md` for the step-by-step setup.
+*   **Signing:** Debug uses default keystore. Each app has its **own** release upload key, configured in `build.gradle.kts` via app-scoped environment variables: `:app` reads `TOOLBOX_KEYSTORE_FILE`, `TOOLBOX_STORE_PASSWORD`, `TOOLBOX_KEY_ALIAS`, `TOOLBOX_KEY_PASSWORD`; `:phototok` reads the `PHOTOTOK_*` equivalents. In GitHub Actions CI, each keystore is decoded from its own base64 secret (`TOOLBOX_KEYSTORE_FILE` / `PHOTOTOK_KEYSTORE_FILE`) into a temporary file before compilation.
+*   **Firebase App Distribution:** Release builds pushed to the `main` branch are uploaded to each app's own Firebase project (in its own GCP project) for over-the-air tester updates, each with its own service-account credential secret:
+    *   **Photo Selector Toolbox:** App ID from the `photo-selector-tb-dist` project, supplied via the `TOOLBOX_FIREBASE_APP_ID` repository variable, credential `TOOLBOX_FIREBASE_APP_DISTRIBUTION_CREDENTIALS`.
+    *   **Photo Tok:** App ID from the dedicated `phototok-app` project, supplied via the `PHOTOTOK_FIREBASE_APP_ID` repository variable, credential `PHOTOTOK_FIREBASE_APP_DISTRIBUTION_CREDENTIALS`.
+    Both distribution pipelines target the `testers` group.
+*   **Google Play Publishing:** Release builds (AABs) triggered by pushes to `main` or release tags (starting with `v*`) are automatically published to the Google Play Store's **internal testing track**, each app using its own publishing service account secret. The packages and secrets are:
+    *   **Photo Selector Toolbox (`:app`):** Package `com.photoselectortoolbox`, secret `TOOLBOX_GP_SERVICE_ACCOUNT_JSON`, `internal` track.
+    *   **Photo Tok (`:phototok`):** Package `com.phototok`, secret `PHOTOTOK_GP_SERVICE_ACCOUNT_JSON`, `internal` track.
+*   **Public Distribution Strategy:** The supported, user-facing distribution channel is **GitHub Releases** — signed APKs and AABs attached to the `nightly` (rolling, from `main`) and tagged (stable) releases. [Obtainium](https://github.com/ImranOmarRashid/Obtainium) is supported only as a *consumer* of those GitHub release assets (it auto-updates by reading the Releases page); it requires no dedicated server or project-side configuration and is not a managed channel. **Google Play (internal track)** serves as a development/preview build for invited testers. Firebase App Distribution remains in the CI pipeline as a legacy internal step and is **not** a publicly documented installation channel.
 
 
 ### 7.11 Android Visual Theme
