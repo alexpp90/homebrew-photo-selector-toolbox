@@ -1,6 +1,6 @@
 [project]
 name = "photo-selector-toolbox"
-version = "0.3.0"
+version = "0.4.0"
 description = "A tool to analyze image metadata and provide statistics."
 authors = [
     {name = "Jules"}

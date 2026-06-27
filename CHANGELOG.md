@@ -5,6 +5,18 @@ All notable changes to the Photo Selector Toolbox project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-27
+
+### Added
+- **Visual Regression Tests:** Added screenshot capture and baseline pixel-matching regression test suite for main desktop GUI panels.
+- **Keyboard Shortcut Discoverability:** Appended keyboard shortcut hints directly onto action buttons (e.g., Copy, Move, Delete) in the Tkinter GUI and fullscreen viewer.
+
+### Changed & Fixed
+- **Google Play & Firebase deployment:** Updated Google Play action and service account format, ensuring robust automatic publishing of AABs for both the main app and Photo-Tok.
+- **Android Cloud Project Isolation:** Isolated Google Cloud / Firebase projects, signing keys, and secrets between the main app (`:app`) and Photo-Tok (`:phototok`).
+- **Keyboard Accessibility:** Configured explicit focus states mapping for `TCheckbutton` in the Tkinter clam theme to restore keyboard navigation visibility.
+- **Robust CI Pipelines:** Optimized wait-on-check preflight gating to prevent CI blockages and added manual build-android triggers.
+
 ## [0.3.0] - 2026-06-27
 
 ### Added
