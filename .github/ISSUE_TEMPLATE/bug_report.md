@@ -25,7 +25,7 @@ Please provide details about your configuration:
 - Operating System & Version: [e.g. macOS 14.2, Windows 11, Ubuntu 22.04, Android 14]
 - Device Model (if Android): [e.g. Samsung Galaxy S25 Ultra, Tab S11 Ultra]
 - Target Solution affected: [e.g. Desktop GUI, Desktop CLI, Android Desktop, Android Phone]
-- App version: [e.g. 0.2.0, Nightly]
+- App version: [e.g. 0.4.0, Nightly]
 
 **Additional Context or Logs**
 Add any other context, screenshots, error logs, or stack traces about the problem here.

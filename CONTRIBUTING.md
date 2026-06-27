@@ -72,7 +72,7 @@ poetry run flake8 src tests
 ### Prerequisites
 - Android Studio Ladybug (or newer)
 - JDK 17
-- Android SDK 35/36
+- Android SDK 36
 
 ### Getting Started
 1. Open the `android/` directory in Android Studio.

@@ -6,8 +6,8 @@ Only the latest stable release of the Photo Selector Toolbox is supported for se
 
 | Version | Supported |
 | ------- | --------- |
-| >= 0.2.0 | :white_check_mark: Yes |
-| < 0.2.0  | :x: No |
+| >= 0.4.0 | :white_check_mark: Yes |
+| < 0.4.0  | :x: No |
 
 ## Reporting a Vulnerability
 

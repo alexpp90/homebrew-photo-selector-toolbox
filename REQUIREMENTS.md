@@ -176,7 +176,7 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 *   **Architecture:** MVVM with Clean Architecture (UI → ViewModel → UseCase → Repository → DataSource). All layers are separated by interfaces.
 *   **Async Model:** Kotlin Coroutines with Flow for reactive data streams. Use `Dispatchers.IO` for file I/O, `Dispatchers.Default` for CPU-intensive analysis. Never block the main thread.
 *   **Dependency Injection:** Hilt for all injectable classes.
-*   **Android SDK:** minSdk 26, targetSdk 35, compileSdk 35.
+*   **Android SDK:** minSdk 26, targetSdk 36, compileSdk 36.
 
 ### 7.2 Adaptive Layout Requirements
 *   **Window Size Classes:** Every screen must support three `WindowWidthSizeClass` breakpoints:
