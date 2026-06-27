@@ -472,21 +472,21 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.del_btn = ttk.Button(
             btn_frame,
-            text="🗑️ Delete (Trash)",
+            text="🗑️ Delete (Trash) (Del)",
             command=self.delete_current_candidate,
         )
         self.del_btn.pack(side="top", fill="x", pady=2)
 
         self.move_btn = ttk.Button(
             btn_frame,
-            text="⤳ Move to Selection",
+            text="⤳ Move to Selection (M)",
             command=self.move_current_to_selection,
         )
         self.move_btn.pack(side="top", fill="x", pady=2)
 
         self.copy_btn = ttk.Button(
             btn_frame,
-            text="⎘ Copy to Selection",
+            text="⎘ Copy to Selection (C)",
             command=self.copy_current_to_selection,
         )
         self.copy_btn.pack(side="top", fill="x", pady=2)
@@ -932,21 +932,21 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.focus_del_btn = ttk.Button(
             self.focus_right_panel,
-            text="🗑️ DELETE (Trash)",
+            text="🗑️ DELETE (Trash) (Del)",
             command=self.delete_current_candidate,
         )
         self.focus_del_btn.pack(side="top", pady=20, fill="x")
 
         self.focus_move_btn = ttk.Button(
             self.focus_right_panel,
-            text="⤳ Move to Selection",
+            text="⤳ Move to Selection (M)",
             command=self.move_current_to_selection,
         )
         self.focus_move_btn.pack(side="top", pady=5, fill="x")
 
         self.focus_copy_btn = ttk.Button(
             self.focus_right_panel,
-            text="⎘ Copy to Selection",
+            text="⎘ Copy to Selection (C)",
             command=self.copy_current_to_selection,
         )
         self.focus_copy_btn.pack(side="top", pady=5, fill="x")

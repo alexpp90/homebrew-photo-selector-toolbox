@@ -181,6 +181,7 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
         "TCheckbutton",
         background=[("active", colors.bg_dark), ("disabled", colors.bg_dark)],
         foreground=[("active", colors.fg_light), ("disabled", colors.fg_muted)],
+        focuscolor=[("focus", colors.accent_blue)],
     )
 
 
