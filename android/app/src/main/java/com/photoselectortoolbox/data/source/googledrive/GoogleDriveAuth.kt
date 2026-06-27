@@ -44,10 +44,21 @@ class GoogleDriveAuth @Inject constructor(
         get() = _signedInAccount.value != null
 
     private val gso: GoogleSignInOptions by lazy {
-        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        val builder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestScopes(Scope(SCOPE_DRIVE), Scope(SCOPE_DRIVE_FILE))
-            .build()
+
+        // Check if there is an explicit web client ID defined in string resources
+        // to handle projects registered under duplicate package names/SHA-1 signatures.
+        val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+        if (resId != 0) {
+            val webClientId = context.getString(resId)
+            if (webClientId.isNotEmpty() && webClientId.endsWith(".apps.googleusercontent.com")) {
+                Log.i(TAG, "Configuring Google Sign-In with explicit Web Client ID.")
+                builder.requestIdToken(webClientId)
+            }
+        }
+        builder.build()
     }
 
     private val signInClient: GoogleSignInClient by lazy {

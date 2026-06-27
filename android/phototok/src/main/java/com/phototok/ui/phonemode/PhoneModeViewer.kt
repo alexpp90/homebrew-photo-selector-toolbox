@@ -69,7 +69,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
+import coil.compose.SubcomposeAsyncImage
 import com.phototok.data.model.ExifData
 import com.phototok.data.model.ImageItem
 import com.phototok.ui.theme.SuccessGreen
@@ -255,11 +257,31 @@ private fun ImagePage(
             contentAlignment = Alignment.Center,
         ) {
             val parsedUri = remember(image.uri) { android.net.Uri.parse(image.uri) }
-            AsyncImage(
+            val configuration = LocalConfiguration.current
+            val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            SubcomposeAsyncImage(
                 model = parsedUri,
                 contentDescription = image.fileName,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (!isLandscape) {
+                            Modifier.padding(top = 64.dp, bottom = 80.dp)
+                        } else {
+                            Modifier
+                        }
+                    ),
                 contentScale = ContentScale.Fit,
+                loading = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            color = colors.primary
+                        )
+                    }
+                }
             )
         }
 

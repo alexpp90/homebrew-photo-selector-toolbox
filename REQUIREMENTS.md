@@ -246,12 +246,21 @@ All analysis algorithms must produce equivalent results to the desktop Python im
 
 ### 7.10 Android Build & CI
 *   **Build System:** Gradle with Kotlin DSL and version catalog (`gradle/libs.versions.toml`).
-*   **CI Workflow:** `.github/workflows/build-android.yml` — runs on `ubuntu-latest` with JDK 17. Triggers on pushes to `main`, tags matching `v*`, and PRs modifying `android/**`. Runs lint and unit tests before building. Produces signed APK and AAB.
-*   **Artifact Naming:** `photo-selector-toolbox-android-release.apk` and `photo-selector-toolbox-android-release.aab`.
+*   **CI Workflow:** `.github/workflows/build-android.yml` — runs on `ubuntu-latest` with JDK 17. Triggers on pushes to `main`, tags matching `v*`, and PRs modifying `android/**`. Runs lint and unit tests before building. Produces signed APKs and AABs for both the `:app` (Photo Selector Toolbox) and `:phototok` (Photo Tok) modules.
+*   **Artifact Naming:**
+    *   **Photo Selector Toolbox (`:app`):** `photo-selector-toolbox-android-release.apk` and `photo-selector-toolbox-android-release.aab`.
+    *   **Photo Tok (`:phototok`):** `phototok-android-release.apk` and `phototok-android-release.aab`.
 *   **R8 Optimization:** Release builds enable R8 full mode with minification and resource shrinking. OpenCV native libraries excluded from stripping.
 *   **ABI Filter:** Release APKs include only `arm64-v8a` (covers Galaxy S25 Ultra and Tab S11 Ultra).
 *   **Signing:** Debug uses default keystore. Release signing is configured in `build.gradle.kts` dynamically using environment variables (`KEYSTORE_FILE`, `STORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`) populated by the CI environment. In GitHub Actions CI, the keystore file is decoded from a base64 string secret `ANDROID_KEYSTORE_FILE` into a temporary file in the workspace before compilation to package properly signed release artifacts.
-*   **Firebase App Distribution:** Release builds pushed to the `main` branch are automatically uploaded to Firebase App Distribution for over-the-air tester updates.
+*   **Firebase App Distribution:** Release builds pushed to the `main` branch are automatically uploaded to Firebase App Distribution for over-the-air tester updates, using the distinct hardcoded App IDs:
+    *   **Photo Selector Toolbox:** `1:211786657248:android:8c889798b3318b40f68f85`
+    *   **Photo Tok:** `1:211786657248:android:27e94ef870600f10f68f85`
+    Both distribution pipelines target the `testers` group and utilize the shared Firebase credential secret.
+*   **Google Play Publishing:** Release builds (AABs) triggered by pushes to `main` or release tags (starting with `v*`) are automatically published to the Google Play Store's **internal testing track** using the `GP_SERVICE_ACCOUNT_JSON` repository secret. The packages and target track are:
+    *   **Photo Selector Toolbox (`:app`):** Package `com.photoselectortoolbox` to the `internal` track.
+    *   **Photo Tok (`:phototok`):** Package `com.phototok` to the `internal` track.
+
 
 ### 7.11 Android Visual Theme
 *   **Dark Theme Only:** Matches desktop's dark theme. Material 3 custom `darkColorScheme`:

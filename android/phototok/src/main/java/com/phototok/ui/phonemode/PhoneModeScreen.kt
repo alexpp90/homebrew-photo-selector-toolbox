@@ -9,6 +9,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.phototok.ui.components.DriveFolderPickerDialog
 import com.phototok.ui.components.BottomNavBar
 import com.phototok.ui.components.NavTab
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -211,11 +213,10 @@ fun PhoneModeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "P-T",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = colors.primary,
-                        fontWeight = FontWeight.Bold
+                    Image(
+                        painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
+                        contentDescription = "Logo",
+                        modifier = Modifier.size(32.dp)
                     )
 
                     Column(
@@ -340,7 +341,7 @@ fun PhoneModeScreen(
                                 WindowInsetsSides.Right + WindowInsetsSides.Top + WindowInsetsSides.Bottom
                             )
                         )
-                        .width(200.dp)
+                        .width(125.dp)
                         .padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
@@ -389,9 +390,9 @@ fun PhoneModeScreen(
             // Default/Portrait Layout
             if (!isViewing) {
                 PhoneModeLanding(
+                    sourceFolderUri = uiState.sourceFolderUri,
                     sourceFolderName = uiState.sourceFolderName,
                     collectionFolderName = uiState.collectionFolderName,
-                    hasSourceFolder = uiState.sourceFolderUri != null,
                     isLoading = uiState.isLoading,
                     onSelectSource = { viewModel.selectSourceFolder(it) },
                     onSelectCollection = { viewModel.selectCollectionFolder(it) },
@@ -448,11 +449,10 @@ fun PhoneModeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "Photo-Tok",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = colors.primary,
-                    fontWeight = FontWeight.Bold,
+                Image(
+                    painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(36.dp)
                 )
                 IconButton(
                     onClick = { showSettingsSheet = true },
@@ -467,19 +467,21 @@ fun PhoneModeScreen(
             }
 
             // ── Bottom nav bar ───────────────────────────────────────
-            BottomNavBar(
-                activeTab = if (isViewing) NavTab.Cards else NavTab.Sources,
-                onTabSelected = { tab ->
-                    when (tab) {
-                        NavTab.Sources -> {
-                            if (isViewing) viewModel.goBackToLanding()
+            if (isViewing) {
+                BottomNavBar(
+                    activeTab = NavTab.Cards,
+                    onTabSelected = { tab ->
+                        when (tab) {
+                            NavTab.Sources -> {
+                                viewModel.goBackToLanding()
+                            }
+                            NavTab.Cards -> { /* already viewing or no-op */ }
+                            NavTab.History -> { /* placeholder for future */ }
                         }
-                        NavTab.Cards -> { /* already viewing or no-op */ }
-                        NavTab.History -> { /* placeholder for future */ }
-                    }
-                },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
 
         // ── Snackbar ─────────────────────────────────────────────

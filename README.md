@@ -344,6 +344,22 @@ poetry run photo-selector-toolbox /path/to/photos [--output <dir>] [--show-plots
 
 ## Android Installation
 
+### Pre-built Releases (Recommended)
+
+To automatically get the latest releases of the Android apps (**Photo Selector Toolbox** and **Photo Tok**) on your phone or tablet, you can use one of the following methods:
+
+#### Option A: Obtainium (Direct from GitHub Releases)
+1. Install [Obtainium](https://github.com/ImranRqd/Obtainium) on your Android device.
+2. In Obtainium, click **Add App** and paste the URL of this GitHub repository.
+3. Obtainium will automatically check the GitHub Releases page (including the `nightly` release tag for bleeding-edge updates from the `main` branch) and prompt you to update with a single tap.
+
+#### Option B: Firebase App Distribution (Over-the-Air)
+1. Join the project's tester group (contact the administrator to add your email).
+2. Install the **Firebase App Tester** app on your device.
+3. Sign in to Firebase App Tester with your registered email to download the latest builds and receive OTA update notifications.
+
+---
+
 ### Build from Source
 
 ```bash
@@ -351,7 +367,9 @@ cd android
 ./gradlew assembleDebug
 ```
 
-The APK is output to `android/app/build/outputs/apk/debug/`.
+The debug APKs are output to:
+- **Photo Selector Toolbox (`:app`):** `android/app/build/outputs/apk/debug/`
+- **Photo Tok (`:phototok`):** `android/phototok/build/outputs/apk/debug/`
 
 **Requirements:**
 - Android SDK with compileSdk 35
