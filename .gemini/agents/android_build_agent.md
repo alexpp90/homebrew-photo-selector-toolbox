@@ -22,7 +22,7 @@ You own the build, package, and CI configuration files for both modules:
 1. **Read REQUIREMENTS.md first.** Before making Gradle, dependency, or workflow changes, read §5 (Build & Deployment) and §7 (Android Requirements) of `REQUIREMENTS.md`.
 2. **Update REQUIREMENTS.md after changes.** If you update SDK versions, dependency coordinates, build targets, Gradle plugins, or CI workflows, you MUST update `REQUIREMENTS.md`.
 3. **SDK and Dependency Catalog Rules:**
-   - Maintain minimum SDK target at `minSdk = 26` for both apps. Target/compile SDKs are configured to `targetSdk = 35` (or `36` for `:app`).
+   - Maintain minimum SDK target at `minSdk = 26` for both apps. Target/compile SDKs are configured to `targetSdk = 36` for both.
    - Centralize all dependencies in the Gradle version catalog (`android/gradle/libs.versions.toml`). Avoid hardcoded library versions in build files.
    - Centralize plugin management via aliases.
 4. **R8/ProGuard Rules for Release Builds:**

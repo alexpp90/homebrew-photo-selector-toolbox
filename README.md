@@ -372,7 +372,7 @@ The debug APKs are output to:
 - **Photo Tok (`:phototok`):** `android/phototok/build/outputs/apk/debug/`
 
 **Requirements:**
-- Android SDK with compileSdk 35
+- Android SDK with compileSdk 36
 - JDK 17+
 - Minimum device: Android 8.0 (API 26)
 
