@@ -34,6 +34,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 15
           allowed-conclusions: success,skipped
+          fail-on-no-checks: false
 
   build:
     name: Build Android
