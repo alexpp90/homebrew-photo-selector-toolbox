@@ -119,11 +119,10 @@ This is not a web wrapper or a desktop port. The Android app uses a fully native
 
 The app uses **Material 3 Window Size Classes** to adapt seamlessly:
 
-**Expanded (>= 840dp) — Tablet Landscape / Samsung DeX**
-Full desktop-class experience: NavigationRail, two-pane image viewer + metadata panel, horizontal candidate strip, keyboard shortcuts when a hardware keyboard is connected.
-
-**Medium (600–840dp) — Tablet Portrait**
-NavigationRail with compact labels, single-pane layout with metadata below the image, scrollable candidate strip.
+**Medium (600–840dp) & Expanded (>= 840dp) — Tablet / Samsung DeX**
+Full desktop-class experience: NavigationRail, horizontal candidate strip, hardware keyboard shortcuts (arrow keys, Delete/Backspace, M, C, Escape), and a toggleable layout supporting either:
+- **Three-Column View:** Previous, Current, and Next images side-by-side in equal dimensions for direct comparisons.
+- **Focused View:** Large centered Current image on top, with Previous and Next images side-by-side at the bottom.
 
 **Compact (< 600dp) — Phone**
 A completely reimagined experience (see Phone Mode below).
@@ -137,6 +136,7 @@ Phone mode delivers a full-screen, gesture-first experience purpose-built for sm
 - **Swipe left to delete** — Progressive drag reveals a red delete indicator; release past the threshold to confirm
 - **EXIF overlay** — ISO, shutter speed, aperture, focal length, and lens shown non-intrusively in the corner
 - **Orientation-aware sorting** — Landscape shots first, then portrait, with a visual section divider prompting you to rotate your phone
+- **Picture randomization** — Optional setting to shuffle the order of loaded pictures, overriding standard sorting
 - **Gesture tutorial** — Animated onboarding overlay shown on first launch (and after a week away)
 
 ### Samsung DeX — Desktop-Grade on a Tablet
@@ -349,7 +349,7 @@ poetry run photo-selector-toolbox /path/to/photos [--output <dir>] [--show-plots
 To automatically get the latest releases of the Android apps (**Photo Selector Toolbox** and **Photo Tok**) on your phone or tablet, you can use one of the following methods:
 
 #### Option A: Obtainium (Direct from GitHub Releases)
-1. Install [Obtainium](https://github.com/ImranRqd/Obtainium) on your Android device.
+1. Install [Obtainium](https://github.com/ImranOmarRashid/Obtainium) on your Android device.
 2. In Obtainium, click **Add App** and paste the URL of this GitHub repository.
 3. Obtainium will automatically check the GitHub Releases page (including the `nightly` release tag for bleeding-edge updates from the `main` branch) and prompt you to update with a single tap.
 
