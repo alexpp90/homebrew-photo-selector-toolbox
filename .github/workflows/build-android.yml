@@ -41,6 +41,8 @@ jobs:
     name: Build Android
     needs: preflight
     runs-on: ubuntu-latest
+    env:
+      VERSION_CODE: ${{ github.run_number }}
 
     steps:
       - name: Checkout code
