@@ -12,6 +12,7 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/build-android.yml'
+  workflow_dispatch:
 
 concurrency:
   group: build-android-${{ github.ref }}
