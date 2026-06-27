@@ -31,7 +31,8 @@ dev = [
     "cairosvg (>=2.8.2,<3.0.0)",
     "pip-licenses (>=5.5.0,<6.0.0)",
     "xvfbwrapper (>=0.2.21,<0.3.0)",
-    "pytest-cov (>=7.1.0,<8.0.0)"
+    "pytest-cov (>=7.1.0,<8.0.0)",
+    "pixelmatch (>=0.3.0,<1.0.0)"
 ]
 
 
@@ -51,6 +52,7 @@ markers = [
   "mac_only: skip unless running on macOS",
   "windows_only: skip unless running on Windows",
   "gui_required: skip when no display is available",
+  "visual: visual regression tests requiring a display",
 ]
 
 [tool.coverage.run]

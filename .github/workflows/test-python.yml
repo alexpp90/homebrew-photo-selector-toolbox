@@ -8,6 +8,7 @@ on:
       - 'tests/**'
       - 'pyproject.toml'
       - 'poetry.lock'
+      - '.flake8'
       - '.github/workflows/test-python.yml'
   pull_request:
     branches: [main]
@@ -16,12 +17,37 @@ on:
       - 'tests/**'
       - 'pyproject.toml'
       - 'poetry.lock'
+      - '.flake8'
       - '.github/workflows/test-python.yml'
   workflow_dispatch:
 
+concurrency:
+  group: test-python-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # ── Fast lint gate (< 30s) ──────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Run flake8
+        run: flake8 src/ tests/ --count --show-source --statistics
+
+  # ── Unit & integration tests ────────────────────────────────────
   test:
     name: Tests on ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    needs: lint
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -30,15 +56,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux — primary CI target
           - os: ubuntu-latest
             python-version: "3.12"
             architecture: x64
-          # macOS Apple Silicon
           - os: macos-latest
             python-version: "3.12"
             architecture: arm64
-          # Windows
           - os: windows-latest
             python-version: "3.12"
             architecture: x64
@@ -56,7 +79,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-tk libcairo2-dev
+          sudo apt-get install -y python3-tk libcairo2-dev xvfb scrot
 
       - name: Install Poetry
         run: |
@@ -78,14 +101,18 @@ jobs:
       - name: Start Xvfb (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y xvfb
-          Xvfb :99 -screen 0 1024x768x24 &
+          Xvfb :99 -screen 0 1280x1024x24 &
+          sleep 1
 
-      - name: Lint
-        run: poetry run flake8 src/ tests/ --count --show-source --statistics
-
-      - name: Run tests
-        run: poetry run pytest --tb=short -q --junitxml=test-results.xml --cov=photo_selector_toolbox --cov-report=xml --cov-fail-under=60
+      - name: Run tests (excluding visual)
+        run: >-
+          poetry run pytest
+          --tb=short -q
+          --junitxml=test-results.xml
+          --cov=photo_selector_toolbox
+          --cov-report=xml
+          --cov-fail-under=60
+          -m "not visual"
         env:
           DISPLAY: ${{ runner.os == 'Linux' && ':99' || '' }}
 
@@ -103,4 +130,61 @@ jobs:
         with:
           name: coverage-${{ matrix.os }}
           path: coverage.xml
+          if-no-files-found: ignore
+
+  # ── Visual regression tests (Linux only, real Xvfb rendering) ───
+  visual:
+    name: Visual regression tests
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk libcairo2-dev xvfb scrot
+
+      - name: Install Poetry
+        run: |
+          pip install poetry
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+
+      - name: Cache Poetry venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-poetry-3.12-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-3.12-
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-root
+
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 &
+          sleep 1
+
+      - name: Run visual tests
+        run: >-
+          poetry run pytest
+          tests/visual/
+          --tb=short -q
+          -m visual
+        env:
+          DISPLAY: ':99'
+
+      - name: Upload visual diffs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-test-diffs
+          path: tests/visual/diffs/
           if-no-files-found: ignore

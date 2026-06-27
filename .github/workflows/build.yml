@@ -2,18 +2,51 @@ name: Build Executables
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - '*.spec'
+      - '.github/workflows/build.yml'
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - '*.spec'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
+  # ── Gate: wait for tests to pass ────────────────────────────────
+  preflight:
+    name: Wait for tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Python tests workflow
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-regexp: 'Tests on .+'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+          allowed-conclusions: success,skipped
+
   build:
     name: Build on ${{ matrix.os }}
+    needs: preflight
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -52,6 +85,14 @@ jobs:
         poetry config virtualenvs.create true
         poetry config virtualenvs.in-project true
 
+    - name: Cache Poetry venv
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: ${{ runner.os }}-poetry-build-3.12-${{ hashFiles('poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-build-3.12-
+
     - name: Install dependencies
       run: poetry install --no-interaction --no-root
 
@@ -67,8 +108,6 @@ jobs:
     - name: Create Archive (Windows)
       if: runner.os == 'Windows'
       run: |
-        # Create a zip archive of the dist directory
-        # shutil.make_archive adds the .zip extension automatically
         python -c "import shutil; shutil.make_archive('${{ matrix.artifact_name }}', 'zip', 'dist')"
 
     - name: Upload Artifacts
@@ -141,49 +180,47 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           update_and_push() {
             git fetch origin main
             git checkout main
             git reset --hard origin/main
-            
+
             if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              # Nightly update: update Cask and Formula
               python3 scripts/update_formula.py \
                 --file Casks/photo-selector-toolbox@nightly.rb \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
-              
+
               python3 scripts/update_formula.py \
                 --file Formula/photo-selector-toolbox@nightly.rb \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
                 --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
-              
+
               git add Casks/photo-selector-toolbox@nightly.rb Formula/photo-selector-toolbox@nightly.rb
               COMMIT_MSG="Update nightly Homebrew SHA256 hashes"
             else
-              # Stable update: update Cask and Formula
               TAG_NAME="${{ github.ref_name }}"
               VERSION="${TAG_NAME#v}"
-              
+
               python3 scripts/update_formula.py \
                 --file Casks/photo-selector-toolbox.rb \
                 --version-val "${VERSION}" \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
-              
+
               python3 scripts/update_formula.py \
                 --file Formula/photo-selector-toolbox.rb \
                 --version-val "${VERSION}" \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
                 --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
-              
+
               git add Casks/photo-selector-toolbox.rb Formula/photo-selector-toolbox.rb
               COMMIT_MSG="Update stable Homebrew files to version ${VERSION}"
             fi
-            
+
             git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
             git push origin main
           }
-          
+
           for i in {1..5}; do
             if update_and_push; then
               echo "Homebrew files updated and pushed successfully."
@@ -192,7 +229,7 @@ jobs:
             echo "Attempt $i failed. Retrying in 2 seconds..."
             sleep 2
           done
-          
+
           echo "Failed to update and push Homebrew files after 5 attempts."
           exit 1
         shell: bash

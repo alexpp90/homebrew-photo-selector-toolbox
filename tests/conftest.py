@@ -11,6 +11,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "mac_only: skip unless running on macOS")
     config.addinivalue_line("markers", "windows_only: skip unless running on Windows")
     config.addinivalue_line("markers", "gui_required: skip when no display is available")
+    config.addinivalue_line("markers", "visual: visual regression tests requiring a display")
 
 
 def pytest_collection_modifyitems(config, items):
