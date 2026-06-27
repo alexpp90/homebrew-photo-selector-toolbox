@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "photo-selector-tb-dist",
+    "toolbox": "photo-selector-tb-dist",
+    "phototok": "phototok-app"
+  }
+}

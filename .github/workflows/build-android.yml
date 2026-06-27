@@ -67,16 +67,24 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
-      - name: Decode Keystore
+      # Each app has its own upload keystore (full isolation). Decode both.
+      - name: Decode Keystores
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         env:
-          ANDROID_KEYSTORE_FILE_BASE64: ${{ secrets.ANDROID_KEYSTORE_FILE }}
+          TOOLBOX_KEYSTORE_BASE64: ${{ secrets.TOOLBOX_KEYSTORE_FILE }}
+          PHOTOTOK_KEYSTORE_BASE64: ${{ secrets.PHOTOTOK_KEYSTORE_FILE }}
         run: |
-          if [ -n "$ANDROID_KEYSTORE_FILE_BASE64" ]; then
-            printf "%s" "$ANDROID_KEYSTORE_FILE_BASE64" | base64 --decode > ${{ github.workspace }}/android/release.jks
-            echo "KEYSTORE_FILE=${{ github.workspace }}/android/release.jks" >> "$GITHUB_ENV"
+          if [ -n "$TOOLBOX_KEYSTORE_BASE64" ]; then
+            printf "%s" "$TOOLBOX_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/android/toolbox-upload.jks
+            echo "TOOLBOX_KEYSTORE_FILE=${{ github.workspace }}/android/toolbox-upload.jks" >> "$GITHUB_ENV"
           else
-            echo "Keystore secret is empty, skipping decoding and signing config."
+            echo "Toolbox keystore secret is empty; :app release will be unsigned."
+          fi
+          if [ -n "$PHOTOTOK_KEYSTORE_BASE64" ]; then
+            printf "%s" "$PHOTOTOK_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/android/phototok-upload.jks
+            echo "PHOTOTOK_KEYSTORE_FILE=${{ github.workspace }}/android/phototok-upload.jks" >> "$GITHUB_ENV"
+          else
+            echo "Photo Tok keystore secret is empty; :phototok release will be unsigned."
           fi
 
       - name: Build release APK
@@ -84,18 +92,24 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease
         env:
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          TOOLBOX_KEY_ALIAS: ${{ secrets.TOOLBOX_KEY_ALIAS }}
+          TOOLBOX_KEY_PASSWORD: ${{ secrets.TOOLBOX_KEY_PASSWORD }}
+          TOOLBOX_STORE_PASSWORD: ${{ secrets.TOOLBOX_STORE_PASSWORD }}
+          PHOTOTOK_KEY_ALIAS: ${{ secrets.PHOTOTOK_KEY_ALIAS }}
+          PHOTOTOK_KEY_PASSWORD: ${{ secrets.PHOTOTOK_KEY_PASSWORD }}
+          PHOTOTOK_STORE_PASSWORD: ${{ secrets.PHOTOTOK_STORE_PASSWORD }}
 
       - name: Build release AAB
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         working-directory: android
         run: ./gradlew bundleRelease
         env:
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          TOOLBOX_KEY_ALIAS: ${{ secrets.TOOLBOX_KEY_ALIAS }}
+          TOOLBOX_KEY_PASSWORD: ${{ secrets.TOOLBOX_KEY_PASSWORD }}
+          TOOLBOX_STORE_PASSWORD: ${{ secrets.TOOLBOX_STORE_PASSWORD }}
+          PHOTOTOK_KEY_ALIAS: ${{ secrets.PHOTOTOK_KEY_ALIAS }}
+          PHOTOTOK_KEY_PASSWORD: ${{ secrets.PHOTOTOK_KEY_PASSWORD }}
+          PHOTOTOK_STORE_PASSWORD: ${{ secrets.PHOTOTOK_STORE_PASSWORD }}
 
       - name: Prepare Release Assets
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
@@ -126,12 +140,14 @@ jobs:
           name: phototok-android-release
           path: android/release-assets/phototok-android-release.apk
 
+      # Each app lives in its own Firebase project with its own service-account credential.
       - name: Upload Photo Selector Toolbox to Firebase App Distribution
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
-          appId: 1:211786657248:android:8c889798b3318b40f68f85
-          serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
+          # App ID from the Photo Selector Toolbox Firebase project (photo-selector-tb-dist).
+          appId: ${{ vars.TOOLBOX_FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.TOOLBOX_FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
           groups: testers
           file: android/release-assets/photo-selector-toolbox-android-release.apk
 
@@ -139,8 +155,9 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
-          appId: 1:211786657248:android:27e94ef870600f10f68f85
-          serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
+          # TODO: replace with the App ID from the NEW Photo Tok Firebase project.
+          appId: ${{ vars.PHOTOTOK_FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.PHOTOTOK_FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
           groups: testers
           file: android/release-assets/phototok-android-release.apk
 
@@ -167,11 +184,12 @@ jobs:
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           files: android/release-assets/*
 
+      # Each app has its own Play publishing service account (from its own GCP project).
       - name: Upload Photo Selector Toolbox AAB to Google Play
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: r0adkll/upload-google-play@v1
         with:
-          serviceAccountJsonRaw: ${{ secrets.GP_SERVICE_ACCOUNT_JSON }}
+          serviceAccountJsonRaw: ${{ secrets.TOOLBOX_GP_SERVICE_ACCOUNT_JSON }}
           packageName: com.photoselectortoolbox
           releaseFiles: android/release-assets/photo-selector-toolbox-android-release.aab
           track: internal
@@ -181,7 +199,7 @@ jobs:
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: r0adkll/upload-google-play@v1
         with:
-          serviceAccountJsonRaw: ${{ secrets.GP_SERVICE_ACCOUNT_JSON }}
+          serviceAccountJsonRaw: ${{ secrets.PHOTOTOK_GP_SERVICE_ACCOUNT_JSON }}
           packageName: com.phototok
           releaseFiles: android/release-assets/phototok-android-release.aab
           track: internal
