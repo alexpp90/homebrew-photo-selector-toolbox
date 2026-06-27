@@ -5,6 +5,21 @@ All notable changes to the Photo Selector Toolbox project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-27
+
+### Added
+- **Android Platform & UI Improvements:**
+  - Added sample mockup card slideshow layout to the Phone Mode landing screen using custom landscape, portrait, and architectural photography assets for enhanced design aesthetics.
+  - Configured explicit Web Client ID in Google Drive authentication to support multiple package names/SHA-1 signatures.
+  - Integrated launcher foreground logos into navigation components, top bar, and hero cards.
+  - Added full-screen image loading indicators and orientation-responsive safety padding for image viewing.
+- **Distribution & CI/CD Pipelines:**
+  - Integrated Google Play Store publishing to automate uploading AABs of both apps to the `internal` testing track.
+  - Documented over-the-air installation procedures (via Obtainium direct from GitHub Releases, or via Firebase App Tester app) in the project documentation.
+
+### Changed & Fixed
+- Hidden the bottom navigation bar when on the landing/sources screen to prevent empty navigation actions.
+
 ## [0.2.0] - 2026-06-21
 
 ### Added

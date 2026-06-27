@@ -24,17 +24,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.SdCard
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,9 +65,9 @@ enum class SourceType { Local, SdCard, GoogleDrive }
  */
 @Composable
 fun PhoneModeLanding(
+    sourceFolderUri: String?,
     sourceFolderName: String,
     collectionFolderName: String,
-    hasSourceFolder: Boolean,
     isLoading: Boolean,
     onSelectSource: (Uri) -> Unit,
     onSelectCollection: (Uri) -> Unit,
@@ -77,7 +83,22 @@ fun PhoneModeLanding(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri: Uri? -> uri?.let { onSelectSource(it) } }
 
-    var selectedSource by remember { mutableStateOf(SourceType.Local) }
+    val hasSourceFolder = sourceFolderUri != null
+    var selectedSource by remember(sourceFolderUri) {
+        mutableStateOf(
+            when {
+                sourceFolderUri == null -> SourceType.Local
+                com.phototok.data.source.googledrive.GoogleDriveImageSource.isDriveUri(sourceFolderUri) -> SourceType.GoogleDrive
+                else -> {
+                    val isSdCard = externalVolumes.any { vol ->
+                        sourceFolderUri.contains(vol.path) || 
+                        (Uri.parse(sourceFolderUri).path?.contains(vol.path) == true)
+                    }
+                    if (isSdCard) SourceType.SdCard else SourceType.Local
+                }
+            }
+        )
+    }
     val colors = MaterialTheme.colorScheme
 
     Box(
@@ -113,7 +134,7 @@ fun PhoneModeLanding(
                 .padding(top = 64.dp, bottom = 100.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.weight(0.15f))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // ── Hero branding ────────────────────────────────────────
             Box(
@@ -123,11 +144,10 @@ fun PhoneModeLanding(
                     .background(colors.primaryContainer.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Default.PhotoLibrary,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = colors.primary,
+                Image(
+                    painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(64.dp),
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -145,7 +165,62 @@ fun PhoneModeLanding(
                 color = colors.onSurfaceVariant,
             )
 
-            Spacer(modifier = Modifier.weight(0.15f))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Sample Image Mockup Cards ────────────────────────────
+            Row(
+                horizontalArrangement = Arrangement.spacedBy((-16).dp),
+                modifier = Modifier.padding(vertical = 12.dp)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .size(width = 80.dp, height = 110.dp)
+                        .graphicsLayer { rotationZ = -8f }
+                        .border(2.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
+                    shape = RoundedCornerShape(8.dp),
+                    color = colors.surfaceVariant
+                ) {
+                    Image(
+                        painter = painterResource(id = com.phototok.R.drawable.placeholder_landscape),
+                        contentDescription = "Sample Landscape",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Surface(
+                    modifier = Modifier
+                        .size(width = 90.dp, height = 120.dp)
+                        .graphicsLayer { translationY = -8f }
+                        .border(2.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                        .shadow(8.dp, RoundedCornerShape(8.dp)),
+                    shape = RoundedCornerShape(8.dp),
+                    color = colors.surfaceVariant
+                ) {
+                    Image(
+                        painter = painterResource(id = com.phototok.R.drawable.placeholder_portrait),
+                        contentDescription = "Sample Lens",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Surface(
+                    modifier = Modifier
+                        .size(width = 80.dp, height = 110.dp)
+                        .graphicsLayer { rotationZ = 8f }
+                        .border(2.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
+                    shape = RoundedCornerShape(8.dp),
+                    color = colors.surfaceVariant
+                ) {
+                    Image(
+                        painter = painterResource(id = com.phototok.R.drawable.placeholder_architecture),
+                        contentDescription = "Sample Architecture",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             // ── Source selection ──────────────────────────────────────
             Text(
@@ -171,20 +246,18 @@ fun PhoneModeLanding(
                     },
                     modifier = Modifier.weight(1f),
                 )
-                SourceCard(
-                    icon = Icons.Default.SdCard,
-                    label = "SD Card",
-                    isActive = selectedSource == SourceType.SdCard,
-                    onClick = {
-                        selectedSource = SourceType.SdCard
-                        if (externalVolumes.isNotEmpty()) {
+                if (externalVolumes.isNotEmpty()) {
+                    SourceCard(
+                        icon = Icons.Default.Storage,
+                        label = "External Storage",
+                        isActive = selectedSource == SourceType.SdCard,
+                        onClick = {
+                            selectedSource = SourceType.SdCard
                             onBrowseExternalVolume(externalVolumes.first().path)
-                        } else {
-                            sourcePickerLauncher.launch(null)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 SourceCard(
                     icon = Icons.Default.Cloud,
                     label = "Google Drive",
@@ -225,7 +298,7 @@ fun PhoneModeLanding(
                 onSelect = onFileTypeFilterChange,
             )
 
-            Spacer(modifier = Modifier.weight(0.2f))
+            Spacer(modifier = Modifier.height(32.dp))
 
             // ── CTA button ───────────────────────────────────────────
             val enabled = hasSourceFolder && !isLoading

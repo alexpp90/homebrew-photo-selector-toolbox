@@ -103,6 +103,8 @@ jobs:
           mkdir -p android/release-assets
           cp android/app/build/outputs/apk/release/*.apk android/release-assets/photo-selector-toolbox-android-release.apk
           cp android/app/build/outputs/bundle/release/*.aab android/release-assets/photo-selector-toolbox-android-release.aab
+          cp android/phototok/build/outputs/apk/release/*.apk android/release-assets/phototok-android-release.apk
+          cp android/phototok/build/outputs/bundle/release/*.aab android/release-assets/phototok-android-release.aab
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -117,14 +119,30 @@ jobs:
           name: photo-selector-toolbox-android-release
           path: android/release-assets/photo-selector-toolbox-android-release.apk
 
-      - name: Upload to Firebase App Distribution
+      - name: Upload Phototok release APK
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: phototok-android-release
+          path: android/release-assets/phototok-android-release.apk
+
+      - name: Upload Photo Selector Toolbox to Firebase App Distribution
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
-          appId: ${{ secrets.FIREBASE_APP_ID }}
+          appId: 1:211786657248:android:8c889798b3318b40f68f85
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
           groups: testers
           file: android/release-assets/photo-selector-toolbox-android-release.apk
+
+      - name: Upload Photo Tok to Firebase App Distribution
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: 1:211786657248:android:27e94ef870600f10f68f85
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
+          groups: testers
+          file: android/release-assets/phototok-android-release.apk
 
       - name: Upload release AAB
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
@@ -132,6 +150,13 @@ jobs:
         with:
           name: photo-selector-toolbox-android-release-aab
           path: android/release-assets/photo-selector-toolbox-android-release.aab
+
+      - name: Upload Phototok release AAB
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: phototok-android-release-aab
+          path: android/release-assets/phototok-android-release.aab
 
       - name: Publish Release Assets
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
@@ -141,3 +166,24 @@ jobs:
           name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           files: android/release-assets/*
+
+      - name: Upload Photo Selector Toolbox AAB to Google Play
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonRaw: ${{ secrets.GP_SERVICE_ACCOUNT_JSON }}
+          packageName: com.photoselectortoolbox
+          releaseFiles: android/release-assets/photo-selector-toolbox-android-release.aab
+          track: internal
+          status: completed
+
+      - name: Upload Photo Tok AAB to Google Play
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonRaw: ${{ secrets.GP_SERVICE_ACCOUNT_JSON }}
+          packageName: com.phototok
+          releaseFiles: android/release-assets/phototok-android-release.aab
+          track: internal
+          status: completed
+
