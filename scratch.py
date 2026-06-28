@@ -1,4 +1,4 @@
-from pathlib import Path
-expected_linux = Path("/run/user/1000/gvfs/smb-share:server=myserver,share=myshare/path/to/image.jpg")
-expected_str = str(expected_linux)
-print(expected_str)
+import socket
+
+# Look at windows behavior for socket.gethostbyname
+# Oh, on Windows `socket.gethostbyname("0xa9fea9fe")` raises socket.gaierror!
