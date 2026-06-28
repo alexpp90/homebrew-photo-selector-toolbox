@@ -71,9 +71,8 @@ class OllamaAestheticTool(AnalysisTool):
         if not ollama_url.lower().startswith(('http://', 'https://')):
             raise RuntimeError("Ollama URL must start with http:// or https://")
 
-        from urllib.parse import urlparse
-        hostname = urlparse(ollama_url).hostname or ""
-        if hostname == "169.254.169.254" or hostname.startswith("169.254."):
+        from photo_selector_toolbox.utils import is_cloud_metadata_url
+        if is_cloud_metadata_url(ollama_url):
             raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
 
         url = f"{ollama_url.rstrip('/')}/api/generate"

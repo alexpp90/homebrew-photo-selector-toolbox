@@ -646,3 +646,26 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
 
     # Return a copy so the cached original is never mutated
     return img.copy()
+
+def is_cloud_metadata_url(url: str) -> bool:
+    """
+    Checks if a URL resolves to a cloud metadata IP address (e.g. 169.254.169.254)
+    to protect against SSRF bypasses via hex, octal, or integer encodings.
+    """
+    import socket
+    import ipaddress
+    from urllib.parse import urlparse
+
+    hostname = urlparse(url).hostname or ""
+    if not hostname:
+        return False
+
+    try:
+        ip_str = socket.gethostbyname(hostname)
+        ip = ipaddress.ip_address(ip_str)
+        if ip.is_link_local:
+            return True
+    except Exception:
+        pass
+
+    return hostname == "169.254.169.254" or hostname.startswith("169.254.")
