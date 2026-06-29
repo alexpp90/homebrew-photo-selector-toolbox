@@ -9,6 +9,8 @@ from photo_selector_toolbox.gui_utils import ask_directory
 import os
 import json
 import urllib.request
+import socket
+import ipaddress
 
 import send2trash
 import shutil
@@ -700,8 +702,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
                 from urllib.parse import urlparse
                 hostname = urlparse(url).hostname or ""
-                if hostname == "169.254.169.254" or hostname.startswith("169.254."):
-                    raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+                try:
+                    ip = socket.gethostbyname(hostname)
+                    if ipaddress.ip_address(ip).is_link_local:
+                        raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+                except socket.gaierror:
+                    pass
+                except ValueError as e:
+                    if str(e) == "SSRF Protection: Cloud metadata IPs are not allowed.":
+                        raise e
+                    pass
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
