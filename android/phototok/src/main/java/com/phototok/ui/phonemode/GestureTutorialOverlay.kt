@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,11 +77,12 @@ fun GestureTutorialOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
                     .padding(horizontal = 16.dp)
-                    .padding(top = 32.dp, bottom = 32.dp)
-                    .navigationBarsPadding(),
+                    .padding(top = 16.dp, bottom = 24.dp),
             ) {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // ── Header ───────────────────────────────────────────
                 Text(
