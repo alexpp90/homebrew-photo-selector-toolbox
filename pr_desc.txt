@@ -1,4 +1,11 @@
-💡 What: Added keyboard shortcut hints (Left), (Right), (Esc) to the navigation and exit buttons in the Sharpness Tool.
-🎯 Why: Users often miss that actions like Next, Previous, and Exit Focus Mode have global keyboard shortcuts unless those shortcuts are explicitly hinted in the corresponding UI button text.
-📸 Before/After: Visual regression baselines have been updated to reflect the button label changes.
-♿ Accessibility: Improves discoverability of keyboard navigation, helping users who rely on keyboard shortcuts.
+🎯 **What**
+Refactored the `concurrent.futures` import in `src/photo_selector_toolbox/cli.py` to use explicit imports (`from concurrent.futures import ThreadPoolExecutor, as_completed`) and updated the call sites.
+
+💡 **Why**
+This resolves a false-positive unused import warning from the linter. While the module was imported, only its sub-components were used. Being explicit satisfies the linter cleanly without the need for inline suppression comments.
+
+✅ **Verification**
+Ran `poetry run black .` and `poetry run flake8` locally to confirm formatting and that the linter warning is resolved. Also verified no regressions by running the full test suite (`poetry run xvfb-run pytest`).
+
+✨ **Result**
+Clean, explicit code with one fewer linter warning, improving overall code health and readability.
