@@ -56,6 +56,10 @@ data class PhoneModeUiState(
     /** Detected external/removable storage volumes. */
     val externalVolumes: List<ExternalVolume> = emptyList(),
     val showExifOverlay: Boolean = true,
+    val pendingDeleteImage: ImageItem? = null,
+    val pendingDeleteIndex: Int = -1,
+    val pendingDeleteAllImagesIndex: Int = -1,
+    val revertAllowedImageUri: String? = null,
 )
 
 data class ActionFeedback(
@@ -183,6 +187,7 @@ class PhoneModeViewModel @Inject constructor(
             selectDriveFolder(folderId, "Google Drive")
             return
         }
+        finalizePendingDelete()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, sourceFolderUri = uri.toString()) }
 
@@ -237,6 +242,7 @@ class PhoneModeViewModel @Inject constructor(
     /** Select a Google Drive folder as the source. */
     fun selectDriveFolder(folderId: String, folderName: String) {
         val driveUri = GoogleDriveImageSource.buildUri(folderId)
+        finalizePendingDelete()
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -304,6 +310,7 @@ class PhoneModeViewModel @Inject constructor(
     }
 
     private fun resortImages() {
+        finalizePendingDelete()
         viewModelScope.launch {
             val current = _uiState.value
             if (current.images.isEmpty()) return@launch
@@ -322,6 +329,11 @@ class PhoneModeViewModel @Inject constructor(
 
     fun navigateToImage(index: Int) {
         if (index in _uiState.value.images.indices) {
+            val state = _uiState.value
+            val newUri = state.images.getOrNull(index)?.uri
+            if (state.pendingDeleteImage != null && newUri != state.revertAllowedImageUri) {
+                finalizePendingDelete()
+            }
             _uiState.update { it.copy(currentIndex = index) }
             loadExifForCurrent()
             // Persist position for this folder
@@ -369,16 +381,113 @@ class PhoneModeViewModel @Inject constructor(
         }
     }
 
-    /** Swipe left: request delete. */
+    /** Swipe left: request delete (does a temporary/pending delete). */
     fun requestDelete() {
+        deleteImagePending()
+    }
+
+    private fun deleteImagePending() {
         val state = _uiState.value
         if (state.images.isEmpty()) return
 
-        if (state.deleteConfirmEnabled) {
-            _uiState.update { it.copy(showDeleteConfirmation = true) }
-        } else {
-            confirmDelete()
+        // 1. If there's already a pending deletion, finalize it first!
+        finalizePendingDelete()
+
+        val indexToDelete = state.currentIndex
+        val imageToDelete = state.images[indexToDelete]
+        val allImagesIndex = state.allImages.indexOfFirst { it.uri == imageToDelete.uri }
+
+        // 2. Perform the UI removal immediately
+        val updatedImages = state.images.toMutableList().apply {
+            removeAt(indexToDelete)
         }
+        val updatedAll = state.allImages.filter { it.uri != imageToDelete.uri }
+        val newIndex = indexToDelete.coerceAtMost(updatedImages.size - 1).coerceAtLeast(0)
+        val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
+            val firstPortrait = updatedImages.indexOfFirst { !it.isLandscape }
+            if (firstPortrait >= 0) firstPortrait else -1
+        } else -1
+
+        val nextActiveImageUri = updatedImages.getOrNull(newIndex)?.uri
+
+        _uiState.update {
+            it.copy(
+                images = updatedImages,
+                allImages = updatedAll,
+                currentIndex = newIndex,
+                portraitSectionStart = newSplit,
+                pendingDeleteImage = imageToDelete,
+                pendingDeleteIndex = indexToDelete,
+                pendingDeleteAllImagesIndex = allImagesIndex,
+                revertAllowedImageUri = nextActiveImageUri
+            )
+        }
+        
+        loadExifForCurrent()
+    }
+
+    fun finalizePendingDelete() {
+        val state = _uiState.value
+        val imageToDelete = state.pendingDeleteImage ?: return
+
+        // Clear the pending state from UI state first
+        _uiState.update {
+            it.copy(
+                pendingDeleteImage = null,
+                pendingDeleteIndex = -1,
+                pendingDeleteAllImagesIndex = -1,
+                revertAllowedImageUri = null
+            )
+        }
+
+        // Perform actual deletion on I/O thread
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val deleted = imageRepository.deleteImage(context, Uri.parse(imageToDelete.uri))
+                if (!deleted) {
+                    Log.e(TAG, "Failed to delete file on disk: ${imageToDelete.uri}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error deleting file: ${imageToDelete.uri}", e)
+            }
+        }
+    }
+
+    fun revertDelete() {
+        val state = _uiState.value
+        val imageToRestore = state.pendingDeleteImage ?: return
+        val restoreIndex = state.pendingDeleteIndex
+        val restoreAllIndex = state.pendingDeleteAllImagesIndex
+
+        val updatedImages = state.images.toMutableList().apply {
+            add(restoreIndex.coerceIn(0, size), imageToRestore)
+        }
+        val updatedAll = state.allImages.toMutableList().apply {
+            if (restoreAllIndex in 0..size) {
+                add(restoreAllIndex, imageToRestore)
+            } else {
+                add(imageToRestore)
+            }
+        }
+
+        val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
+            val firstPortrait = updatedImages.indexOfFirst { !it.isLandscape }
+            if (firstPortrait >= 0) firstPortrait else -1
+        } else -1
+
+        _uiState.update {
+            it.copy(
+                images = updatedImages,
+                allImages = updatedAll,
+                currentIndex = restoreIndex.coerceIn(0, updatedImages.size - 1),
+                portraitSectionStart = newSplit,
+                pendingDeleteImage = null,
+                pendingDeleteIndex = -1,
+                pendingDeleteAllImagesIndex = -1,
+                revertAllowedImageUri = null
+            )
+        }
+        loadExifForCurrent()
     }
 
     fun dismissDeleteConfirmation() {
@@ -483,6 +592,7 @@ class PhoneModeViewModel @Inject constructor(
 
     /** Go back to the landing screen (clears images). */
     fun goBackToLanding() {
+        finalizePendingDelete()
         _uiState.update { it.copy(images = emptyList(), allImages = emptyList(), currentIndex = 0) }
     }
 
@@ -609,6 +719,21 @@ class PhoneModeViewModel @Inject constructor(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        val imageToDelete = _uiState.value.pendingDeleteImage
+        if (imageToDelete != null) {
+            val uri = Uri.parse(imageToDelete.uri)
+            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    imageRepository.deleteImage(context, uri)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in onCleared deleting file: ${imageToDelete.uri}", e)
                 }
             }
         }

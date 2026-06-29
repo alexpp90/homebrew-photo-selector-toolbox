@@ -204,7 +204,7 @@ Phone Mode (Phone Tok) includes:
 ### 7.4 Touch Interaction Patterns
 *   **Photo Navigation:** Horizontal swipe via HorizontalPager (phone) or tap on prev/next thumbnails (tablet).
 *   **Fullscreen Viewer:** Pinch-to-zoom, double-tap to toggle fit/100%, swipe-down to dismiss, horizontal swipe to navigate.
-*   **Selection/Deletion:** Long-press for context menu. Swipe gestures configurable. Delete uses Snackbar with Undo (30s) for single items, confirmation dialog for batch operations.
+*   **Selection/Deletion:** Long-press for context menu. Swipe gestures configurable. On the phone client (Phototok), swiping left triggers a non-blocking temporary deletion where the image is immediately hidden from the viewer and a "Revert Deletion" button is shown. Navigating away from the current image or leaving the viewer finalizes the deletion and deletes the file from disk/Google Drive. For other clients or operations, delete uses Snackbar with Undo (30s) or confirmation dialogs.
 *   **Minimum Touch Target:** 48dp for all interactive elements.
 *   **Context Menus:** Long-press activated. No hover-dependent interactions.
 *   **Desktop/Input Enhancements**: Mouse pointer cursors automatically display hand pointer shapes (`PointerIcon.Hand`) when hovering over interactive components (buttons, clickable images, list thumbnails). Folder drag-and-drop capability is supported, enabling users to drag a photo folder from external file managers directly into the app window to load it automatically.
