@@ -43,6 +43,16 @@ import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Lens
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -491,6 +501,46 @@ fun PhoneModeScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = if (isLandscape && isViewing) 16.dp else 80.dp),
         )
+
+        // ── Revert Deletion overlay button ───────────────────────────
+        AnimatedVisibility(
+            visible = uiState.pendingDeleteImage != null,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = if (isViewing) 100.dp else 24.dp),
+            enter = fadeIn() + scaleIn(spring(stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut() + scaleOut(tween(300)),
+        ) {
+            Surface(
+                onClick = { viewModel.revertDelete() },
+                shape = RoundedCornerShape(50),
+                color = colors.surfaceContainerHigh.copy(alpha = 0.9f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    colors.primary.copy(alpha = 0.8f)
+                ),
+                modifier = Modifier.shadow(8.dp, RoundedCornerShape(50))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Undo,
+                        contentDescription = "Revert deletion",
+                        tint = colors.primary
+                    )
+                    Text(
+                        text = "Revert Deletion",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
