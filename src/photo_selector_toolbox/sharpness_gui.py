@@ -459,12 +459,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         btn_frame.pack(pady=10, fill="x")
 
         self.prev_btn = ttk.Button(
-            btn_frame, text="◀ Prev", command=self.prev_candidate
+            btn_frame, text="◀ Prev (Left)", command=self.prev_candidate
         )
         self.prev_btn.pack(side="top", fill="x", pady=2)
 
         self.next_btn = ttk.Button(
-            btn_frame, text="Next ▶", command=self.next_candidate
+            btn_frame, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.next_btn.pack(side="top", fill="x", pady=2)
 
@@ -910,7 +910,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
        # Controls Stack
         self.focus_exit_btn = ttk.Button(
             self.focus_right_panel,
-            text="🔙 Exit Focus Mode",
+            text="🔙 Exit Focus Mode (Esc)",
             command=self.toggle_focus_mode,
         )
         self.focus_exit_btn.pack(side="top", pady=10, fill="x")
@@ -921,12 +921,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
        # Navigation & Actions
         self.focus_prev_btn = ttk.Button(
-            self.focus_right_panel, text="◀ Previous", command=self.prev_candidate
+            self.focus_right_panel, text="◀ Previous (Left)", command=self.prev_candidate
         )
         self.focus_prev_btn.pack(side="top", pady=5, fill="x")
 
         self.focus_next_btn = ttk.Button(
-            self.focus_right_panel, text="Next ▶", command=self.next_candidate
+            self.focus_right_panel, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.focus_next_btn.pack(side="top", pady=5, fill="x")
 
