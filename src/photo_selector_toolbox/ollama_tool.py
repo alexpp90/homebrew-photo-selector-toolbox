@@ -6,6 +6,8 @@ import urllib.request
 from urllib.error import URLError
 import io
 import threading
+import socket
+import ipaddress
 from pathlib import Path
 from typing import Any, Tuple
 
@@ -73,8 +75,14 @@ class OllamaAestheticTool(AnalysisTool):
 
         from urllib.parse import urlparse
         hostname = urlparse(ollama_url).hostname or ""
-        if hostname == "169.254.169.254" or hostname.startswith("169.254."):
-            raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
+        try:
+            ip = socket.gethostbyname(hostname)
+            if ipaddress.ip_address(ip).is_link_local:
+                raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
+        except socket.gaierror:
+            pass
+        except ValueError:
+            pass
 
         url = f"{ollama_url.rstrip('/')}/api/generate"
         payload = {

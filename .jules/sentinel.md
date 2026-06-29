@@ -10,3 +10,8 @@
 **Vulnerability:** Fixing Path Traversal by resolving path segments must account for cross-platform differences. Using `os.path.normpath` on URLs (which are always `/` delimited) while running on Windows translates forward slashes into backslashes (`\`). This can break subsequent path parsing logic that splits by `/`.
 **Learning:** For resolving parsed network URLs or URIs specifically, standard `os.path.normpath` should be avoided if platform-agnostic output is needed.
 **Prevention:** Use `posixpath.normpath()` directly when working with URLs or paths that must explicitly preserve the POSIX standard forward slash representation across all operating systems.
+
+## 2025-06-29 - Fixed SSRF Vulnerability By Verifying Link-Local IPs and Handling Exception Accurately
+**Vulnerability:** A Server-Side Request Forgery (SSRF) bypass in Ollama URL validation where an attacker could provide obfuscated internal IPs (like hex-encoded `0xa9fea9fe`) that evaded string-matching.
+**Learning:** Checking for bad URLs via string prefixes like `169.254.` does not work because HTTP clients handle hex, octal, or integer-encoded IPs just fine. Furthermore, catching too broad of exceptions (like catching all `ValueError` indiscriminately) in security validations could accidentally swallow the specific `ValueError` that is intended to block the request.
+**Prevention:** Resolve the hostname into an IP via `socket.gethostbyname` and check properties explicitly, e.g., `ipaddress.ip_address(ip).is_link_local`. Always be careful not to catch and swallow security exceptions raised within the same `try` block.
