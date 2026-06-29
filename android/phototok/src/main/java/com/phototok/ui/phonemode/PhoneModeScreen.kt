@@ -448,7 +448,7 @@ fun PhoneModeScreen(
         }
 
         // ── Overlay App Bars (Only when not in Landscape Viewer) ───────────
-        if (!(isLandscape && isViewing)) {
+        if (!(isLandscape && isViewing) && !uiState.showGestureTutorial) {
             // ── Top app bar ──────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -477,7 +477,7 @@ fun PhoneModeScreen(
             }
 
             // ── Bottom nav bar ───────────────────────────────────────
-            if (isViewing) {
+            if (isViewing && !uiState.showGestureTutorial) {
                 BottomNavBar(
                     activeTab = NavTab.Cards,
                     onTabSelected = { tab ->
@@ -504,7 +504,7 @@ fun PhoneModeScreen(
 
         // ── Revert Deletion overlay button ───────────────────────────
         AnimatedVisibility(
-            visible = uiState.pendingDeleteImage != null,
+            visible = uiState.pendingDeleteImage != null && !uiState.showGestureTutorial,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
