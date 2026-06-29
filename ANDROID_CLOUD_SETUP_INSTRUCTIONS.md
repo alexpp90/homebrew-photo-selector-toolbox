@@ -109,9 +109,9 @@ are git-ignored and must never be committed.
      google-services Gradle plugin; the current Drive auth resolves via
      package + SHA-1 and does not require it.
 
-3. **Enable the Drive API**
+3. **Enable the APIs**
    - Google Cloud Console (same project) → **APIs & Services → Library** →
-     enable **Google Drive API**.
+     enable **Google Drive API** and **Google Play Android Developer API**.
 
 4. **OAuth consent screen**
    - APIs & Services → **OAuth consent screen** → External.
@@ -145,6 +145,7 @@ are git-ignored and must never be committed.
      grant access to the **Photo Tok app only** with "Release to testing tracks"
      permission. (Play Console is one developer account; you scope each service
      account to its app.)
+   - **Crucial First Release Step:** Because Google Play Developer API does not support initializing brand-new apps, the very first upload of `com.phototok`'s AAB must be done **manually** in the Play Console UI. Once a manual build is uploaded to the internal track, future updates can run automatically via GitHub Actions.
 
 ---
 
@@ -168,6 +169,7 @@ The Toolbox keeps `photo-selector-tb-dist`. Tidy it so it's Toolbox-only:
    - `TOOLBOX_GP_SERVICE_ACCOUNT_JSON`
    In Play Console, scope `play-publisher@photo-selector-tb-dist…` to the **Toolbox
    app only**.
+   - **Note:** Ensure the **Google Play Android Developer API** is enabled in the `photo-selector-tb-dist` GCP project, and that at least one manual AAB upload has been completed to Google Play Console before attempting automated builds.
 
 4. **Drop the OAuth workaround** — once both Android clients have the correct
    debug + Play SHA-1s registered, the `default_web_client_id` string-resource

@@ -103,8 +103,9 @@ and you have its App ID.
 > The Google Cloud Console and Firebase share the **same** project; just switch the
 > project picker at the top to **Photo Tok / phototok-app**.
 
-1. **Enable the API**
+1. **Enable the APIs**
    - ☁️ APIs & Services → **Library** → search **Google Drive API** → **Enable**.
+   - ☁️ APIs & Services → **Library** → search **Google Play Android Developer API** → **Enable**.
 2. **OAuth consent screen**
    - APIs & Services → **OAuth consent screen** → User type **External** → Create.
    - App name `Photo Tok`, support email = your email, developer contact = your email.
@@ -124,7 +125,7 @@ and you have its App ID.
    - Come back after Phase 5 and **add the Photo Tok Play App Signing SHA-1** to
      this same client.
 
-✓ **Checkpoint:** Drive API enabled, consent screen has both scopes + you as test
+✓ **Checkpoint:** Drive and Google Play APIs enabled, consent screen has both scopes + you as test
 user, and an `android-phototok` OAuth client exists with the debug SHA-1.
 
 ---
@@ -157,8 +158,8 @@ Make two service accounts in the **phototok-app** project.
 1. ▶️ Play Console → **Create app**.
    - App name `Photo Tok`, default language, **App or Game = App**, free/paid as you
      wish, accept declarations → Create.
-   - This reserves package **`com.phototok`** (the package locks when you first
-     upload an AAB to the internal track — CI will do that).
+   - This reserves package **`com.phototok`**.
+   - **Crucial:** You must **manually upload the very first release AAB** to the **Internal testing** track via the Google Play Console web interface. The Google Play Developer API (used by GitHub Actions) cannot initialize brand-new apps or create the package association until a manual upload has been completed.
 2. **Grant the publisher service account access**
    - Play Console → **Users & permissions → Invite new users**.
    - Email = the `play-publisher@phototok-app…` address from Phase 4.
@@ -166,8 +167,8 @@ Make two service accounts in the **phototok-app** project.
    - Permissions → at minimum **Release to testing tracks** (and **View app
      information**). Invite.
 3. **Get the Photo Tok Play App Signing SHA-1** (now that the app exists)
-   - First upload happens via CI, so this only appears after the first release.
-     Once available: left sidebar → **Protected with Play** → **App signing key
+   - The first upload must be done manually (see Step 1 above). Once uploaded,
+     the SHA-1 fingerprint becomes available immediately: left sidebar → **Protected with Play** → **App signing key
      certificate → SHA-1** (older layout: **App integrity → App signing**) → copy it
      → go back to ☁️ Phase 3 step 3 and **add it to the `android-phototok` OAuth
      client**.
