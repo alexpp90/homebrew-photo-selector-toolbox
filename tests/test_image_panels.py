@@ -277,10 +277,24 @@ def test_load_images_background(mock_gui_deps):
     host.cache_manager.get_preview.side_effect = lambda p: img_mock if p == path1 else None
     mock_gui_deps["load_image_preview"].side_effect = lambda p, max_size: img_mock if p == path2 else None
 
+    host.panel_prev.path = path1
+    host.panel_curr.path = path2
+    host.panel_next.path = path3
+    host.refresh_active_view = MagicMock()
+
     host.load_images_background(path1, path2, path3, (100, 100), (100, 100), (100, 100))
 
     # check that parent.after was called
     host.parent.after.assert_called_once()
+
+    # Execute the callback
+    callback = host.parent.after.call_args[0][1]
+    callback()
+
+    # Assertions
+    assert hasattr(host, 'current_triplet_images')
+    assert host.current_triplet_images == (img_mock, img_mock, None)
+    host.refresh_active_view.assert_called_once()
 
 
 def test_update_panels_final():
