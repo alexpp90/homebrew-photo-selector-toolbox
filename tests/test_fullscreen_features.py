@@ -758,3 +758,41 @@ def test_fullscreen_viewer_metadata_error_handling():
 
                 assert dummy_res.exif is not None
                 assert type(dummy_res.exif).__name__ == "MockExifData"
+
+def test_fullscreen_viewer_redraw_canvas_error():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test_image.jpg")
+    file_list = [path]
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"), \
+         patch("photo_selector_toolbox.fullscreen_viewer.ImageTk.PhotoImage"), \
+         patch("photo_selector_toolbox.fullscreen_viewer.logger.error") as mock_logger_error:
+
+        viewer = FullscreenViewer(parent, path, file_list=file_list)
+
+        # Setup mock pil_image
+        viewer.pil_image = MagicMock()
+        viewer.pil_image.width = 100
+        viewer.pil_image.height = 100
+        # Mock crop and resize so they don't fail
+        mock_region = MagicMock()
+        mock_region.width = 50
+        mock_region.height = 50
+        mock_region.resize.return_value = mock_region
+        viewer.pil_image.crop.return_value = mock_region
+
+        viewer.scale = 1.0
+        viewer.offset_x = 0
+        viewer.offset_y = 0
+        viewer.winfo_width = MagicMock(return_value=100)
+        viewer.winfo_height = MagicMock(return_value=100)
+
+        # Setup canvas mock to fail on create_image
+        viewer.canvas = MagicMock()
+        viewer.canvas.create_image.side_effect = Exception("Canvas create_image error")
+
+        viewer.redraw()
+
+        mock_logger_error.assert_called_once_with("Redraw error: Canvas create_image error")
