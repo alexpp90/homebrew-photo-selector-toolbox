@@ -4,14 +4,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
-from photo_selector_toolbox.ollama_tool import (
-    OllamaAestheticTool,
-    load_config,
-    save_config,
-    DEFAULT_CONFIG,
-)
+from photo_selector_toolbox.ollama_tool import OllamaAestheticTool
 import photo_selector_toolbox.ollama_tool as ot
-
 
 @pytest.fixture
 def temp_config_dir(tmp_path):
@@ -24,21 +18,6 @@ def temp_config_dir(tmp_path):
         yield tmp_path
 
 
-def test_load_save_config(temp_config_dir):
-    # Test loading when no file exists (should create defaults)
-    config = load_config()
-    assert config == DEFAULT_CONFIG
-    assert ot.CONFIG_FILE.exists()
-
-    # Modify and save
-    config["ollama_model"] = "test-vlm-model"
-    save_config(config)
-
-    # Reload and verify
-    reloaded = load_config()
-    assert reloaded["ollama_model"] == "test-vlm-model"
-
-
 @pytest.fixture
 def dummy_image_file(tmp_path):
     """Create a temporary dummy JPEG image."""
@@ -46,7 +25,6 @@ def dummy_image_file(tmp_path):
     img = Image.new("RGB", (100, 100), color="red")
     img.save(img_path, format="JPEG")
     return img_path
-
 
 @patch("urllib.request.urlopen")
 def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
@@ -69,7 +47,6 @@ def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     assert req.full_url == "http://localhost:11434/api/generate"
     assert req.method == "POST"
 
-
 @patch("urllib.request.urlopen")
 def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_dir):
     # Setup custom configuration
@@ -78,6 +55,7 @@ def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_d
         "ollama_model": "qwen-vl",
         "ollama_prompt": "Rate the aesthetics of the photo. Score: ",
     }
+    from photo_selector_toolbox.config import save_config
     save_config(custom_config)
 
     # Mock response
@@ -100,7 +78,6 @@ def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_d
     assert body["model"] == "qwen-vl"
     assert body["prompt"] == "Rate the aesthetics of the photo. Score: "
 
-
 @patch("urllib.request.urlopen")
 def test_ollama_tool_connection_error(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock connection failure (URLError)
@@ -111,7 +88,6 @@ def test_ollama_tool_connection_error(mock_urlopen, dummy_image_file, temp_confi
         tool.analyze(dummy_image_file)
 
     assert "Ollama server connection error" in str(exc_info.value)
-
 
 @patch("urllib.request.urlopen")
 def test_ollama_tool_parsing_error(mock_urlopen, dummy_image_file, temp_config_dir):
@@ -129,77 +105,6 @@ def test_ollama_tool_parsing_error(mock_urlopen, dummy_image_file, temp_config_d
 
     assert "Could not parse a numeric score from Ollama output" in str(exc_info.value)
 
-
-def test_load_config_migration(temp_config_dir):
-    # Write an old config file directly
-    old_prompt = (
-        "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
-        "Consider composition, lighting, focus, and subject. "
-        "Provide your reasoning in one short sentence, then end your response "
-        "with the score in the format [SCORE: X.Y]."
-    )
-    old_config = {
-        "ollama_url": "http://localhost:11434",
-        "ollama_model": "llava",
-        "ollama_prompt": old_prompt,
-    }
-    with open(ot.CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(old_config, f, indent=4)
-
-    # Call load_config, which should trigger the migration
-    loaded = load_config()
-    assert loaded["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
-
-    # Now test the second legacy default prompt format
-    old_prompt_2 = (
-        "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
-        "Consider composition, lighting, focus, and subject. "
-        "Start your response with the score in the format [SCORE: X.Y], followed by a short sentence of reasoning."
-    )
-    old_config_2 = {
-        "ollama_url": "http://localhost:11434",
-        "ollama_model": "llava",
-        "ollama_prompt": old_prompt_2,
-    }
-    with open(ot.CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(old_config_2, f, indent=4)
-
-    loaded_2 = load_config()
-    assert loaded_2["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
-
-    # Now test the third legacy default prompt format (previous version)
-    old_prompt_3 = (
-        "Rate this photo's aesthetic quality on a scale of 1.0 (horrible) to 10.0 (outstanding / perfect). "
-        "Consider composition, lighting, focus, and subject.\n\n"
-        "Use this calibration scale:\n"
-        "- 1.0 - 3.0: Very poor (blurry, out of focus, extremely poor lighting/exposure, or no clear subject).\n"
-        "- 4.0 - 6.0: Average (acceptable quality but has noticeable flaws in composition, lighting, or sharpness).\n"
-        "- 7.0 - 8.0: Good (sharp, well-composed, appealing lighting/subject).\n"
-        "- 9.0 - 10.0: Outstanding (perfect exposure/lighting, creative composition, "
-        "excellent sharpness, professional grade).\n\n"
-        "Start your response in this exact format:\n"
-        "[SCORE: X.Y] [ANALYSIS: tag]\n"
-        "where tag is exactly a 1 or 2 word description of the main reason "
-        "(e.g. 'Blurry', 'Good composition', 'Under-exposed', 'Great lighting', 'Soft focus', 'Well-composed'). "
-        "Follow it with a short sentence explaining your reasoning."
-    )
-    old_config_3 = {
-        "ollama_url": "http://localhost:11434",
-        "ollama_model": "llava",
-        "ollama_prompt": old_prompt_3,
-    }
-    with open(ot.CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(old_config_3, f, indent=4)
-
-    loaded_3 = load_config()
-    assert loaded_3["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
-
-    # Verify that it is also written back to disk
-    with open(ot.CONFIG_FILE, "r", encoding="utf-8") as f:
-        on_disk = json.load(f)
-    assert on_disk["ollama_prompt"] == DEFAULT_CONFIG["ollama_prompt"]
-
-
 @patch("urllib.request.urlopen")
 def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with SCORE but no ANALYSIS tag
@@ -215,40 +120,5 @@ def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_conf
 
     assert score == 8.5
     assert tag == "N/A"
-
-
-def test_add_get_recent_folders(temp_config_dir):
-    from photo_selector_toolbox.config import add_recent_folder, get_recent_folders
-    add_recent_folder("/some/path/1")
-    add_recent_folder("/some/path/2")
-    add_recent_folder("/some/path/1")  # duplicate
-
-    folders = get_recent_folders()
-    assert folders == ["/some/path/1", "/some/path/2"]
-
-
-def test_is_ollama_url_external(temp_config_dir):
-    from photo_selector_toolbox.config import is_ollama_url_external
-    assert not is_ollama_url_external("http://localhost:11434")
-    assert not is_ollama_url_external("http://127.0.0.1:11434")
-    assert is_ollama_url_external("http://192.168.1.100:11434")
-    assert not is_ollama_url_external(None)  # loads from config, which defaults to localhost (False)
-
-
-@patch("builtins.open", side_effect=OSError("Read-only file system"))
-def test_load_save_config_error(mock_open, temp_config_dir):
-    from photo_selector_toolbox.config import load_config, save_config
-    # Force exceptions
-    cfg = load_config()
-    assert cfg == DEFAULT_CONFIG
-    save_config(cfg)
-
-
-@patch("os.chmod", side_effect=OSError("Not supported"))
-def test_set_secure_permissions_error(mock_chmod, temp_config_dir):
-    from pathlib import Path
-    from photo_selector_toolbox.config import _set_secure_permissions
-    # Should not raise exception
-    _set_secure_permissions(Path("/tmp/fake_config_file"))
 
 

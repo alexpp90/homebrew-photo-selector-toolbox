@@ -1,3 +1,4 @@
+import os
 import json
 import stat
 from unittest.mock import patch
@@ -204,18 +205,28 @@ def test_is_ollama_url_external_exception():
         assert is_ollama_url_external("http://bad-url")
 
 
-@patch("os.chmod")
-def test_set_secure_permissions(mock_chmod, tmp_path):
+
+
+def test_set_secure_permissions_real_file(tmp_path):
     test_file = tmp_path / "test.txt"
+    test_file.touch()
+
+    # Run the function
     _set_secure_permissions(test_file)
 
-    mock_chmod.assert_called_once_with(test_file, stat.S_IRUSR | stat.S_IWUSR)
+    # Assert on posix systems
+    if os.name == "posix":
+        mode = test_file.stat().st_mode
+        # The mode should be 0o100600 (regular file, read/write for owner only)
+        # stat.S_IMODE gets the bottom 12 bits (permissions)
+        assert stat.S_IMODE(mode) == (stat.S_IRUSR | stat.S_IWUSR)
 
 
 @patch("os.chmod")
 def test_set_secure_permissions_oserror(mock_chmod, tmp_path):
     mock_chmod.side_effect = OSError("chmod not supported")
     test_file = tmp_path / "test.txt"
+    test_file.touch()
 
     # This should not raise an exception
     _set_secure_permissions(test_file)
