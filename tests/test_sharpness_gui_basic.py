@@ -569,3 +569,29 @@ def test_sorting_grouped_list():
 
 
 
+
+
+def test_cancel_scan():
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
+    ):
+        tool = SharpnessTool(parent)
+
+        # Mock dependencies
+        tool.scan_controller = MagicMock()
+        tool.log = MagicMock()
+
+        # Action
+        tool.cancel_scan()
+
+        # Assertions
+        tool.scan_controller.cancel.assert_called_once()
+        tool.log.assert_called_once_with("Stopping scan...")
