@@ -698,9 +698,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 if not url.lower().startswith(('http://', 'https://')):
                     raise ValueError("URL must start with http:// or https://")
 
-                from urllib.parse import urlparse
-                hostname = urlparse(url).hostname or ""
-                if hostname == "169.254.169.254" or hostname.startswith("169.254."):
+                from photo_selector_toolbox.utils import is_cloud_metadata
+                if is_cloud_metadata(url):
                     raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
