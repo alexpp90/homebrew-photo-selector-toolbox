@@ -248,6 +248,7 @@ All analysis algorithms must produce equivalent results to the desktop Python im
 ### 7.10 Android Build & CI
 *   **Build System:** Gradle with Kotlin DSL and version catalog (`gradle/libs.versions.toml`).
 *   **CI Workflow:** `.github/workflows/build-android.yml` — runs on `ubuntu-latest` with JDK 17. Triggers on pushes to `main`, tags matching `v*`, and PRs modifying `android/**`. Runs lint and unit tests before building. Produces signed APKs and AABs for both the `:app` (Photo Selector Toolbox) and `:phototok` (Photo Tok) modules.
+*   **Version Code Generation & Offsets:** Version codes in CI are based on the GitHub workflow run number (`VERSION_CODE: ${{ github.run_number }}`). To prevent collisions (e.g., if a version code has already been used on Google Play), version codes can be adjusted using repository variables or environment variables: `VERSION_CODE_OFFSET` (global offset applied to both apps), `TOOLBOX_VERSION_CODE_OFFSET` (app-specific offset), and `PHOTOTOK_VERSION_CODE_OFFSET` (phototok-specific offset). These are added to the base version code.
 *   **Artifact Naming:**
     *   **Photo Selector Toolbox (`:app`):** `photo-selector-toolbox-android-release.apk` and `photo-selector-toolbox-android-release.aab`.
     *   **Photo Tok (`:phototok`):** `phototok-android-release.apk` and `phototok-android-release.aab`.
