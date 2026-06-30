@@ -1,0 +1,3 @@
+🎯 **What:** The `cancel_scan` method in `SharpnessTool` was missing test coverage.
+📊 **Coverage:** A new test `test_cancel_scan` has been added to `tests/test_sharpness_gui_basic.py` that verifies the thread cancellation is triggered correctly and proper logging happens when the cancel button is clicked.
+✨ **Result:** Thread cancellation behavior in `SharpnessTool` is now verified, ensuring thread safety improvements or changes won't silently break this critical GUI control path.
