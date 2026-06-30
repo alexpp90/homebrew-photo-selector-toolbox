@@ -1542,6 +1542,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             # Batch fetch all cached scores for missing paths to prevent N+1 query bottleneck
             cached_scores = cache.get_multiple_scores(missing)
+            updates = {}
 
             for idx, path in enumerate(missing):
                 if self.grouping_stop_event.is_set():
@@ -1562,7 +1563,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             dhash_num = calculate_dhash(img, hash_size=hash_size)
                             format_str = f"0{hash_size*hash_size//4}x"
                             dhash_str = format(dhash_num, format_str)
-                            cache.set_scores(path, {hash_key: dhash_str})
+                            updates[path] = {hash_key: dhash_str}
                         else:
                             dhash_str = None
 
@@ -1581,6 +1582,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         self.group_status_lbl.config(text=f"👥 Grouping: {int(p)}% ({i}/{total})")
                     )
                 )
+
+            if updates:
+                cache.set_multiple_scores(updates)
 
             self.parent.after(0, lambda: self._handle_grouping_finished(level))
 

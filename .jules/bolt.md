@@ -4,3 +4,7 @@
 ## 2025-02-18 - Single-Pass Metadata Extraction in Analyzer
 **Learning:** The previous implementation of `analyze_data` and `analyze_data_json` performed multiple redundant iterations over the entire dataset using list comprehensions (`get_values` with `getattr`), resulting in an O(M*N) complexity overhead.
 **Action:** Replace multiple sequential loops over the same array with a single-pass extraction helper. Utilizing direct attribute access instead of `getattr` inside a single loop provides significant performance boosts when extracting attributes from hundreds of thousands of objects.
+
+## 2024-05-18 - Optimize DB writes for Image Grouping
+**Learning:** During similarity analysis looping over images, calling `cache.set_scores()` on each missing image individually leads to an N+1 query loop for database writes, significantly impacting performance and file I/O.
+**Action:** Always aggregate updates into a dictionary (`updates[path] = {hash_key: dhash_str}`) during calculation loops, and perform a single batched database transaction using `cache.set_multiple_scores(updates)` afterwards. This scales linearly instead of quadratically and drastically speeds up processing time (~19x improvement).
