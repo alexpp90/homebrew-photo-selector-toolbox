@@ -721,7 +721,8 @@ def test_fullscreen_viewer_redraw_canvas_error():
     path = Path("test_image.jpg")
     file_list = [path]
 
-    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),          patch("photo_selector_toolbox.fullscreen_viewer.logger.error") as mock_logger_error:
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"), \
+         patch("photo_selector_toolbox.fullscreen_viewer.logger.error") as mock_logger_error:
 
         viewer = FullscreenViewer(parent, path, file_list=file_list)
         viewer.pil_image = MagicMock()
