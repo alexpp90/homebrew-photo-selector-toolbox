@@ -43,6 +43,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSION_CODE: ${{ github.run_number }}
+      VERSION_CODE_OFFSET: ${{ vars.VERSION_CODE_OFFSET || 0 }}
+      TOOLBOX_VERSION_CODE_OFFSET: ${{ vars.TOOLBOX_VERSION_CODE_OFFSET || 0 }}
+      PHOTOTOK_VERSION_CODE_OFFSET: ${{ vars.PHOTOTOK_VERSION_CODE_OFFSET || 0 }}
 
     steps:
       - name: Checkout code

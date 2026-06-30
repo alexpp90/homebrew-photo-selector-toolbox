@@ -15,7 +15,11 @@ android {
         applicationId = "com.photoselectortoolbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 5
+        val baseVersion = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 5
+        val offset = System.getenv("TOOLBOX_VERSION_CODE_OFFSET")?.toIntOrNull()
+            ?: System.getenv("VERSION_CODE_OFFSET")?.toIntOrNull()
+            ?: 0
+        versionCode = baseVersion + offset
         versionName = "0.4.0"
 
         testInstrumentationRunner = "com.photoselectortoolbox.HiltTestRunner"
