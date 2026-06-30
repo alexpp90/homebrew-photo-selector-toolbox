@@ -36,8 +36,9 @@ def capture_widget_screenshot(widget, width=800, height=600, settle_ms=200):
     """
     root = widget.winfo_toplevel()
 
-    # Force a specific size so baselines are reproducible
-    root.geometry(f"{width}x{height}")
+    # Force a specific size and position it to avoid screen edges/popups
+    root.geometry(f"{width}x{height}+50+50")
+
     root.update_idletasks()
     root.update()
     # Let the window manager settle (important under Xvfb)

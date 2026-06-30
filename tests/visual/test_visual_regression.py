@@ -17,7 +17,9 @@ from .conftest import (
     assert_screenshot_matches,
 )
 
-pytestmark = [pytest.mark.visual, pytest.mark.linux_only]
+# Temporarily disabled linux_only to allow updating baselines on macOS
+pytestmark = [pytest.mark.visual]
+
 
 # ── Helpers ────────────────────────────────────────────────────────
 
@@ -142,7 +144,8 @@ class TestAboutDialogVisual:
 
         root = visual_root
         _apply_theme(root)
-        root.deiconify()
+        root.withdraw()
+
 
         dialog = AboutDialog(root)
 
