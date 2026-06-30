@@ -1181,6 +1181,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         # Batch fetch all cached scores for paths to prevent N+1 query bottleneck
         cached_scores = cache.get_multiple_scores(paths)
+        new_scores_to_cache = {}
 
         for path in paths:
             if self.stop_event.is_set():
@@ -1219,9 +1220,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             dhash_str = f"{dhash_num:016x}"
                             res.scores["dhash_8"] = dhash_str
                             res.scores["dhash"] = dhash_str
-                            cache.set_scores(path, {"dhash_8": dhash_str})
+                            new_scores_to_cache[path] = {"dhash_8": dhash_str}
                 except Exception as e:
                     logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
+
+        if new_scores_to_cache:
+            cache.set_multiple_scores(new_scores_to_cache)
 
     def _start_background_update_scan(self):
        # Stop previous background updates
