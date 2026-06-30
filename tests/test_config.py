@@ -221,3 +221,16 @@ def test_set_secure_permissions_oserror(mock_chmod, tmp_path):
     _set_secure_permissions(test_file)
 
     mock_chmod.assert_called_once_with(test_file, stat.S_IRUSR | stat.S_IWUSR)
+
+@patch("builtins.open", side_effect=OSError("Read-only file system"))
+def test_load_config_open_error(mock_open, mock_config_paths, caplog):
+    config_dir, config_file = mock_config_paths
+
+    # We need to make sure CONFIG_FILE exists so we hit the open("r") branch,
+    # or if we don't, we hit open("w") branch and get an exception.
+    # Both paths use open and catch Exception.
+
+    loaded_config = load_config()
+
+    assert loaded_config == DEFAULT_CONFIG
+    assert "Failed to load or write config file" in caplog.text
