@@ -17,6 +17,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -121,6 +123,58 @@ fun SettingsClickItem(
         if (trailing != null) {
             Spacer(modifier = Modifier.width(12.dp))
             trailing()
+        }
+    }
+}
+
+/**
+ * A labeled single-choice radio group, used for settings like Format Filter or
+ * the Add-to-Collection action.
+ */
+@Composable
+fun SettingsRadioGroup(
+    title: String,
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.onSurface,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        options.forEach { (value, label) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(value) }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = selected == value,
+                    onClick = { onSelect(value) },
+                    colors = RadioButtonDefaults.colors(
+                        selectedColor = colors.primaryContainer,
+                        unselectedColor = colors.onSurfaceVariant,
+                    ),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurface,
+                )
+            }
         }
     }
 }

@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.MaterialTheme
@@ -123,13 +124,13 @@ fun GestureTutorialOverlay(
                             modifier = Modifier.weight(1f),
                         )
                         GestureCard(
-                            icon = Icons.Default.TouchApp,
-                            title = "Double Tap",
+                            icon = Icons.AutoMirrored.Filled.ArrowForward,
+                            title = "Swipe Right",
                             description = "Add to collection",
                             iconTint = colors.primary,
                             circleBorder = colors.primary.copy(alpha = 0.2f),
                             circleFill = colors.primary.copy(alpha = 0.1f),
-                            animationType = GestureAnimation.DOUBLE_TAP,
+                            animationType = GestureAnimation.SWIPE_RIGHT,
                             animDelay = 500,
                             modifier = Modifier.weight(1f),
                         )
@@ -161,13 +162,13 @@ fun GestureTutorialOverlay(
                             animDelay = 0,
                         )
                         GestureCard(
-                            icon = Icons.Default.TouchApp,
-                            title = "Double Tap",
+                            icon = Icons.AutoMirrored.Filled.ArrowForward,
+                            title = "Swipe Right",
                             description = "Add to your collection",
                             iconTint = colors.primary,
                             circleBorder = colors.primary.copy(alpha = 0.2f),
                             circleFill = colors.primary.copy(alpha = 0.1f),
-                            animationType = GestureAnimation.DOUBLE_TAP,
+                            animationType = GestureAnimation.SWIPE_RIGHT,
                             animDelay = 500,
                         )
                         GestureCard(
@@ -231,7 +232,7 @@ fun GestureTutorialOverlay(
 
 // ── Gesture card composable ──────────────────────────────────────────────
 
-private enum class GestureAnimation { VERTICAL, DOUBLE_TAP, SWIPE_LEFT }
+private enum class GestureAnimation { VERTICAL, DOUBLE_TAP, SWIPE_LEFT, SWIPE_RIGHT }
 
 @Composable
 private fun GestureCard(
@@ -342,6 +343,18 @@ private fun AnimatedGestureIcon(
             val offsetX = (-(anim.value) * 12f)
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier
+                    .size(32.dp)
+                    .offset { IntOffset(offsetX.dp.roundToPx(), 0) },
+            )
+        }
+
+        GestureAnimation.SWIPE_RIGHT -> {
+            val offsetX = (anim.value * 12f)
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier

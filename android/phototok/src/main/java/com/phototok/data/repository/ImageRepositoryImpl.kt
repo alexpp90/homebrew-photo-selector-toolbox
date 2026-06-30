@@ -28,7 +28,7 @@ class ImageRepositoryImpl @Inject constructor(
 
     companion object {
         private const val TAG = "ImageRepositoryImpl"
-        private const val SELECTION_FOLDER_NAME = "Selection"
+        const val SELECTION_FOLDER_NAME = "PhotoTok_Selection"
         private const val RAW_SUBFOLDER = "RAW"
         private const val JPEG_SUBFOLDER = "JPEG"
 

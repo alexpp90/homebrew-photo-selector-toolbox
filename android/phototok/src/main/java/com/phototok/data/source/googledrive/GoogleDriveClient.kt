@@ -98,7 +98,9 @@ class GoogleDriveClient @Inject constructor(
                 if (mime == DriveFile.MIME_FOLDER) {
                     // Skip "Selection" / "Selected" folders just like the local source
                     val folderName = f.getString("name").lowercase()
-                    if (folderName == "selection" || folderName == "selected") continue
+                    if (folderName == "selection" || folderName == "selected" ||
+                        folderName == "phototok_selection"
+                    ) continue
 
                     if (recursive) {
                         listImagesInternal(f.getString("id"), true, results)

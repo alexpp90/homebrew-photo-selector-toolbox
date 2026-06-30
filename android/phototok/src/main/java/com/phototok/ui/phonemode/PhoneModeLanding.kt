@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
@@ -72,12 +73,14 @@ fun PhoneModeLanding(
     onSelectSource: (Uri) -> Unit,
     onSelectCollection: (Uri) -> Unit,
     onStart: () -> Unit,
-    fileTypeFilter: String = "all",
-    onFileTypeFilterChange: (String) -> Unit = {},
     externalVolumes: List<com.phototok.data.source.ExternalVolume> = emptyList(),
     onBrowseExternalVolume: (String) -> Unit = {},
     onOpenGoogleDrive: () -> Unit = {},
     isGoogleDriveSignedIn: Boolean = false,
+    recentPaths: List<com.phototok.data.model.RecentPath> = emptyList(),
+    recentPathsEnabled: Boolean = true,
+    recentPathsCount: Int = 3,
+    onSelectRecentPath: (com.phototok.data.model.RecentPath) -> Unit = {},
 ) {
     val sourcePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -281,22 +284,27 @@ fun PhoneModeLanding(
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // ── Format filter ────────────────────────────────────────
-            Text(
-                text = "FORMAT FILTER",
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, bottom = 12.dp),
-            )
-
-            FormatFilterRow(
-                selected = fileTypeFilter,
-                onSelect = onFileTypeFilterChange,
-            )
+            // ── Recent folders (quick re-select) ─────────────────────
+            val recentToShow = recentPaths.take(recentPathsCount.coerceAtLeast(1))
+            if (recentPathsEnabled && recentToShow.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(32.dp))
+                Text(
+                    text = "RECENT FOLDERS",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, bottom = 12.dp),
+                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    recentToShow.forEach { recent ->
+                        RecentPathRow(recent = recent, onClick = { onSelectRecentPath(recent) })
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -388,33 +396,47 @@ private fun SourceCard(
 }
 
 @Composable
-private fun FormatFilterRow(
-    selected: String,
-    onSelect: (String) -> Unit,
+private fun RecentPathRow(
+    recent: com.phototok.data.model.RecentPath,
+    onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val isDrive = com.phototok.data.source.googledrive.GoogleDriveImageSource.isDriveUri(recent.uri)
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("all" to "Both", "raw" to "RAW", "jpg" to "JPG").forEach { (value, label) ->
-            val isSelected = selected == value
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .then(
-                        if (!isSelected) Modifier.border(1.dp, colors.outlineVariant, RoundedCornerShape(50))
-                        else Modifier,
-                    )
-                    .clickable { onSelect(value) },
-                shape = RoundedCornerShape(50),
-                color = if (isSelected) colors.primaryContainer else colors.surfaceContainer,
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isSelected) colors.onPrimaryContainer else colors.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                )
-            }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, colors.outlineVariant, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = colors.surfaceContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = if (isDrive) Icons.Default.Cloud else Icons.Default.History,
+                contentDescription = null,
+                tint = colors.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = recent.name.ifEmpty { "Folder" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSurface,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

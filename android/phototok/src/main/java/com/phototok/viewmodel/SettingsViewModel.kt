@@ -20,12 +20,16 @@ data class SettingsUiState(
     val selectionFolderName: String = "Selection",
     val sortingEnabled: Boolean = true,
     val collectionAction: String = "copy",
-    val deleteConfirmEnabled: Boolean = true,
-    val sortByOrientation: Boolean = true,
+    val trashConfirmEnabled: Boolean = true,
+    val directDeleteConfirmEnabled: Boolean = true,
+    val sortByOrientation: Boolean = false,
     val randomizeOrder: Boolean = false,
     val collectionUri: String? = null,
     val fileTypeFilter: String = "all",
-    val showExifOverlay: Boolean = true,
+    val showExifOverlay: Boolean = false,
+    val moveRelatedFiles: Boolean = false,
+    val recentPathsEnabled: Boolean = true,
+    val recentPathsCount: Int = 3,
     val sourceFolderUri: String? = null,
     val sourceFolderName: String = "",
 )
@@ -45,21 +49,29 @@ class SettingsViewModel @Inject constructor(
                 settingsRepository.selectionFolderName,
                 settingsRepository.sortingEnabled,
                 settingsRepository.phoneCollectionAction,
-                settingsRepository.phoneDeleteConfirmEnabled,
+                settingsRepository.phoneTrashConfirmEnabled,
+                settingsRepository.phoneDirectDeleteConfirmEnabled,
                 settingsRepository.phoneSortByOrientation,
                 settingsRepository.phoneRandomizeOrder,
                 settingsRepository.phoneFileTypeFilter,
-                settingsRepository.phoneShowExifOverlay
+                settingsRepository.phoneShowExifOverlay,
+                settingsRepository.phoneMoveRelatedFiles,
+                settingsRepository.phoneRecentPathsEnabled,
+                settingsRepository.phoneRecentPathsCount,
             ) { arrays ->
                 SettingsUiState(
                     selectionFolderName = arrays[0] as String,
                     sortingEnabled = arrays[1] as Boolean,
                     collectionAction = arrays[2] as String,
-                    deleteConfirmEnabled = arrays[3] as Boolean,
-                    sortByOrientation = arrays[4] as Boolean,
-                    randomizeOrder = arrays[5] as Boolean,
-                    fileTypeFilter = arrays[6] as String,
-                    showExifOverlay = arrays[7] as Boolean,
+                    trashConfirmEnabled = arrays[3] as Boolean,
+                    directDeleteConfirmEnabled = arrays[4] as Boolean,
+                    sortByOrientation = arrays[5] as Boolean,
+                    randomizeOrder = arrays[6] as Boolean,
+                    fileTypeFilter = arrays[7] as String,
+                    showExifOverlay = arrays[8] as Boolean,
+                    moveRelatedFiles = arrays[9] as Boolean,
+                    recentPathsEnabled = arrays[10] as Boolean,
+                    recentPathsCount = arrays[11] as Int,
                     collectionUri = _uiState.value.collectionUri,
                     sourceFolderUri = _uiState.value.sourceFolderUri,
                     sourceFolderName = _uiState.value.sourceFolderName,
@@ -101,8 +113,12 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setPhoneCollectionAction(action) }
     }
 
-    fun updateDeleteConfirm(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setPhoneDeleteConfirmEnabled(enabled) }
+    fun updateTrashConfirm(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPhoneTrashConfirmEnabled(enabled) }
+    }
+
+    fun updateDirectDeleteConfirm(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPhoneDirectDeleteConfirmEnabled(enabled) }
     }
 
     fun updateSortByOrientation(enabled: Boolean) {
@@ -123,5 +139,17 @@ class SettingsViewModel @Inject constructor(
 
     fun updateShowExifOverlay(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setPhoneShowExifOverlay(enabled) }
+    }
+
+    fun updateMoveRelatedFiles(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPhoneMoveRelatedFiles(enabled) }
+    }
+
+    fun updateRecentPathsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPhoneRecentPathsEnabled(enabled) }
+    }
+
+    fun updateRecentPathsCount(count: Int) {
+        viewModelScope.launch { settingsRepository.setPhoneRecentPathsCount(count) }
     }
 }

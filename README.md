@@ -3,18 +3,17 @@
 
   # Photo Selector Toolbox
 
-  **The fastest way to cull, analyze, and organize your photos — across desktop and Android.**
+  **The ultimate multi-platform ecosystem to cull, analyze, and organize your photo libraries with blazing speed — built for Desktop, Tablet, and Mobile.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
   [![Kotlin](https://img.shields.io/badge/Kotlin-2.0%2B-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
-  [![Build](https://img.shields.io/github/actions/workflow/status/alexpp90/homebrew-photo-selector-toolbox/build.yml?branch=main&label=Build&logo=github)](https://github.com/alexpp90/homebrew-photo-selector-toolbox/actions)
+  [![Build Status](https://img.shields.io/github/actions/workflow/status/alexpp90/homebrew-photo-selector-toolbox/build.yml?branch=main&label=Build&logo=github)](https://github.com/alexpp90/homebrew-photo-selector-toolbox/actions)
   [![Latest Release](https://img.shields.io/github/v/release/alexpp90/homebrew-photo-selector-toolbox?label=Stable&logo=github)](https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/latest)
-  [![Nightly](https://img.shields.io/github/release-date-pre/alexpp90/homebrew-photo-selector-toolbox?label=Nightly&logo=github)](https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/tag/nightly)
   [![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)](#-desktop-installation)
   [![Windows](https://img.shields.io/badge/Windows-0078D4?logo=windows&logoColor=white)](#-desktop-installation)
   [![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](#-desktop-installation)
-  [![Android](https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white)](#-android)
+  [![Android](https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white)](#-android-installation)
 
   <br />
   <img src="assets/banner.png" alt="Photo Selector Toolbox Dashboard Banner" width="800" style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);" />
@@ -22,30 +21,93 @@
 
 ---
 
-## Overview
+## 🌟 The Ecosystem at a Glance
 
-Photo Selector Toolbox provides a professional, high-velocity photo culling and analysis workflow. Designed to process directories of images, it automatically extracts EXIF metadata, estimates image quality (sharpness, noise, highlight/shadow clipping), groups similar series, and finds duplicate files.
+**Photo Selector Toolbox** is a privacy-first, high-velocity photo culling and metadata analysis suite designed for professional photographers, enthusiasts, and creators. Whether you are at your desktop workstation, reviewing on a tablet, or sorting on the go with your phone, we have a native solution tailored to your workflow.
 
-This project delivers **three independent, native solutions** tailored to different form factors and interaction models, sharing a single codebase repository.
-
-> **Privacy First:** Your images are processed entirely on-device. No subscriptions. No cloud uploads. No telemetry.
+> 🔒 **100% Private & Offline:** Your photos never leave your device. All EXIF parsing, duplicate detection, and quality evaluations (including local AI models) run strictly on-device. No cloud uploads, no subscriptions, no telemetry.
 
 ---
 
-## The Three Solutions
+## 📦 Three Native Solutions, One Shared Repository
 
-| Solution | Code Module | Target Environment | Primary UI Paradigm | Key Tech Stack |
+The repository targets three independent solutions optimized for their respective environments and UX models, while sharing high-level photographic domain concepts (like EXIF data structures and quality algorithms):
+
+| Solution | Location | Tech Stack | Target Environment | Primary UX Paradigm |
 | :--- | :--- | :--- | :--- | :--- |
-| **Desktop** | `src/` | macOS, Windows, Linux | Menu & Keyboard-driven desktop | Python 3.10+, Tkinter (clam custom), OpenCV, rawpy, Pillow, Matplotlib |
-| **Android Desktop** | `android/app/` | Samsung DeX, Large Tablets ($\ge 840$dp), Chromebooks | Mouse, Keyboard & Multi-Pane Touch | Kotlin 2.0+, Compose, Room DB, OpenCV SDK, Vico Charts, Coil 2 |
-| **Android Phone** | `android/phototok/` | Portrait Mobile Phones ($< 600$dp) | Swipe-centric, Gesture-first ("Photo Tok") | Kotlin 2.0+, Compose, DataStore (lightweight), AndroidX ExifInterface, Coil 2 |
+| **Desktop Suite** | `src/` | Python 3.10+, Tkinter, OpenCV, rawpy | macOS, Windows, Linux | Menu & Keyboard-driven, split view |
+| **Android Desktop** | `android/app/` | Kotlin, Compose, Room, OpenCV, Vico Charts | Samsung DeX, Large Tablets ($\ge 840$dp) | Mouse, Keyboard & Multi-Pane Touch |
+| **Android Phone** | `android/phototok/` | Kotlin, Compose, DataStore (lightweight) | Portrait Mobile Phones ($< 600$dp) | Swipe-centric, Gesture-first ("Photo Tok") |
 
-### Platform Feature Sync Matrix
+---
 
-| Feature | Desktop | Android Desktop | Android Phone (Photo Tok) | Notes |
+## 💻 1. Desktop Culling Suite (Python)
+
+A full-featured Python command-line utility and custom Tkinter graphical interface optimized for high-throughput desktop curation.
+
+<div align="center">
+  <img src="assets/desktop_main_app.png" alt="Desktop Application Initial Layout" width="750" style="border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 15px;" />
+  <p><em>The clean, zinc-themed Desktop workspace in its initial state</em></p>
+  <img src="assets/desktop_statistics.png" alt="Desktop Application Statistics Dashboard" width="750" style="border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 15px;" />
+  <p><em>Interactive Library Statistics and EXIF histograms integrated into the dark theme</em></p>
+</div>
+
+### Key Features
+*   **Dynamic Review Layouts:** Toggle between **Standard** mode (Current image on top, Previous/Next images side-by-side) and **Focus** mode (Current image and Controls split top, Previous/Next split bottom).
+*   **Aesthetic & Quality Algorithms:**
+    *   **Sharpness Score:** Crops the center 50% of the image, divides it into an 8x8 grid, and calculates the maximum block variance of the Laplacian filter.
+    *   **Noise Level:** Estimates noise via Median Absolute Deviation (MAD) of the Laplacian filter:
+        $$\sigma = \frac{\text{median}(|\nabla^2 I - \text{median}(\nabla^2 I)|)}{0.6745}$$
+    *   **Highlight & Shadow Clipping:** Grayscale pixel thresholds highlighting blown highlights ($\ge 254$) and crushed shadows ($\le 2$).
+    *   **Ollama AI Vision Integration:** Offline local VLM scoring ($1.0 - 10.0$) and analysis tags (e.g. `[ANALYSIS: Portrait]`) using base64-encoded $400 \times 400$ previews.
+*   **Library Utilities:** Smart dHash-based grouping levels (Time & Filename, Fast, or Detailed) to automatically bundle burst sequences, and a SHA-256 duplicate finder with system trash fallback.
+*   **ExifTool & SMB Mounting:** Bundled with ExifTool for robust raw file reading, and includes dynamic path resolvers for macOS and Linux network shares (`smb://`).
+
+---
+
+## 🖥️ 2. Android Desktop & DeX Companion
+
+Built specifically for desktop mode environments like Samsung DeX, Chromebooks, and large-screen tablets, providing parity with the desktop culling workflow.
+
+<div align="center">
+  <img src="assets/android_desktop_screenshot.png" alt="Android Desktop Layout" width="360" style="border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 15px;" />
+  <p><em>Adaptive tablet layout running on Android, optimizing column viewports</em></p>
+</div>
+
+### Key Features
+*   **Widescreen Viewports:** Supports a **Three-Column View** displaying Previous, Current, and Next images side-by-side in equal dimensions, as well as a **Focused View** layout.
+*   **Desktop Ergonomics:** Hardware mouse pointer support (`PointerIcon.Hand` hover state) and physical keyboard shortcuts matching the desktop app (Left/Right to scroll, Backspace/Delete to trash, M/C to organize).
+*   **Drag-and-Drop Imports:** Drag photo folder directories from Android file managers directly into the app window to import them instantly.
+*   **SQLite Score Caching:** Persists analyzed image parameters in a local Room database with a rolling 10,000 image MRU capacity.
+
+---
+
+## 📱 3. PhotoTok Mobile Client
+
+A lightweight, gesture-first, touch-optimized portrait client designed for quick, single-handed photo curation on your phone.
+
+<div align="center">
+  <img src="assets/phototok_screenshot.png" alt="PhotoTok Mobile Interface" width="360" style="border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 15px;" />
+  <p><em>Vertical TikTok-style culling with a gesture tutorial overlay and glassmorphic HUD</em></p>
+</div>
+
+### Key Features
+*   **TikTok-Style Navigation:** Browse through local collections by swiping vertically up and down (`HorizontalPager` adapted to vertical scrolling).
+*   **Fluid Swipes & Gestures:**
+    *   **Swipe-Left to Discard:** Dragging progressive distance reveals a pulsing red trash icon, tilts the card ($2^\circ$), and fades it before executing trashing via `MediaStore`.
+    *   **Double-Tap to Collect:** Instantly copies or moves the photo to your Selection folder with a bouncy green checkmark animation.
+    *   **One-Tap HUD:** Single tap anywhere on screen hides/shows the glassmorphic metadata panel and controls to allow unobstructed viewing.
+*   **Orientation-Aware Sorting:** Intelligently groups and sorts landscape images first, followed by portrait, or shuffles files randomly via the **Picture Randomization** settings toggle.
+*   **Non-Blocking Undo:** Deletions are kept in a temporary state for 30 seconds with a quick Snackbar undo option before committing to disk or Google Drive.
+
+---
+
+## 📊 Platform Feature Sync Matrix
+
+| Feature | Desktop | Android Desktop | Android Phone (PhotoTok) | Notes |
 | :--- | :---: | :---: | :---: | :--- |
-| **Image Review Layouts** | Standard / Focus | 3-Column / Focused | Vertical Pager | Desktop uses side-by-side panels; Phone utilizes gesture pager. |
-| **Center Sharpness Score** | ✅ | ✅ | ✅ | center 50% crop variance check. |
+| **Image Review Layouts** | Standard / Focus | 3-Column / Focused | Vertical Pager | Desktop uses side-by-side; Phone utilizes vertical gesture pagers. |
+| **Center Sharpness Score** | ✅ | ✅ | ✅ | Center 50% crop Laplacian variance check. |
 | **Laplacian Noise (MAD)** | ✅ | ✅ | ✅ | Estimating noise with Median Absolute Deviation. |
 | **Highlights/Shadows Clipping** | ✅ | ✅ | ✅ | Grayscale pixel thresholds $\ge 254$ and $\le 2$. |
 | **SQLite Score Caching** | ✅ | ✅ | ❌ | Phone mode avoids local DB overhead to stay lightweight. |
@@ -55,78 +117,6 @@ This project delivers **three independent, native solutions** tailored to differ
 | **SMB Path Resolution** | ✅ | ❌ | ❌ | Android delegates remote directory shares via SAF. |
 | **ExifTool Integration** | ✅ | ❌ (ExifInterface) | ❌ (ExifInterface) | Android uses native AndroidX ExifInterface. |
 | **Picture Randomization** | ❌ | ❌ | ✅ | Phone settings toggle to shuffle loaded assets. |
-
----
-
-## 💻 1. The Desktop Solution (Python)
-
-A full-featured Python command-line utility and Tkinter graphical interface.
-
-### Dynamic Review Layouts
-- **Standard Mode:** Center-focused layout with Current image on top and Previous/Next images side-by-side below.
-- **Focus Mode:** Top row is split between the Current image and a Controls/Metadata panel. Bottom row splits the Previous and Next images in equal dimensions.
-- **Fullscreen Viewer:** Accessible via `F` (or double-click). Features a non-intrusive metadata panel overlay showing Lens, EXIF metrics, and quality scores.
-
-### Quality Assessment Algorithms
-- **Sharpness Score:** Crops the center 50% of the image, divides it into an 8x8 grid, and calculates the maximum block variance of the Laplacian.
-- **Noise Level:** Evaluates image noise using the Median Absolute Deviation (MAD) of the Laplacian filter:
-  $$\sigma = \frac{\text{median}(|\nabla^2 I - \text{median}(\nabla^2 I)|)}{0.6745}$$
-- **Clipping Indices:** Measures percentage of blown highlights ($\ge 254$ intensity) and crushed shadows ($\le 2$ intensity).
-- **Ollama AI Evaluation:** Offline local Vision Language Model querying (via `urllib` to avoid external dependencies). Resizes the preview to $400 \times 400$, encodes to base64, and prompts the local server. Calibrates output to a $1.0 - 10.0$ score, and extracts `[ANALYSIS: tag]` descriptions.
-
-### Utilities & Operations
-- **Smart Image Grouping:** Three settings (Time & Filename, Time + Fast Similarity, Detailed Similarity) using 8x8 or 16x16 dHash metrics. Restricts visual dHash calculations to temporal burst candidates (modification time diff $\le 30.0$s) to bypass up to 90% of file decoding.
-- **Duplicate Finder:** SHA-256 content hashing to identify true duplicates. Moves files safely using `send2trash`, falling back to permanent delete (`unlink`) with user approval on failure (e.g. network drives).
-- **SMB url Resolver:** Resolves network `smb://` share URLs to local filesystem mount paths dynamically for macOS (`/Volumes/...`) and Linux (`/run/user/.../gvfs/...`).
-
----
-
-## 🖥️ 2. The Android Desktop Solution (Tablet / DeX)
-
-Built for Samsung DeX desktop mode and expanded tablets, providing parity with the desktop culling workflow.
-
-### Tablet Multi-Pane Layout
-- **Toggleable Viewports:**
-  - **Three-Column View:** Displays Previous, Current, and Next images side-by-side in equal dimensions for quick comparative culling.
-  - **Focused View:** Focuses on the Current image (55% height weight) on top, with Previous and Next images side-by-side at the bottom (45% height weight).
-- **Control Bar:** Provides actions (Move, Copy, Delete) and details directly beneath the active image.
-- **Scrub Strip:** Bounded horizontal thumbnail candidate list at the bottom for quick folder indexing.
-
-### Desktop-Grade Interactivity
-- **Samsung DeX Support:** Configured with density-keepalive metadata and explicit minimum launch bounds ($800 \times 600$dp).
-- **Mouse & Keyboard Bindings:** Hovering over buttons/images activates the hand pointer shape (`PointerIcon.Hand`). Binds hardware keyboard shortcuts matching the desktop app (Left/Right to navigate, Delete/Backspace to trash, M/C to organize, Escape to exit).
-- **Folder Drag-and-Drop:** Allows dragging folder directories from native file managers directly into the app window to import them instantly.
-- **Persistent Room Database Cache:** Saves evaluated metrics locally. Automatically prunes records past a 10,000 image MRU limit.
-
----
-
-## 📱 3. The Android Phone Solution ("Photo Tok")
-
-A lightweight, gesture-first, touch-optimized portrait client designed for quick culling on mobile phones.
-
-### TikTok-Style Culling Pager
-- **Vertical Navigation:** Browse through local folders by swiping up/down (`HorizontalPager` adapted to vertical scrolling).
-- **Orientation-Aware Sorting:** Orders landscape photos first, followed by portrait, separating them with a visual rotation prompt. Optional **Picture Randomization** toggle overrides this, shuffling the collection.
-- **Snackbar Undo:** Supports a 30-second snackbar undo window for single deletions, avoiding modal dialog interruptions.
-
-### Tactile Touch Gestures
-- **Swipe-Left to Discard:** Progressive drag reveals a large, pulsing red trash indicator at the right edge. Card tilts ($2^\circ$ counter-clockwise) and fades. Releasing past the threshold triggers system-level trashing (`MediaStore.createTrashRequest()`).
-- **Double-Tap to Collect:** Instantly copies or moves the photo to the selection folder, accompanied by an animated green checkmark overlay with a bounce-in scale effect.
-- **One-Tap HUD Toggle:** Tapping the main screen toggles the visibility of the glassmorphic metadata panel, page counters, and navigation bars.
-- **Gesture Onboarder:** Displayed on first launch to teach users the culling controls.
-
----
-
-## ⚙️ Core Architecture & Infrastructure
-
-### Unified EXIF Data Contract
-Both desktop and Android solutions enforce typed contracts. Raw dictionaries are mapped to the standard `ExifData` class/data class (ISO, Shutter Speed, Aperture, Focal Length, Lens model). Focal length plotting and stats calculations automatically exclude values $\le 0.0$ mm.
-
-### Android Cloud Project Isolation
-The two Android modules (`:app` and `:phototok`) are **fully isolated**. They operate with:
-- Dedicated Google Cloud / Firebase Projects (`photo-selector-tb-dist` and `phototok-app`).
-- Isolated Android OAuth client registrations (with separate debug/Play SHA-1 signatures).
-- Bounded GitHub Actions variables (`TOOLBOX_*` and `PHOTOTOK_*`) representing independent keystores, passwords, and distribution endpoints.
 
 ---
 
@@ -160,7 +150,7 @@ brew install photo-selector-toolbox@nightly
 ```
 
 #### Standalone Executables (Pre-built)
-Download the standalone ZIP archives from our latest [GitHub Releases](https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases) page. Bundled with **ExifTool** out of the box (no Python required).
+Download the standalone ZIP archives from our latest [GitHub Releases](https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases) page. Bundled with **ExifTool** out of the box (no Python installation required).
 
 | Operating System | Target Architecture | Archive Link |
 | :--- | :--- | :--- |
@@ -224,18 +214,18 @@ Run unit and integration tests using pytest:
 poetry run pytest
 ```
 > [!NOTE]
-> When executing GUI tests in headless Linux development environments, run pytest using `xvfb-run` to prevent display exceptions:
+> When executing GUI tests in headless Linux environments, run pytest using `xvfb-run` to prevent display exceptions:
 > `poetry run xvfb-run pytest`
 
 ### Android Tests
-- **JVM Unit Tests:**
-  ```bash
-  ./gradlew testDebugUnitTest
-  ```
-- **Instrumented Emulator Tests:**
-  ```bash
-  ./gradlew connectedDebugAndroidTest
-  ```
+*   **JVM Unit Tests:**
+    ```bash
+    ./gradlew testDebugUnitTest
+    ```
+*   **Instrumented Emulator Tests:**
+    ```bash
+    ./gradlew connectedDebugAndroidTest
+    ```
 
 ---
 

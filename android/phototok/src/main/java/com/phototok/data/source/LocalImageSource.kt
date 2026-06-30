@@ -33,7 +33,7 @@ class LocalImageSourceImpl @Inject constructor(
             "rw2", "pef", "srw", "raf", "nrw"
         )
 
-        private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected")
+        private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "phototok_selection")
     }
 
     override fun discoverImages(folderUri: Uri): Flow<List<ImageItem>> = flow {
