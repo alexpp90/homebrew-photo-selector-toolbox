@@ -47,6 +47,9 @@ def test_ollama_tool_blocks_metadata_ip(mock_urlopen, dummy_image_file, temp_con
         "ollama_prompt": "test"
     })
     tool = OllamaAestheticTool()
+    # The JSON object error means the `RuntimeError` didn't get caught with the expected message,
+    # or the test failed earlier. Oh wait, `is_cloud_metadata` might not be resolving it properly
+    # in the test environment (e.g., DNS not resolving hex IP).
     with pytest.raises(RuntimeError, match="SSRF Protection: Cloud metadata IPs are not allowed."):
         tool.analyze(dummy_image_file)
 

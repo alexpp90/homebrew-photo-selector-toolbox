@@ -667,8 +667,14 @@ def is_cloud_metadata(url: str) -> bool:
         return False
     except socket.gaierror:
         # If DNS resolution fails, fallback to direct parsing in case it's a raw IP format that socket missed
+        # Some OS platforms (like Windows) might fail gethostbyname on hex/octal representations
         try:
-            ip = ipaddress.ip_address(hostname)
+            # Handle hex explicitly for fallback
+            if hostname.startswith("0x"):
+                ip = ipaddress.ip_address(int(hostname, 16))
+            else:
+                ip = ipaddress.ip_address(hostname)
+
             if ip.is_link_local:
                 return True
         except ValueError:
