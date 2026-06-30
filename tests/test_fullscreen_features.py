@@ -713,6 +713,43 @@ def test_fullscreen_viewer_redraw_error_path():
 
         mock_logger_error.assert_called_once_with("Redraw error: Test redraw error")
 
+
+def test_fullscreen_viewer_redraw_canvas_error():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test_image.jpg")
+    file_list = [path]
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"), \
+         patch("photo_selector_toolbox.fullscreen_viewer.logger.error") as mock_logger_error:
+
+        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer.pil_image = MagicMock()
+        viewer.pil_image.width = 100
+        viewer.pil_image.height = 100
+
+        # Make crop return a valid mock region so it proceeds to resize and canvas creation
+        mock_region = MagicMock()
+        mock_region.width = 50
+        mock_region.height = 50
+        mock_region.resize.return_value = mock_region
+        viewer.pil_image.crop.return_value = mock_region
+
+        viewer.scale = 1.0
+        viewer.offset_x = 0
+        viewer.offset_y = 0
+        viewer.winfo_width = MagicMock(return_value=100)
+        viewer.winfo_height = MagicMock(return_value=100)
+
+        viewer.canvas = MagicMock()
+        viewer.canvas.create_image.side_effect = Exception("Test canvas error")
+
+        with patch("photo_selector_toolbox.fullscreen_viewer.ImageTk.PhotoImage", return_value=MagicMock()):
+            viewer.redraw()
+
+        mock_logger_error.assert_called_once_with("Redraw error: Test canvas error")
+
 def test_fullscreen_viewer_metadata_error_handling():
     from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
 
