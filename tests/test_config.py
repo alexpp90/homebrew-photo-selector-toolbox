@@ -221,3 +221,14 @@ def test_set_secure_permissions_oserror(mock_chmod, tmp_path):
     _set_secure_permissions(test_file)
 
     mock_chmod.assert_called_once_with(test_file, stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_load_config_handles_oserror(mock_config_paths, caplog):
+    config_dir, config_file = mock_config_paths
+
+    with patch("builtins.open", side_effect=OSError("Permission denied")):
+        loaded_config = load_config()
+
+    assert loaded_config == DEFAULT_CONFIG
+    assert "Failed to load or write config file" in caplog.text
+    assert "Permission denied" in caplog.text
