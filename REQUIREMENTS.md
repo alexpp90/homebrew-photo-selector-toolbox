@@ -204,7 +204,11 @@ Phone Mode (Phone Tok) includes:
 ### 7.4 Touch Interaction Patterns
 *   **Photo Navigation:** Horizontal swipe via HorizontalPager (phone) or tap on prev/next thumbnails (tablet).
 *   **Fullscreen Viewer:** Pinch-to-zoom, double-tap to toggle fit/100%, swipe-down to dismiss, horizontal swipe to navigate.
-*   **Selection/Deletion:** Long-press for context menu. Swipe gestures configurable. On the phone client (Phototok), swiping left triggers a non-blocking temporary deletion where the image is immediately hidden from the viewer and a "Revert Deletion" button is shown. Navigating away from the current image or leaving the viewer finalizes the deletion and deletes the file from disk/Google Drive. For other clients or operations, delete uses Snackbar with Undo (30s) or confirmation dialogs.
+*   **Selection/Deletion:** Long-press for context menu. Swipe gestures configurable. On the phone client (Phototok), swiping left triggers a non-blocking temporary deletion where the image is immediately hidden from the viewer and a "Revert Deletion" button is shown. Navigating away from the current image or leaving the viewer finalizes the deletion and deletes the file from disk/Google Drive. Before putting the image into the temporary deletion state, a confirmation dialogue is shown:
+    - If trashing is supported (Google Drive files), the **Trash Confirmation** dialog is shown. It includes a "Do not show this dialogue again" checkbox, which toggles the **Trash Confirmation** setting.
+    - If trashing is not supported (local files via SAF), the **Direct Delete Confirmation** dialog is shown. It does not have a checkbox in the dialog, but hints that it can be disabled in settings. In settings, this **Direct Delete Confirmation** option is offered with a warning indication.
+    - In both cases, the revert option is preserved immediately after confirmation.
+    For other clients or operations, delete uses Snackbar with Undo (30s) or confirmation dialogs.
 *   **Minimum Touch Target:** 48dp for all interactive elements.
 *   **Gesture Tutorial Overlay:** When the full-screen gesture tutorial overlay is visible, the top app bar (containing the logo and settings button) and the bottom navigation bar must be hidden to prevent layout overlapping with the overlay text and layout obscuring of the "Got it" button at the bottom. Additionally, the overlay container must apply appropriate status bar and navigation bar padding to prevent clipping by system decorations.
 *   **Context Menus:** Long-press activated. No hover-dependent interactions.

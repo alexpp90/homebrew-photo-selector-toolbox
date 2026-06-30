@@ -41,6 +41,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Lens
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.Icon
@@ -70,8 +72,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import android.content.res.Configuration
 import coil.compose.SubcomposeAsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
 import com.phototok.data.model.ExifData
 import com.phototok.data.model.ImageItem
 import com.phototok.ui.theme.SuccessGreen
@@ -79,14 +84,20 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+/** How many images ahead/behind to warm into Coil's caches for snappy paging. */
+private const val PREFETCH_RADIUS = 3
+
 /**
  * Full-screen TikTok-style vertical-pager image viewer.
  *
  * - Swipe up/down → navigate images
- * - Double-tap → add to collection (green check flash)
+ * - Swipe right → add to collection (green check flash)
  * - Swipe left → delete (card rotates, pulsing trash indicator)
  * - Single tap → toggle HUD overlay
  * - Gradient vignettes for readability
+ *
+ * When [readOnly] is true (selection-folder preview) the horizontal add/delete
+ * gestures and their indicators are disabled — only vertical paging + HUD remain.
  */
 @Composable
 fun PhoneModeViewer(
@@ -98,6 +109,7 @@ fun PhoneModeViewer(
     onRequestDelete: () -> Unit,
     showExifOverlay: Boolean = true,
     showPageCounter: Boolean = true,
+    readOnly: Boolean = false,
 ) {
     if (images.isEmpty()) return
 
@@ -105,6 +117,22 @@ fun PhoneModeViewer(
         initialPage = currentIndex,
         pageCount = { images.size },
     )
+
+    // ── Prefetch upcoming/previous images into Coil caches ───────────────
+    val context = LocalContext.current
+    LaunchedEffect(pagerState.currentPage, images) {
+        val center = pagerState.currentPage
+        for (offset in 1..PREFETCH_RADIUS) {
+            listOf(center + offset, center - offset)
+                .filter { it in images.indices }
+                .forEach { idx ->
+                    val request = ImageRequest.Builder(context)
+                        .data(android.net.Uri.parse(images[idx].uri))
+                        .build()
+                    context.imageLoader.enqueue(request)
+                }
+        }
+    }
 
     // Sync pager → ViewModel
     LaunchedEffect(pagerState) {
@@ -129,6 +157,14 @@ fun PhoneModeViewer(
         }
     }
 
+    val maxPageSeen = remember(images) { mutableStateOf(currentIndex) }
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage > maxPageSeen.value) {
+            maxPageSeen.value = pagerState.currentPage
+        }
+    }
+    val showFloatingPeeks = maxPageSeen.value < 3
+
     // HUD visibility toggle (single tap)
     var hudVisible by remember { mutableStateOf(true) }
     val hudAlpha by animateFloatAsState(
@@ -148,7 +184,7 @@ fun PhoneModeViewer(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             key = { images[it].uri },
-            beyondViewportPageCount = 1,
+            beyondViewportPageCount = 2,
         ) { page ->
             ImagePage(
                 image = images[page],
@@ -158,12 +194,14 @@ fun PhoneModeViewer(
                 showExifOverlay = showExifOverlay,
                 showPageCounter = showPageCounter,
                 hudAlpha = hudAlpha,
-                onDoubleTap = {
+                readOnly = readOnly,
+                showFloatingPeeks = showFloatingPeeks,
+                onSingleTap = { hudVisible = !hudVisible },
+                onSwipeLeftDelete = onRequestDelete,
+                onSwipeRightCollect = {
                     onAddToCollection()
                     showCollectionFlash = true
                 },
-                onSingleTap = { hudVisible = !hudVisible },
-                onSwipeLeftDelete = onRequestDelete,
             )
         }
 
@@ -199,7 +237,7 @@ fun PhoneModeViewer(
 
 /**
  * A single page in the vertical pager.
- * Handles horizontal-drag (delete) and double-tap (collection) gestures.
+ * Handles horizontal-drag gestures: swipe-left = delete, swipe-right = add to collection.
  */
 @Composable
 private fun ImagePage(
@@ -210,14 +248,17 @@ private fun ImagePage(
     showExifOverlay: Boolean,
     showPageCounter: Boolean,
     hudAlpha: Float,
-    onDoubleTap: () -> Unit,
+    readOnly: Boolean,
+    showFloatingPeeks: Boolean,
     onSingleTap: () -> Unit,
     onSwipeLeftDelete: () -> Unit,
+    onSwipeRightCollect: () -> Unit,
 ) {
     var horizontalDragOffset by remember { mutableFloatStateOf(0f) }
-    val deleteThreshold = -200f
-    val swipeProgress = (abs(horizontalDragOffset) / abs(deleteThreshold)).coerceIn(0f, 1f)
-    val isSwiping = horizontalDragOffset < -40f
+    val actionThreshold = 200f
+    val swipeProgress = (abs(horizontalDragOffset) / actionThreshold).coerceIn(0f, 1f)
+    val isSwipingLeft = horizontalDragOffset < -40f   // delete
+    val isSwipingRight = horizontalDragOffset > 40f    // collect
 
     val colors = MaterialTheme.colorScheme
 
@@ -226,34 +267,37 @@ private fun ImagePage(
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onDoubleTap = { onDoubleTap() },
                     onTap = { onSingleTap() },
                 )
             },
     ) {
-        // ── Image with swipe-to-delete (rotation + translation) ──────
+        // ── Image with swipe gestures (rotation + translation) ───────
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    translationX = horizontalDragOffset.coerceAtMost(0f)
-                    rotationZ = -2f * swipeProgress
+                    translationX = horizontalDragOffset
+                    rotationZ = 2f * swipeProgress * (if (horizontalDragOffset < 0f) -1f else 1f)
                     alpha = 1f - swipeProgress * 0.3f
                 }
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (horizontalDragOffset < deleteThreshold) {
-                                onSwipeLeftDelete()
-                            }
-                            horizontalDragOffset = 0f
-                        },
-                        onDragCancel = { horizontalDragOffset = 0f },
-                        onHorizontalDrag = { _, dragAmount ->
-                            horizontalDragOffset = (horizontalDragOffset + dragAmount).coerceAtMost(0f)
-                        },
-                    )
-                },
+                .then(
+                    if (readOnly) Modifier else Modifier.pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (horizontalDragOffset < -actionThreshold) {
+                                    onSwipeLeftDelete()
+                                } else if (horizontalDragOffset > actionThreshold) {
+                                    onSwipeRightCollect()
+                                }
+                                horizontalDragOffset = 0f
+                            },
+                            onDragCancel = { horizontalDragOffset = 0f },
+                            onHorizontalDrag = { _, dragAmount ->
+                                horizontalDragOffset += dragAmount
+                            },
+                        )
+                    }
+                ),
             contentAlignment = Alignment.Center,
         ) {
             val parsedUri = remember(image.uri) { android.net.Uri.parse(image.uri) }
@@ -309,8 +353,52 @@ private fun ImagePage(
                 ),
         )
 
+        // ── Collection indicator (green check on right-swipe) ────────
+        if (!readOnly && isSwipingRight) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(CircleShape)
+                            .background(SuccessGreen.copy(alpha = 0.25f)),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size((64 + 16 * swipeProgress).dp)
+                            .shadow(
+                                elevation = (20 * swipeProgress).dp,
+                                shape = CircleShape,
+                                ambientColor = SuccessGreen.copy(alpha = 0.4f),
+                            )
+                            .clip(CircleShape)
+                            .background(SuccessGreen.copy(alpha = 0.85f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Add to collection",
+                            tint = Color.White,
+                            modifier = Modifier.size((28 + 8 * swipeProgress).dp),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "KEEP",
+                    style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 3.sp),
+                    color = SuccessGreen,
+                )
+            }
+        }
+
         // ── Delete indicator (pulsing trash with glow) ───────────────
-        if (isSwiping) {
+        if (!readOnly && isSwipingLeft) {
             val pulseTransition = rememberInfiniteTransition(label = "trash-pulse")
             val pulseScale by pulseTransition.animateFloat(
                 initialValue = 1f,
@@ -368,35 +456,90 @@ private fun ImagePage(
             }
         }
 
-        // ── Trash peek (subtle idle hint on right edge) ──────────────
-        if (!isSwiping && hudAlpha > 0.5f) {
-            val peekTransition = rememberInfiniteTransition(label = "trash-peek")
-            val peekOffset by peekTransition.animateFloat(
+        // ── Navigation peeks (subtle idle hints on left/right edges with direction arrows) ──
+        if (!readOnly && showFloatingPeeks && !isSwipingLeft && !isSwipingRight && hudAlpha > 0.5f) {
+            val peekTransition = rememberInfiniteTransition(label = "peeks")
+            // Right-side (trash) offset: slides from 12dp (mostly hidden) to -4dp (showing more)
+            val trashPeekOffset by peekTransition.animateFloat(
                 initialValue = 12f,
                 targetValue = -4f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(1500, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse,
                 ),
-                label = "peek-offset",
+                label = "trash-peek-offset",
+            )
+            // Left-side (keep) offset: slides from -12dp (mostly hidden) to 4dp (showing more)
+            val keepPeekOffset by peekTransition.animateFloat(
+                initialValue = -12f,
+                targetValue = 4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "keep-peek-offset",
             )
 
-            Box(
+            // Left peek: Keep (CheckCircle icon + arrow pointing right)
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = keepPeekOffset.dp)
+                    .graphicsLayer { alpha = hudAlpha * 0.4f },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(colors.surfaceContainerHigh.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Swipe right to keep",
+                        tint = SuccessGreen,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = SuccessGreen,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+
+            // Right peek: Trash (Delete icon + arrow pointing left)
+            Row(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .offset(x = peekOffset.dp)
-                    .graphicsLayer { alpha = hudAlpha * 0.4f }
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(colors.surfaceContainerHigh.copy(alpha = 0.4f)),
-                contentAlignment = Alignment.Center,
+                    .offset(x = trashPeekOffset.dp)
+                    .graphicsLayer { alpha = hudAlpha * 0.4f },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Delete,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = null,
                     tint = colors.error,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(16.dp),
                 )
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(colors.surfaceContainerHigh.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Swipe left to delete",
+                        tint = colors.error,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
 

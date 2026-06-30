@@ -9,13 +9,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.phototok.data.model.ExifData
 import com.phototok.data.model.ImageItem
+import com.phototok.data.model.RecentPath
 import com.phototok.data.repository.ImageRepository
+import com.phototok.data.repository.ImageRepositoryImpl
 import com.phototok.data.repository.SettingsRepository
 import com.phototok.data.source.ExternalStorageDetector
 import com.phototok.data.source.ExternalVolume
 import com.phototok.data.source.googledrive.GoogleDriveAuth
 import com.phototok.data.source.googledrive.GoogleDriveClient
 import com.phototok.data.source.googledrive.GoogleDriveImageSource
+import com.phototok.domain.PhoneFeedOrdering
+import com.phototok.domain.RelatedFiles
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -46,8 +50,9 @@ data class PhoneModeUiState(
     val lastActionFeedback: ActionFeedback? = null,
     // Settings (observed)
     val collectionAction: String = "copy", // "copy" or "move"
-    val deleteConfirmEnabled: Boolean = true,
-    val sortByOrientation: Boolean = true,
+    val trashConfirmEnabled: Boolean = true,
+    val directDeleteConfirmEnabled: Boolean = true,
+    val sortByOrientation: Boolean = false,
     val randomizeOrder: Boolean = false,
     /** "all", "raw", or "jpg" */
     val fileTypeFilter: String = "all",
@@ -55,12 +60,29 @@ data class PhoneModeUiState(
     val portraitSectionStart: Int = -1,
     /** Detected external/removable storage volumes. */
     val externalVolumes: List<ExternalVolume> = emptyList(),
-    val showExifOverlay: Boolean = true,
+    val showExifOverlay: Boolean = false,
     val pendingDeleteImage: ImageItem? = null,
     val pendingDeleteIndex: Int = -1,
     val pendingDeleteAllImagesIndex: Int = -1,
     val revertAllowedImageUri: String? = null,
+    /** Sibling files removed alongside the pending delete (restored together on revert). */
+    val pendingDeleteRelated: List<ImageItem> = emptyList(),
+    /** Whether collection/delete actions also move/delete same-name sibling files. */
+    val moveRelatedFiles: Boolean = false,
+    // Recent folders (landing quick-select)
+    val recentPaths: List<RecentPath> = emptyList(),
+    val recentPathsEnabled: Boolean = true,
+    val recentPathsCount: Int = 3,
+    // Read-only selection-folder viewer
+    val isViewingSelection: Boolean = false,
+    val selectionImages: List<ImageItem> = emptyList(),
+    val selectionFolderName: String = "",
+    val selectionCurrentIndex: Int = 0,
 )
+
+/** True when there is a pending deletion that can still be reverted. */
+val PhoneModeUiState.canRevert: Boolean
+    get() = pendingDeleteImage != null
 
 data class ActionFeedback(
     val message: String,
@@ -115,8 +137,13 @@ class PhoneModeViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            settingsRepository.phoneDeleteConfirmEnabled.collect { enabled ->
-                _uiState.update { it.copy(deleteConfirmEnabled = enabled) }
+            settingsRepository.phoneTrashConfirmEnabled.collect { enabled ->
+                _uiState.update { it.copy(trashConfirmEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.phoneDirectDeleteConfirmEnabled.collect { enabled ->
+                _uiState.update { it.copy(directDeleteConfirmEnabled = enabled) }
             }
         }
         viewModelScope.launch {
@@ -159,6 +186,44 @@ class PhoneModeViewModel @Inject constructor(
             settingsRepository.phoneShowExifOverlay.collect { enabled ->
                 _uiState.update { it.copy(showExifOverlay = enabled) }
             }
+        }
+        viewModelScope.launch {
+            settingsRepository.phoneMoveRelatedFiles.collect { enabled ->
+                _uiState.update { it.copy(moveRelatedFiles = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.phoneRecentPathsEnabled.collect { enabled ->
+                _uiState.update { it.copy(recentPathsEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.phoneRecentPathsCount.collect { count ->
+                _uiState.update { it.copy(recentPathsCount = count) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.phoneRecentPaths.collect { paths ->
+                _uiState.update { it.copy(recentPaths = paths) }
+            }
+        }
+    }
+
+    /** Toggle the EXIF stats overlay (driven by tapping the Photo-Tok logo). */
+    fun toggleExifOverlay() {
+        viewModelScope.launch {
+            settingsRepository.setPhoneShowExifOverlay(!_uiState.value.showExifOverlay)
+        }
+    }
+
+    /** Re-open a previously used source folder from the recents list. */
+    fun selectRecentPath(path: RecentPath) {
+        val uri = Uri.parse(path.uri)
+        if (GoogleDriveImageSource.isDriveUri(uri)) {
+            val folderId = GoogleDriveImageSource.extractId(uri) ?: return
+            selectDriveFolder(folderId, path.name.ifEmpty { "Google Drive" })
+        } else {
+            selectSourceFolder(uri)
         }
     }
 
@@ -211,8 +276,10 @@ class PhoneModeViewModel @Inject constructor(
                 return@launch
             }
 
-            _uiState.update { it.copy(sourceFolderName = folderDoc.name ?: "Photos") }
+            val folderName = folderDoc.name ?: "Photos"
+            _uiState.update { it.copy(sourceFolderName = folderName) }
             settingsRepository.setLastFolderUri(uri.toString())
+            settingsRepository.addRecentPath(uri.toString(), folderName)
 
             try {
                 imageRepository.discoverImages(uri).collect { images ->
@@ -253,6 +320,7 @@ class PhoneModeViewModel @Inject constructor(
                 )
             }
             settingsRepository.setLastFolderUri(driveUri.toString())
+            settingsRepository.addRecentPath(driveUri.toString(), folderName)
 
             try {
                 imageRepository.discoverImages(driveUri).collect { images ->
@@ -296,17 +364,9 @@ class PhoneModeViewModel @Inject constructor(
 
     private suspend fun sortImages(images: List<ImageItem>): Pair<List<ImageItem>, Int> {
         val randomizeOrder = settingsRepository.phoneRandomizeOrder.first()
-        if (randomizeOrder) {
-            return Pair(images.shuffled(), -1)
-        }
         val sortByOrientation = settingsRepository.phoneSortByOrientation.first()
-        if (!sortByOrientation) return Pair(images, -1)
-
-        val landscape = images.filter { it.isLandscape }
-        val portrait = images.filter { !it.isLandscape }
-        val result = landscape + portrait
-        val splitIndex = if (portrait.isEmpty()) -1 else landscape.size
-        return Pair(result, splitIndex)
+        val result = PhoneFeedOrdering.order(images, randomizeOrder, sortByOrientation)
+        return Pair(result.images, result.portraitSectionStart)
     }
 
     private fun resortImages() {
@@ -347,7 +407,15 @@ class PhoneModeViewModel @Inject constructor(
 
     // ── Actions ───────────────────────────────────────────────────────────
 
-    /** Double-tap: copy or move to collection. */
+    /**
+     * Sibling files that share the same base name (stem) but differ in extension,
+     * e.g. IMG_001.JPG and IMG_001.ARW. Computed from the unfiltered list so it is
+     * independent of the user's file-type filter selection.
+     */
+    private fun relatedImages(target: ImageItem): List<ImageItem> =
+        RelatedFiles.siblings(_uiState.value.allImages, target)
+
+    /** Swipe right: copy or move the current photo (and optionally siblings) to collection. */
     fun addToCollection() {
         val state = _uiState.value
         if (state.images.isEmpty()) return
@@ -355,24 +423,31 @@ class PhoneModeViewModel @Inject constructor(
         val targetUri = state.collectionFolderUri ?: state.sourceFolderUri ?: return
         val currentImage = state.images[state.currentIndex]
         val isCopy = state.collectionAction == "copy"
+        val related = if (state.moveRelatedFiles) relatedImages(currentImage) else emptyList()
+        val targets = listOf(currentImage) + related
 
         viewModelScope.launch {
             try {
                 val sortingEnabled = settingsRepository.sortingEnabled.first()
                 val folderUri = Uri.parse(targetUri)
 
-                if (isCopy) {
-                    imageRepository.copyImage(context, Uri.parse(currentImage.uri), folderUri, sortingEnabled)
-                } else {
-                    imageRepository.moveImage(context, Uri.parse(currentImage.uri), folderUri, sortingEnabled)
+                targets.forEach { img ->
+                    if (isCopy) {
+                        imageRepository.copyImage(context, Uri.parse(img.uri), folderUri, sortingEnabled)
+                    } else {
+                        imageRepository.moveImage(context, Uri.parse(img.uri), folderUri, sortingEnabled)
+                    }
                 }
 
                 if (!isCopy) {
-                    removeCurrentImageFromList()
+                    removeImagesFromLists(targets.map { it.uri }.toSet())
                 }
 
+                val suffix = if (related.isNotEmpty()) " (+${related.size} related)" else ""
                 val verb = if (isCopy) "Copied" else "Moved"
-                _uiState.update { it.copy(lastActionFeedback = ActionFeedback("$verb to collection")) }
+                _uiState.update {
+                    it.copy(lastActionFeedback = ActionFeedback("$verb to collection$suffix"))
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(lastActionFeedback = ActionFeedback("Failed: ${e.message}", isError = true))
@@ -397,11 +472,15 @@ class PhoneModeViewModel @Inject constructor(
         val imageToDelete = state.images[indexToDelete]
         val allImagesIndex = state.allImages.indexOfFirst { it.uri == imageToDelete.uri }
 
+        // Sibling files removed together (independent of the file-type filter).
+        val related = if (state.moveRelatedFiles) relatedImages(imageToDelete) else emptyList()
+        val removedUris = (listOf(imageToDelete) + related).map { it.uri }.toSet()
+
         // 2. Perform the UI removal immediately
         val updatedImages = state.images.toMutableList().apply {
             removeAt(indexToDelete)
         }
-        val updatedAll = state.allImages.filter { it.uri != imageToDelete.uri }
+        val updatedAll = state.allImages.filter { it.uri !in removedUris }
         val newIndex = indexToDelete.coerceAtMost(updatedImages.size - 1).coerceAtLeast(0)
         val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
             val firstPortrait = updatedImages.indexOfFirst { !it.isLandscape }
@@ -419,16 +498,18 @@ class PhoneModeViewModel @Inject constructor(
                 pendingDeleteImage = imageToDelete,
                 pendingDeleteIndex = indexToDelete,
                 pendingDeleteAllImagesIndex = allImagesIndex,
+                pendingDeleteRelated = related,
                 revertAllowedImageUri = nextActiveImageUri
             )
         }
-        
+
         loadExifForCurrent()
     }
 
     fun finalizePendingDelete() {
         val state = _uiState.value
         val imageToDelete = state.pendingDeleteImage ?: return
+        val related = state.pendingDeleteRelated
 
         // Clear the pending state from UI state first
         _uiState.update {
@@ -436,19 +517,22 @@ class PhoneModeViewModel @Inject constructor(
                 pendingDeleteImage = null,
                 pendingDeleteIndex = -1,
                 pendingDeleteAllImagesIndex = -1,
+                pendingDeleteRelated = emptyList(),
                 revertAllowedImageUri = null
             )
         }
 
-        // Perform actual deletion on I/O thread
+        // Perform actual deletion on I/O thread (primary + any siblings)
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val deleted = imageRepository.deleteImage(context, Uri.parse(imageToDelete.uri))
-                if (!deleted) {
-                    Log.e(TAG, "Failed to delete file on disk: ${imageToDelete.uri}")
+            (listOf(imageToDelete) + related).forEach { img ->
+                try {
+                    val deleted = imageRepository.deleteImage(context, Uri.parse(img.uri))
+                    if (!deleted) {
+                        Log.e(TAG, "Failed to delete file on disk: ${img.uri}")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error deleting file: ${img.uri}", e)
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error deleting file: ${imageToDelete.uri}", e)
             }
         }
     }
@@ -468,6 +552,10 @@ class PhoneModeViewModel @Inject constructor(
             } else {
                 add(imageToRestore)
             }
+            // Restore any sibling files removed alongside the primary.
+            state.pendingDeleteRelated.forEach { sibling ->
+                if (none { it.uri == sibling.uri }) add(sibling)
+            }
         }
 
         val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
@@ -484,38 +572,22 @@ class PhoneModeViewModel @Inject constructor(
                 pendingDeleteImage = null,
                 pendingDeleteIndex = -1,
                 pendingDeleteAllImagesIndex = -1,
+                pendingDeleteRelated = emptyList(),
                 revertAllowedImageUri = null
             )
         }
         loadExifForCurrent()
     }
 
-    fun dismissDeleteConfirmation() {
-        _uiState.update { it.copy(showDeleteConfirmation = false) }
+    fun updateTrashConfirm(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setPhoneTrashConfirmEnabled(enabled)
+        }
     }
 
-    fun confirmDelete() {
-        val state = _uiState.value
-        if (state.images.isEmpty()) return
-
-        val imageToDelete = state.images[state.currentIndex]
+    fun updateDirectDeleteConfirm(enabled: Boolean) {
         viewModelScope.launch {
-            _uiState.update { it.copy(showDeleteConfirmation = false) }
-            try {
-                val deleted = imageRepository.deleteImage(context, Uri.parse(imageToDelete.uri))
-                if (deleted) {
-                    removeCurrentImageFromList()
-                    _uiState.update { it.copy(lastActionFeedback = ActionFeedback("Deleted")) }
-                } else {
-                    _uiState.update {
-                        it.copy(lastActionFeedback = ActionFeedback("Delete failed", isError = true))
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(lastActionFeedback = ActionFeedback("Delete failed: ${e.message}", isError = true))
-                }
-            }
+            settingsRepository.setPhoneDirectDeleteConfirmEnabled(enabled)
         }
     }
 
@@ -596,7 +668,127 @@ class PhoneModeViewModel @Inject constructor(
         _uiState.update { it.copy(images = emptyList(), allImages = emptyList(), currentIndex = 0) }
     }
 
+    // ── Selection folder (read-only viewer) ───────────────────────────────
+
+    /**
+     * Open the PhotoTok_Selection folder in a read-only viewer (view + back only).
+     * Local folders only; the folder lives inside the collection target (or source).
+     */
+    fun openSelectionFolder() {
+        finalizePendingDelete()
+        val state = _uiState.value
+        val targetUri = state.collectionFolderUri ?: state.sourceFolderUri ?: run {
+            _uiState.update {
+                it.copy(lastActionFeedback = ActionFeedback("No selection folder yet", isError = true))
+            }
+            return
+        }
+        val parsed = Uri.parse(targetUri)
+        if (GoogleDriveImageSource.isDriveUri(parsed)) {
+            _uiState.update {
+                it.copy(lastActionFeedback = ActionFeedback("Selection view is local-only", isError = true))
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            val selectionDir = withContext(Dispatchers.IO) {
+                try {
+                    DocumentFile.fromTreeUri(context, parsed)
+                        ?.findFile(ImageRepositoryImpl.SELECTION_FOLDER_NAME)
+                } catch (_: Exception) { null }
+            }
+            if (selectionDir == null || !selectionDir.exists()) {
+                _uiState.update {
+                    it.copy(lastActionFeedback = ActionFeedback("Selection folder is empty", isError = true))
+                }
+                return@launch
+            }
+            _uiState.update { it.copy(isViewingSelection = true, selectionCurrentIndex = 0) }
+            try {
+                // Enumerate the sub-folder directly: passing a child document URI to
+                // discoverImages() would re-resolve to the tree root via fromTreeUri().
+                val images = withContext(Dispatchers.IO) {
+                    val acc = mutableListOf<ImageItem>()
+                    enumerateSelectionImages(selectionDir, acc)
+                    acc.sortedByDescending { it.lastModified }
+                }
+                _uiState.update {
+                    it.copy(
+                        selectionImages = images,
+                        selectionFolderName = selectionDir.name ?: "Selection",
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isViewingSelection = false,
+                        lastActionFeedback = ActionFeedback("Failed to open selection: ${e.message}", isError = true),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Recursively collect images from the selection folder (flattens RAW/JPEG subfolders). */
+    private fun enumerateSelectionImages(folder: DocumentFile, results: MutableList<ImageItem>) {
+        for (file in folder.listFiles()) {
+            if (file.isDirectory) {
+                enumerateSelectionImages(file, results)
+                continue
+            }
+            if (!file.isFile) continue
+            val name = file.name ?: continue
+            if (name.startsWith(".")) continue
+            val ext = name.substringAfterLast('.', "").lowercase()
+            if (ext !in com.phototok.data.source.LocalImageSourceImpl.SUPPORTED_EXTENSIONS) continue
+            results.add(
+                ImageItem(
+                    uri = file.uri.toString(),
+                    fileName = name,
+                    fileSize = file.length(),
+                    lastModified = file.lastModified(),
+                    mimeType = file.type,
+                )
+            )
+        }
+    }
+
+    fun closeSelectionFolder() {
+        _uiState.update {
+            it.copy(isViewingSelection = false, selectionImages = emptyList(), selectionCurrentIndex = 0)
+        }
+    }
+
+    fun navigateSelection(index: Int) {
+        if (index in _uiState.value.selectionImages.indices) {
+            _uiState.update { it.copy(selectionCurrentIndex = index) }
+        }
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────
+
+    /** Remove a set of images (by URI) from both the filtered and unfiltered lists. */
+    private fun removeImagesFromLists(uris: Set<String>) {
+        val state = _uiState.value
+        val updatedImages = state.images.filter { it.uri !in uris }
+        val updatedAll = state.allImages.filter { it.uri !in uris }
+        val newIndex = state.currentIndex.coerceAtMost(updatedImages.size - 1).coerceAtLeast(0)
+        val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
+            val firstPortrait = updatedImages.indexOfFirst { !it.isLandscape }
+            if (firstPortrait >= 0) firstPortrait else -1
+        } else -1
+
+        _uiState.update {
+            it.copy(
+                images = updatedImages,
+                allImages = updatedAll,
+                currentIndex = newIndex,
+                portraitSectionStart = newSplit,
+            )
+        }
+        loadExifForCurrent()
+    }
 
     private fun removeCurrentImageFromList() {
         val state = _uiState.value

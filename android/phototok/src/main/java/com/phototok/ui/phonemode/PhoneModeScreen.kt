@@ -7,8 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.phototok.ui.components.DriveFolderPickerDialog
-import com.phototok.ui.components.BottomNavBar
-import com.phototok.ui.components.NavTab
+import com.phototok.ui.components.ViewerBottomBar
+import com.phototok.data.source.googledrive.GoogleDriveImageSource
+import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.background
@@ -27,8 +28,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
@@ -40,19 +39,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Style
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Lens
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
-import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -85,10 +76,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.phototok.data.model.ExifData
 import com.phototok.ui.settings.SettingsScreen
 import com.phototok.viewmodel.PhoneModeViewModel
+import com.phototok.viewmodel.canRevert
 
 /**
  * Root composable for the phone-mode experience.
- * Integrates top app bar, bottom nav, and content (landing or viewer).
+ * Integrates top app bar, bottom action bar, and content (landing / loading / viewer).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,8 +93,33 @@ fun PhoneModeScreen(
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showDrivePicker by remember { mutableStateOf(false) }
+    var showTrashConfirmDialog by remember { mutableStateOf(false) }
+    var showDirectDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var dontShowAgainChecked by remember { mutableStateOf(false) }
+
+    val performDeleteSwipe = {
+        val currentImage = uiState.images.getOrNull(uiState.currentIndex)
+        if (currentImage != null) {
+            val isDrive = GoogleDriveImageSource.isDriveUri(Uri.parse(currentImage.uri))
+            if (isDrive) {
+                if (uiState.trashConfirmEnabled) {
+                    dontShowAgainChecked = false
+                    showTrashConfirmDialog = true
+                } else {
+                    viewModel.requestDelete()
+                }
+            } else {
+                if (uiState.directDeleteConfirmEnabled) {
+                    showDirectDeleteConfirmDialog = true
+                } else {
+                    viewModel.requestDelete()
+                }
+            }
+        }
+    }
 
     val isViewing = uiState.images.isNotEmpty()
+    val isViewingSelection = uiState.isViewingSelection
 
     // Google Sign-In launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
@@ -137,22 +154,68 @@ fun PhoneModeScreen(
         }
     }
 
-    // Delete confirmation dialog
-    if (uiState.showDeleteConfirmation) {
+    // Dialogue 1: Trash Confirmation Dialog
+    if (showTrashConfirmDialog) {
         val currentImage = uiState.images.getOrNull(uiState.currentIndex)
         AlertDialog(
-            onDismissRequest = { viewModel.dismissDeleteConfirmation() },
-            title = { Text("Delete Image") },
+            onDismissRequest = { showTrashConfirmDialog = false },
+            title = { Text("Move to Trash") },
             text = {
-                Text("Delete \"${currentImage?.fileName ?: ""}\"? This cannot be undone.")
+                Column {
+                    Text("Are you sure you want to move \"${currentImage?.fileName ?: ""}\" to the trash?")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { dontShowAgainChecked = !dontShowAgainChecked }
+                    ) {
+                        Checkbox(
+                            checked = dontShowAgainChecked,
+                            onCheckedChange = { dontShowAgainChecked = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Do not show this dialogue again", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmDelete() }) {
+                TextButton(onClick = {
+                    showTrashConfirmDialog = false
+                    if (dontShowAgainChecked) {
+                        viewModel.updateTrashConfirm(false)
+                    }
+                    viewModel.requestDelete()
+                }) {
+                    Text("Move to Trash", color = colors.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTrashConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = colors.surfaceContainerHigh,
+        )
+    }
+
+    // Dialogue 2: Direct Delete Confirmation Dialog (trash unsupported)
+    if (showDirectDeleteConfirmDialog) {
+        val currentImage = uiState.images.getOrNull(uiState.currentIndex)
+        AlertDialog(
+            onDismissRequest = { showDirectDeleteConfirmDialog = false },
+            title = { Text("Delete Permanently", color = colors.error) },
+            text = {
+                Text("This picture will be directly deleted (permanently) because trash is not supported for this location.\n\nHint: You can disable this confirmation in Settings.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDirectDeleteConfirmDialog = false
+                    viewModel.requestDelete()
+                }) {
                     Text("Delete", color = colors.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissDeleteConfirmation() }) {
+                TextButton(onClick = { showDirectDeleteConfirmDialog = false }) {
                     Text("Cancel")
                 }
             },
@@ -201,8 +264,14 @@ fun PhoneModeScreen(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // ── Content ──────────────────────────────────────────────
-        if (isLandscape && isViewing) {
+        // ── Read-only Selection-folder viewer (view + back only) ────────────
+        if (isViewingSelection) {
+            SelectionFolderViewer(
+                viewModel = viewModel,
+                folderName = uiState.selectionFolderName,
+            )
+        } else if (isLandscape && isViewing) {
+            // ── Landscape viewer with side panels ───────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -223,101 +292,46 @@ fun PhoneModeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
+                    // Logo toggles the EXIF overlay
                     Image(
                         painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(32.dp)
+                        contentDescription = "Toggle EXIF stats",
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                            ) { viewModel.toggleExifOverlay() }
                     )
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        val activeTab = if (isViewing) NavTab.Cards else NavTab.Sources
-
-                        // Sources Tab
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .then(
-                                    if (activeTab == NavTab.Sources) {
-                                        Modifier
-                                            .clip(CircleShape)
-                                            .background(colors.primaryContainer)
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() }
-                                ) {
-                                    if (isViewing) viewModel.goBackToLanding()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FolderOpen,
-                                contentDescription = "Sources",
-                                tint = if (activeTab == NavTab.Sources) colors.onPrimaryContainer else colors.secondary
-                            )
-                        }
-
-                        // Cards Tab
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .then(
-                                    if (activeTab == NavTab.Cards) {
-                                        Modifier
-                                            .clip(CircleShape)
-                                            .background(colors.primaryContainer)
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() }
-                                ) {
-                                    // Cards tab is currently active when viewing
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Style,
-                                contentDescription = "Cards",
-                                tint = if (activeTab == NavTab.Cards) colors.onPrimaryContainer else colors.secondary
-                            )
-                        }
-
-                        // History Tab
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .then(
-                                    if (activeTab == NavTab.History) {
-                                        Modifier
-                                            .clip(CircleShape)
-                                            .background(colors.primaryContainer)
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() }
-                                ) {
-                                    // Placeholder for history click
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = "History",
-                                tint = if (activeTab == NavTab.History) colors.onPrimaryContainer else colors.secondary
-                            )
-                        }
+                        // Sources (back to landing)
+                        SidePanelButton(
+                            icon = Icons.Default.FolderOpen,
+                            description = "Sources",
+                            isActive = false,
+                            enabled = true,
+                            onClick = { viewModel.goBackToLanding() },
+                        )
+                        // Selection
+                        SidePanelButton(
+                            icon = Icons.Default.Star,
+                            description = "Selection",
+                            isActive = false,
+                            enabled = true,
+                            onClick = { viewModel.openSelectionFolder() },
+                        )
+                        // Revert (active only when there is a pending deletion)
+                        SidePanelButton(
+                            icon = Icons.AutoMirrored.Filled.Undo,
+                            description = "Revert",
+                            isActive = uiState.canRevert,
+                            enabled = uiState.canRevert,
+                            onClick = { viewModel.revertDelete() },
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -335,7 +349,7 @@ fun PhoneModeScreen(
                         portraitSectionStart = uiState.portraitSectionStart,
                         onNavigate = viewModel::navigateToImage,
                         onAddToCollection = viewModel::addToCollection,
-                        onRequestDelete = viewModel::requestDelete,
+                        onRequestDelete = performDeleteSwipe,
                         showExifOverlay = false,
                         showPageCounter = false,
                     )
@@ -397,8 +411,20 @@ fun PhoneModeScreen(
                 }
             }
         } else {
-            // Default/Portrait Layout
-            if (!isViewing) {
+            // ── Portrait: viewer / loading / landing ────────────────────────
+            if (isViewing) {
+                PhoneModeViewer(
+                    images = uiState.images,
+                    currentIndex = uiState.currentIndex,
+                    portraitSectionStart = uiState.portraitSectionStart,
+                    onNavigate = viewModel::navigateToImage,
+                    onAddToCollection = viewModel::addToCollection,
+                    onRequestDelete = performDeleteSwipe,
+                    showExifOverlay = uiState.showExifOverlay,
+                )
+            } else if (uiState.isLoading) {
+                PhoneModeLoading(folderName = uiState.sourceFolderName)
+            } else {
                 PhoneModeLanding(
                     sourceFolderUri = uiState.sourceFolderUri,
                     sourceFolderName = uiState.sourceFolderName,
@@ -411,8 +437,6 @@ fun PhoneModeScreen(
                             viewModel.selectSourceFolder(Uri.parse(it))
                         }
                     },
-                    fileTypeFilter = uiState.fileTypeFilter,
-                    onFileTypeFilterChange = viewModel::setFileTypeFilter,
                     externalVolumes = uiState.externalVolumes,
                     onBrowseExternalVolume = { path ->
                         folderPickerLauncher.launch(Uri.parse(path))
@@ -425,30 +449,24 @@ fun PhoneModeScreen(
                         }
                     },
                     isGoogleDriveSignedIn = viewModel.driveAuth.isSignedIn,
-                )
-            } else {
-                PhoneModeViewer(
-                    images = uiState.images,
-                    currentIndex = uiState.currentIndex,
-                    portraitSectionStart = uiState.portraitSectionStart,
-                    onNavigate = viewModel::navigateToImage,
-                    onAddToCollection = viewModel::addToCollection,
-                    onRequestDelete = viewModel::requestDelete,
-                    showExifOverlay = uiState.showExifOverlay,
+                    recentPaths = uiState.recentPaths,
+                    recentPathsEnabled = uiState.recentPathsEnabled,
+                    recentPathsCount = uiState.recentPathsCount,
+                    onSelectRecentPath = { viewModel.selectRecentPath(it) },
                 )
             }
         }
 
         // ── Gesture tutorial overlay (Always on top of content & bars) ────────
-        if (isViewing) {
+        if (isViewing && !isViewingSelection) {
             GestureTutorialOverlay(
                 visible = uiState.showGestureTutorial,
                 onDismiss = viewModel::dismissGestureTutorial,
             )
         }
 
-        // ── Overlay App Bars (Only when not in Landscape Viewer) ───────────
-        if (!(isLandscape && isViewing) && !uiState.showGestureTutorial) {
+        // ── Overlay App Bars (Only when not in Landscape Viewer / selection) ──
+        if (!isViewingSelection && !(isLandscape && isViewing) && !uiState.showGestureTutorial) {
             // ── Top app bar ──────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -459,10 +477,16 @@ fun PhoneModeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Logo toggles the EXIF overlay
                 Image(
                     painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
-                    contentDescription = "Logo",
-                    modifier = Modifier.size(36.dp)
+                    contentDescription = "Toggle EXIF stats",
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                        ) { viewModel.toggleExifOverlay() }
                 )
                 IconButton(
                     onClick = { showSettingsSheet = true },
@@ -476,19 +500,13 @@ fun PhoneModeScreen(
                 }
             }
 
-            // ── Bottom nav bar ───────────────────────────────────────
-            if (isViewing && !uiState.showGestureTutorial) {
-                BottomNavBar(
-                    activeTab = NavTab.Cards,
-                    onTabSelected = { tab ->
-                        when (tab) {
-                            NavTab.Sources -> {
-                                viewModel.goBackToLanding()
-                            }
-                            NavTab.Cards -> { /* already viewing or no-op */ }
-                            NavTab.History -> { /* placeholder for future */ }
-                        }
-                    },
+            // ── Bottom action bar ────────────────────────────────────
+            if (isViewing) {
+                ViewerBottomBar(
+                    canRevert = uiState.canRevert,
+                    onRevert = { viewModel.revertDelete() },
+                    onJumpToSelection = { viewModel.openSelectionFolder() },
+                    onGoToLanding = { viewModel.goBackToLanding() },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -501,45 +519,104 @@ fun PhoneModeScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = if (isLandscape && isViewing) 16.dp else 80.dp),
         )
+    }
+}
 
-        // ── Revert Deletion overlay button ───────────────────────────
-        AnimatedVisibility(
-            visible = uiState.pendingDeleteImage != null && !uiState.showGestureTutorial,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = if (isViewing) 100.dp else 24.dp),
-            enter = fadeIn() + scaleIn(spring(stiffness = Spring.StiffnessMediumLow)),
-            exit = fadeOut() + scaleOut(tween(300)),
-        ) {
-            Surface(
-                onClick = { viewModel.revertDelete() },
-                shape = RoundedCornerShape(50),
-                color = colors.surfaceContainerHigh.copy(alpha = 0.9f),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    colors.primary.copy(alpha = 0.8f)
-                ),
-                modifier = Modifier.shadow(8.dp, RoundedCornerShape(50))
+/** Side-panel circular button used in the landscape viewer. */
+@Composable
+private fun SidePanelButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    isActive: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val tint = when {
+        isActive -> colors.onPrimaryContainer
+        enabled -> colors.secondary
+        else -> colors.onSurface.copy(alpha = 0.25f)
+    }
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .then(
+                if (isActive) Modifier.clip(CircleShape).background(colors.primaryContainer)
+                else Modifier
+            )
+            .then(
+                if (enabled) Modifier.clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onClick,
+                ) else Modifier
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(imageVector = icon, contentDescription = description, tint = tint)
+    }
+}
+
+/** Read-only viewer for the PhotoTok_Selection folder: scroll through and go back. */
+@Composable
+private fun SelectionFolderViewer(
+    viewModel: PhoneModeViewModel,
+    folderName: String,
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val colors = MaterialTheme.colorScheme
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (uiState.selectionImages.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colors.background),
+                contentAlignment = Alignment.Center,
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Undo,
-                        contentDescription = "Revert deletion",
-                        tint = colors.primary
-                    )
-                    Text(
-                        text = "Revert Deletion",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = colors.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    text = "No photos in the selection folder yet",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                )
             }
+        } else {
+            PhoneModeViewer(
+                images = uiState.selectionImages,
+                currentIndex = uiState.selectionCurrentIndex,
+                portraitSectionStart = -1,
+                onNavigate = viewModel::navigateSelection,
+                onAddToCollection = { },
+                onRequestDelete = { },
+                showExifOverlay = uiState.showExifOverlay,
+                readOnly = true,
+            )
+        }
+
+        // Top bar: back + title (view + back only)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start,
+        ) {
+            IconButton(onClick = { viewModel.closeSelectionFolder() }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = colors.onSurface,
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = folderName.ifEmpty { "Selection" },
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.phototok.data.model.RecentPath
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -32,15 +33,23 @@ class SettingsRepository @Inject constructor(
 
         private val KEY_COLLECTION_ACTION = stringPreferencesKey("collection_action")
         private val KEY_COLLECTION_URI = stringPreferencesKey("collection_uri")
-        private val KEY_DELETE_CONFIRM = booleanPreferencesKey("delete_confirm")
+        private val KEY_TRASH_CONFIRM = booleanPreferencesKey("trash_confirm")
+        private val KEY_DIRECT_DELETE_CONFIRM = booleanPreferencesKey("direct_delete_confirm")
         private val KEY_SORT_BY_ORIENTATION = booleanPreferencesKey("sort_by_orientation")
         private val KEY_RANDOMIZE_ORDER = booleanPreferencesKey("randomize_order")
         private val KEY_GESTURE_TUTORIAL_TS = longPreferencesKey("gesture_tutorial_ts")
         private val KEY_FILE_TYPE_FILTER = stringPreferencesKey("file_type_filter")
         private val KEY_SHOW_EXIF_OVERLAY = booleanPreferencesKey("show_exif_overlay")
+        private val KEY_MOVE_RELATED_FILES = booleanPreferencesKey("move_related_files")
+        private val KEY_RECENT_PATHS_ENABLED = booleanPreferencesKey("recent_paths_enabled")
+        private val KEY_RECENT_PATHS_COUNT = intPreferencesKey("recent_paths_count")
+        private val KEY_RECENT_PATHS = stringPreferencesKey("recent_paths")
 
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
         const val DEFAULT_SORTING_ENABLED = true
+        const val DEFAULT_RECENT_PATHS_COUNT = 3
+        private const val MAX_STORED_RECENT_PATHS = RecentPathCodec.MAX_STORED
+
     }
 
     val selectionFolderName: Flow<String> = context.dataStore.data.map { prefs ->
@@ -86,14 +95,19 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_COLLECTION_URI]
     }
 
-    /** Whether to show delete confirmation dialog (default true). */
-    val phoneDeleteConfirmEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_DELETE_CONFIRM] ?: true
+    /** Whether to show trash confirmation dialog (default true). */
+    val phoneTrashConfirmEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_TRASH_CONFIRM] ?: true
     }
 
-    /** Sort images horizontal-first, then vertical (default true). */
+    /** Whether to show direct delete confirmation dialog (default true). */
+    val phoneDirectDeleteConfirmEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DIRECT_DELETE_CONFIRM] ?: true
+    }
+
+    /** Sort images horizontal-first, then vertical (default false; base order is by date). */
     val phoneSortByOrientation: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_SORT_BY_ORIENTATION] ?: true
+        prefs[KEY_SORT_BY_ORIENTATION] ?: false
     }
 
     /** Randomize picture order (default false). */
@@ -111,9 +125,29 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_FILE_TYPE_FILTER] ?: "all"
     }
 
-    /** Whether to show EXIF stats overlay (default true). */
+    /** Whether to show EXIF stats overlay (default false; toggled via the logo). */
     val phoneShowExifOverlay: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_SHOW_EXIF_OVERLAY] ?: true
+        prefs[KEY_SHOW_EXIF_OVERLAY] ?: false
+    }
+
+    /** Whether collection/delete actions also affect same-name sibling files (default false). */
+    val phoneMoveRelatedFiles: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_MOVE_RELATED_FILES] ?: false
+    }
+
+    /** Whether to show the recent-folders list on the landing screen (default true). */
+    val phoneRecentPathsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_RECENT_PATHS_ENABLED] ?: true
+    }
+
+    /** How many recent folders to show on the landing screen (default 3). */
+    val phoneRecentPathsCount: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[KEY_RECENT_PATHS_COUNT] ?: DEFAULT_RECENT_PATHS_COUNT
+    }
+
+    /** Most-recently-used source folders, newest first. */
+    val phoneRecentPaths: Flow<List<RecentPath>> = context.dataStore.data.map { prefs ->
+        RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
     }
 
     suspend fun setPhoneCollectionAction(action: String) {
@@ -127,8 +161,12 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    suspend fun setPhoneDeleteConfirmEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[KEY_DELETE_CONFIRM] = enabled }
+    suspend fun setPhoneTrashConfirmEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_TRASH_CONFIRM] = enabled }
+    }
+
+    suspend fun setPhoneDirectDeleteConfirmEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_DIRECT_DELETE_CONFIRM] = enabled }
     }
 
     suspend fun setPhoneSortByOrientation(enabled: Boolean) {
@@ -149,6 +187,27 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setPhoneShowExifOverlay(enabled: Boolean) {
         context.dataStore.edit { prefs -> prefs[KEY_SHOW_EXIF_OVERLAY] = enabled }
+    }
+
+    suspend fun setPhoneMoveRelatedFiles(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_MOVE_RELATED_FILES] = enabled }
+    }
+
+    suspend fun setPhoneRecentPathsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_RECENT_PATHS_ENABLED] = enabled }
+    }
+
+    suspend fun setPhoneRecentPathsCount(count: Int) {
+        context.dataStore.edit { prefs -> prefs[KEY_RECENT_PATHS_COUNT] = count.coerceAtLeast(1) }
+    }
+
+    /** Record a folder as recently used, moving it to the front and de-duplicating. */
+    suspend fun addRecentPath(uri: String, name: String) {
+        context.dataStore.edit { prefs ->
+            val current = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
+            val updated = RecentPathCodec.add(current, uri, name, MAX_STORED_RECENT_PATHS)
+            prefs[KEY_RECENT_PATHS] = RecentPathCodec.encode(updated)
+        }
     }
 
     // ── Per-folder last position ─────────────────────────────────────────

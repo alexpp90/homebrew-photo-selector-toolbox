@@ -6,6 +6,7 @@ Welcome to the Photo Selector Toolbox project. When modifying this codebase, you
 2. **Update After Changes:** If your task introduces new requirements, alters existing rules (e.g., UI layout, threading models, duplicate logic, dependency lists), or deprecates features, you MUST update `REQUIREMENTS.md` to reflect these changes before finalizing your work.
 3. **Consistency:** Ensure that any code changes you make perfectly align with the rules specified in `REQUIREMENTS.md` unless the user explicitly instructs you to change those rules.
 4. **Testing Context:** Review the testing and headless execution requirements in `REQUIREMENTS.md` (e.g., using `xvfb-run`) when running tests or debugging GUI components.
+5. **Write Proper Tests:** For every new feature, bug fix, or logic modification, you MUST write or update corresponding automated tests (unit tests or integration tests) to ensure that the code behaves exactly as expected. Tests must be executed and verify correctness before completing the task.
 
 ## Three Independent Solutions
 

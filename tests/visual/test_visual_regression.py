@@ -19,6 +19,7 @@ from .conftest import (
 
 pytestmark = [pytest.mark.visual, pytest.mark.linux_only]
 
+
 # ── Helpers ────────────────────────────────────────────────────────
 
 
@@ -143,6 +144,7 @@ class TestAboutDialogVisual:
         root = visual_root
         _apply_theme(root)
         root.deiconify()
+
 
         dialog = AboutDialog(root)
 

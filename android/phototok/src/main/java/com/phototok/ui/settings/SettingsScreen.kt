@@ -12,25 +12,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -188,11 +192,72 @@ fun SettingsScreen(
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
             SettingsToggleItem(
-                title = "Delete Confirmation",
-                description = "Ask before removing files",
-                checked = uiState.deleteConfirmEnabled,
-                onCheckedChange = { viewModel.updateDeleteConfirm(it) },
+                title = "Trash Confirmation",
+                description = "Ask before moving files to trash",
+                checked = uiState.trashConfirmEnabled,
+                onCheckedChange = { viewModel.updateTrashConfirm(it) },
             )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.updateDirectDeleteConfirm(!uiState.directDeleteConfirmEnabled) }
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Direct Delete Confirmation",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colors.onSurface,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Ask before permanently deleting files (trash unsupported)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Switch(
+                        checked = uiState.directDeleteConfirmEnabled,
+                        onCheckedChange = { viewModel.updateDirectDeleteConfirm(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = colors.onPrimary,
+                            checkedTrackColor = colors.primaryContainer,
+                            uncheckedThumbColor = colors.onSurfaceVariant,
+                            uncheckedTrackColor = colors.secondaryContainer,
+                            uncheckedBorderColor = colors.secondaryContainer,
+                        ),
+                    )
+                }
+
+                if (!uiState.directDeleteConfirmEnabled) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Warning",
+                            tint = colors.error,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Warning: Disabling this deletes files permanently without confirmation!",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.error,
+                        )
+                    }
+                }
+            }
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
@@ -205,43 +270,53 @@ fun SettingsScreen(
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
-            // Double-tap action
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            ) {
-                Text(
-                    text = "Double-Tap Action",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = colors.onSurface,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+            SettingsToggleItem(
+                title = "Move Related Files",
+                description = "Also move/delete same-name files (e.g. .JPG + .RAW)",
+                checked = uiState.moveRelatedFiles,
+                onCheckedChange = { viewModel.updateMoveRelatedFiles(it) },
+            )
 
-                listOf("copy" to "Copy to Collection", "move" to "Move to Collection").forEach { (value, label) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = uiState.collectionAction == value,
-                            onClick = { viewModel.updateCollectionAction(value) },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = colors.primaryContainer,
-                                unselectedColor = colors.onSurfaceVariant,
-                            ),
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurface,
-                        )
-                    }
-                }
-            }
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            // Format filter (moved here from the landing screen; default Both)
+            SettingsRadioGroup(
+                title = "Format Filter",
+                options = listOf("all" to "Both", "raw" to "RAW only", "jpg" to "JPG only"),
+                selected = uiState.fileTypeFilter,
+                onSelect = { viewModel.updateFileTypeFilter(it) },
+            )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            // Add-to-collection action (triggered by swipe-right or the Star button)
+            SettingsRadioGroup(
+                title = "Add to Collection Action",
+                options = listOf("copy" to "Copy to Collection", "move" to "Move to Collection"),
+                selected = uiState.collectionAction,
+                onSelect = { viewModel.updateCollectionAction(it) },
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ── Recent folders ───────────────────────────────────────────
+        SettingsSection(title = "Recent Folders", icon = Icons.Default.History) {
+            SettingsToggleItem(
+                title = "Show Recent Folders",
+                description = "List last-used folders on the start screen",
+                checked = uiState.recentPathsEnabled,
+                onCheckedChange = { viewModel.updateRecentPathsEnabled(it) },
+            )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            SettingsRadioGroup(
+                title = "How Many to Show",
+                options = listOf("1" to "1", "3" to "3", "5" to "5", "10" to "10"),
+                selected = uiState.recentPathsCount.toString(),
+                onSelect = { viewModel.updateRecentPathsCount(it.toIntOrNull() ?: 3) },
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))

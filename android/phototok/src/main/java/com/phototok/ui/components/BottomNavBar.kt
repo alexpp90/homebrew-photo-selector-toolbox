@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +29,100 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
 enum class NavTab { Sources, Cards, History }
+
+/**
+ * Bottom action bar shown while viewing photos (portrait).
+ *
+ * Left   = Folder → go back to landing page.
+ * Middle = Star → jump to the read-only Selection-folder view.
+ * Right  = Revert last deletion (active only when [canRevert]).
+ */
+@Composable
+fun ViewerBottomBar(
+    canRevert: Boolean,
+    onRevert: () -> Unit,
+    onJumpToSelection: () -> Unit,
+    onGoToLanding: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+            .background(colors.surfaceContainerLowest.copy(alpha = 0.8f))
+            .navigationBarsPadding()
+            .padding(horizontal = 32.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Left: Go back to landing (Sources)
+        ActionButton(
+            icon = Icons.Default.FolderOpen,
+            label = "Sources",
+            isActive = false,
+            enabled = true,
+            onClick = onGoToLanding,
+        )
+        // Middle: Jump to selection folder
+        ActionButton(
+            icon = Icons.Default.Star,
+            label = "Selection",
+            isActive = false,
+            enabled = true,
+            onClick = onJumpToSelection,
+        )
+        // Right: Revert (highlighted/active when there is something to revert)
+        ActionButton(
+            icon = Icons.AutoMirrored.Filled.Undo,
+            label = "Revert",
+            isActive = canRevert,
+            enabled = canRevert,
+            onClick = onRevert,
+        )
+    }
+}
+
+@Composable
+private fun ActionButton(
+    icon: ImageVector,
+    label: String,
+    isActive: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val tint = when {
+        isActive -> colors.onPrimaryContainer
+        enabled -> colors.secondary
+        else -> colors.onSurface.copy(alpha = 0.25f)
+    }
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .then(
+                if (isActive) Modifier.clip(CircleShape).background(colors.primaryContainer)
+                else Modifier,
+            )
+            .then(
+                if (enabled) Modifier.clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onClick,
+                ) else Modifier,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(24.dp),
+        )
+    }
+}
 
 @Composable
 fun BottomNavBar(
