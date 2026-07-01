@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.phototok.data.model.PhoneSettings
 import com.phototok.data.model.RecentPath
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FileTypeFilter
@@ -55,6 +56,32 @@ class SettingsRepository @Inject constructor(
         const val DEFAULT_RECENT_PATHS_COUNT = 3
         private const val MAX_STORED_RECENT_PATHS = RecentPathCodec.MAX_STORED
 
+        /**
+         * Map raw preferences to the typed settings snapshot. Companion-level and
+         * internal so the mapping is unit-testable without a DataStore instance.
+         */
+        internal fun phoneSettingsOf(prefs: Preferences): PhoneSettings = PhoneSettings(
+            collectionAction = CollectionAction.fromKey(prefs[KEY_COLLECTION_ACTION]),
+            trashConfirmEnabled = prefs[KEY_TRASH_CONFIRM] ?: true,
+            directDeleteConfirmEnabled = prefs[KEY_DIRECT_DELETE_CONFIRM] ?: true,
+            sortByOrientation = prefs[KEY_SORT_BY_ORIENTATION] ?: false,
+            randomizeOrder = prefs[KEY_RANDOMIZE_ORDER] ?: false,
+            fileTypeFilter = FileTypeFilter.fromKey(prefs[KEY_FILE_TYPE_FILTER]),
+            leftSwipeAction = SwipeAction.fromKey(prefs[KEY_LEFT_SWIPE_ACTION]),
+            showExifOverlay = prefs[KEY_SHOW_EXIF_OVERLAY] ?: false,
+            moveRelatedFiles = prefs[KEY_MOVE_RELATED_FILES] ?: false,
+            recentPathsEnabled = prefs[KEY_RECENT_PATHS_ENABLED] ?: true,
+            recentPathsCount = prefs[KEY_RECENT_PATHS_COUNT] ?: DEFAULT_RECENT_PATHS_COUNT,
+            recentPaths = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS]),
+        )
+    }
+
+    /**
+     * All simple phone-mode settings as one typed flow. DataStore already emits a
+     * single Preferences snapshot, so this needs no combine and no positional casts.
+     */
+    val phoneSettings: Flow<PhoneSettings> = context.dataStore.data.map { prefs ->
+        phoneSettingsOf(prefs)
     }
 
     val selectionFolderName: Flow<String> = context.dataStore.data.map { prefs ->
@@ -227,24 +254,44 @@ class SettingsRepository @Inject constructor(
         context.dataStore.edit { prefs -> prefs[KEY_RECENT_PATHS_COUNT] = count.coerceAtLeast(1) }
     }
 
-    /** Record a folder as recently used, moving it to the front and de-duplicating. */
+    /**
+     * Record a folder as recently used, moving it to the front and de-duplicating.
+     * Folders evicted from the recents list also get their stored last-position
+     * removed so the preferences file does not grow without bound.
+     */
     suspend fun addRecentPath(uri: String, name: String) {
         context.dataStore.edit { prefs ->
             val current = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
             val updated = RecentPathCodec.add(current, uri, name, MAX_STORED_RECENT_PATHS)
+            RecentPathCodec.evictedUris(current, updated).forEach { evictedUri ->
+                prefs.remove(folderPositionKey(evictedUri))
+                prefs.remove(legacyFolderPositionKey(evictedUri))
+            }
             prefs[KEY_RECENT_PATHS] = RecentPathCodec.encode(updated)
         }
     }
 
     // ── Per-folder last position ─────────────────────────────────────────
 
+    /** Keyed by the full URI: collision-free, unlike the legacy hashCode keys. */
+    private fun folderPositionKey(folderUri: String) =
+        intPreferencesKey("folder_pos_v2_$folderUri")
+
+    /** Legacy hashCode-based key, read as a fallback and cleaned up on write. */
+    private fun legacyFolderPositionKey(folderUri: String) =
+        intPreferencesKey("folder_pos_${folderUri.hashCode()}")
+
     suspend fun setFolderLastPosition(folderUri: String, index: Int) {
-        val key = intPreferencesKey("folder_pos_${folderUri.hashCode()}")
-        context.dataStore.edit { prefs -> prefs[key] = index }
+        context.dataStore.edit { prefs ->
+            prefs[folderPositionKey(folderUri)] = index
+            prefs.remove(legacyFolderPositionKey(folderUri))
+        }
     }
 
     suspend fun getFolderLastPosition(folderUri: String): Int {
-        val key = intPreferencesKey("folder_pos_${folderUri.hashCode()}")
-        return context.dataStore.data.map { prefs -> prefs[key] ?: 0 }.first()
+        val prefs = context.dataStore.data.first()
+        return prefs[folderPositionKey(folderUri)]
+            ?: prefs[legacyFolderPositionKey(folderUri)]
+            ?: 0
     }
 }

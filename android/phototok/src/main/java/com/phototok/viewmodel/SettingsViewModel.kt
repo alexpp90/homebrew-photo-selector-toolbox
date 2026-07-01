@@ -1,16 +1,14 @@
 package com.phototok.viewmodel
 
-import android.content.Context
 import android.net.Uri
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.phototok.data.repository.ImageRepository
 import com.phototok.data.repository.SettingsRepository
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FileTypeFilter
 import com.phototok.domain.SwipeAction
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,7 +40,7 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    @ApplicationContext private val context: Context,
+    private val imageRepository: ImageRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -50,42 +48,31 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // Typed flows only — no positional array casts.
             combine(
+                settingsRepository.phoneSettings,
                 settingsRepository.selectionFolderName,
                 settingsRepository.sortingEnabled,
-                settingsRepository.phoneCollectionAction,
-                settingsRepository.phoneTrashConfirmEnabled,
-                settingsRepository.phoneDirectDeleteConfirmEnabled,
-                settingsRepository.phoneSortByOrientation,
-                settingsRepository.phoneRandomizeOrder,
-                settingsRepository.phoneFileTypeFilter,
-                settingsRepository.phoneShowExifOverlay,
-                settingsRepository.phoneMoveRelatedFiles,
-                settingsRepository.phoneRecentPathsEnabled,
-                settingsRepository.phoneRecentPathsCount,
-                settingsRepository.phoneLeftSwipeAction,
-            ) { arrays ->
-                SettingsUiState(
-                    selectionFolderName = arrays[0] as String,
-                    sortingEnabled = arrays[1] as Boolean,
-                    collectionAction = arrays[2] as CollectionAction,
-                    trashConfirmEnabled = arrays[3] as Boolean,
-                    directDeleteConfirmEnabled = arrays[4] as Boolean,
-                    sortByOrientation = arrays[5] as Boolean,
-                    randomizeOrder = arrays[6] as Boolean,
-                    fileTypeFilter = arrays[7] as FileTypeFilter,
-                    showExifOverlay = arrays[8] as Boolean,
-                    moveRelatedFiles = arrays[9] as Boolean,
-                    recentPathsEnabled = arrays[10] as Boolean,
-                    recentPathsCount = arrays[11] as Int,
-                    leftSwipeAction = arrays[12] as SwipeAction,
-                    collectionUri = _uiState.value.collectionUri,
-                    leftSwipeUri = _uiState.value.leftSwipeUri,
-                    sourceFolderUri = _uiState.value.sourceFolderUri,
-                    sourceFolderName = _uiState.value.sourceFolderName,
-                )
-            }.collect { newState ->
-                _uiState.update { newState }
+            ) { phone, selectionFolderName, sortingEnabled ->
+                Triple(phone, selectionFolderName, sortingEnabled)
+            }.collect { (phone, selectionFolderName, sortingEnabled) ->
+                _uiState.update {
+                    it.copy(
+                        selectionFolderName = selectionFolderName,
+                        sortingEnabled = sortingEnabled,
+                        collectionAction = phone.collectionAction,
+                        trashConfirmEnabled = phone.trashConfirmEnabled,
+                        directDeleteConfirmEnabled = phone.directDeleteConfirmEnabled,
+                        sortByOrientation = phone.sortByOrientation,
+                        randomizeOrder = phone.randomizeOrder,
+                        fileTypeFilter = phone.fileTypeFilter,
+                        showExifOverlay = phone.showExifOverlay,
+                        moveRelatedFiles = phone.moveRelatedFiles,
+                        recentPathsEnabled = phone.recentPathsEnabled,
+                        recentPathsCount = phone.recentPathsCount,
+                        leftSwipeAction = phone.leftSwipeAction,
+                    )
+                }
             }
         }
 
@@ -104,9 +91,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.lastFolderUri.collect { uri ->
                 val name = if (uri != null) {
-                    try {
-                        DocumentFile.fromTreeUri(context, Uri.parse(uri))?.name ?: "Photos"
-                    } catch (_: Exception) { "Photos" }
+                    imageRepository.resolveFolderName(Uri.parse(uri)) ?: "Photos"
                 } else ""
                 _uiState.update { it.copy(sourceFolderUri = uri, sourceFolderName = name) }
             }

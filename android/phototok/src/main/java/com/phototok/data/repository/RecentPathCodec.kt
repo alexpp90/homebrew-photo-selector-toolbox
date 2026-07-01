@@ -33,4 +33,10 @@ object RecentPathCodec {
         max: Int = MAX_STORED,
     ): List<RecentPath> =
         (listOf(RecentPath(uri, name)) + current.filter { it.uri != uri }).take(max)
+
+    /** URIs present in [before] but no longer in [after] (evicted by the cap). */
+    fun evictedUris(before: List<RecentPath>, after: List<RecentPath>): List<String> {
+        val kept = after.mapTo(HashSet()) { it.uri }
+        return before.map { it.uri }.filter { it !in kept }
+    }
 }

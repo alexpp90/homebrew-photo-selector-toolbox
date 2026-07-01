@@ -1,70 +1,103 @@
 package com.phototok.data.repository
 
-import androidx.documentfile.provider.DocumentFile
+import android.net.Uri
+import android.util.Log
+import com.phototok.data.source.ImageSourceResolver
+import com.phototok.data.source.LocalImageSource
+import com.phototok.data.source.SelectionListing
+import com.phototok.data.source.googledrive.GoogleDriveImageSource
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import org.junit.Assert.assertSame
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
- * Tests for the RAW/JPEG sorting rules in [ImageRepositoryImpl.determineTargetFolder].
+ * Routing tests for [ImageRepositoryImpl]: the repository must dispatch each
+ * operation to the source that owns the URI and refuse cross-source transfers.
  */
 class ImageRepositoryImplTest {
 
-    private val repository = ImageRepositoryImpl(
-        localImageSource = mockk(relaxed = true),
-        androidExifReader = mockk(relaxed = true),
-        mediaStoreReader = mockk(relaxed = true),
-        driveImageSource = mockk(relaxed = true),
-        driveClient = mockk(relaxed = true),
-    )
+    private val localUri = mockk<Uri>(relaxed = true)
+    private val driveUri = mockk<Uri>(relaxed = true)
 
-    private val rawDir = mockk<DocumentFile>()
-    private val jpegDir = mockk<DocumentFile>()
-    private val selectionDir = mockk<DocumentFile> {
-        every { findFile("RAW") } returns rawDir
-        every { findFile("JPEG") } returns jpegDir
+    private val local = mockk<LocalImageSource>(relaxed = true) {
+        every { owns(localUri) } returns true
+        every { owns(driveUri) } returns false
+    }
+    private val drive = mockk<GoogleDriveImageSource>(relaxed = true) {
+        every { owns(driveUri) } returns true
+        every { owns(localUri) } returns false
+    }
+
+    private val repository = ImageRepositoryImpl(ImageSourceResolver(local, drive))
+
+    @Before
+    fun setUp() {
+        mockkStatic(Log::class)
+        every { Log.w(any(), any<String>()) } returns 0
+    }
+
+    @After
+    fun tearDown() {
+        unmockkStatic(Log::class)
     }
 
     @Test
-    fun `raw files go to RAW subfolder`() {
-        assertSame(rawDir, repository.determineTargetFolder("IMG_001.ARW", selectionDir))
-        assertSame(rawDir, repository.determineTargetFolder("img_002.dng", selectionDir))
+    fun `discoverImages routes to the owning source`() {
+        every { local.discoverImages(localUri) } returns flowOf(emptyList())
+        every { drive.discoverImages(driveUri) } returns flowOf(emptyList())
+
+        repository.discoverImages(localUri)
+        repository.discoverImages(driveUri)
+
+        coVerify(exactly = 1) { local.discoverImages(localUri) }
+        coVerify(exactly = 1) { drive.discoverImages(driveUri) }
     }
 
     @Test
-    fun `jpeg files go to JPEG subfolder`() {
-        assertSame(jpegDir, repository.determineTargetFolder("IMG_001.JPG", selectionDir))
-        assertSame(jpegDir, repository.determineTargetFolder("img_002.jpeg", selectionDir))
+    fun `deleteImage routes to the owning source`() = runTest {
+        coEvery { drive.deleteImage(driveUri) } returns true
+
+        assertTrue(repository.deleteImage(driveUri))
+
+        coVerify(exactly = 1) { drive.deleteImage(driveUri) }
+        coVerify(exactly = 0) { local.deleteImage(any()) }
     }
 
     @Test
-    fun `lightroom edits go to RAW subfolder`() {
-        assertSame(rawDir, repository.determineTargetFolder("IMG_001-Edit.tif", selectionDir))
+    fun `copy within one source delegates to that source`() = runTest {
+        coEvery { local.copyImage(localUri, localUri, true, "Sub") } returns true
+
+        assertTrue(repository.copyImage(localUri, localUri, sorting = true, subfolderName = "Sub"))
     }
 
     @Test
-    fun `xmp sidecar follows raw parent`() {
-        assertSame(rawDir, repository.determineTargetFolder("IMG_001.arw.xmp", selectionDir))
+    fun `cross-source copy and move are rejected without touching the sources`() = runTest {
+        assertFalse(repository.copyImage(localUri, driveUri, sorting = true, subfolderName = "Sub"))
+        assertFalse(repository.moveImage(driveUri, localUri, sorting = true, subfolderName = "Sub"))
+
+        coVerify(exactly = 0) { local.copyImage(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { local.moveImage(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { drive.copyImage(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { drive.moveImage(any(), any(), any(), any()) }
     }
 
     @Test
-    fun `xmp sidecar without raw parent stays in selection folder`() {
-        assertSame(selectionDir, repository.determineTargetFolder("IMG_001.xmp", selectionDir))
-    }
+    fun `listSelectionImages routes to the owning source`() = runTest {
+        coEvery { drive.listSelectionImages(driveUri, any()) } returns SelectionListing.NotSupported
+        coEvery { local.listSelectionImages(localUri, any()) } returns SelectionListing.Missing
 
-    @Test
-    fun `unknown extensions stay in selection folder`() {
-        assertSame(selectionDir, repository.determineTargetFolder("video.mp4", selectionDir))
-        assertSame(selectionDir, repository.determineTargetFolder("notes.txt", selectionDir))
-    }
-
-    @Test
-    fun `falls back to selection folder when subfolder cannot be created`() {
-        val brokenDir = mockk<DocumentFile> {
-            every { findFile("RAW") } returns null
-            every { createDirectory("RAW") } returns null
-        }
-        assertSame(brokenDir, repository.determineTargetFolder("IMG_001.ARW", brokenDir))
+        assertEquals(SelectionListing.NotSupported, repository.listSelectionImages(driveUri))
+        assertEquals(SelectionListing.Missing, repository.listSelectionImages(localUri))
     }
 }
