@@ -129,14 +129,15 @@ fun SettingsClickItem(
 
 /**
  * A labeled single-choice radio group, used for settings like Format Filter or
- * the Add-to-Collection action.
+ * the Add-to-Collection action. Generic over the option value type so callers
+ * can pass typed enums instead of raw strings.
  */
 @Composable
-fun SettingsRadioGroup(
+fun <T> SettingsRadioGroup(
     title: String,
-    options: List<Pair<String, String>>,
-    selected: String,
-    onSelect: (String) -> Unit,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
 

@@ -81,6 +81,18 @@ class GoogleDriveAuth @Inject constructor(
         _signedInAccount.value = null
     }
 
+    /**
+     * Drop a cached OAuth token so the next [getAccessToken] call fetches a fresh
+     * one. Used by the Drive client to retry once after an HTTP 401.
+     */
+    suspend fun invalidateAccessToken(token: String) = withContext(Dispatchers.IO) {
+        try {
+            com.google.android.gms.auth.GoogleAuthUtil.clearToken(context, token)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clear cached token", e)
+        }
+    }
+
     suspend fun getAccessToken(): String? = withContext(Dispatchers.IO) {
         val account = _signedInAccount.value ?: return@withContext null
         try {

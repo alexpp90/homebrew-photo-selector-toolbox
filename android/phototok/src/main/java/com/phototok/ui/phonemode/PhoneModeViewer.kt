@@ -80,6 +80,7 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import com.phototok.data.model.ExifData
 import com.phototok.data.model.ImageItem
+import com.phototok.domain.SwipeAction
 import com.phototok.ui.theme.SuccessGreen
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -108,7 +109,7 @@ fun PhoneModeViewer(
     onNavigate: (Int) -> Unit,
     onAddToCollection: () -> Unit,
     onRequestDelete: () -> Unit,
-    leftSwipeAction: String = "delete",
+    leftSwipeAction: SwipeAction = SwipeAction.DELETE,
     leftSwipeFolderName: String = "",
     showExifOverlay: Boolean = true,
     showPageCounter: Boolean = true,
@@ -210,7 +211,7 @@ fun PhoneModeViewer(
                 onSingleTap = { hudVisible = !hudVisible },
                 onSwipeLeftDelete = {
                     onRequestDelete()
-                    if (leftSwipeAction != "delete") {
+                    if (leftSwipeAction != SwipeAction.DELETE) {
                         showLeftSwipeFlash = true
                     }
                 },
@@ -299,7 +300,7 @@ private fun ImagePage(
     hudAlpha: Float,
     readOnly: Boolean,
     showFloatingPeeks: Boolean,
-    leftSwipeAction: String,
+    leftSwipeAction: SwipeAction,
     leftSwipeFolderName: String,
     onSingleTap: () -> Unit,
     onSwipeLeftDelete: () -> Unit,
@@ -461,20 +462,20 @@ private fun ImagePage(
                 label = "left-swipe-scale",
             )
 
-            val isDelete = leftSwipeAction == "delete"
+            val isDelete = leftSwipeAction == SwipeAction.DELETE
             val icon = if (isDelete) Icons.Default.Delete else Icons.Default.Folder
             val color = if (isDelete) colors.error else colors.primary
             val containerColor = if (isDelete) colors.errorContainer else colors.primaryContainer
             val onContainerColor = if (isDelete) colors.onErrorContainer else colors.onPrimaryContainer
             val labelText = when (leftSwipeAction) {
-                "copy" -> "COPY"
-                "move" -> "MOVE"
-                else -> "DISCARD"
+                SwipeAction.COPY -> "COPY"
+                SwipeAction.MOVE -> "MOVE"
+                SwipeAction.DELETE -> "DISCARD"
             }
             val contentDesc = when (leftSwipeAction) {
-                "copy" -> "Copy to folder"
-                "move" -> "Move to folder"
-                else -> "Delete"
+                SwipeAction.COPY -> "Copy to folder"
+                SwipeAction.MOVE -> "Move to folder"
+                SwipeAction.DELETE -> "Delete"
             }
 
             Column(
@@ -579,13 +580,13 @@ private fun ImagePage(
             }
 
             // Right peek: Left Swipe Action (Delete/Folder icon + arrow pointing left)
-            val isDelete = leftSwipeAction == "delete"
+            val isDelete = leftSwipeAction == SwipeAction.DELETE
             val icon = if (isDelete) Icons.Default.Delete else Icons.Default.Folder
             val color = if (isDelete) colors.error else colors.primary
             val contentDesc = when (leftSwipeAction) {
-                "copy" -> "Swipe left to copy"
-                "move" -> "Swipe left to move"
-                else -> "Swipe left to delete"
+                SwipeAction.COPY -> "Swipe left to copy"
+                SwipeAction.MOVE -> "Swipe left to move"
+                SwipeAction.DELETE -> "Swipe left to delete"
             }
 
             Row(

@@ -271,7 +271,8 @@ class GoogleDriveClient @Inject constructor(
     suspend fun findOrCreateFolder(parentId: String, folderName: String): String? =
         withContext(Dispatchers.IO) {
             // Search for existing
-            val query = "'$parentId' in parents and mimeType='${DriveFile.MIME_FOLDER}' and name='$folderName' and trashed=false"
+            val query = "'$parentId' in parents and mimeType='${DriveFile.MIME_FOLDER}' " +
+                "and name='${escapeQueryValue(folderName)}' and trashed=false"
             val fields = "files(id)"
             val url = buildString {
                 append("$BASE_URL/files?")
@@ -366,26 +367,49 @@ class GoogleDriveClient @Inject constructor(
 
     // ── Internal helpers ─────────────────────────────────────────────────
 
-    private suspend fun httpGet(urlString: String): JSONObject? {
-        val token = auth.getAccessToken() ?: return null
-        return try {
-            val conn = URL(urlString).openConnection() as HttpURLConnection
-            conn.setRequestProperty("Authorization", "Bearer $token")
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 30_000
+    /**
+     * Escape a user-supplied value for use inside a Drive query string.
+     * Drive queries use single-quoted strings where `\` and `'` must be escaped —
+     * a folder named e.g. "Tom's Photos" would otherwise break the query.
+     */
+    private fun escapeQueryValue(value: String): String =
+        value.replace("\\", "\\\\").replace("'", "\\'")
 
-            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                val body = conn.inputStream.bufferedReader().readText()
-                JSONObject(body)
-            } else {
-                val errorBody = conn.errorStream?.bufferedReader()?.use { it.readText() }
-                Log.e(TAG, "HTTP ${conn.responseCode}: ${conn.responseMessage} - Body: $errorBody")
-                null
+    /**
+     * GET with a single retry on HTTP 401: GoogleAuthUtil caches tokens, so an
+     * expired token is cleared and re-fetched once before giving up.
+     */
+    private suspend fun httpGet(urlString: String): JSONObject? {
+        repeat(2) { attempt ->
+            val token = auth.getAccessToken() ?: return null
+            try {
+                val conn = URL(urlString).openConnection() as HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 30_000
+
+                when {
+                    conn.responseCode == HttpURLConnection.HTTP_OK -> {
+                        val body = conn.inputStream.bufferedReader().readText()
+                        return JSONObject(body)
+                    }
+                    conn.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED && attempt == 0 -> {
+                        Log.w(TAG, "HTTP 401 — refreshing access token and retrying")
+                        auth.invalidateAccessToken(token)
+                        // fall through to next repeat() iteration
+                    }
+                    else -> {
+                        val errorBody = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                        Log.e(TAG, "HTTP ${conn.responseCode}: ${conn.responseMessage} - Body: $errorBody")
+                        return null
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "HTTP GET failed: $urlString", e)
+                return null
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "HTTP GET failed: $urlString", e)
-            null
         }
+        return null
     }
 
     private fun writeMultipartBody(
@@ -415,16 +439,12 @@ class GoogleDriveClient @Inject constructor(
 
     private fun parseRfc3339(dateString: String): Long {
         if (dateString.isEmpty()) return 0
+        // Instant.parse handles RFC 3339 with or without fractional seconds
+        // (minSdk 26, so java.time is available without desugaring).
         return try {
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
-                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                .parse(dateString)?.time ?: 0
+            java.time.Instant.parse(dateString).toEpochMilli()
         } catch (_: Exception) {
-            try {
-                java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
-                    .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                    .parse(dateString)?.time ?: 0
-            } catch (_: Exception) { 0 }
+            0
         }
     }
 }

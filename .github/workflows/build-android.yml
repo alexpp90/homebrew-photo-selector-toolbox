@@ -35,7 +35,10 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 15
           allowed-conclusions: success,skipped
-          fail-on-no-checks: false
+          # test-android.yml triggers are a superset of this workflow's triggers,
+          # so a missing test run means something is wrong — fail instead of
+          # silently building untested code.
+          fail-on-no-checks: true
 
   build:
     name: Build Android

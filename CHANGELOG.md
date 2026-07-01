@@ -5,6 +5,19 @@ All notable changes to the Photo Selector Toolbox project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed & Fixed
+- **Photo-Tok Reliability Refactor:**
+  - Fixed a bug where sibling files (e.g. `.ARW` next to `.JPG`) of a pending deletion were not removed from disk when the app was closed during the undo window; pending deletions now finalize on an application-scoped coroutine so they survive screen exit.
+  - Fixed a coroutine leak where re-selecting a source folder started a new image-discovery collector without cancelling the previous one.
+  - Failed file copies no longer leave zero-byte placeholder files in the destination folder.
+  - Google Drive: user folder names are now escaped in Drive queries (names containing `'` no longer break folder lookup); HTTP 401 responses trigger a one-time token refresh and retry; the Drive download cache is capped at 512 MB with LRU eviction.
+  - Replaced raw setting strings ("delete"/"copy"/"move", "all"/"raw"/"jpg") with typed enums (`SwipeAction`, `CollectionAction`, `FileTypeFilter`); DataStore wire format is unchanged.
+  - Extracted pending-delete list transitions (`PendingDeleteLogic`), feed filtering, and portrait-split computation into the pure `domain` layer with unit-test coverage; deduplicated RAW/JPEG extension sets (`PhotoExtensions`).
+- **CI:** Unit-test reports are now uploaded for both Android modules (previously `:phototok` reports were dropped); added an advisory Android Lint job; the Android build gate now fails when no test run is found; `versionName` can be overridden from CI via environment variables.
+- **Repo Hygiene:** Removed committed scratch/debug files and report dumps; moved stray root benchmarks into `benchmarks/`; added `CLAUDE.md`/`GEMINI.md` agent stubs and a REQUIREMENTS.md drift-check workflow.
+
 ## [0.4.0] - 2026-06-27
 
 ### Added

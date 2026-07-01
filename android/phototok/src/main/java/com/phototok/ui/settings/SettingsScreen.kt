@@ -46,6 +46,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.phototok.domain.CollectionAction
+import com.phototok.domain.FileTypeFilter
+import com.phototok.domain.SwipeAction
 import com.phototok.viewmodel.SettingsViewModel
 
 @Composable
@@ -294,7 +297,11 @@ fun SettingsScreen(
             // Format filter (moved here from the landing screen; default Both)
             SettingsRadioGroup(
                 title = "Format Filter",
-                options = listOf("all" to "Both", "raw" to "RAW only", "jpg" to "JPG only"),
+                options = listOf(
+                    FileTypeFilter.ALL to "Both",
+                    FileTypeFilter.RAW to "RAW only",
+                    FileTypeFilter.JPG to "JPG only",
+                ),
                 selected = uiState.fileTypeFilter,
                 onSelect = { viewModel.updateFileTypeFilter(it) },
             )
@@ -304,7 +311,10 @@ fun SettingsScreen(
             // Add-to-collection action (triggered by swipe-right or the Star button)
             SettingsRadioGroup(
                 title = "Add to Collection Action",
-                options = listOf("copy" to "Copy to Collection", "move" to "Move to Collection"),
+                options = listOf(
+                    CollectionAction.COPY to "Copy to Collection",
+                    CollectionAction.MOVE to "Move to Collection",
+                ),
                 selected = uiState.collectionAction,
                 onSelect = { viewModel.updateCollectionAction(it) },
             )
@@ -315,15 +325,15 @@ fun SettingsScreen(
             SettingsRadioGroup(
                 title = "Left Swipe Action",
                 options = listOf(
-                    "delete" to "Delete / Trash",
-                    "copy" to "Copy to Custom Folder",
-                    "move" to "Move to Custom Folder"
+                    SwipeAction.DELETE to "Delete / Trash",
+                    SwipeAction.COPY to "Copy to Custom Folder",
+                    SwipeAction.MOVE to "Move to Custom Folder",
                 ),
                 selected = uiState.leftSwipeAction,
                 onSelect = { viewModel.updateLeftSwipeAction(it) },
             )
 
-            if (uiState.leftSwipeAction != "delete") {
+            if (uiState.leftSwipeAction != SwipeAction.DELETE) {
                 HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
                 SettingsClickItem(

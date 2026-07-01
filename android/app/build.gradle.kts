@@ -20,7 +20,10 @@ android {
             ?: System.getenv("VERSION_CODE_OFFSET")?.toIntOrNull()
             ?: 0
         versionCode = baseVersion + offset
-        versionName = "0.4.0"
+        // Overridable from CI (e.g. derived from the git tag on release builds).
+        versionName = System.getenv("TOOLBOX_VERSION_NAME")
+            ?: System.getenv("VERSION_NAME")
+            ?: "0.4.0"
 
         testInstrumentationRunner = "com.photoselectortoolbox.HiltTestRunner"
 

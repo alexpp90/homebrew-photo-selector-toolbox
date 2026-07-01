@@ -24,6 +24,9 @@ class GoogleDriveImageSource @Inject constructor(
         private const val TAG = "GoogleDriveImageSource"
         const val SCHEME = "gdrive"
 
+        /** Hard cap for the on-disk Drive download cache. */
+        private const val MAX_CACHE_BYTES = 512L * 1024 * 1024
+
         fun buildUri(driveId: String): Uri = Uri.parse("$SCHEME://$driveId")
         fun extractId(uri: Uri): String? {
             if (uri.scheme != SCHEME) return null
@@ -58,9 +61,33 @@ class GoogleDriveImageSource @Inject constructor(
 
     suspend fun ensureCached(fileId: String, fileName: String): File? {
         val cached = getCacheFile(fileId, fileName)
-        if (cached.exists() && cached.length() > 0) return cached
+        if (cached.exists() && cached.length() > 0) {
+            // Touch for LRU eviction ordering.
+            cached.parentFile?.setLastModified(System.currentTimeMillis())
+            return cached
+        }
         val success = driveClient.downloadFile(fileId, cached)
+        if (success) enforceCacheLimit()
         return if (success) cached else null
+    }
+
+    /** Evict least-recently-used cache entries until the cache fits [MAX_CACHE_BYTES]. */
+    private fun enforceCacheLimit() {
+        try {
+            val dirs = cacheDir.listFiles()?.filter { it.isDirectory } ?: return
+            val sizes = dirs.associateWith { dir ->
+                dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+            }
+            var total = sizes.values.sum()
+            if (total <= MAX_CACHE_BYTES) return
+            for (dir in dirs.sortedBy { it.lastModified() }) {
+                if (total <= MAX_CACHE_BYTES) break
+                val size = sizes[dir] ?: 0
+                if (dir.deleteRecursively()) total -= size
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Cache eviction failed", e)
+        }
     }
 
     fun getCacheFile(fileId: String, fileName: String): File {

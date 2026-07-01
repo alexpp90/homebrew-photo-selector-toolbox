@@ -281,7 +281,15 @@ All analysis algorithms must produce equivalent results to the desktop Python im
 *   **Charts:** Vico library with Indigo-500 bars, Zinc-400 labels, Zinc-700 grid lines on Zinc-800 backgrounds.
 *   **App Launcher Icon:** The application uses a custom app launcher icon matching the desktop logo. It specifies both legacy and adaptive versions. The adaptive icon utilizes a solid Zinc-900 background (`#18181B`) and a centered, transparent foreground logo scaled to fit within the safe zone (72dp on a 108dp canvas).
 
-### 7.12 Feature Sync Policy
+### 7.12 Photo-Tok Architecture Conventions (`:phototok`)
+*   **Typed Settings:** User-facing choice settings are typed enums in `com.phototok.domain` (`SwipeAction` delete/copy/move, `CollectionAction` copy/move, `FileTypeFilter` all/raw/jpg). Raw strings must not be passed through ViewModels or UI; the DataStore wire format is the enum's `key` (backward compatible with previously persisted values).
+*   **Pure Domain Logic:** List/ordering logic must live in `com.phototok.domain` free of Android dependencies so it is unit-testable: `PhoneFeedOrdering` (ordering, file-type filtering, portrait-split computation), `PendingDeleteLogic` (pending-delete/revert list transitions), `RelatedFiles` (sibling detection), `PhotoExtensions` (single source of truth for RAW/JPEG extension sets).
+*   **Pending Deletion Lifecycle:** Finalizing a pending deletion (primary image AND its related siblings) must run on the injected application-scoped `CoroutineScope` (`@ApplicationScope`), never on an ad-hoc scope, so deletions complete even when the ViewModel is cleared mid-undo-window.
+*   **Folder Discovery:** Only one image-discovery collection may be active at a time; selecting a new source folder cancels the previous discovery `Job`.
+*   **File Copies:** A failed copy must not leave a zero-byte or partially written destination file behind.
+*   **Google Drive Client:** User-supplied values interpolated into Drive query strings must be escaped (`'` and `\`). HTTP 401 responses trigger one token invalidation + retry. The Drive download cache is capped at 512 MB with LRU (last-access) eviction.
+
+### 7.13 Feature Sync Policy
 When a new feature is added to the desktop application, it must be evaluated for inclusion in the Android app:
 *   **Tablet/DeX mode:** Should include the feature if technically feasible on Android.
 *   **Phone mode:** Should include the feature if it works well on small screens; may omit with documented rationale.

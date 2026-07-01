@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.phototok.data.model.ExifData
+import com.phototok.domain.SwipeAction
 import com.phototok.ui.settings.SettingsScreen
 import com.phototok.viewmodel.PhoneModeViewModel
 import com.phototok.viewmodel.canRevert
@@ -98,7 +99,7 @@ fun PhoneModeScreen(
     var dontShowAgainChecked by remember { mutableStateOf(false) }
 
     val performDeleteSwipe = {
-        if (uiState.leftSwipeAction == "delete") {
+        if (uiState.leftSwipeAction == SwipeAction.DELETE) {
             val currentImage = uiState.images.getOrNull(uiState.currentIndex)
             if (currentImage != null) {
                 val isDrive = GoogleDriveImageSource.isDriveUri(Uri.parse(currentImage.uri))
