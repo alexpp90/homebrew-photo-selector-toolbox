@@ -44,6 +44,9 @@ data class PhoneModeUiState(
     val sourceFolderName: String = "",
     val collectionFolderUri: String? = null,
     val collectionFolderName: String = "",
+    val leftSwipeAction: String = "delete",
+    val leftSwipeFolderUri: String? = null,
+    val leftSwipeFolderName: String = "",
     val error: String? = null,
     val showDeleteConfirmation: Boolean = false,
     val showGestureTutorial: Boolean = false,
@@ -179,6 +182,23 @@ class PhoneModeViewModel @Inject constructor(
                 } else ""
                 _uiState.update {
                     it.copy(collectionFolderUri = uri, collectionFolderName = name)
+                }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.phoneLeftSwipeAction.collect { action ->
+                _uiState.update { it.copy(leftSwipeAction = action) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.phoneLeftSwipeUri.collect { uri ->
+                val name = if (uri != null) {
+                    try {
+                        DocumentFile.fromTreeUri(context, Uri.parse(uri))?.name ?: "Folder"
+                    } catch (_: Exception) { "Folder" }
+                } else ""
+                _uiState.update {
+                    it.copy(leftSwipeFolderUri = uri, leftSwipeFolderName = name)
                 }
             }
         }
@@ -360,6 +380,19 @@ class PhoneModeViewModel @Inject constructor(
         }
     }
 
+    fun selectLeftSwipeFolder(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            } catch (_: Exception) {}
+
+            val name = DocumentFile.fromTreeUri(context, uri)?.name ?: "Folder"
+            settingsRepository.setPhoneLeftSwipeUri(uri.toString())
+            _uiState.update { it.copy(leftSwipeFolderUri = uri.toString(), leftSwipeFolderName = name) }
+        }
+    }
+
     // ── Sorting ───────────────────────────────────────────────────────────
 
     private suspend fun sortImages(images: List<ImageItem>): Pair<List<ImageItem>, Int> {
@@ -447,6 +480,58 @@ class PhoneModeViewModel @Inject constructor(
                 val verb = if (isCopy) "Copied" else "Moved"
                 _uiState.update {
                     it.copy(lastActionFeedback = ActionFeedback("$verb to collection$suffix"))
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(lastActionFeedback = ActionFeedback("Failed: ${e.message}", isError = true))
+                }
+            }
+        }
+    }
+
+    fun performLeftSwipeCopyOrMove() {
+        val state = _uiState.value
+        if (state.images.isEmpty()) return
+
+        val targetUri = state.leftSwipeFolderUri ?: state.sourceFolderUri ?: return
+        val currentImage = state.images[state.currentIndex]
+        val isCopy = state.leftSwipeAction == "copy"
+        val related = if (state.moveRelatedFiles) relatedImages(currentImage) else emptyList()
+        val targets = listOf(currentImage) + related
+
+        viewModelScope.launch {
+            try {
+                val sortingEnabled = settingsRepository.sortingEnabled.first()
+                val folderUri = Uri.parse(targetUri)
+
+                targets.forEach { img ->
+                    if (isCopy) {
+                        imageRepository.copyImage(
+                            context = context,
+                            sourceUri = Uri.parse(img.uri),
+                            destFolderUri = folderUri,
+                            sorting = sortingEnabled,
+                            subfolderName = ImageRepositoryImpl.LEFT_SWIPE_FOLDER_NAME
+                        )
+                    } else {
+                        imageRepository.moveImage(
+                            context = context,
+                            sourceUri = Uri.parse(img.uri),
+                            destFolderUri = folderUri,
+                            sorting = sortingEnabled,
+                            subfolderName = ImageRepositoryImpl.LEFT_SWIPE_FOLDER_NAME
+                        )
+                    }
+                }
+
+                if (!isCopy) {
+                    removeImagesFromLists(targets.map { it.uri }.toSet())
+                }
+
+                val suffix = if (related.isNotEmpty()) " (+${related.size} related)" else ""
+                val verb = if (isCopy) "Copied" else "Moved"
+                _uiState.update {
+                    it.copy(lastActionFeedback = ActionFeedback("$verb to folder$suffix"))
                 }
             } catch (e: Exception) {
                 _uiState.update {

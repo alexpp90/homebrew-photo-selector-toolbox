@@ -73,6 +73,18 @@ fun SettingsScreen(
         }
     }
 
+    val leftSwipeFolderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(it, takeFlags)
+            } catch (_: Exception) {}
+            viewModel.updateLeftSwipeUri(it.toString())
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -296,6 +308,50 @@ fun SettingsScreen(
                 selected = uiState.collectionAction,
                 onSelect = { viewModel.updateCollectionAction(it) },
             )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            // Left swipe action (triggered by swipe-left)
+            SettingsRadioGroup(
+                title = "Left Swipe Action",
+                options = listOf(
+                    "delete" to "Delete / Trash",
+                    "copy" to "Copy to Custom Folder",
+                    "move" to "Move to Custom Folder"
+                ),
+                selected = uiState.leftSwipeAction,
+                onSelect = { viewModel.updateLeftSwipeAction(it) },
+            )
+
+            if (uiState.leftSwipeAction != "delete") {
+                HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+                SettingsClickItem(
+                    title = "Left Swipe Custom Location",
+                    description = if (uiState.leftSwipeUri != null) "Using custom folder" else "Default: subfolder in source",
+                    onClick = { leftSwipeFolderPickerLauncher.launch(null) },
+                    trailing = {
+                        if (uiState.leftSwipeUri != null) {
+                            TextButton(onClick = { viewModel.updateLeftSwipeUri(null) }) {
+                                Text("Reset", color = colors.primary)
+                            }
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Change",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colors.primaryContainer,
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = colors.primaryContainer,
+                                )
+                            }
+                        }
+                    },
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

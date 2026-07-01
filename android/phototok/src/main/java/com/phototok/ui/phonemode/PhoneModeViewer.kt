@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Lens
@@ -107,6 +108,8 @@ fun PhoneModeViewer(
     onNavigate: (Int) -> Unit,
     onAddToCollection: () -> Unit,
     onRequestDelete: () -> Unit,
+    leftSwipeAction: String = "delete",
+    leftSwipeFolderName: String = "",
     showExifOverlay: Boolean = true,
     showPageCounter: Boolean = true,
     readOnly: Boolean = false,
@@ -157,6 +160,14 @@ fun PhoneModeViewer(
         }
     }
 
+    var showLeftSwipeFlash by remember { mutableStateOf(false) }
+    LaunchedEffect(showLeftSwipeFlash) {
+        if (showLeftSwipeFlash) {
+            delay(900)
+            showLeftSwipeFlash = false
+        }
+    }
+
     val maxPageSeen = remember(images) { mutableStateOf(currentIndex) }
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage > maxPageSeen.value) {
@@ -197,11 +208,18 @@ fun PhoneModeViewer(
                 readOnly = readOnly,
                 showFloatingPeeks = showFloatingPeeks,
                 onSingleTap = { hudVisible = !hudVisible },
-                onSwipeLeftDelete = onRequestDelete,
+                onSwipeLeftDelete = {
+                    onRequestDelete()
+                    if (leftSwipeAction != "delete") {
+                        showLeftSwipeFlash = true
+                    }
+                },
                 onSwipeRightCollect = {
                     onAddToCollection()
                     showCollectionFlash = true
                 },
+                leftSwipeAction = leftSwipeAction,
+                leftSwipeFolderName = leftSwipeFolderName,
             )
         }
 
@@ -232,6 +250,37 @@ fun PhoneModeViewer(
                 )
             }
         }
+
+
+
+        // ── Left Swipe flash (centered folder icon with glow) ────────
+        AnimatedVisibility(
+            visible = showLeftSwipeFlash,
+            modifier = Modifier.align(Alignment.Center),
+            enter = scaleIn(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+            exit = scaleOut(tween(300)) + fadeOut(tween(300)),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                val primaryColor = MaterialTheme.colorScheme.primary
+                // Glow ring
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(primaryColor.copy(alpha = 0.15f))
+                        .border(1.dp, primaryColor.copy(alpha = 0.3f), CircleShape),
+                )
+                // Icon
+                Icon(
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = "Saved to folder",
+                    tint = primaryColor.copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .size(72.dp)
+                        .shadow(20.dp, CircleShape, ambientColor = primaryColor),
+                )
+            }
+        }
     }
 }
 
@@ -250,6 +299,8 @@ private fun ImagePage(
     hudAlpha: Float,
     readOnly: Boolean,
     showFloatingPeeks: Boolean,
+    leftSwipeAction: String,
+    leftSwipeFolderName: String,
     onSingleTap: () -> Unit,
     onSwipeLeftDelete: () -> Unit,
     onSwipeRightCollect: () -> Unit,
@@ -397,9 +448,9 @@ private fun ImagePage(
             }
         }
 
-        // ── Delete indicator (pulsing trash with glow) ───────────────
+        // ── Left Swipe Action indicator (pulsing indicator with glow) ───────────────
         if (!readOnly && isSwipingLeft) {
-            val pulseTransition = rememberInfiniteTransition(label = "trash-pulse")
+            val pulseTransition = rememberInfiniteTransition(label = "left-swipe-pulse")
             val pulseScale by pulseTransition.animateFloat(
                 initialValue = 1f,
                 targetValue = 1.1f,
@@ -407,8 +458,24 @@ private fun ImagePage(
                     animation = tween(1000, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse,
                 ),
-                label = "trash-scale",
+                label = "left-swipe-scale",
             )
+
+            val isDelete = leftSwipeAction == "delete"
+            val icon = if (isDelete) Icons.Default.Delete else Icons.Default.Folder
+            val color = if (isDelete) colors.error else colors.primary
+            val containerColor = if (isDelete) colors.errorContainer else colors.primaryContainer
+            val onContainerColor = if (isDelete) colors.onErrorContainer else colors.onPrimaryContainer
+            val labelText = when (leftSwipeAction) {
+                "copy" -> "COPY"
+                "move" -> "MOVE"
+                else -> "DISCARD"
+            }
+            val contentDesc = when (leftSwipeAction) {
+                "copy" -> "Copy to folder"
+                "move" -> "Move to folder"
+                else -> "Delete"
+            }
 
             Column(
                 modifier = Modifier
@@ -422,7 +489,7 @@ private fun ImagePage(
                         modifier = Modifier
                             .size((96 * pulseScale).dp)
                             .clip(CircleShape)
-                            .background(colors.errorContainer.copy(alpha = 0.3f)),
+                            .background(containerColor.copy(alpha = 0.3f)),
                     )
                     // Inner circle
                     Box(
@@ -431,27 +498,27 @@ private fun ImagePage(
                             .shadow(
                                 elevation = (20 * swipeProgress).dp,
                                 shape = CircleShape,
-                                ambientColor = colors.error.copy(alpha = 0.4f),
+                                ambientColor = color.copy(alpha = 0.4f),
                             )
                             .clip(CircleShape)
-                            .background(colors.errorContainer),
+                            .background(containerColor),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = colors.onErrorContainer,
+                            imageVector = icon,
+                            contentDescription = contentDesc,
+                            tint = onContainerColor,
                             modifier = Modifier.size((28 + 8 * swipeProgress).dp),
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "DISCARD",
+                    text = labelText,
                     style = MaterialTheme.typography.labelLarge.copy(
                         letterSpacing = 3.sp,
                     ),
-                    color = colors.error,
+                    color = color,
                 )
             }
         }
@@ -511,7 +578,16 @@ private fun ImagePage(
                 )
             }
 
-            // Right peek: Trash (Delete icon + arrow pointing left)
+            // Right peek: Left Swipe Action (Delete/Folder icon + arrow pointing left)
+            val isDelete = leftSwipeAction == "delete"
+            val icon = if (isDelete) Icons.Default.Delete else Icons.Default.Folder
+            val color = if (isDelete) colors.error else colors.primary
+            val contentDesc = when (leftSwipeAction) {
+                "copy" -> "Swipe left to copy"
+                "move" -> "Swipe left to move"
+                else -> "Swipe left to delete"
+            }
+
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -523,7 +599,7 @@ private fun ImagePage(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = null,
-                    tint = colors.error,
+                    tint = color,
                     modifier = Modifier.size(16.dp),
                 )
                 Box(
@@ -534,9 +610,9 @@ private fun ImagePage(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Swipe left to delete",
-                        tint = colors.error,
+                        imageVector = icon,
+                        contentDescription = contentDesc,
+                        tint = color,
                         modifier = Modifier.size(20.dp),
                     )
                 }

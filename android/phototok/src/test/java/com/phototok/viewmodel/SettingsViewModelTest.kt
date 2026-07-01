@@ -36,6 +36,8 @@ class SettingsViewModelTest {
     private val phoneRecentPathsEnabledFlow = MutableStateFlow(true)
     private val phoneRecentPathsCountFlow = MutableStateFlow(3)
     private val phoneCollectionUriFlow = MutableStateFlow<String?>(null)
+    private val phoneLeftSwipeActionFlow = MutableStateFlow("delete")
+    private val phoneLeftSwipeUriFlow = MutableStateFlow<String?>(null)
     private val lastFolderUriFlow = MutableStateFlow<String?>(null)
 
     private lateinit var viewModel: SettingsViewModel
@@ -59,6 +61,8 @@ class SettingsViewModelTest {
         every { settingsRepository.phoneRecentPathsCount } returns phoneRecentPathsCountFlow
         every { settingsRepository.phoneRecentPaths } returns MutableStateFlow(emptyList())
         every { settingsRepository.phoneCollectionUri } returns phoneCollectionUriFlow
+        every { settingsRepository.phoneLeftSwipeAction } returns phoneLeftSwipeActionFlow
+        every { settingsRepository.phoneLeftSwipeUri } returns phoneLeftSwipeUriFlow
         every { settingsRepository.lastFolderUri } returns lastFolderUriFlow
 
         viewModel = SettingsViewModel(settingsRepository, context)
@@ -85,6 +89,8 @@ class SettingsViewModelTest {
         assertFalse(state.moveRelatedFiles)
         assertTrue(state.recentPathsEnabled)
         assertEquals(3, state.recentPathsCount)
+        assertEquals("delete", state.leftSwipeAction)
+        assertEquals(null, state.leftSwipeUri)
     }
 
     @Test
@@ -109,6 +115,12 @@ class SettingsViewModelTest {
 
         viewModel.updateDirectDeleteConfirm(false)
         coVerify { settingsRepository.setPhoneDirectDeleteConfirmEnabled(false) }
+
+        viewModel.updateLeftSwipeAction("copy")
+        coVerify { settingsRepository.setPhoneLeftSwipeAction("copy") }
+
+        viewModel.updateLeftSwipeUri("content://left")
+        coVerify { settingsRepository.setPhoneLeftSwipeUri("content://left") }
     }
 
     @Test
@@ -130,5 +142,17 @@ class SettingsViewModelTest {
 
         assertFalse(viewModel.uiState.value.trashConfirmEnabled)
         assertFalse(viewModel.uiState.value.directDeleteConfirmEnabled)
+    }
+
+    @Test
+    fun `state updates when left swipe flows emit new values`() = runTest {
+        assertEquals("delete", viewModel.uiState.value.leftSwipeAction)
+        assertEquals(null, viewModel.uiState.value.leftSwipeUri)
+
+        phoneLeftSwipeActionFlow.value = "move"
+        phoneLeftSwipeUriFlow.value = "content://left"
+
+        assertEquals("move", viewModel.uiState.value.leftSwipeAction)
+        assertEquals("content://left", viewModel.uiState.value.leftSwipeUri)
     }
 }
