@@ -646,3 +646,37 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
 
     # Return a copy so the cached original is never mutated
     return img.copy()
+
+def is_cloud_metadata(url: str) -> bool:
+    """
+    Checks if a given URL resolves to a cloud metadata IP address (169.254.0.0/16).
+    Handles hex, octal, integer representations, and DNS resolutions.
+    """
+    import socket
+    import ipaddress
+    from urllib.parse import urlparse
+
+    hostname = urlparse(url).hostname or ""
+    try:
+        # Try to resolve to IP (handles hex, octal, int formats and DNS resolution)
+        ip_str = socket.gethostbyname(hostname)
+        ip = ipaddress.ip_address(ip_str)
+        # 169.254.0.0/16 is the IPv4 link-local block used for cloud metadata
+        if ip.is_link_local:
+            return True
+        return False
+    except socket.gaierror:
+        # If DNS resolution fails, fallback to direct parsing in case it's a raw IP format that socket missed
+        # Some OS platforms (like Windows) might fail gethostbyname on hex/octal representations
+        try:
+            # Handle hex explicitly for fallback
+            if hostname.startswith("0x"):
+                ip = ipaddress.ip_address(int(hostname, 16))
+            else:
+                ip = ipaddress.ip_address(hostname)
+
+            if ip.is_link_local:
+                return True
+        except ValueError:
+            pass
+    return False
