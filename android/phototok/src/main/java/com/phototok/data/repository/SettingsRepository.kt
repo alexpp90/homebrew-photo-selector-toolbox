@@ -33,6 +33,8 @@ class SettingsRepository @Inject constructor(
 
         private val KEY_COLLECTION_ACTION = stringPreferencesKey("collection_action")
         private val KEY_COLLECTION_URI = stringPreferencesKey("collection_uri")
+        private val KEY_LEFT_SWIPE_ACTION = stringPreferencesKey("left_swipe_action")
+        private val KEY_LEFT_SWIPE_URI = stringPreferencesKey("left_swipe_uri")
         private val KEY_TRASH_CONFIRM = booleanPreferencesKey("trash_confirm")
         private val KEY_DIRECT_DELETE_CONFIRM = booleanPreferencesKey("direct_delete_confirm")
         private val KEY_SORT_BY_ORIENTATION = booleanPreferencesKey("sort_by_orientation")
@@ -93,6 +95,16 @@ class SettingsRepository @Inject constructor(
     /** Optional custom collection target folder URI. */
     val phoneCollectionUri: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[KEY_COLLECTION_URI]
+    }
+
+    /** "delete" (default), "copy", or "move" */
+    val phoneLeftSwipeAction: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LEFT_SWIPE_ACTION] ?: "delete"
+    }
+
+    /** Optional custom left swipe target folder URI. */
+    val phoneLeftSwipeUri: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LEFT_SWIPE_URI]
     }
 
     /** Whether to show trash confirmation dialog (default true). */
@@ -158,6 +170,17 @@ class SettingsRepository @Inject constructor(
         context.dataStore.edit { prefs ->
             if (uri != null) prefs[KEY_COLLECTION_URI] = uri
             else prefs.remove(KEY_COLLECTION_URI)
+        }
+    }
+
+    suspend fun setPhoneLeftSwipeAction(action: String) {
+        context.dataStore.edit { prefs -> prefs[KEY_LEFT_SWIPE_ACTION] = action }
+    }
+
+    suspend fun setPhoneLeftSwipeUri(uri: String?) {
+        context.dataStore.edit { prefs ->
+            if (uri != null) prefs[KEY_LEFT_SWIPE_URI] = uri
+            else prefs.remove(KEY_LEFT_SWIPE_URI)
         }
     }
 

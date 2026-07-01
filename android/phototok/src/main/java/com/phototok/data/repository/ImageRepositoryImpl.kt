@@ -29,6 +29,7 @@ class ImageRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = "ImageRepositoryImpl"
         const val SELECTION_FOLDER_NAME = "PhotoTok_Selection"
+        const val LEFT_SWIPE_FOLDER_NAME = "PhotoTok_LeftSwipe"
         private const val RAW_SUBFOLDER = "RAW"
         private const val JPEG_SUBFOLDER = "JPEG"
 
@@ -83,13 +84,14 @@ class ImageRepositoryImpl @Inject constructor(
         context: Context,
         sourceUri: Uri,
         destFolderUri: Uri,
-        sorting: Boolean
+        sorting: Boolean,
+        subfolderName: String
     ): Boolean = withContext(Dispatchers.IO) {
         if (GoogleDriveImageSource.isDriveUri(sourceUri) && GoogleDriveImageSource.isDriveUri(destFolderUri)) {
-            return@withContext driveMoveCopy(sourceUri, destFolderUri, sorting, move = true)
+            return@withContext driveMoveCopy(sourceUri, destFolderUri, sorting, move = true, subfolderName = subfolderName)
         }
         try {
-            val copied = copyImageInternal(context, sourceUri, destFolderUri, sorting)
+            val copied = copyImageInternal(context, sourceUri, destFolderUri, sorting, subfolderName = subfolderName)
             if (copied) { deleteImage(context, sourceUri) } else { false }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to move image: $sourceUri", e)
@@ -101,13 +103,14 @@ class ImageRepositoryImpl @Inject constructor(
         context: Context,
         sourceUri: Uri,
         destFolderUri: Uri,
-        sorting: Boolean
+        sorting: Boolean,
+        subfolderName: String
     ): Boolean = withContext(Dispatchers.IO) {
         if (GoogleDriveImageSource.isDriveUri(sourceUri) && GoogleDriveImageSource.isDriveUri(destFolderUri)) {
-            return@withContext driveMoveCopy(sourceUri, destFolderUri, sorting, move = false)
+            return@withContext driveMoveCopy(sourceUri, destFolderUri, sorting, move = false, subfolderName = subfolderName)
         }
         try {
-            copyImageInternal(context, sourceUri, destFolderUri, sorting)
+            copyImageInternal(context, sourceUri, destFolderUri, sorting, subfolderName = subfolderName)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy image: $sourceUri", e)
             false
@@ -115,12 +118,12 @@ class ImageRepositoryImpl @Inject constructor(
     }
 
     private suspend fun driveMoveCopy(
-        sourceUri: Uri, destFolderUri: Uri, sorting: Boolean, move: Boolean,
+        sourceUri: Uri, destFolderUri: Uri, sorting: Boolean, move: Boolean, subfolderName: String,
     ): Boolean {
         val fileId = GoogleDriveImageSource.extractId(sourceUri) ?: return false
         val destFolderId = GoogleDriveImageSource.extractId(destFolderUri) ?: return false
         val targetFolderId = if (sorting) {
-            driveClient.findOrCreateFolder(destFolderId, SELECTION_FOLDER_NAME) ?: return false
+            driveClient.findOrCreateFolder(destFolderId, subfolderName) ?: return false
         } else { destFolderId }
         return if (move) {
             driveClient.moveFile(fileId, destFolderId, targetFolderId)
@@ -133,7 +136,8 @@ class ImageRepositoryImpl @Inject constructor(
         context: Context,
         sourceUri: Uri,
         destFolderUri: Uri,
-        sorting: Boolean
+        sorting: Boolean,
+        subfolderName: String
     ): Boolean {
         val sourceDoc = DocumentFile.fromSingleUri(context, sourceUri) ?: return false
         val fileName = sourceDoc.name ?: return false
@@ -142,9 +146,9 @@ class ImageRepositoryImpl @Inject constructor(
         val destFolder = DocumentFile.fromTreeUri(context, destFolderUri) ?: return false
 
         val targetFolder = if (sorting) {
-            // Create Selection folder
-            val selectionDir = destFolder.findFile(SELECTION_FOLDER_NAME)
-                ?: destFolder.createDirectory(SELECTION_FOLDER_NAME)
+            // Create target folder
+            val selectionDir = destFolder.findFile(subfolderName)
+                ?: destFolder.createDirectory(subfolderName)
                 ?: return false
 
             // Determine the correct subfolder based on file extension

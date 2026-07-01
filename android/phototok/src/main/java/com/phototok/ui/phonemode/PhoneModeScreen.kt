@@ -98,23 +98,27 @@ fun PhoneModeScreen(
     var dontShowAgainChecked by remember { mutableStateOf(false) }
 
     val performDeleteSwipe = {
-        val currentImage = uiState.images.getOrNull(uiState.currentIndex)
-        if (currentImage != null) {
-            val isDrive = GoogleDriveImageSource.isDriveUri(Uri.parse(currentImage.uri))
-            if (isDrive) {
-                if (uiState.trashConfirmEnabled) {
-                    dontShowAgainChecked = false
-                    showTrashConfirmDialog = true
+        if (uiState.leftSwipeAction == "delete") {
+            val currentImage = uiState.images.getOrNull(uiState.currentIndex)
+            if (currentImage != null) {
+                val isDrive = GoogleDriveImageSource.isDriveUri(Uri.parse(currentImage.uri))
+                if (isDrive) {
+                    if (uiState.trashConfirmEnabled) {
+                        dontShowAgainChecked = false
+                        showTrashConfirmDialog = true
+                    } else {
+                        viewModel.requestDelete()
+                    }
                 } else {
-                    viewModel.requestDelete()
-                }
-            } else {
-                if (uiState.directDeleteConfirmEnabled) {
-                    showDirectDeleteConfirmDialog = true
-                } else {
-                    viewModel.requestDelete()
+                    if (uiState.directDeleteConfirmEnabled) {
+                        showDirectDeleteConfirmDialog = true
+                    } else {
+                        viewModel.requestDelete()
+                    }
                 }
             }
+        } else {
+            viewModel.performLeftSwipeCopyOrMove()
         }
     }
 
@@ -350,6 +354,8 @@ fun PhoneModeScreen(
                         onNavigate = viewModel::navigateToImage,
                         onAddToCollection = viewModel::addToCollection,
                         onRequestDelete = performDeleteSwipe,
+                        leftSwipeAction = uiState.leftSwipeAction,
+                        leftSwipeFolderName = uiState.leftSwipeFolderName,
                         showExifOverlay = false,
                         showPageCounter = false,
                     )
@@ -420,6 +426,8 @@ fun PhoneModeScreen(
                     onNavigate = viewModel::navigateToImage,
                     onAddToCollection = viewModel::addToCollection,
                     onRequestDelete = performDeleteSwipe,
+                    leftSwipeAction = uiState.leftSwipeAction,
+                    leftSwipeFolderName = uiState.leftSwipeFolderName,
                     showExifOverlay = uiState.showExifOverlay,
                 )
             } else if (uiState.isLoading) {

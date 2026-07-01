@@ -25,6 +25,8 @@ data class SettingsUiState(
     val sortByOrientation: Boolean = false,
     val randomizeOrder: Boolean = false,
     val collectionUri: String? = null,
+    val leftSwipeAction: String = "delete",
+    val leftSwipeUri: String? = null,
     val fileTypeFilter: String = "all",
     val showExifOverlay: Boolean = false,
     val moveRelatedFiles: Boolean = false,
@@ -58,6 +60,7 @@ class SettingsViewModel @Inject constructor(
                 settingsRepository.phoneMoveRelatedFiles,
                 settingsRepository.phoneRecentPathsEnabled,
                 settingsRepository.phoneRecentPathsCount,
+                settingsRepository.phoneLeftSwipeAction,
             ) { arrays ->
                 SettingsUiState(
                     selectionFolderName = arrays[0] as String,
@@ -72,7 +75,9 @@ class SettingsViewModel @Inject constructor(
                     moveRelatedFiles = arrays[9] as Boolean,
                     recentPathsEnabled = arrays[10] as Boolean,
                     recentPathsCount = arrays[11] as Int,
+                    leftSwipeAction = arrays[12] as String,
                     collectionUri = _uiState.value.collectionUri,
+                    leftSwipeUri = _uiState.value.leftSwipeUri,
                     sourceFolderUri = _uiState.value.sourceFolderUri,
                     sourceFolderName = _uiState.value.sourceFolderName,
                 )
@@ -84,6 +89,12 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.phoneCollectionUri.collect { uri ->
                 _uiState.update { it.copy(collectionUri = uri) }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.phoneLeftSwipeUri.collect { uri ->
+                _uiState.update { it.copy(leftSwipeUri = uri) }
             }
         }
 
@@ -151,5 +162,13 @@ class SettingsViewModel @Inject constructor(
 
     fun updateRecentPathsCount(count: Int) {
         viewModelScope.launch { settingsRepository.setPhoneRecentPathsCount(count) }
+    }
+
+    fun updateLeftSwipeAction(action: String) {
+        viewModelScope.launch { settingsRepository.setPhoneLeftSwipeAction(action) }
+    }
+
+    fun updateLeftSwipeUri(uri: String?) {
+        viewModelScope.launch { settingsRepository.setPhoneLeftSwipeUri(uri) }
     }
 }
