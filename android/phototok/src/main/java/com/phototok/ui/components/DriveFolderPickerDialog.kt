@@ -31,55 +31,37 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.phototok.data.source.googledrive.DriveFile
-import com.phototok.data.source.googledrive.GoogleDriveClient
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.phototok.viewmodel.DriveFolderPickerViewModel
 // Colors sourced from MaterialTheme.colorScheme at call sites
-
-private data class BreadcrumbEntry(val id: String, val name: String)
 
 @Composable
 fun DriveFolderPickerDialog(
-    driveClient: GoogleDriveClient,
     onFolderSelected: (folderId: String, folderName: String) -> Unit,
     onDismiss: () -> Unit,
+    viewModel: DriveFolderPickerViewModel = hiltViewModel(),
 ) {
-    var isLoading by remember { mutableStateOf(true) }
-    var folders by remember { mutableStateOf<List<DriveFile>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentFolder = uiState.currentFolder
 
-    val breadcrumb = remember {
-        mutableStateListOf(BreadcrumbEntry("root", "My Drive"))
-    }
-
-    val currentFolder = breadcrumb.last()
-
-    LaunchedEffect(currentFolder.id) {
-        isLoading = true
-        error = null
-        try {
-            folders = driveClient.listFolders(currentFolder.id)
-        } catch (e: Exception) {
-            error = e.message ?: "Failed to load folders"
-            folders = emptyList()
-        }
-        isLoading = false
+    // The ViewModel outlives the dialog (activity-scoped); start each opening
+    // back at the Drive root like the previous remember{}-based implementation.
+    LaunchedEffect(Unit) {
+        viewModel.reset()
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (breadcrumb.size > 1) {
+                if (uiState.canGoBack) {
                     IconButton(
-                        onClick = { breadcrumb.removeLastOrNull() },
+                        onClick = { viewModel.navigateBack() },
                         modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
@@ -109,26 +91,26 @@ fun DriveFolderPickerDialog(
         text = {
             Column(modifier = Modifier.heightIn(min = 200.dp, max = 400.dp)) {
                 when {
-                    isLoading -> {
+                    uiState.isLoading -> {
                         Box(
                             modifier = Modifier.fillMaxWidth().height(200.dp),
                             contentAlignment = Alignment.Center,
                         ) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
                     }
-                    error != null -> {
+                    uiState.error != null -> {
                         Box(
                             modifier = Modifier.fillMaxWidth().height(200.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = error!!,
+                                text = uiState.error!!,
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
                     }
                     else -> {
-                        if (folders.isEmpty()) {
+                        if (uiState.folders.isEmpty()) {
                             Box(
                                 modifier = Modifier.fillMaxWidth().height(100.dp),
                                 contentAlignment = Alignment.Center,
@@ -144,11 +126,11 @@ fun DriveFolderPickerDialog(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
-                            items(folders, key = { it.id }) { folder ->
+                            items(uiState.folders, key = { it.id }) { folder ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { breadcrumb.add(BreadcrumbEntry(folder.id, folder.name)) }
+                                        .clickable { viewModel.enterFolder(folder) }
                                         .padding(vertical = 10.dp, horizontal = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {

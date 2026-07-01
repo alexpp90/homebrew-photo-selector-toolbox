@@ -5,10 +5,8 @@ import android.content.res.Configuration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
-import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.phototok.ui.components.DriveFolderPickerDialog
 import com.phototok.ui.components.ViewerBottomBar
-import com.phototok.data.source.googledrive.GoogleDriveImageSource
 import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
@@ -74,9 +72,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.phototok.data.model.ExifData
+import com.phototok.data.model.ImageItem
 import com.phototok.domain.SwipeAction
 import com.phototok.ui.settings.SettingsScreen
 import com.phototok.viewmodel.PhoneModeViewModel
+import com.phototok.viewmodel.SelectionViewerViewModel
 import com.phototok.viewmodel.canRevert
 
 /**
@@ -87,10 +87,17 @@ import com.phototok.viewmodel.canRevert
 @Composable
 fun PhoneModeScreen(
     viewModel: PhoneModeViewModel = hiltViewModel(),
+    selectionViewModel: SelectionViewerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectionState by selectionViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val colors = MaterialTheme.colorScheme
+
+    val openSelectionViewer = {
+        viewModel.finalizePendingDelete()
+        selectionViewModel.open(uiState.collectionFolderUri ?: uiState.sourceFolderUri)
+    }
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showDrivePicker by remember { mutableStateOf(false) }
@@ -102,8 +109,7 @@ fun PhoneModeScreen(
         if (uiState.leftSwipeAction == SwipeAction.DELETE) {
             val currentImage = uiState.images.getOrNull(uiState.currentIndex)
             if (currentImage != null) {
-                val isDrive = GoogleDriveImageSource.isDriveUri(Uri.parse(currentImage.uri))
-                if (isDrive) {
+                if (currentImage.isRemote) {
                     if (uiState.trashConfirmEnabled) {
                         dontShowAgainChecked = false
                         showTrashConfirmDialog = true
@@ -124,18 +130,12 @@ fun PhoneModeScreen(
     }
 
     val isViewing = uiState.images.isNotEmpty()
-    val isViewingSelection = uiState.isViewingSelection
+    val isViewingSelection = selectionState.isOpen
 
-    // Google Sign-In launcher
+    // Google Sign-In launcher (result parsing/errors handled by the ViewModel)
     val googleSignInLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        try {
-            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
-            viewModel.driveAuth.handleSignInResult(account)
+        if (viewModel.handleDriveSignIn(result.data)) {
             showDrivePicker = true
-        } catch (e: Exception) {
-            android.util.Log.e("PhoneModeScreen", "Google Sign-In failed", e)
-            viewModel.setError("Google Sign-In failed: ${e.message}")
         }
     }
 
@@ -156,6 +156,14 @@ fun PhoneModeScreen(
         uiState.lastActionFeedback?.let { fb ->
             snackbarHostState.showSnackbar(message = fb.message, duration = SnackbarDuration.Short)
             viewModel.clearFeedback()
+        }
+    }
+
+    // Selection-viewer feedback snackbar
+    LaunchedEffect(selectionState.feedback) {
+        selectionState.feedback?.let { fb ->
+            snackbarHostState.showSnackbar(message = fb.message, duration = SnackbarDuration.Short)
+            selectionViewModel.clearFeedback()
         }
     }
 
@@ -256,7 +264,6 @@ fun PhoneModeScreen(
     // Google Drive folder picker dialog
     if (showDrivePicker) {
         DriveFolderPickerDialog(
-            driveClient = viewModel.driveClient,
             onFolderSelected = { folderId, folderName ->
                 showDrivePicker = false
                 viewModel.selectDriveFolder(folderId, folderName)
@@ -272,8 +279,12 @@ fun PhoneModeScreen(
         // ── Read-only Selection-folder viewer (view + back only) ────────────
         if (isViewingSelection) {
             SelectionFolderViewer(
-                viewModel = viewModel,
-                folderName = uiState.selectionFolderName,
+                images = selectionState.images,
+                currentIndex = selectionState.currentIndex,
+                folderName = selectionState.folderName,
+                showExifOverlay = uiState.showExifOverlay,
+                onNavigate = selectionViewModel::navigateTo,
+                onClose = selectionViewModel::close,
             )
         } else if (isLandscape && isViewing) {
             // ── Landscape viewer with side panels ───────────────────────────
@@ -327,7 +338,7 @@ fun PhoneModeScreen(
                             description = "Selection",
                             isActive = false,
                             enabled = true,
-                            onClick = { viewModel.openSelectionFolder() },
+                            onClick = openSelectionViewer,
                         )
                         // Revert (active only when there is a pending deletion)
                         SidePanelButton(
@@ -451,13 +462,13 @@ fun PhoneModeScreen(
                         folderPickerLauncher.launch(Uri.parse(path))
                     },
                     onOpenGoogleDrive = {
-                        if (viewModel.driveAuth.isSignedIn) {
+                        if (uiState.isDriveSignedIn) {
                             showDrivePicker = true
                         } else {
-                            googleSignInLauncher.launch(viewModel.driveAuth.getSignInIntent())
+                            googleSignInLauncher.launch(viewModel.driveSignInIntent())
                         }
                     },
-                    isGoogleDriveSignedIn = viewModel.driveAuth.isSignedIn,
+                    isGoogleDriveSignedIn = uiState.isDriveSignedIn,
                     recentPaths = uiState.recentPaths,
                     recentPathsEnabled = uiState.recentPathsEnabled,
                     recentPathsCount = uiState.recentPathsCount,
@@ -514,7 +525,7 @@ fun PhoneModeScreen(
                 ViewerBottomBar(
                     canRevert = uiState.canRevert,
                     onRevert = { viewModel.revertDelete() },
-                    onJumpToSelection = { viewModel.openSelectionFolder() },
+                    onJumpToSelection = openSelectionViewer,
                     onGoToLanding = { viewModel.goBackToLanding() },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
@@ -569,14 +580,17 @@ private fun SidePanelButton(
 /** Read-only viewer for the PhotoTok_Selection folder: scroll through and go back. */
 @Composable
 private fun SelectionFolderViewer(
-    viewModel: PhoneModeViewModel,
+    images: List<ImageItem>,
+    currentIndex: Int,
     folderName: String,
+    showExifOverlay: Boolean,
+    onNavigate: (Int) -> Unit,
+    onClose: () -> Unit,
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (uiState.selectionImages.isEmpty()) {
+        if (images.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -591,13 +605,13 @@ private fun SelectionFolderViewer(
             }
         } else {
             PhoneModeViewer(
-                images = uiState.selectionImages,
-                currentIndex = uiState.selectionCurrentIndex,
+                images = images,
+                currentIndex = currentIndex,
                 portraitSectionStart = -1,
-                onNavigate = viewModel::navigateSelection,
+                onNavigate = onNavigate,
                 onAddToCollection = { },
                 onRequestDelete = { },
-                showExifOverlay = uiState.showExifOverlay,
+                showExifOverlay = showExifOverlay,
                 readOnly = true,
             )
         }
@@ -612,7 +626,7 @@ private fun SelectionFolderViewer(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Start,
         ) {
-            IconButton(onClick = { viewModel.closeSelectionFolder() }) {
+            IconButton(onClick = onClose) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",

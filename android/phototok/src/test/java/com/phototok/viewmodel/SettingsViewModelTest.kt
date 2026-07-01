@@ -1,6 +1,7 @@
 package com.phototok.viewmodel
 
-import android.content.Context
+import com.phototok.data.model.PhoneSettings
+import com.phototok.data.repository.ImageRepository
 import com.phototok.data.repository.SettingsRepository
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FileTypeFilter
@@ -23,23 +24,27 @@ class SettingsViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private val settingsRepository: SettingsRepository = mockk(relaxed = true)
-    private val context: Context = mockk(relaxed = true)
+    private val imageRepository: ImageRepository = mockk(relaxed = true)
 
     // Flow mocks
+    private val phoneSettingsFlow = MutableStateFlow(
+        PhoneSettings(
+            collectionAction = CollectionAction.COPY,
+            trashConfirmEnabled = true,
+            directDeleteConfirmEnabled = true,
+            sortByOrientation = false,
+            randomizeOrder = false,
+            fileTypeFilter = FileTypeFilter.ALL,
+            leftSwipeAction = SwipeAction.DELETE,
+            showExifOverlay = false,
+            moveRelatedFiles = false,
+            recentPathsEnabled = true,
+            recentPathsCount = 3,
+        )
+    )
     private val selectionFolderNameFlow = MutableStateFlow("Selection")
     private val sortingEnabledFlow = MutableStateFlow(true)
-    private val phoneCollectionActionFlow = MutableStateFlow(CollectionAction.COPY)
-    private val phoneTrashConfirmEnabledFlow = MutableStateFlow(true)
-    private val phoneDirectDeleteConfirmEnabledFlow = MutableStateFlow(true)
-    private val phoneSortByOrientationFlow = MutableStateFlow(false)
-    private val phoneRandomizeOrderFlow = MutableStateFlow(false)
-    private val phoneFileTypeFilterFlow = MutableStateFlow(FileTypeFilter.ALL)
-    private val phoneShowExifOverlayFlow = MutableStateFlow(false)
-    private val phoneMoveRelatedFilesFlow = MutableStateFlow(false)
-    private val phoneRecentPathsEnabledFlow = MutableStateFlow(true)
-    private val phoneRecentPathsCountFlow = MutableStateFlow(3)
     private val phoneCollectionUriFlow = MutableStateFlow<String?>(null)
-    private val phoneLeftSwipeActionFlow = MutableStateFlow(SwipeAction.DELETE)
     private val phoneLeftSwipeUriFlow = MutableStateFlow<String?>(null)
     private val lastFolderUriFlow = MutableStateFlow<String?>(null)
 
@@ -49,26 +54,15 @@ class SettingsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
-        // Mock settings flows
+        // Mock settings flows (one typed flow for the simple settings)
+        every { settingsRepository.phoneSettings } returns phoneSettingsFlow
         every { settingsRepository.selectionFolderName } returns selectionFolderNameFlow
         every { settingsRepository.sortingEnabled } returns sortingEnabledFlow
-        every { settingsRepository.phoneCollectionAction } returns phoneCollectionActionFlow
-        every { settingsRepository.phoneTrashConfirmEnabled } returns phoneTrashConfirmEnabledFlow
-        every { settingsRepository.phoneDirectDeleteConfirmEnabled } returns phoneDirectDeleteConfirmEnabledFlow
-        every { settingsRepository.phoneSortByOrientation } returns phoneSortByOrientationFlow
-        every { settingsRepository.phoneRandomizeOrder } returns phoneRandomizeOrderFlow
-        every { settingsRepository.phoneFileTypeFilter } returns phoneFileTypeFilterFlow
-        every { settingsRepository.phoneShowExifOverlay } returns phoneShowExifOverlayFlow
-        every { settingsRepository.phoneMoveRelatedFiles } returns phoneMoveRelatedFilesFlow
-        every { settingsRepository.phoneRecentPathsEnabled } returns phoneRecentPathsEnabledFlow
-        every { settingsRepository.phoneRecentPathsCount } returns phoneRecentPathsCountFlow
-        every { settingsRepository.phoneRecentPaths } returns MutableStateFlow(emptyList())
         every { settingsRepository.phoneCollectionUri } returns phoneCollectionUriFlow
-        every { settingsRepository.phoneLeftSwipeAction } returns phoneLeftSwipeActionFlow
         every { settingsRepository.phoneLeftSwipeUri } returns phoneLeftSwipeUriFlow
         every { settingsRepository.lastFolderUri } returns lastFolderUriFlow
 
-        viewModel = SettingsViewModel(settingsRepository, context)
+        viewModel = SettingsViewModel(settingsRepository, imageRepository)
     }
 
     @After
@@ -127,32 +121,34 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `state updates when repository flows emit new values`() = runTest {
+    fun `state updates when the typed settings flow emits new values`() = runTest {
         assertFalse(viewModel.uiState.value.moveRelatedFiles)
 
-        phoneMoveRelatedFilesFlow.value = true
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(moveRelatedFiles = true)
 
         assertTrue(viewModel.uiState.value.moveRelatedFiles)
     }
 
     @Test
-    fun `state updates when trash and direct delete confirmation flows emit new values`() = runTest {
+    fun `state updates when trash and direct delete confirmations change`() = runTest {
         assertTrue(viewModel.uiState.value.trashConfirmEnabled)
         assertTrue(viewModel.uiState.value.directDeleteConfirmEnabled)
 
-        phoneTrashConfirmEnabledFlow.value = false
-        phoneDirectDeleteConfirmEnabledFlow.value = false
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(
+            trashConfirmEnabled = false,
+            directDeleteConfirmEnabled = false,
+        )
 
         assertFalse(viewModel.uiState.value.trashConfirmEnabled)
         assertFalse(viewModel.uiState.value.directDeleteConfirmEnabled)
     }
 
     @Test
-    fun `state updates when left swipe flows emit new values`() = runTest {
+    fun `state updates when left swipe settings change`() = runTest {
         assertEquals(SwipeAction.DELETE, viewModel.uiState.value.leftSwipeAction)
         assertEquals(null, viewModel.uiState.value.leftSwipeUri)
 
-        phoneLeftSwipeActionFlow.value = SwipeAction.MOVE
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(leftSwipeAction = SwipeAction.MOVE)
         phoneLeftSwipeUriFlow.value = "content://left"
 
         assertEquals(SwipeAction.MOVE, viewModel.uiState.value.leftSwipeAction)

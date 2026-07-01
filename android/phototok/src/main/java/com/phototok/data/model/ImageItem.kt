@@ -14,4 +14,11 @@ data class ImageItem(
     /** True when the image is wider than it is tall (or dimensions unknown). */
     val isLandscape: Boolean
         get() = imageWidth == 0 && imageHeight == 0 || imageWidth > imageHeight
+
+    /**
+     * True when the image lives on a remote backend (Google Drive) rather than
+     * local storage. Remote deletions go to a trash; local ones are permanent.
+     */
+    val isRemote: Boolean
+        get() = com.phototok.domain.SourceUris.isRemote(uri)
 }

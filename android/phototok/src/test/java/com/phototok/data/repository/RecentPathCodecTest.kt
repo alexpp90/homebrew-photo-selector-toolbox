@@ -68,4 +68,31 @@ class RecentPathCodecTest {
         val paths = listOf(RecentPath("content://tree/x", "Holiday 2026 Photos"))
         assertEquals(paths, RecentPathCodec.decode(RecentPathCodec.encode(paths)))
     }
+
+    @Test
+    fun `evictedUris returns uris dropped by the cap`() {
+        val before = (1..RecentPathCodec.MAX_STORED).map { RecentPath("uri-$it", "N$it") }
+        val after = RecentPathCodec.add(before, "uri-new", "New")
+
+        assertEquals(
+            listOf("uri-${RecentPathCodec.MAX_STORED}"),
+            RecentPathCodec.evictedUris(before, after),
+        )
+    }
+
+    @Test
+    fun `evictedUris is empty when nothing was dropped`() {
+        val before = listOf(RecentPath("uri-a", "A"))
+        val after = RecentPathCodec.add(before, "uri-b", "B")
+
+        assertTrue(RecentPathCodec.evictedUris(before, after).isEmpty())
+    }
+
+    @Test
+    fun `evictedUris ignores re-added uri`() {
+        val before = listOf(RecentPath("uri-a", "A"), RecentPath("uri-b", "B"))
+        val after = RecentPathCodec.add(before, "uri-a", "A2")
+
+        assertTrue(RecentPathCodec.evictedUris(before, after).isEmpty())
+    }
 }

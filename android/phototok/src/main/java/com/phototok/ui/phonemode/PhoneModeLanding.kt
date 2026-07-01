@@ -91,7 +91,7 @@ fun PhoneModeLanding(
         mutableStateOf(
             when {
                 sourceFolderUri == null -> SourceType.Local
-                com.phototok.data.source.googledrive.GoogleDriveImageSource.isDriveUri(sourceFolderUri) -> SourceType.GoogleDrive
+                com.phototok.domain.SourceUris.isRemote(sourceFolderUri) -> SourceType.GoogleDrive
                 else -> {
                     val isSdCard = externalVolumes.any { vol ->
                         sourceFolderUri.contains(vol.path) || 
@@ -401,7 +401,7 @@ private fun RecentPathRow(
     onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
-    val isDrive = com.phototok.data.source.googledrive.GoogleDriveImageSource.isDriveUri(recent.uri)
+    val isDrive = com.phototok.domain.SourceUris.isRemote(recent.uri)
 
     Surface(
         modifier = Modifier

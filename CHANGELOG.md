@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed & Fixed
+- **Photo-Tok Architecture Refactor:**
+  - Introduced an `ImageSource` abstraction (local SAF + Google Drive) with a single resolver; all URI-scheme dispatch now lives in the data layer and `ImageRepository` no longer takes `Context` parameters. Cross-source copy/move is rejected explicitly.
+  - Split `PhoneModeViewModel`: the read-only selection viewer moved to `SelectionViewerViewModel` (folder traversal moved into the local image source), and the Drive folder picker to `DriveFolderPickerViewModel`; Compose no longer receives `GoogleDriveClient`/`GoogleDriveAuth` objects (sign-in state is part of the UI state).
+  - Replaced the fragile 12/13-flow positional `combine` of settings with a single typed `PhoneSettings` flow mapped from one DataStore snapshot (both feed and settings ViewModels).
+  - Copy/move actions now track per-file results: partial failures are reported ("Moved 1 of 2 …, 1 failed") and only successfully moved files leave the feed.
+  - Image dimensions are applied to the UI state in batches instead of per image, bounding recompositions in folders with thousands of photos.
+  - Per-folder last positions are now keyed by the full URI (collision-free; legacy hash keys read as fallback and cleaned up) and pruned when a folder falls out of the recents list.
+  - Google Drive client: all HTTP verbs (including downloads and uploads) share one authorized-request helper with a single token-refresh retry on 401; recursive folder listings run concurrently (bounded); corrected the upload documentation (multipart, not resumable).
 - **Photo-Tok Reliability Refactor:**
   - Fixed a bug where sibling files (e.g. `.ARW` next to `.JPG`) of a pending deletion were not removed from disk when the app was closed during the undo window; pending deletions now finalize on an application-scoped coroutine so they survive screen exit.
   - Fixed a coroutine leak where re-selecting a source folder started a new image-discovery collector without cancelling the previous one.
