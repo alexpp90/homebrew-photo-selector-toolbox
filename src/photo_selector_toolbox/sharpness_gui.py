@@ -107,6 +107,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.bind_all("<M>", self.on_move_key)
         self.bind_all("<c>", self.on_copy_key)
         self.bind_all("<C>", self.on_copy_key)
+        self.bind_all("<f>", self.on_f_key)
+        self.bind_all("<F>", self.on_f_key)
 
     def _resolve_widget(self, widget_val):
         if isinstance(widget_val, str):
@@ -200,6 +202,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
             return
         self.copy_current_to_selection()
+
+    def on_f_key(self, event):
+        widget = self._resolve_widget(event.widget)
+        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
+            return
+        # Don't trigger if user is typing in a text entry
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+            return
+        if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
+            return
+        self.toggle_focus_mode()
 
     def setup_ui(self):
 
@@ -494,7 +507,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
 
         self.focus_toggle_btn = ttk.Button(
-            btn_frame, text="⛶ Focus Mode", command=self.toggle_focus_mode
+            btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
 
@@ -910,7 +923,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
        # Controls Stack
         self.focus_exit_btn = ttk.Button(
             self.focus_right_panel,
-            text="🔙 Exit Focus Mode",
+            text="🔙 Exit Focus Mode (F/Esc)",
             command=self.toggle_focus_mode,
         )
         self.focus_exit_btn.pack(side="top", pady=10, fill="x")
