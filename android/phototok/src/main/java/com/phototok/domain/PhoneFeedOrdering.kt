@@ -40,4 +40,23 @@ object PhoneFeedOrdering {
         val split = if (portrait.isEmpty()) -1 else landscape.size
         return Result(result, split)
     }
+
+    /**
+     * Recompute the portrait-section start for an already-ordered list, e.g. after an
+     * item was removed or restored. Returns -1 when orientation sorting is off, the
+     * list is empty, or there are no portrait images.
+     */
+    fun portraitSplit(images: List<ImageItem>, sortByOrientation: Boolean): Int {
+        if (!sortByOrientation || images.isEmpty()) return -1
+        val firstPortrait = images.indexOfFirst { !it.isLandscape }
+        return if (firstPortrait >= 0) firstPortrait else -1
+    }
+
+    /** Apply the user's file-type filter to a list of images. */
+    fun filterByType(images: List<ImageItem>, filter: FileTypeFilter): List<ImageItem> =
+        when (filter) {
+            FileTypeFilter.ALL -> images
+            FileTypeFilter.RAW -> images.filter { PhotoExtensions.isRaw(it.fileName) }
+            FileTypeFilter.JPG -> images.filter { PhotoExtensions.isJpeg(it.fileName) }
+        }
 }

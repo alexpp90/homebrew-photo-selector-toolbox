@@ -10,6 +10,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.phototok.data.model.RecentPath
+import com.phototok.domain.CollectionAction
+import com.phototok.domain.FileTypeFilter
+import com.phototok.domain.SwipeAction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -87,9 +90,9 @@ class SettingsRepository @Inject constructor(
 
     // ── Collection & browsing settings ──────────────────────────────────
 
-    /** "copy" (default) or "move" */
-    val phoneCollectionAction: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_COLLECTION_ACTION] ?: "copy"
+    /** Action to perform when adding a photo to the collection. */
+    val phoneCollectionAction: Flow<CollectionAction> = context.dataStore.data.map { prefs ->
+        CollectionAction.fromKey(prefs[KEY_COLLECTION_ACTION])
     }
 
     /** Optional custom collection target folder URI. */
@@ -97,9 +100,9 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_COLLECTION_URI]
     }
 
-    /** "delete" (default), "copy", or "move" */
-    val phoneLeftSwipeAction: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_LEFT_SWIPE_ACTION] ?: "delete"
+    /** Action to perform on a left swipe. */
+    val phoneLeftSwipeAction: Flow<SwipeAction> = context.dataStore.data.map { prefs ->
+        SwipeAction.fromKey(prefs[KEY_LEFT_SWIPE_ACTION])
     }
 
     /** Optional custom left swipe target folder URI. */
@@ -132,9 +135,9 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_GESTURE_TUTORIAL_TS] ?: 0L
     }
 
-    /** "all" (default), "raw", or "jpg" */
-    val phoneFileTypeFilter: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_FILE_TYPE_FILTER] ?: "all"
+    /** File-type filter applied to the feed. */
+    val phoneFileTypeFilter: Flow<FileTypeFilter> = context.dataStore.data.map { prefs ->
+        FileTypeFilter.fromKey(prefs[KEY_FILE_TYPE_FILTER])
     }
 
     /** Whether to show EXIF stats overlay (default false; toggled via the logo). */
@@ -162,8 +165,8 @@ class SettingsRepository @Inject constructor(
         RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
     }
 
-    suspend fun setPhoneCollectionAction(action: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_COLLECTION_ACTION] = action }
+    suspend fun setPhoneCollectionAction(action: CollectionAction) {
+        context.dataStore.edit { prefs -> prefs[KEY_COLLECTION_ACTION] = action.key }
     }
 
     suspend fun setPhoneCollectionUri(uri: String?) {
@@ -173,8 +176,8 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    suspend fun setPhoneLeftSwipeAction(action: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_LEFT_SWIPE_ACTION] = action }
+    suspend fun setPhoneLeftSwipeAction(action: SwipeAction) {
+        context.dataStore.edit { prefs -> prefs[KEY_LEFT_SWIPE_ACTION] = action.key }
     }
 
     suspend fun setPhoneLeftSwipeUri(uri: String?) {
@@ -204,8 +207,8 @@ class SettingsRepository @Inject constructor(
         context.dataStore.edit { prefs -> prefs[KEY_GESTURE_TUTORIAL_TS] = ts }
     }
 
-    suspend fun setPhoneFileTypeFilter(filter: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_FILE_TYPE_FILTER] = filter }
+    suspend fun setPhoneFileTypeFilter(filter: FileTypeFilter) {
+        context.dataStore.edit { prefs -> prefs[KEY_FILE_TYPE_FILTER] = filter.key }
     }
 
     suspend fun setPhoneShowExifOverlay(enabled: Boolean) {

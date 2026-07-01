@@ -1,0 +1,35 @@
+name: Requirements Drift Check
+
+# AGENTS.md requires REQUIREMENTS.md to be kept in sync with behavior changes.
+# This check warns (does not fail) when source code changes without a
+# corresponding REQUIREMENTS.md update.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: REQUIREMENTS.md sync reminder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for drift
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD")
+
+          echo "$CHANGED"
+
+          if echo "$CHANGED" | grep -qE '^(src/|android/(app|phototok)/src/)'; then
+            if ! echo "$CHANGED" | grep -q '^REQUIREMENTS.md$'; then
+              echo "::warning title=REQUIREMENTS.md not updated::Source code changed but REQUIREMENTS.md was not touched. Per AGENTS.md, update it if this PR changes behavior, or ignore this warning for pure refactors/bug fixes."
+            fi
+          fi

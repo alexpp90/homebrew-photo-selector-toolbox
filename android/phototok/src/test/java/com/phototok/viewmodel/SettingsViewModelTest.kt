@@ -2,6 +2,9 @@ package com.phototok.viewmodel
 
 import android.content.Context
 import com.phototok.data.repository.SettingsRepository
+import com.phototok.domain.CollectionAction
+import com.phototok.domain.FileTypeFilter
+import com.phototok.domain.SwipeAction
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,18 +28,18 @@ class SettingsViewModelTest {
     // Flow mocks
     private val selectionFolderNameFlow = MutableStateFlow("Selection")
     private val sortingEnabledFlow = MutableStateFlow(true)
-    private val phoneCollectionActionFlow = MutableStateFlow("copy")
+    private val phoneCollectionActionFlow = MutableStateFlow(CollectionAction.COPY)
     private val phoneTrashConfirmEnabledFlow = MutableStateFlow(true)
     private val phoneDirectDeleteConfirmEnabledFlow = MutableStateFlow(true)
     private val phoneSortByOrientationFlow = MutableStateFlow(false)
     private val phoneRandomizeOrderFlow = MutableStateFlow(false)
-    private val phoneFileTypeFilterFlow = MutableStateFlow("all")
+    private val phoneFileTypeFilterFlow = MutableStateFlow(FileTypeFilter.ALL)
     private val phoneShowExifOverlayFlow = MutableStateFlow(false)
     private val phoneMoveRelatedFilesFlow = MutableStateFlow(false)
     private val phoneRecentPathsEnabledFlow = MutableStateFlow(true)
     private val phoneRecentPathsCountFlow = MutableStateFlow(3)
     private val phoneCollectionUriFlow = MutableStateFlow<String?>(null)
-    private val phoneLeftSwipeActionFlow = MutableStateFlow("delete")
+    private val phoneLeftSwipeActionFlow = MutableStateFlow(SwipeAction.DELETE)
     private val phoneLeftSwipeUriFlow = MutableStateFlow<String?>(null)
     private val lastFolderUriFlow = MutableStateFlow<String?>(null)
 
@@ -79,17 +82,17 @@ class SettingsViewModelTest {
 
         assertEquals("Selection", state.selectionFolderName)
         assertTrue(state.sortingEnabled)
-        assertEquals("copy", state.collectionAction)
+        assertEquals(CollectionAction.COPY, state.collectionAction)
         assertTrue(state.trashConfirmEnabled)
         assertTrue(state.directDeleteConfirmEnabled)
         assertFalse(state.sortByOrientation)
         assertFalse(state.randomizeOrder)
-        assertEquals("all", state.fileTypeFilter)
+        assertEquals(FileTypeFilter.ALL, state.fileTypeFilter)
         assertFalse(state.showExifOverlay)
         assertFalse(state.moveRelatedFiles)
         assertTrue(state.recentPathsEnabled)
         assertEquals(3, state.recentPathsCount)
-        assertEquals("delete", state.leftSwipeAction)
+        assertEquals(SwipeAction.DELETE, state.leftSwipeAction)
         assertEquals(null, state.leftSwipeUri)
     }
 
@@ -116,8 +119,8 @@ class SettingsViewModelTest {
         viewModel.updateDirectDeleteConfirm(false)
         coVerify { settingsRepository.setPhoneDirectDeleteConfirmEnabled(false) }
 
-        viewModel.updateLeftSwipeAction("copy")
-        coVerify { settingsRepository.setPhoneLeftSwipeAction("copy") }
+        viewModel.updateLeftSwipeAction(SwipeAction.COPY)
+        coVerify { settingsRepository.setPhoneLeftSwipeAction(SwipeAction.COPY) }
 
         viewModel.updateLeftSwipeUri("content://left")
         coVerify { settingsRepository.setPhoneLeftSwipeUri("content://left") }
@@ -146,13 +149,13 @@ class SettingsViewModelTest {
 
     @Test
     fun `state updates when left swipe flows emit new values`() = runTest {
-        assertEquals("delete", viewModel.uiState.value.leftSwipeAction)
+        assertEquals(SwipeAction.DELETE, viewModel.uiState.value.leftSwipeAction)
         assertEquals(null, viewModel.uiState.value.leftSwipeUri)
 
-        phoneLeftSwipeActionFlow.value = "move"
+        phoneLeftSwipeActionFlow.value = SwipeAction.MOVE
         phoneLeftSwipeUriFlow.value = "content://left"
 
-        assertEquals("move", viewModel.uiState.value.leftSwipeAction)
+        assertEquals(SwipeAction.MOVE, viewModel.uiState.value.leftSwipeAction)
         assertEquals("content://left", viewModel.uiState.value.leftSwipeUri)
     }
 }

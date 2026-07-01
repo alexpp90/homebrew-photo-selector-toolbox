@@ -15,24 +15,33 @@ import com.phototok.data.repository.ImageRepositoryImpl
 import com.phototok.data.repository.SettingsRepository
 import com.phototok.data.source.ExternalStorageDetector
 import com.phototok.data.source.ExternalVolume
+import com.phototok.data.source.LocalImageSourceImpl
 import com.phototok.data.source.googledrive.GoogleDriveAuth
 import com.phototok.data.source.googledrive.GoogleDriveClient
 import com.phototok.data.source.googledrive.GoogleDriveImageSource
+import com.phototok.di.ApplicationScope
+import com.phototok.domain.CollectionAction
+import com.phototok.domain.FileTypeFilter
+import com.phototok.domain.PendingDeleteLogic
 import com.phototok.domain.PhoneFeedOrdering
 import com.phototok.domain.RelatedFiles
+import com.phototok.domain.SwipeAction
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import kotlin.math.abs
-import kotlinx.coroutines.Job
 
 data class PhoneModeUiState(
     val images: List<ImageItem> = emptyList(),
@@ -44,32 +53,26 @@ data class PhoneModeUiState(
     val sourceFolderName: String = "",
     val collectionFolderUri: String? = null,
     val collectionFolderName: String = "",
-    val leftSwipeAction: String = "delete",
+    val leftSwipeAction: SwipeAction = SwipeAction.DEFAULT,
     val leftSwipeFolderUri: String? = null,
     val leftSwipeFolderName: String = "",
     val error: String? = null,
-    val showDeleteConfirmation: Boolean = false,
     val showGestureTutorial: Boolean = false,
     val lastActionFeedback: ActionFeedback? = null,
     // Settings (observed)
-    val collectionAction: String = "copy", // "copy" or "move"
+    val collectionAction: CollectionAction = CollectionAction.DEFAULT,
     val trashConfirmEnabled: Boolean = true,
     val directDeleteConfirmEnabled: Boolean = true,
     val sortByOrientation: Boolean = false,
     val randomizeOrder: Boolean = false,
-    /** "all", "raw", or "jpg" */
-    val fileTypeFilter: String = "all",
+    val fileTypeFilter: FileTypeFilter = FileTypeFilter.DEFAULT,
     /** Index where portrait section starts (-1 = no split). */
     val portraitSectionStart: Int = -1,
     /** Detected external/removable storage volumes. */
     val externalVolumes: List<ExternalVolume> = emptyList(),
     val showExifOverlay: Boolean = false,
-    val pendingDeleteImage: ImageItem? = null,
-    val pendingDeleteIndex: Int = -1,
-    val pendingDeleteAllImagesIndex: Int = -1,
-    val revertAllowedImageUri: String? = null,
-    /** Sibling files removed alongside the pending delete (restored together on revert). */
-    val pendingDeleteRelated: List<ImageItem> = emptyList(),
+    /** Deletion applied to the UI but not yet finalized on disk (revertable). */
+    val pendingDelete: PendingDeleteLogic.Pending? = null,
     /** Whether collection/delete actions also move/delete same-name sibling files. */
     val moveRelatedFiles: Boolean = false,
     // Recent folders (landing quick-select)
@@ -85,7 +88,7 @@ data class PhoneModeUiState(
 
 /** True when there is a pending deletion that can still be reverted. */
 val PhoneModeUiState.canRevert: Boolean
-    get() = pendingDeleteImage != null
+    get() = pendingDelete != null
 
 data class ActionFeedback(
     val message: String,
@@ -100,6 +103,7 @@ class PhoneModeViewModel @Inject constructor(
     private val externalStorageDetector: ExternalStorageDetector,
     val driveAuth: GoogleDriveAuth,
     val driveClient: GoogleDriveClient,
+    @ApplicationScope private val appScope: CoroutineScope,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -111,18 +115,14 @@ class PhoneModeViewModel @Inject constructor(
             size > MAX_EXIF_CACHE_SIZE
     }
 
+    /** Active folder-discovery collection; cancelled when a new folder is selected. */
+    private var discoveryJob: Job? = null
+    private var dimensionsJob: Job? = null
+
     companion object {
         private const val TAG = "PhoneModeVM"
         private const val MAX_EXIF_CACHE_SIZE = 30
         private const val ONE_WEEK_MS = 7L * 24 * 60 * 60 * 1000
-
-        private val RAW_EXTENSIONS = setOf(
-            "arw", "cr2", "cr3", "nef", "nrw", "orf", "raf", "rw2",
-            "pef", "srw", "dng", "raw", "3fr", "ari", "bay", "cap",
-            "iiq", "eip", "erf", "fff", "mef", "mdc", "mos", "mrw",
-            "obm", "ptx", "pxn", "rwl", "rwz", "sr2", "srf", "x3f"
-        )
-        private val JPG_EXTENSIONS = setOf("jpg", "jpeg")
     }
 
     init {
@@ -133,98 +133,116 @@ class PhoneModeViewModel @Inject constructor(
 
     // ── Settings observation ──────────────────────────────────────────────
 
+    /** Snapshot of all simple observed settings, combined into one flow. */
+    private data class ObservedSettings(
+        val collectionAction: CollectionAction,
+        val trashConfirmEnabled: Boolean,
+        val directDeleteConfirmEnabled: Boolean,
+        val sortByOrientation: Boolean,
+        val randomizeOrder: Boolean,
+        val fileTypeFilter: FileTypeFilter,
+        val leftSwipeAction: SwipeAction,
+        val showExifOverlay: Boolean,
+        val moveRelatedFiles: Boolean,
+        val recentPathsEnabled: Boolean,
+        val recentPathsCount: Int,
+        val recentPaths: List<RecentPath>,
+    )
+
     private fun observeSettings() {
+        // All simple settings in a single combine: one state update per emission
+        // instead of 13 independent collectors racing each other.
         viewModelScope.launch {
-            settingsRepository.phoneCollectionAction.collect { action ->
-                _uiState.update { it.copy(collectionAction = action) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.phoneTrashConfirmEnabled.collect { enabled ->
-                _uiState.update { it.copy(trashConfirmEnabled = enabled) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.phoneDirectDeleteConfirmEnabled.collect { enabled ->
-                _uiState.update { it.copy(directDeleteConfirmEnabled = enabled) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.phoneSortByOrientation.collect { enabled ->
-                _uiState.update { it.copy(sortByOrientation = enabled) }
-                if (_uiState.value.images.isNotEmpty()) {
-                    resortImages()
+            var previous: ObservedSettings? = null
+            combine(
+                settingsRepository.phoneCollectionAction,
+                settingsRepository.phoneTrashConfirmEnabled,
+                settingsRepository.phoneDirectDeleteConfirmEnabled,
+                settingsRepository.phoneSortByOrientation,
+                settingsRepository.phoneRandomizeOrder,
+                settingsRepository.phoneFileTypeFilter,
+                settingsRepository.phoneLeftSwipeAction,
+                settingsRepository.phoneShowExifOverlay,
+                settingsRepository.phoneMoveRelatedFiles,
+                settingsRepository.phoneRecentPathsEnabled,
+                settingsRepository.phoneRecentPathsCount,
+                settingsRepository.phoneRecentPaths,
+            ) { values ->
+                @Suppress("UNCHECKED_CAST")
+                val recentPaths = values[11] as List<RecentPath>
+                ObservedSettings(
+                    collectionAction = values[0] as CollectionAction,
+                    trashConfirmEnabled = values[1] as Boolean,
+                    directDeleteConfirmEnabled = values[2] as Boolean,
+                    sortByOrientation = values[3] as Boolean,
+                    randomizeOrder = values[4] as Boolean,
+                    fileTypeFilter = values[5] as FileTypeFilter,
+                    leftSwipeAction = values[6] as SwipeAction,
+                    showExifOverlay = values[7] as Boolean,
+                    moveRelatedFiles = values[8] as Boolean,
+                    recentPathsEnabled = values[9] as Boolean,
+                    recentPathsCount = values[10] as Int,
+                    recentPaths = recentPaths,
+                )
+            }.collect { s ->
+                _uiState.update {
+                    it.copy(
+                        collectionAction = s.collectionAction,
+                        trashConfirmEnabled = s.trashConfirmEnabled,
+                        directDeleteConfirmEnabled = s.directDeleteConfirmEnabled,
+                        sortByOrientation = s.sortByOrientation,
+                        randomizeOrder = s.randomizeOrder,
+                        fileTypeFilter = s.fileTypeFilter,
+                        leftSwipeAction = s.leftSwipeAction,
+                        showExifOverlay = s.showExifOverlay,
+                        moveRelatedFiles = s.moveRelatedFiles,
+                        recentPathsEnabled = s.recentPathsEnabled,
+                        recentPathsCount = s.recentPathsCount,
+                        recentPaths = s.recentPaths,
+                    )
+                }
+                val prev = previous
+                previous = s
+                if (prev != null) {
+                    if (s.fileTypeFilter != prev.fileTypeFilter &&
+                        _uiState.value.allImages.isNotEmpty()
+                    ) {
+                        refilterAndSort()
+                    } else if ((s.sortByOrientation != prev.sortByOrientation ||
+                            s.randomizeOrder != prev.randomizeOrder) &&
+                        _uiState.value.images.isNotEmpty()
+                    ) {
+                        resortImages()
+                    }
                 }
             }
         }
-        viewModelScope.launch {
-            settingsRepository.phoneRandomizeOrder.collect { enabled ->
-                _uiState.update { it.copy(randomizeOrder = enabled) }
-                if (_uiState.value.images.isNotEmpty()) {
-                    resortImages()
-                }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.phoneFileTypeFilter.collect { filter ->
-                _uiState.update { it.copy(fileTypeFilter = filter) }
-                if (_uiState.value.allImages.isNotEmpty()) {
-                    refilterAndSort()
-                }
-            }
-        }
+        // URI settings resolve display names via DocumentFile (I/O) — kept separate.
         viewModelScope.launch {
             settingsRepository.phoneCollectionUri.collect { uri ->
-                val name = if (uri != null) {
-                    try {
-                        DocumentFile.fromTreeUri(context, Uri.parse(uri))?.name ?: "Collection"
-                    } catch (_: Exception) { "Collection" }
-                } else ""
+                val name = resolveFolderName(uri, fallback = "Collection")
                 _uiState.update {
                     it.copy(collectionFolderUri = uri, collectionFolderName = name)
                 }
             }
         }
         viewModelScope.launch {
-            settingsRepository.phoneLeftSwipeAction.collect { action ->
-                _uiState.update { it.copy(leftSwipeAction = action) }
-            }
-        }
-        viewModelScope.launch {
             settingsRepository.phoneLeftSwipeUri.collect { uri ->
-                val name = if (uri != null) {
-                    try {
-                        DocumentFile.fromTreeUri(context, Uri.parse(uri))?.name ?: "Folder"
-                    } catch (_: Exception) { "Folder" }
-                } else ""
+                val name = resolveFolderName(uri, fallback = "Folder")
                 _uiState.update {
                     it.copy(leftSwipeFolderUri = uri, leftSwipeFolderName = name)
                 }
             }
         }
-        viewModelScope.launch {
-            settingsRepository.phoneShowExifOverlay.collect { enabled ->
-                _uiState.update { it.copy(showExifOverlay = enabled) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.phoneMoveRelatedFiles.collect { enabled ->
-                _uiState.update { it.copy(moveRelatedFiles = enabled) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.phoneRecentPathsEnabled.collect { enabled ->
-                _uiState.update { it.copy(recentPathsEnabled = enabled) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.phoneRecentPathsCount.collect { count ->
-                _uiState.update { it.copy(recentPathsCount = count) }
-            }
-        }
-        viewModelScope.launch {
-            settingsRepository.phoneRecentPaths.collect { paths ->
-                _uiState.update { it.copy(recentPaths = paths) }
+    }
+
+    private suspend fun resolveFolderName(uri: String?, fallback: String): String {
+        if (uri == null) return ""
+        return withContext(Dispatchers.IO) {
+            try {
+                DocumentFile.fromTreeUri(context, Uri.parse(uri))?.name ?: fallback
+            } catch (_: Exception) {
+                fallback
             }
         }
     }
@@ -266,32 +284,41 @@ class PhoneModeViewModel @Inject constructor(
     // ── Folder selection ──────────────────────────────────────────────────
 
     fun selectSourceFolder(uri: Uri) {
-        // Handle Google Drive URIs
+        // Google Drive URIs are routed to the Drive loader.
         if (GoogleDriveImageSource.isDriveUri(uri)) {
             val folderId = GoogleDriveImageSource.extractId(uri) ?: return
             selectDriveFolder(folderId, "Google Drive")
             return
         }
         finalizePendingDelete()
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null, sourceFolderUri = uri.toString()) }
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(isLoading = true, error = null, sourceFolderUri = uri.toString())
+            }
 
             try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 context.contentResolver.takePersistableUriPermission(uri, takeFlags)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to persist URI permission for $uri", e)
             }
 
-            val folderDoc = try {
-                DocumentFile.fromTreeUri(context, uri)
-            } catch (e: SecurityException) {
-                null
+            val folderDoc = withContext(Dispatchers.IO) {
+                try {
+                    DocumentFile.fromTreeUri(context, uri)?.takeIf { it.exists() }
+                } catch (e: SecurityException) {
+                    null
+                }
             }
 
-            if (folderDoc == null || !folderDoc.exists()) {
+            if (folderDoc == null) {
                 _uiState.update {
-                    it.copy(isLoading = false, error = "Cannot access folder. Permission may have been revoked.")
+                    it.copy(
+                        isLoading = false,
+                        error = "Cannot access folder. Permission may have been revoked.",
+                    )
                 }
                 return@launch
             }
@@ -301,28 +328,7 @@ class PhoneModeViewModel @Inject constructor(
             settingsRepository.setLastFolderUri(uri.toString())
             settingsRepository.addRecentPath(uri.toString(), folderName)
 
-            try {
-                imageRepository.discoverImages(uri).collect { images ->
-                    val filtered = filterByType(images, _uiState.value.fileTypeFilter)
-                    val sorted = sortImages(filtered)
-                    val lastPos = settingsRepository.getFolderLastPosition(uri.toString())
-                    val startIndex = lastPos.coerceIn(0, (sorted.first.size - 1).coerceAtLeast(0))
-                    _uiState.update {
-                        it.copy(
-                            allImages = images,
-                            images = sorted.first,
-                            portraitSectionStart = sorted.second,
-                            currentIndex = startIndex,
-                            isLoading = false,
-                        )
-                    }
-                    checkGestureTutorial()
-                    loadExifForCurrent()
-                    loadDimensionsAsynchronously(images)
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = "Failed to load images: ${e.message}") }
-            }
+            collectDiscoveredImages(uri, restorePosition = true, errorLabel = "images")
         }
     }
 
@@ -330,7 +336,8 @@ class PhoneModeViewModel @Inject constructor(
     fun selectDriveFolder(folderId: String, folderName: String) {
         val driveUri = GoogleDriveImageSource.buildUri(folderId)
         finalizePendingDelete()
-        viewModelScope.launch {
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isLoading = true,
@@ -342,64 +349,86 @@ class PhoneModeViewModel @Inject constructor(
             settingsRepository.setLastFolderUri(driveUri.toString())
             settingsRepository.addRecentPath(driveUri.toString(), folderName)
 
-            try {
-                imageRepository.discoverImages(driveUri).collect { images ->
-                    val filtered = filterByType(images, _uiState.value.fileTypeFilter)
-                    val sorted = sortImages(filtered)
-                    _uiState.update {
-                        it.copy(
-                            allImages = images,
-                            images = sorted.first,
-                            portraitSectionStart = sorted.second,
-                            currentIndex = 0,
-                            isLoading = false,
-                        )
-                    }
-                    checkGestureTutorial()
-                    loadExifForCurrent()
-                    loadDimensionsAsynchronously(images)
+            collectDiscoveredImages(driveUri, restorePosition = false, errorLabel = "Drive images")
+        }
+    }
+
+    /** Shared tail of local/Drive folder selection: discover, filter, sort, publish. */
+    private suspend fun collectDiscoveredImages(
+        folderUri: Uri,
+        restorePosition: Boolean,
+        errorLabel: String,
+    ) {
+        try {
+            imageRepository.discoverImages(folderUri).collect { images ->
+                val filtered = PhoneFeedOrdering.filterByType(images, _uiState.value.fileTypeFilter)
+                val sorted = sortImages(filtered)
+                val startIndex = if (restorePosition) {
+                    settingsRepository.getFolderLastPosition(folderUri.toString())
+                        .coerceIn(0, (sorted.images.size - 1).coerceAtLeast(0))
+                } else {
+                    0
                 }
-            } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, error = "Failed to load Drive images: ${e.message}")
+                    it.copy(
+                        allImages = images,
+                        images = sorted.images,
+                        portraitSectionStart = sorted.portraitSectionStart,
+                        currentIndex = startIndex,
+                        isLoading = false,
+                    )
                 }
+                checkGestureTutorial()
+                loadExifForCurrent()
+                loadDimensionsAsynchronously(images)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(isLoading = false, error = "Failed to load $errorLabel: ${e.message}")
             }
         }
     }
 
     fun selectCollectionFolder(uri: Uri) {
         viewModelScope.launch {
-            try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
-            } catch (_: Exception) {}
-
-            val name = DocumentFile.fromTreeUri(context, uri)?.name ?: "Collection"
+            takePersistablePermission(uri)
+            val name = resolveFolderName(uri.toString(), fallback = "Collection")
             settingsRepository.setPhoneCollectionUri(uri.toString())
-            _uiState.update { it.copy(collectionFolderUri = uri.toString(), collectionFolderName = name) }
+            _uiState.update {
+                it.copy(collectionFolderUri = uri.toString(), collectionFolderName = name)
+            }
         }
     }
 
     fun selectLeftSwipeFolder(uri: Uri) {
         viewModelScope.launch {
-            try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
-            } catch (_: Exception) {}
-
-            val name = DocumentFile.fromTreeUri(context, uri)?.name ?: "Folder"
+            takePersistablePermission(uri)
+            val name = resolveFolderName(uri.toString(), fallback = "Folder")
             settingsRepository.setPhoneLeftSwipeUri(uri.toString())
-            _uiState.update { it.copy(leftSwipeFolderUri = uri.toString(), leftSwipeFolderName = name) }
+            _uiState.update {
+                it.copy(leftSwipeFolderUri = uri.toString(), leftSwipeFolderName = name)
+            }
+        }
+    }
+
+    private fun takePersistablePermission(uri: Uri) {
+        try {
+            val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to persist URI permission for $uri", e)
         }
     }
 
     // ── Sorting ───────────────────────────────────────────────────────────
 
-    private suspend fun sortImages(images: List<ImageItem>): Pair<List<ImageItem>, Int> {
+    private suspend fun sortImages(images: List<ImageItem>): PhoneFeedOrdering.Result {
         val randomizeOrder = settingsRepository.phoneRandomizeOrder.first()
         val sortByOrientation = settingsRepository.phoneSortByOrientation.first()
-        val result = PhoneFeedOrdering.order(images, randomizeOrder, sortByOrientation)
-        return Pair(result.images, result.portraitSectionStart)
+        return PhoneFeedOrdering.order(images, randomizeOrder, sortByOrientation)
     }
 
     private fun resortImages() {
@@ -410,11 +439,39 @@ class PhoneModeViewModel @Inject constructor(
             val currentUri = current.images.getOrNull(current.currentIndex)?.uri
             val sorted = sortImages(current.images)
             val newIndex = if (currentUri != null) {
-                sorted.first.indexOfFirst { it.uri == currentUri }.coerceAtLeast(0)
-            } else 0
-            _uiState.update {
-                it.copy(images = sorted.first, portraitSectionStart = sorted.second, currentIndex = newIndex)
+                sorted.images.indexOfFirst { it.uri == currentUri }.coerceAtLeast(0)
+            } else {
+                0
             }
+            _uiState.update {
+                it.copy(
+                    images = sorted.images,
+                    portraitSectionStart = sorted.portraitSectionStart,
+                    currentIndex = newIndex,
+                )
+            }
+        }
+    }
+
+    private fun refilterAndSort() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val currentUri = state.images.getOrNull(state.currentIndex)?.uri
+            val filtered = PhoneFeedOrdering.filterByType(state.allImages, state.fileTypeFilter)
+            val sorted = sortImages(filtered)
+            val newIndex = if (currentUri != null) {
+                sorted.images.indexOfFirst { it.uri == currentUri }.coerceAtLeast(0)
+            } else {
+                0
+            }
+            _uiState.update {
+                it.copy(
+                    images = sorted.images,
+                    portraitSectionStart = sorted.portraitSectionStart,
+                    currentIndex = newIndex,
+                )
+            }
+            loadExifForCurrent()
         }
     }
 
@@ -424,7 +481,7 @@ class PhoneModeViewModel @Inject constructor(
         if (index in _uiState.value.images.indices) {
             val state = _uiState.value
             val newUri = state.images.getOrNull(index)?.uri
-            if (state.pendingDeleteImage != null && newUri != state.revertAllowedImageUri) {
+            if (state.pendingDelete != null && newUri != state.pendingDelete.revertAllowedUri) {
                 finalizePendingDelete()
             }
             _uiState.update { it.copy(currentIndex = index) }
@@ -451,51 +508,36 @@ class PhoneModeViewModel @Inject constructor(
     /** Swipe right: copy or move the current photo (and optionally siblings) to collection. */
     fun addToCollection() {
         val state = _uiState.value
-        if (state.images.isEmpty()) return
-
-        val targetUri = state.collectionFolderUri ?: state.sourceFolderUri ?: return
-        val currentImage = state.images[state.currentIndex]
-        val isCopy = state.collectionAction == "copy"
-        val related = if (state.moveRelatedFiles) relatedImages(currentImage) else emptyList()
-        val targets = listOf(currentImage) + related
-
-        viewModelScope.launch {
-            try {
-                val sortingEnabled = settingsRepository.sortingEnabled.first()
-                val folderUri = Uri.parse(targetUri)
-
-                targets.forEach { img ->
-                    if (isCopy) {
-                        imageRepository.copyImage(context, Uri.parse(img.uri), folderUri, sortingEnabled)
-                    } else {
-                        imageRepository.moveImage(context, Uri.parse(img.uri), folderUri, sortingEnabled)
-                    }
-                }
-
-                if (!isCopy) {
-                    removeImagesFromLists(targets.map { it.uri }.toSet())
-                }
-
-                val suffix = if (related.isNotEmpty()) " (+${related.size} related)" else ""
-                val verb = if (isCopy) "Copied" else "Moved"
-                _uiState.update {
-                    it.copy(lastActionFeedback = ActionFeedback("$verb to collection$suffix"))
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(lastActionFeedback = ActionFeedback("Failed: ${e.message}", isError = true))
-                }
-            }
-        }
+        copyOrMoveCurrent(
+            targetUri = state.collectionFolderUri ?: state.sourceFolderUri,
+            isCopy = state.collectionAction == CollectionAction.COPY,
+            subfolderName = ImageRepositoryImpl.SELECTION_FOLDER_NAME,
+            destinationNoun = "collection",
+        )
     }
 
+    /** Swipe left (copy/move mode): copy or move the current photo to the custom folder. */
     fun performLeftSwipeCopyOrMove() {
         val state = _uiState.value
-        if (state.images.isEmpty()) return
+        copyOrMoveCurrent(
+            targetUri = state.leftSwipeFolderUri ?: state.sourceFolderUri,
+            isCopy = state.leftSwipeAction == SwipeAction.COPY,
+            subfolderName = ImageRepositoryImpl.LEFT_SWIPE_FOLDER_NAME,
+            destinationNoun = "folder",
+        )
+    }
 
-        val targetUri = state.leftSwipeFolderUri ?: state.sourceFolderUri ?: return
+    private fun copyOrMoveCurrent(
+        targetUri: String?,
+        isCopy: Boolean,
+        subfolderName: String,
+        destinationNoun: String,
+    ) {
+        val state = _uiState.value
+        if (state.images.isEmpty()) return
+        if (targetUri == null) return
+
         val currentImage = state.images[state.currentIndex]
-        val isCopy = state.leftSwipeAction == "copy"
         val related = if (state.moveRelatedFiles) relatedImages(currentImage) else emptyList()
         val targets = listOf(currentImage) + related
 
@@ -511,7 +553,7 @@ class PhoneModeViewModel @Inject constructor(
                             sourceUri = Uri.parse(img.uri),
                             destFolderUri = folderUri,
                             sorting = sortingEnabled,
-                            subfolderName = ImageRepositoryImpl.LEFT_SWIPE_FOLDER_NAME
+                            subfolderName = subfolderName,
                         )
                     } else {
                         imageRepository.moveImage(
@@ -519,7 +561,7 @@ class PhoneModeViewModel @Inject constructor(
                             sourceUri = Uri.parse(img.uri),
                             destFolderUri = folderUri,
                             sorting = sortingEnabled,
-                            subfolderName = ImageRepositoryImpl.LEFT_SWIPE_FOLDER_NAME
+                            subfolderName = subfolderName,
                         )
                     }
                 }
@@ -531,7 +573,7 @@ class PhoneModeViewModel @Inject constructor(
                 val suffix = if (related.isNotEmpty()) " (+${related.size} related)" else ""
                 val verb = if (isCopy) "Copied" else "Moved"
                 _uiState.update {
-                    it.copy(lastActionFeedback = ActionFeedback("$verb to folder$suffix"))
+                    it.copy(lastActionFeedback = ActionFeedback("$verb to $destinationNoun$suffix"))
                 }
             } catch (e: Exception) {
                 _uiState.update {
@@ -543,73 +585,45 @@ class PhoneModeViewModel @Inject constructor(
 
     /** Swipe left: request delete (does a temporary/pending delete). */
     fun requestDelete() {
-        deleteImagePending()
-    }
-
-    private fun deleteImagePending() {
         val state = _uiState.value
         if (state.images.isEmpty()) return
 
-        // 1. If there's already a pending deletion, finalize it first!
+        // If there's already a pending deletion, finalize it first.
         finalizePendingDelete()
 
-        val indexToDelete = state.currentIndex
-        val imageToDelete = state.images[indexToDelete]
-        val allImagesIndex = state.allImages.indexOfFirst { it.uri == imageToDelete.uri }
-
-        // Sibling files removed together (independent of the file-type filter).
+        val imageToDelete = state.images[state.currentIndex]
         val related = if (state.moveRelatedFiles) relatedImages(imageToDelete) else emptyList()
-        val removedUris = (listOf(imageToDelete) + related).map { it.uri }.toSet()
 
-        // 2. Perform the UI removal immediately
-        val updatedImages = state.images.toMutableList().apply {
-            removeAt(indexToDelete)
-        }
-        val updatedAll = state.allImages.filter { it.uri !in removedUris }
-        val newIndex = indexToDelete.coerceAtMost(updatedImages.size - 1).coerceAtLeast(0)
-        val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
-            val firstPortrait = updatedImages.indexOfFirst { !it.isLandscape }
-            if (firstPortrait >= 0) firstPortrait else -1
-        } else -1
-
-        val nextActiveImageUri = updatedImages.getOrNull(newIndex)?.uri
+        val (lists, pending) = PendingDeleteLogic.remove(
+            images = state.images,
+            allImages = state.allImages,
+            currentIndex = state.currentIndex,
+            related = related,
+            sortByOrientation = state.sortByOrientation,
+        ) ?: return
 
         _uiState.update {
             it.copy(
-                images = updatedImages,
-                allImages = updatedAll,
-                currentIndex = newIndex,
-                portraitSectionStart = newSplit,
-                pendingDeleteImage = imageToDelete,
-                pendingDeleteIndex = indexToDelete,
-                pendingDeleteAllImagesIndex = allImagesIndex,
-                pendingDeleteRelated = related,
-                revertAllowedImageUri = nextActiveImageUri
+                images = lists.images,
+                allImages = lists.allImages,
+                currentIndex = lists.currentIndex,
+                portraitSectionStart = lists.portraitSectionStart,
+                pendingDelete = pending,
             )
         }
-
         loadExifForCurrent()
     }
 
+    /**
+     * Delete the pending image (and its siblings) from disk. Runs on the
+     * application scope so it also completes when the ViewModel is cleared.
+     */
     fun finalizePendingDelete() {
-        val state = _uiState.value
-        val imageToDelete = state.pendingDeleteImage ?: return
-        val related = state.pendingDeleteRelated
+        val pending = _uiState.value.pendingDelete ?: return
+        _uiState.update { it.copy(pendingDelete = null) }
 
-        // Clear the pending state from UI state first
-        _uiState.update {
-            it.copy(
-                pendingDeleteImage = null,
-                pendingDeleteIndex = -1,
-                pendingDeleteAllImagesIndex = -1,
-                pendingDeleteRelated = emptyList(),
-                revertAllowedImageUri = null
-            )
-        }
-
-        // Perform actual deletion on I/O thread (primary + any siblings)
-        viewModelScope.launch(Dispatchers.IO) {
-            (listOf(imageToDelete) + related).forEach { img ->
+        appScope.launch {
+            (listOf(pending.image) + pending.related).forEach { img ->
                 try {
                     val deleted = imageRepository.deleteImage(context, Uri.parse(img.uri))
                     if (!deleted) {
@@ -624,41 +638,22 @@ class PhoneModeViewModel @Inject constructor(
 
     fun revertDelete() {
         val state = _uiState.value
-        val imageToRestore = state.pendingDeleteImage ?: return
-        val restoreIndex = state.pendingDeleteIndex
-        val restoreAllIndex = state.pendingDeleteAllImagesIndex
+        val pending = state.pendingDelete ?: return
 
-        val updatedImages = state.images.toMutableList().apply {
-            add(restoreIndex.coerceIn(0, size), imageToRestore)
-        }
-        val updatedAll = state.allImages.toMutableList().apply {
-            if (restoreAllIndex in 0..size) {
-                add(restoreAllIndex, imageToRestore)
-            } else {
-                add(imageToRestore)
-            }
-            // Restore any sibling files removed alongside the primary.
-            state.pendingDeleteRelated.forEach { sibling ->
-                if (none { it.uri == sibling.uri }) add(sibling)
-            }
-        }
-
-        val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
-            val firstPortrait = updatedImages.indexOfFirst { !it.isLandscape }
-            if (firstPortrait >= 0) firstPortrait else -1
-        } else -1
+        val lists = PendingDeleteLogic.restore(
+            images = state.images,
+            allImages = state.allImages,
+            pending = pending,
+            sortByOrientation = state.sortByOrientation,
+        )
 
         _uiState.update {
             it.copy(
-                images = updatedImages,
-                allImages = updatedAll,
-                currentIndex = restoreIndex.coerceIn(0, updatedImages.size - 1),
-                portraitSectionStart = newSplit,
-                pendingDeleteImage = null,
-                pendingDeleteIndex = -1,
-                pendingDeleteAllImagesIndex = -1,
-                pendingDeleteRelated = emptyList(),
-                revertAllowedImageUri = null
+                images = lists.images,
+                allImages = lists.allImages,
+                currentIndex = lists.currentIndex,
+                portraitSectionStart = lists.portraitSectionStart,
+                pendingDelete = null,
             )
         }
         loadExifForCurrent()
@@ -707,49 +702,12 @@ class PhoneModeViewModel @Inject constructor(
         }
     }
 
-    // ── File type filter ────────────────────────────────────────────────
-
-    fun setFileTypeFilter(filter: String) {
-        viewModelScope.launch {
-            settingsRepository.setPhoneFileTypeFilter(filter)
-        }
-    }
-
-    private fun filterByType(images: List<ImageItem>, filter: String): List<ImageItem> {
-        return when (filter) {
-            "raw" -> images.filter { img ->
-                val ext = img.fileName.substringAfterLast('.', "").lowercase()
-                ext in RAW_EXTENSIONS
-            }
-            "jpg" -> images.filter { img ->
-                val ext = img.fileName.substringAfterLast('.', "").lowercase()
-                ext in JPG_EXTENSIONS
-            }
-            else -> images
-        }
-    }
-
-    private fun refilterAndSort() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val currentUri = state.images.getOrNull(state.currentIndex)?.uri
-            val filtered = filterByType(state.allImages, state.fileTypeFilter)
-            val sorted = sortImages(filtered)
-            val newIndex = if (currentUri != null) {
-                sorted.first.indexOfFirst { it.uri == currentUri }.coerceAtLeast(0)
-            } else 0
-            _uiState.update {
-                it.copy(images = sorted.first, portraitSectionStart = sorted.second, currentIndex = newIndex)
-            }
-            loadExifForCurrent()
-        }
-    }
-
     // ── Navigation helpers ───────────────────────────────────────────────
 
     /** Go back to the landing screen (clears images). */
     fun goBackToLanding() {
         finalizePendingDelete()
+        discoveryJob?.cancel()
         _uiState.update { it.copy(images = emptyList(), allImages = emptyList(), currentIndex = 0) }
     }
 
@@ -781,7 +739,9 @@ class PhoneModeViewModel @Inject constructor(
                 try {
                     DocumentFile.fromTreeUri(context, parsed)
                         ?.findFile(ImageRepositoryImpl.SELECTION_FOLDER_NAME)
-                } catch (_: Exception) { null }
+                } catch (_: Exception) {
+                    null
+                }
             }
             if (selectionDir == null || !selectionDir.exists()) {
                 _uiState.update {
@@ -808,7 +768,10 @@ class PhoneModeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isViewingSelection = false,
-                        lastActionFeedback = ActionFeedback("Failed to open selection: ${e.message}", isError = true),
+                        lastActionFeedback = ActionFeedback(
+                            "Failed to open selection: ${e.message}",
+                            isError = true,
+                        ),
                     )
                 }
             }
@@ -826,7 +789,7 @@ class PhoneModeViewModel @Inject constructor(
             val name = file.name ?: continue
             if (name.startsWith(".")) continue
             val ext = name.substringAfterLast('.', "").lowercase()
-            if (ext !in com.phototok.data.source.LocalImageSourceImpl.SUPPORTED_EXTENSIONS) continue
+            if (ext !in LocalImageSourceImpl.SUPPORTED_EXTENSIONS) continue
             results.add(
                 ImageItem(
                     uri = file.uri.toString(),
@@ -859,43 +822,16 @@ class PhoneModeViewModel @Inject constructor(
         val updatedImages = state.images.filter { it.uri !in uris }
         val updatedAll = state.allImages.filter { it.uri !in uris }
         val newIndex = state.currentIndex.coerceAtMost(updatedImages.size - 1).coerceAtLeast(0)
-        val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
-            val firstPortrait = updatedImages.indexOfFirst { !it.isLandscape }
-            if (firstPortrait >= 0) firstPortrait else -1
-        } else -1
 
         _uiState.update {
             it.copy(
                 images = updatedImages,
                 allImages = updatedAll,
                 currentIndex = newIndex,
-                portraitSectionStart = newSplit,
-            )
-        }
-        loadExifForCurrent()
-    }
-
-    private fun removeCurrentImageFromList() {
-        val state = _uiState.value
-        val removedImage = state.images.getOrNull(state.currentIndex) ?: return
-        val updatedImages = state.images.toMutableList().apply {
-            removeAt(state.currentIndex)
-        }
-        // Also remove from allImages (unfiltered list)
-        val updatedAll = state.allImages.filter { it.uri != removedImage.uri }
-        val newIndex = state.currentIndex.coerceAtMost(updatedImages.size - 1).coerceAtLeast(0)
-        // Recompute portrait section start
-        val newSplit = if (state.sortByOrientation && updatedImages.isNotEmpty()) {
-            val firstPortrait = updatedImages.indexOfFirst { !it.isLandscape }
-            if (firstPortrait >= 0) firstPortrait else -1
-        } else -1
-
-        _uiState.update {
-            it.copy(
-                images = updatedImages,
-                allImages = updatedAll,
-                currentIndex = newIndex,
-                portraitSectionStart = newSplit,
+                portraitSectionStart = PhoneFeedOrdering.portraitSplit(
+                    updatedImages,
+                    state.sortByOrientation,
+                ),
             )
         }
         loadExifForCurrent()
@@ -938,14 +874,12 @@ class PhoneModeViewModel @Inject constructor(
         }
     }
 
-    private var dimensionsJob: Job? = null
-
     private fun loadDimensionsAsynchronously(images: List<ImageItem>) {
         dimensionsJob?.cancel()
         dimensionsJob = viewModelScope.launch(Dispatchers.IO) {
             val currentIndex = _uiState.value.currentIndex
             val sortedIndices = images.indices.sortedBy { abs(it - currentIndex) }
-            
+
             for (idx in sortedIndices) {
                 val image = images.getOrNull(idx) ?: continue
                 if (image.imageWidth == 0 && image.imageHeight == 0) {
@@ -955,64 +889,54 @@ class PhoneModeViewModel @Inject constructor(
                         Pair(0, 0)
                     }
                     if (w > 0 && h > 0) {
-                        _uiState.update { state ->
-                            val updatedAll = state.allImages.map { img ->
-                                if (img.uri == image.uri) img.copy(imageWidth = w, imageHeight = h) else img
-                            }
-                            val updatedImages = state.images.map { img ->
-                                if (img.uri == image.uri) img.copy(imageWidth = w, imageHeight = h) else img
-                            }
-                            
-                            val sortByOrientation = state.sortByOrientation
-                            val randomizeOrder = state.randomizeOrder
-                            val finalImages: List<ImageItem>
-                            val splitIndex: Int
-                            val newIndex: Int
-                            
-                            if (randomizeOrder) {
-                                finalImages = updatedImages
-                                splitIndex = -1
-                                newIndex = state.currentIndex
-                            } else if (sortByOrientation) {
-                                val currentActiveUri = state.images.getOrNull(state.currentIndex)?.uri
-                                val landscape = updatedImages.filter { it.isLandscape }
-                                val portrait = updatedImages.filter { !it.isLandscape }
-                                finalImages = landscape + portrait
-                                splitIndex = if (portrait.isEmpty()) -1 else landscape.size
-                                newIndex = if (currentActiveUri != null) {
-                                    finalImages.indexOfFirst { it.uri == currentActiveUri }.coerceAtLeast(0)
-                                } else state.currentIndex
-                            } else {
-                                finalImages = updatedImages
-                                splitIndex = -1
-                                newIndex = state.currentIndex
-                            }
-                            
-                            state.copy(
-                                allImages = updatedAll,
-                                images = finalImages,
-                                portraitSectionStart = splitIndex,
-                                currentIndex = newIndex
-                            )
-                        }
+                        applyDimensions(image.uri, w, h)
                     }
                 }
             }
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        val imageToDelete = _uiState.value.pendingDeleteImage
-        if (imageToDelete != null) {
-            val uri = Uri.parse(imageToDelete.uri)
-            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    imageRepository.deleteImage(context, uri)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in onCleared deleting file: ${imageToDelete.uri}", e)
+    /**
+     * Publish freshly loaded dimensions for one image and — when orientation
+     * sorting is active — regroup the feed, since the image's orientation group
+     * may only now be known.
+     */
+    private fun applyDimensions(uri: String, w: Int, h: Int) {
+        _uiState.update { state ->
+            val updatedAll = state.allImages.map { img ->
+                if (img.uri == uri) img.copy(imageWidth = w, imageHeight = h) else img
+            }
+            val updatedImages = state.images.map { img ->
+                if (img.uri == uri) img.copy(imageWidth = w, imageHeight = h) else img
+            }
+
+            if (!state.randomizeOrder && state.sortByOrientation) {
+                val currentActiveUri = state.images.getOrNull(state.currentIndex)?.uri
+                // Stable regroup: landscape first, then portrait, order within groups kept.
+                val landscape = updatedImages.filter { it.isLandscape }
+                val portrait = updatedImages.filter { !it.isLandscape }
+                val regrouped = landscape + portrait
+                val newIndex = if (currentActiveUri != null) {
+                    regrouped.indexOfFirst { it.uri == currentActiveUri }.coerceAtLeast(0)
+                } else {
+                    state.currentIndex
                 }
+                state.copy(
+                    allImages = updatedAll,
+                    images = regrouped,
+                    portraitSectionStart = if (portrait.isEmpty()) -1 else landscape.size,
+                    currentIndex = newIndex,
+                )
+            } else {
+                state.copy(allImages = updatedAll, images = updatedImages)
             }
         }
+    }
+
+    override fun onCleared() {
+        // Finalizes primary AND sibling files on the application scope, so the
+        // deletion completes even though the ViewModel is going away.
+        finalizePendingDelete()
+        super.onCleared()
     }
 }

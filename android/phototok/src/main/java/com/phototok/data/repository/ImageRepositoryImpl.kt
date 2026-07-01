@@ -11,6 +11,7 @@ import com.phototok.data.reader.MediaStoreReader
 import com.phototok.data.source.LocalImageSource
 import com.phototok.data.source.googledrive.GoogleDriveClient
 import com.phototok.data.source.googledrive.GoogleDriveImageSource
+import com.phototok.domain.PhotoExtensions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -32,16 +33,6 @@ class ImageRepositoryImpl @Inject constructor(
         const val LEFT_SWIPE_FOLDER_NAME = "PhotoTok_LeftSwipe"
         private const val RAW_SUBFOLDER = "RAW"
         private const val JPEG_SUBFOLDER = "JPEG"
-
-        private val RAW_EXTENSIONS = setOf(
-            "arw", "cr2", "cr3", "nef", "nrw", "orf", "raf", "rw2",
-            "pef", "srw", "dng", "raw", "3fr", "ari", "bay", "cap",
-            "iiq", "eip", "erf", "fff", "mef", "mdc", "mos", "mrw",
-            "obm", "ptx", "pxn", "rwl", "rwz", "sr2", "srf", "x3f"
-        )
-
-        private val JPEG_EXTENSIONS = setOf("jpg", "jpeg")
-        private const val XMP_EXTENSION = "xmp"
         private const val EDIT_SUFFIX = "-Edit"
     }
 
@@ -159,14 +150,30 @@ class ImageRepositoryImpl @Inject constructor(
 
         val destFile = targetFolder.createFile(mimeType, fileName) ?: return false
 
-        context.contentResolver.openInputStream(sourceUri)?.use { input ->
-            context.contentResolver.openOutputStream(destFile.uri)?.use { output ->
-                input.copyTo(output)
-                return true
+        try {
+            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                context.contentResolver.openOutputStream(destFile.uri)?.use { output ->
+                    input.copyTo(output)
+                    return true
+                }
             }
+        } catch (e: Exception) {
+            // Don't leave a partially written file behind.
+            cleanUpFailedCopy(destFile)
+            throw e
         }
 
+        // Streams could not be opened — remove the empty placeholder file.
+        cleanUpFailedCopy(destFile)
         return false
+    }
+
+    private fun cleanUpFailedCopy(destFile: DocumentFile) {
+        try {
+            destFile.delete()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not clean up failed copy: ${destFile.uri}", e)
+        }
     }
 
     /**
@@ -174,11 +181,12 @@ class ImageRepositoryImpl @Inject constructor(
      * RAW files → RAW subfolder, JPEG → JPEG subfolder,
      * Lightroom edits → RAW subfolder, XMP sidecars → follow parent type.
      */
-    private fun determineTargetFolder(
+    // Internal (not private) so the sorting rules can be unit-tested directly.
+    internal fun determineTargetFolder(
         fileName: String,
         selectionDir: DocumentFile
     ): DocumentFile {
-        val extension = fileName.substringAfterLast('.', "").lowercase()
+        val extension = PhotoExtensions.extensionOf(fileName)
         val stem = fileName.substringBeforeLast('.')
 
         val rawDir by lazy {
@@ -191,13 +199,13 @@ class ImageRepositoryImpl @Inject constructor(
         }
 
         return when {
-            extension in RAW_EXTENSIONS -> rawDir ?: selectionDir
-            extension in JPEG_EXTENSIONS -> jpegDir ?: selectionDir
+            extension in PhotoExtensions.RAW -> rawDir ?: selectionDir
+            extension in PhotoExtensions.JPEG -> jpegDir ?: selectionDir
             stem.endsWith(EDIT_SUFFIX) -> rawDir ?: selectionDir
-            extension == XMP_EXTENSION -> {
+            extension == PhotoExtensions.XMP -> {
                 val dotIndex = stem.lastIndexOf('.')
                 val parentExt = if (dotIndex > 0) stem.substring(dotIndex + 1).lowercase() else null
-                if (parentExt != null && parentExt in RAW_EXTENSIONS) {
+                if (parentExt != null && parentExt in PhotoExtensions.RAW) {
                     rawDir ?: selectionDir
                 } else {
                     selectionDir

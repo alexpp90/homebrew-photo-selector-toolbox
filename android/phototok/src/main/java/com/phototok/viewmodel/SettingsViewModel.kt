@@ -6,6 +6,9 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.phototok.data.repository.SettingsRepository
+import com.phototok.domain.CollectionAction
+import com.phototok.domain.FileTypeFilter
+import com.phototok.domain.SwipeAction
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,15 +22,15 @@ import javax.inject.Inject
 data class SettingsUiState(
     val selectionFolderName: String = "Selection",
     val sortingEnabled: Boolean = true,
-    val collectionAction: String = "copy",
+    val collectionAction: CollectionAction = CollectionAction.DEFAULT,
     val trashConfirmEnabled: Boolean = true,
     val directDeleteConfirmEnabled: Boolean = true,
     val sortByOrientation: Boolean = false,
     val randomizeOrder: Boolean = false,
     val collectionUri: String? = null,
-    val leftSwipeAction: String = "delete",
+    val leftSwipeAction: SwipeAction = SwipeAction.DEFAULT,
     val leftSwipeUri: String? = null,
-    val fileTypeFilter: String = "all",
+    val fileTypeFilter: FileTypeFilter = FileTypeFilter.DEFAULT,
     val showExifOverlay: Boolean = false,
     val moveRelatedFiles: Boolean = false,
     val recentPathsEnabled: Boolean = true,
@@ -65,17 +68,17 @@ class SettingsViewModel @Inject constructor(
                 SettingsUiState(
                     selectionFolderName = arrays[0] as String,
                     sortingEnabled = arrays[1] as Boolean,
-                    collectionAction = arrays[2] as String,
+                    collectionAction = arrays[2] as CollectionAction,
                     trashConfirmEnabled = arrays[3] as Boolean,
                     directDeleteConfirmEnabled = arrays[4] as Boolean,
                     sortByOrientation = arrays[5] as Boolean,
                     randomizeOrder = arrays[6] as Boolean,
-                    fileTypeFilter = arrays[7] as String,
+                    fileTypeFilter = arrays[7] as FileTypeFilter,
                     showExifOverlay = arrays[8] as Boolean,
                     moveRelatedFiles = arrays[9] as Boolean,
                     recentPathsEnabled = arrays[10] as Boolean,
                     recentPathsCount = arrays[11] as Int,
-                    leftSwipeAction = arrays[12] as String,
+                    leftSwipeAction = arrays[12] as SwipeAction,
                     collectionUri = _uiState.value.collectionUri,
                     leftSwipeUri = _uiState.value.leftSwipeUri,
                     sourceFolderUri = _uiState.value.sourceFolderUri,
@@ -120,7 +123,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setSortingEnabled(enabled) }
     }
 
-    fun updateCollectionAction(action: String) {
+    fun updateCollectionAction(action: CollectionAction) {
         viewModelScope.launch { settingsRepository.setPhoneCollectionAction(action) }
     }
 
@@ -144,7 +147,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setPhoneCollectionUri(uri) }
     }
 
-    fun updateFileTypeFilter(filter: String) {
+    fun updateFileTypeFilter(filter: FileTypeFilter) {
         viewModelScope.launch { settingsRepository.setPhoneFileTypeFilter(filter) }
     }
 
@@ -164,7 +167,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setPhoneRecentPathsCount(count) }
     }
 
-    fun updateLeftSwipeAction(action: String) {
+    fun updateLeftSwipeAction(action: SwipeAction) {
         viewModelScope.launch { settingsRepository.setPhoneLeftSwipeAction(action) }
     }
 
