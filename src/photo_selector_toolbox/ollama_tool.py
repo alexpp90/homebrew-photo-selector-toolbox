@@ -72,9 +72,20 @@ class OllamaAestheticTool(AnalysisTool):
             raise RuntimeError("Ollama URL must start with http:// or https://")
 
         from urllib.parse import urlparse
+        import socket
+        import ipaddress
         hostname = urlparse(ollama_url).hostname or ""
-        if hostname == "169.254.169.254" or hostname.startswith("169.254."):
-            raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
+
+        try:
+            ip = socket.gethostbyname(hostname)
+            if ipaddress.ip_address(ip).is_link_local:
+                raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
+        except socket.gaierror:
+            try:
+                if ipaddress.ip_address(hostname).is_link_local:
+                    raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
+            except ValueError:
+                pass
 
         url = f"{ollama_url.rstrip('/')}/api/generate"
         payload = {

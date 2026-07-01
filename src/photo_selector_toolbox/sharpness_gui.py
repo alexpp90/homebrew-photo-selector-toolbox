@@ -699,9 +699,19 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     raise ValueError("URL must start with http:// or https://")
 
                 from urllib.parse import urlparse
+                import socket
+                import ipaddress
                 hostname = urlparse(url).hostname or ""
-                if hostname == "169.254.169.254" or hostname.startswith("169.254."):
-                    raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+                try:
+                    ip = socket.gethostbyname(hostname)
+                    if ipaddress.ip_address(ip).is_link_local:
+                        raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+                except socket.gaierror:
+                    try:
+                        if ipaddress.ip_address(hostname).is_link_local:
+                            raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+                    except ValueError:
+                        pass
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
