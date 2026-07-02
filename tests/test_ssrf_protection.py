@@ -49,3 +49,27 @@ def test_ollama_tool_blocks_metadata_ip(mock_urlopen, dummy_image_file, temp_con
     tool = OllamaAestheticTool()
     with pytest.raises(RuntimeError, match="SSRF Protection: Cloud metadata IPs are not allowed."):
         tool.analyze(dummy_image_file)
+
+@patch("urllib.request.urlopen")
+def test_ollama_tool_blocks_metadata_ip_hex_bypass(mock_urlopen, dummy_image_file, temp_config_dir):
+    from photo_selector_toolbox.config import save_config
+    save_config({
+        "ollama_url": "http://0xa9fea9fe/latest/meta-data/",
+        "ollama_model": "test",
+        "ollama_prompt": "test"
+    })
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError, match="SSRF Protection: Cloud metadata IPs are not allowed."):
+        tool.analyze(dummy_image_file)
+
+@patch("urllib.request.urlopen")
+def test_ollama_tool_blocks_metadata_ipv6_literal(mock_urlopen, dummy_image_file, temp_config_dir):
+    from photo_selector_toolbox.config import save_config
+    save_config({
+        "ollama_url": "http://[::ffff:169.254.169.254]/latest/meta-data/",
+        "ollama_model": "test",
+        "ollama_prompt": "test"
+    })
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError, match="SSRF Protection: Cloud metadata IPs are not allowed."):
+        tool.analyze(dummy_image_file)

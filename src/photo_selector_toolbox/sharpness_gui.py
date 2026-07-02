@@ -699,9 +699,34 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     raise ValueError("URL must start with http:// or https://")
 
                 from urllib.parse import urlparse
+                import socket
+                import ipaddress
+
                 hostname = urlparse(url).hostname or ""
-                if hostname == "169.254.169.254" or hostname.startswith("169.254."):
+                clean_hostname = hostname.strip("[]")
+
+                def is_forbidden_ip(ip_str):
+                    try:
+                        ip_obj = ipaddress.ip_address(ip_str)
+                        if ip_obj.is_link_local:
+                            return True
+                        if getattr(ip_obj, "ipv4_mapped", None) and ip_obj.ipv4_mapped.is_link_local:
+                            return True
+                        return False
+                    except ValueError:
+                        return False
+
+                if is_forbidden_ip(clean_hostname):
                     raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+
+                try:
+                    addr_info = socket.getaddrinfo(clean_hostname, None)
+                    for res in addr_info:
+                        ip_str = res[4][0]
+                        if is_forbidden_ip(ip_str):
+                            raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+                except socket.gaierror:
+                    pass
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
