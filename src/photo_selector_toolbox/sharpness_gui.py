@@ -1206,9 +1206,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         # Batch fetch all cached scores for paths to prevent N+1 query bottleneck
         cached_scores = cache.get_multiple_scores(paths)
+        updates = {}
 
         for path in paths:
             if self.stop_event.is_set():
+                if updates:
+                    try:
+                        cache.set_multiple_scores(updates)
+                    except Exception as e:
+                        logger.warning(f"Failed to bulk update cache on preload cancel: {e}")
                 break
            # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
             if path not in self.sorted_files:
@@ -1244,9 +1250,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             dhash_str = f"{dhash_num:016x}"
                             res.scores["dhash_8"] = dhash_str
                             res.scores["dhash"] = dhash_str
-                            cache.set_scores(path, {"dhash_8": dhash_str})
+                            updates.setdefault(path, {})["dhash_8"] = dhash_str
                 except Exception as e:
                     logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
+
+        if updates:
+            try:
+                cache.set_multiple_scores(updates)
+            except Exception as e:
+                logger.warning(f"Failed to bulk update cache in background: {e}")
 
     def _start_background_update_scan(self):
        # Stop previous background updates
@@ -1567,9 +1579,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             # Batch fetch all cached scores for missing paths to prevent N+1 query bottleneck
             cached_scores = cache.get_multiple_scores(missing)
+            updates = {}
 
             for idx, path in enumerate(missing):
                 if self.grouping_stop_event.is_set():
+                    if updates:
+                        try:
+                            cache.set_multiple_scores(updates)
+                        except Exception as e:
+                            logger.warning(f"Failed to bulk update cache on grouping cancel: {e}")
                     self.parent.after(0, self._handle_grouping_cancelled)
                     return
                 try:
@@ -1587,7 +1605,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             dhash_num = calculate_dhash(img, hash_size=hash_size)
                             format_str = f"0{hash_size*hash_size//4}x"
                             dhash_str = format(dhash_num, format_str)
-                            cache.set_scores(path, {hash_key: dhash_str})
+                            updates.setdefault(path, {})[hash_key] = dhash_str
                         else:
                             dhash_str = None
 
@@ -1606,6 +1624,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         self.group_status_lbl.config(text=f"👥 Grouping: {int(p)}% ({i}/{total})")
                     )
                 )
+
+            if updates:
+                try:
+                    cache.set_multiple_scores(updates)
+                except Exception as e:
+                    logger.warning(f"Failed to bulk update cache in grouping: {e}")
 
             self.parent.after(0, lambda: self._handle_grouping_finished(level))
 
