@@ -57,11 +57,12 @@ def test_load_config_merges_user_config(mock_config_paths):
     assert loaded_config["selection_folder"] == DEFAULT_CONFIG["selection_folder"]
 
 
-def test_load_config_migrates_old_prompts(mock_config_paths):
+@pytest.mark.parametrize("old_prompt", _OLD_PROMPTS)
+def test_load_config_migrates_old_prompts(mock_config_paths, old_prompt):
     config_dir, config_file = mock_config_paths
-    config_dir.mkdir()
+    config_dir.mkdir(parents=True, exist_ok=True)
 
-    user_config = {"ollama_prompt": _OLD_PROMPTS[0]}
+    user_config = {"ollama_prompt": old_prompt}
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(user_config, f)
 
@@ -217,3 +218,27 @@ def test_set_secure_permissions_oserror(mock_chmod, tmp_path):
     _set_secure_permissions(test_file)
 
     mock_chmod.assert_called_once_with(test_file, stat.S_IRUSR | stat.S_IWUSR)
+
+
+@patch("builtins.open", side_effect=OSError("Read-only file system"))
+def test_load_config_oserror(mock_open, mock_config_paths, caplog):
+    config_dir, config_file = mock_config_paths
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    # Touch the file so the .exists() check passes and builtins.open is called
+    config_file.touch()
+
+    loaded_config = load_config()
+
+    assert loaded_config == DEFAULT_CONFIG
+    assert "Failed to load or write config file" in caplog.text
+
+
+@patch("builtins.open", side_effect=OSError("Read-only file system"))
+def test_save_config_oserror(mock_open, mock_config_paths, caplog):
+    config_dir, config_file = mock_config_paths
+
+    test_config = {"test_key": "test_value"}
+    save_config(test_config)
+
+    assert "Failed to save config" in caplog.text
