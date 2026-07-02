@@ -1043,7 +1043,7 @@ def test_fullscreen_viewer_metadata_exif_load_none():
         assert type(dummy_res.exif).__name__ in ("MagicMock", "ExifData")
 
 
-def test_fullscreen_viewer_update_metadata_error_path():
+def test_fullscreen_viewer_update_metadata_lift_error_path():
     from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
 
     parent = MagicMock()
@@ -1053,7 +1053,7 @@ def test_fullscreen_viewer_update_metadata_error_path():
 
     with (
         patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
-        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer._update_basic_labels") as mock_update,
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer._update_basic_labels"),
         patch("photo_selector_toolbox.fullscreen_viewer.logger.debug") as mock_logger,
     ):
         viewer = FullscreenViewer(parent, path, file_list=file_list)
