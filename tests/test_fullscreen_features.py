@@ -795,3 +795,120 @@ def test_fullscreen_viewer_metadata_error_handling():
 
                 assert dummy_res.exif is not None
                 assert type(dummy_res.exif).__name__ == "MockExifData"
+
+def test_confirm_delete_image_no_path():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"):
+        # We need a path to initialize FullscreenViewer, but we'll set it to None afterwards
+        dummy_path = MagicMock()
+        dummy_path.name = "dummy.jpg"
+        viewer = FullscreenViewer(parent, dummy_path, [])
+        viewer.path = None
+        with patch("tkinter.Toplevel") as mock_toplevel:
+            viewer.confirm_delete_image()
+            mock_toplevel.assert_not_called()
+
+def test_confirm_delete_image_prevent_multiple():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test.jpg")
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"):
+        viewer = FullscreenViewer(parent, path, [path])
+
+        mock_dialog = MagicMock()
+        mock_dialog.winfo_exists.return_value = True
+        viewer._delete_dialog = mock_dialog
+
+        with patch("tkinter.Toplevel") as mock_toplevel:
+            viewer.confirm_delete_image()
+            mock_toplevel.assert_not_called()
+
+def test_confirm_delete_image_callbacks():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test.jpg")
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"):
+        viewer = FullscreenViewer(parent, path, [path])
+
+        viewer.execute_delete_current = MagicMock()
+
+        viewer.winfo_rootx = MagicMock(return_value=100)
+        viewer.winfo_rooty = MagicMock(return_value=100)
+        viewer.winfo_width = MagicMock(return_value=800)
+        viewer.winfo_height = MagicMock(return_value=600)
+
+        with patch("tkinter.Toplevel") as mock_toplevel, \
+             patch("tkinter.ttk.Button") as mock_button, \
+             patch("tkinter.ttk.Label"), \
+             patch("tkinter.ttk.Frame"):
+
+            mock_dialog = MagicMock()
+            mock_dialog.winfo_reqwidth.return_value = 500
+            mock_dialog.winfo_reqheight.return_value = 200
+            mock_toplevel.return_value = mock_dialog
+
+            viewer.confirm_delete_image()
+
+            mock_toplevel.assert_called_once_with(viewer)
+
+            # Geometry check (800 - 500) // 2 = 150 + 100 = 250
+            # (600 - 200) // 2 = 200 + 100 = 300
+            mock_dialog.geometry.assert_called_with("500x200+250+300")
+
+            yes_command = None
+            no_command = None
+            for call in mock_button.call_args_list:
+                args, kwargs = call
+                if kwargs.get('text') == 'Yes':
+                    yes_command = kwargs.get('command')
+                elif kwargs.get('text') == 'No':
+                    no_command = kwargs.get('command')
+
+            assert yes_command is not None
+            assert no_command is not None
+
+            # Test cancel
+            no_command()
+            mock_dialog.destroy.assert_called_once()
+            viewer.execute_delete_current.assert_not_called()
+
+            mock_dialog.destroy.reset_mock()
+
+            # Test confirm
+            yes_command()
+            mock_dialog.destroy.assert_called_once()
+            viewer.execute_delete_current.assert_called_once()
+
+def test_confirm_delete_image_geometry_fallback():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test.jpg")
+    with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"):
+        viewer = FullscreenViewer(parent, path, [path])
+
+        viewer.winfo_rootx = MagicMock(return_value=0)
+        viewer.winfo_rooty = MagicMock(return_value=0)
+        viewer.winfo_width = MagicMock(return_value=1000)
+        viewer.winfo_height = MagicMock(return_value=1000)
+
+        with patch("tkinter.Toplevel") as mock_toplevel, \
+             patch("tkinter.ttk.Button"), \
+             patch("tkinter.ttk.Label"), \
+             patch("tkinter.ttk.Frame"):
+
+            mock_dialog = MagicMock()
+            # Simulate exception in winfo_reqwidth
+            mock_dialog.winfo_reqwidth.side_effect = ValueError("Invalid width")
+            mock_toplevel.return_value = mock_dialog
+
+            viewer.confirm_delete_image()
+
+            # Default fallback should be 400x180
+            # x = 0 + (1000 - 400) // 2 = 300
+            # y = 0 + (1000 - 180) // 2 = 410
+            mock_dialog.geometry.assert_called_with("400x180+300+410")
