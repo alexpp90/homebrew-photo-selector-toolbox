@@ -352,7 +352,7 @@ def test_refresh_active_view(mock_gui_deps):
     assert host.scale_image_to_panel.call_count == 3
 
 
-def test_scale_image_to_panel_edge_cases():
+def test_scale_image_to_panel_edge_cases(caplog):
     host = DummyMixinHost()
     panel_mock = MagicMock()
 
@@ -386,12 +386,11 @@ def test_scale_image_to_panel_edge_cases():
     pil_image_mock.size = (100, 100)
     pil_image_mock.copy.side_effect = Exception("Test error")
 
-    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
-        host.scale_image_to_panel(panel_mock)
-        mock_logger.error.assert_called_with("Error scaling panel image: Test error")
+    host.scale_image_to_panel(panel_mock)
+    assert "Error scaling panel image: Test error" in caplog.text
 
 
-def test_scale_image_to_focus_label_edge_cases():
+def test_scale_image_to_focus_label_edge_cases(caplog):
     host = DummyMixinHost()
     lbl_mock = MagicMock()
 
@@ -422,12 +421,11 @@ def test_scale_image_to_focus_label_edge_cases():
     pil_image_mock.size = (100, 100)
     pil_image_mock.copy.side_effect = Exception("Test error")
 
-    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
-        host.scale_image_to_focus_label(lbl_mock)
-        mock_logger.error.assert_called_with("Error scaling focus label image: Test error")
+    host.scale_image_to_focus_label(lbl_mock)
+    assert "Error scaling focus label image: Test error" in caplog.text
 
 
-def test_load_images_background_errors(mock_gui_deps):
+def test_load_images_background_errors(mock_gui_deps, caplog):
     host = DummyMixinHost()
 
     path = Path("err.jpg")
@@ -438,9 +436,8 @@ def test_load_images_background_errors(mock_gui_deps):
     # Force load_image_preview to raise Exception
     mock_gui_deps["load_image_preview"].side_effect = Exception("Load error")
 
-    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
-        host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
-        mock_logger.error.assert_any_call("Error loading err.jpg: Load error")
+    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
+    assert "Error loading err.jpg: Load error" in caplog.text
 
     # Now make load_image_preview return a valid image, but copy() raise an exception
     img_mock = MagicMock()
@@ -448,9 +445,8 @@ def test_load_images_background_errors(mock_gui_deps):
     mock_gui_deps["load_image_preview"].side_effect = None
     mock_gui_deps["load_image_preview"].return_value = img_mock
 
-    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
-        host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
-        mock_logger.error.assert_any_call("Error preparing err.jpg: Copy error")
+    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
+    assert "Error preparing err.jpg: Copy error" in caplog.text
 
 
 
