@@ -539,3 +539,55 @@ def test_set_placeholder_edge_cases(mock_gui_deps):
     mock_gui_deps["create_placeholder_image"].assert_called()
     assert mock_gui_deps["create_placeholder_image"].call_args[0][0] == 400
     assert mock_gui_deps["create_placeholder_image"].call_args[0][1] == 300
+
+def test_scale_image_to_panel_zero_dimension(mock_gui_deps):
+    """Test scaling an image when the image width or height is exactly zero."""
+    host = DummyMixinHost()
+    panel_mock = MagicMock()
+
+    img_container_mock = MagicMock()
+    panel_mock.img_container = img_container_mock
+    lbl_mock = MagicMock()
+    panel_mock.img_lbl = lbl_mock
+
+    # Container initialized
+    img_container_mock.winfo_width.return_value = 100
+    img_container_mock.winfo_height.return_value = 100
+
+    pil_image_mock = MagicMock()
+    # Image height is zero
+    pil_image_mock.size = (100, 0)
+    panel_mock.pil_image = pil_image_mock
+
+    host.scale_image_to_panel(panel_mock)
+    pil_image_mock.copy.assert_not_called()
+
+    # Image width is zero
+    pil_image_mock.size = (0, 100)
+    host.scale_image_to_panel(panel_mock)
+    pil_image_mock.copy.assert_not_called()
+
+def test_scale_image_to_focus_label_zero_dimension():
+    """Test scaling an image for focus label when the image width or height is exactly zero."""
+    host = DummyMixinHost()
+    lbl_mock = MagicMock()
+
+    container_mock = MagicMock()
+    lbl_mock.container = container_mock
+
+    container_mock.winfo_width.return_value = 100
+    container_mock.winfo_height.return_value = 100
+
+    pil_image_mock = MagicMock()
+
+    # Image height is zero
+    pil_image_mock.size = (100, 0)
+    lbl_mock.pil_image = pil_image_mock
+
+    host.scale_image_to_focus_label(lbl_mock)
+    pil_image_mock.copy.assert_not_called()
+
+    # Image width is zero
+    pil_image_mock.size = (0, 100)
+    host.scale_image_to_focus_label(lbl_mock)
+    pil_image_mock.copy.assert_not_called()
