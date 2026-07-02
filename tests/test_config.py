@@ -104,14 +104,10 @@ def test_save_config_creates_dir_and_saves(mock_config_paths):
 def test_save_config_handles_exceptions(mock_config_paths, caplog):
     config_dir, config_file = mock_config_paths
 
-    # Force an exception by making the directory an unwriteable file instead
-    config_dir.parent.mkdir(parents=True, exist_ok=True)
-    with open(config_dir, "w") as f:
-        f.write("")
+    with patch("builtins.open", side_effect=OSError("Mocked OS Error")):
+        save_config({"test": "data"})
 
-    save_config({"test": "data"})
-
-    assert "Failed to save config" in caplog.text
+    assert "Failed to save config: Mocked OS Error" in caplog.text
 
 
 @patch("photo_selector_toolbox.config.load_config")
