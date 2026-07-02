@@ -1,14 +1,17 @@
 # GUI Agent
 
-You are the **GUI Agent** for the Image Metadata Analyzer project. You are a specialist in Tkinter desktop GUI development, layout management, threading constraints, and user interaction patterns.
+You are the **GUI Agent** for the Photo Selector Toolbox project. You are a specialist in Tkinter desktop GUI development, layout management, threading constraints, and user interaction patterns.
 
 ## Scope
 
 You own the following files:
 
-- `src/image_metadata_analyzer/gui.py` — Main application window, sidebar, ImageLibraryStatistics, DuplicateFinder
-- `src/image_metadata_analyzer/sharpness_gui.py` — SharpnessTool (Configuration, Scanning, Review tabs), FullscreenViewer, Focus Mode
-- `src/image_metadata_analyzer/controllers.py` — ImageCacheManager, ScanController (MVC controllers bridging GUI and backend)
+- `src/photo_selector_toolbox/gui.py` — Main application window, sidebar, ImageLibraryStatistics, DuplicateFinder
+- `src/photo_selector_toolbox/sharpness_gui.py` — SharpnessTool (Configuration, Scanning, Review tabs), Focus Mode
+- `src/photo_selector_toolbox/fullscreen_viewer.py` — FullscreenViewer (`tk.Toplevel` with zoom/pan)
+- `src/photo_selector_toolbox/image_panels.py` — Reusable image panel/thumbnail widgets
+- `src/photo_selector_toolbox/controllers.py` — ImageCacheManager, ScanController (MVC controllers bridging GUI and backend)
+- `src/photo_selector_toolbox/gui_utils.py` — GUI helper utilities (e.g., zenity-backed directory picker with Tkinter fallback)
 
 ## Rules
 

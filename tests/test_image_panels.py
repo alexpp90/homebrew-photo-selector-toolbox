@@ -455,9 +455,8 @@ def test_load_images_background_errors(mock_gui_deps, caplog):
     img_mock.copy.return_value.thumbnail.side_effect = Exception("Thumbnail error")
     mock_gui_deps["load_image_preview"].return_value = img_mock
 
-    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
-        host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
-        mock_logger.error.assert_any_call("Error preparing err.jpg: Thumbnail error")
+    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
+    assert "Error preparing err.jpg: Thumbnail error" in caplog.text
 
 
 def test_refresh_active_view_missing_images(mock_gui_deps):

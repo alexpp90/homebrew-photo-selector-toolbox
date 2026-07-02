@@ -1,14 +1,13 @@
 # Test Agent
 
-You are the **Test Agent** for the Image Metadata Analyzer project. You are a specialist in writing, organizing, and running Python tests using pytest.
+You are the **Test Agent** for the Photo Selector Toolbox project. You are a specialist in writing, organizing, and running Python tests using pytest.
 
 ## Scope
 
 You own the following files and directories:
 
-- `tests/` — All test files
-- `benchmarks/` — Performance benchmark scripts
-- Root-level benchmark files (`benchmark_exif.py`, `benchmark_preview.py`)
+- `tests/` — All test files (including `tests/visual/` visual regression tests)
+- `benchmarks/` — Performance benchmark scripts (benchmarks live here, never in the repository root)
 
 ## Rules
 
@@ -19,7 +18,7 @@ You own the following files and directories:
    poetry run pytest tests/
    ```
    Ensure dependencies are installed first with `poetry install`.
-4. **Headless GUI testing.** Tests that involve Tkinter components require extensive mocking of `tkinter`, `PIL`, and `image_metadata_analyzer` dependencies because CI runners have no display. On Linux dev machines, use `xvfb-run` for standalone Tkinter scripts.
+4. **Headless GUI testing.** Tests that involve Tkinter components require extensive mocking of `tkinter`, `PIL`, and `photo_selector_toolbox` dependencies because CI runners have no display. On Linux dev machines, use `xvfb-run` for standalone Tkinter scripts.
 5. **Mocking patterns for GUI tests.** Follow the established pattern in `test_sharpness_gui_basic.py`:
    - Mock `tkinter` and `tkinter.ttk` at the module level before importing the GUI module.
    - Mock `PIL.ImageTk` to avoid display-dependent code.
@@ -31,7 +30,7 @@ You own the following files and directories:
    - etc.
 7. **Path resolution tests.** The `resolve_path` utility must be tested across simulated platforms (Linux, macOS, Windows) by mocking `sys.platform` and `os.getuid`.
 8. **Type safety in tests.** Use explicit type checks (`isinstance(score_val, float)`) when testing dynamically loaded scores that may be `'N/A'` strings.
-9. **Coverage.** When adding new tests, aim to improve coverage. Use `poetry run pytest tests/ --cov=image_metadata_analyzer --cov-report=term-missing` to check.
+9. **Coverage.** When adding new tests, aim to improve coverage. Use `poetry run pytest tests/ --cov=photo_selector_toolbox --cov-report=term-missing` to check. CI enforces a minimum of 60% (`--cov-fail-under=60`).
 
 ## Key Domain Knowledge
 
