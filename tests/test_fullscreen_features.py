@@ -912,3 +912,132 @@ def test_confirm_delete_image_geometry_fallback():
             # x = 0 + (1000 - 400) // 2 = 300
             # y = 0 + (1000 - 180) // 2 = 410
             mock_dialog.geometry.assert_called_with("400x180+300+410")
+
+def test_fullscreen_viewer_metadata_outer_exception():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.models import ExifData
+    from pathlib import Path
+    from unittest.mock import MagicMock, patch
+
+    path = Path("test_image.jpg")
+
+    class DummyScanResult:
+        def __init__(self):
+            self.exif = ExifData()
+            self.sharpness = 0.5
+            self.noise = 0.5
+            self.highlight = 0.5
+            self.shadow = 0.5
+            self.aesthetic = 0.5
+            self.score = 0.5
+            self.noise_score = 0.5
+            self.highlight_score = 0.5
+            self.shadow_score = 0.5
+            self.aesthetic_score = 0.5
+            self.scores = {}
+
+    dummy_res = DummyScanResult()
+
+    class FakeParent:
+        pass
+
+    fake_parent = FakeParent()
+    fake_parent.files_map = {path: dummy_res}
+
+    viewer = MagicMock()
+    viewer.path = path
+    viewer.parent = fake_parent
+    viewer.meta_panel = MagicMock()
+
+    # Make _update_basic_labels raise an Exception
+    viewer._update_basic_labels.side_effect = Exception("Test Outer Exception")
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.logger.debug") as mock_logger:
+        FullscreenViewer.update_metadata(viewer)
+        mock_logger.assert_any_call("Error updating metadata overlay in fullscreen: Test Outer Exception")
+
+
+def test_fullscreen_viewer_metadata_exif_load_success():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from pathlib import Path
+    from unittest.mock import MagicMock, patch
+
+    path = Path("test_image.jpg")
+
+    class DummyScanResult:
+        def __init__(self):
+            self.exif = None
+            self.sharpness = 0.5
+            self.noise = 0.5
+            self.highlight = 0.5
+            self.shadow = 0.5
+            self.aesthetic = 0.5
+            self.score = 0.5
+            self.noise_score = 0.5
+            self.highlight_score = 0.5
+            self.shadow_score = 0.5
+            self.aesthetic_score = 0.5
+            self.scores = {}
+
+    dummy_res = DummyScanResult()
+
+    class FakeParent:
+        pass
+
+    fake_parent = FakeParent()
+    fake_parent.files_map = {path: dummy_res}
+
+    viewer = MagicMock()
+    viewer.path = path
+    viewer.parent = fake_parent
+    viewer.meta_panel = MagicMock()
+
+    class ExifData:
+        pass
+    valid_exif = ExifData()
+    valid_exif.iso = "100"
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.get_exif_data", return_value=valid_exif):
+        FullscreenViewer.update_metadata(viewer)
+        assert type(dummy_res.exif).__name__ in ("MagicMock", "ExifData")
+
+
+def test_fullscreen_viewer_metadata_exif_load_none():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from pathlib import Path
+    from unittest.mock import MagicMock, patch
+
+    path = Path("test_image.jpg")
+
+    class DummyScanResult:
+        def __init__(self):
+            self.exif = None
+            self.sharpness = 0.5
+            self.noise = 0.5
+            self.highlight = 0.5
+            self.shadow = 0.5
+            self.aesthetic = 0.5
+            self.score = 0.5
+            self.noise_score = 0.5
+            self.highlight_score = 0.5
+            self.shadow_score = 0.5
+            self.aesthetic_score = 0.5
+            self.scores = {}
+
+    dummy_res = DummyScanResult()
+
+    class FakeParent:
+        pass
+
+    fake_parent = FakeParent()
+    fake_parent.files_map = {path: dummy_res}
+
+    viewer = MagicMock()
+    viewer.path = path
+    viewer.parent = fake_parent
+    viewer.meta_panel = MagicMock()
+
+    with patch("photo_selector_toolbox.fullscreen_viewer.get_exif_data", return_value=None):
+        FullscreenViewer.update_metadata(viewer)
+        assert dummy_res.exif is not None
+        assert type(dummy_res.exif).__name__ in ("MagicMock", "ExifData")
