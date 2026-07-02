@@ -51,7 +51,14 @@ def test_ollama_tool_blocks_metadata_ip(mock_urlopen, dummy_image_file, temp_con
         tool.analyze(dummy_image_file)
 
 @patch("urllib.request.urlopen")
-def test_ollama_tool_blocks_metadata_ip_hex_bypass(mock_urlopen, dummy_image_file, temp_config_dir):
+@patch("socket.getaddrinfo")
+def test_ollama_tool_blocks_metadata_ip_hex_bypass(mock_getaddrinfo, mock_urlopen, dummy_image_file, temp_config_dir):
+    import socket
+    # Simulate a successful resolution of the hex IP to the metadata IP, overriding OS-specific behaviors
+    mock_getaddrinfo.return_value = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('169.254.169.254', 0))
+    ]
+
     from photo_selector_toolbox.config import save_config
     save_config({
         "ollama_url": "http://0xa9fea9fe/latest/meta-data/",
