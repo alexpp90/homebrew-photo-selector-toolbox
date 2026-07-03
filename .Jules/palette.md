@@ -13,7 +13,3 @@
 ## 2024-05-18 - Discoverability of Global Shortcuts in Desktop App
 **Learning:** Users often miss that actions like Move (M), Copy (C), and Delete (Del) have global keyboard shortcuts unless those shortcuts are explicitly hinted in the corresponding UI button text.
 **Action:** Always append keyboard shortcut hints in parentheses (e.g., "Copy to Selection (C)") directly onto the action buttons themselves.
-
-## 2024-05-19 - Discoverability of View Modes via Keyboard Shortcuts
-**Learning:** Even when keyboard shortcuts are documented in a help menu (like `F` for Focus mode), users rarely discover them unless they are hinted at on the actual UI controls they interact with.
-**Action:** When a tool has view or layout toggles (like "Focus Mode"), append the shortcut hint (e.g., "(F)") to both the enter and exit buttons so users can learn to navigate without breaking their workflow to check the Help menu.
