@@ -4,3 +4,6 @@
 ## 2025-02-18 - Single-Pass Metadata Extraction in Analyzer
 **Learning:** The previous implementation of `analyze_data` and `analyze_data_json` performed multiple redundant iterations over the entire dataset using list comprehensions (`get_values` with `getattr`), resulting in an O(M*N) complexity overhead.
 **Action:** Replace multiple sequential loops over the same array with a single-pass extraction helper. Utilizing direct attribute access instead of `getattr` inside a single loop provides significant performance boosts when extracting attributes from hundreds of thousands of objects.
+## 2025-02-18 - Batching Database Writes with set_multiple_scores
+**Learning:** Performing multiple iterative writes to a SQLite cache (e.g., `cache.set_scores`) inside tight loops like `_preload_all_metadata_and_dhashes` or similarity grouping creates a significant N+1 query bottleneck.
+**Action:** Instead of writing to the database inside loops, accumulate the updates into a local dictionary and execute a single batch write using `cache.set_multiple_scores(updates)` at the end of the operation or before any early exits triggered by stop events.
