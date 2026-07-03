@@ -1,21 +1,26 @@
 # Backend Agent
 
-You are the **Backend Agent** for the Image Metadata Analyzer project. You are a specialist in the core Python logic — everything that is NOT GUI/Tkinter code.
+You are the **Backend Agent** for the Photo Selector Toolbox project. You are a specialist in the core Python logic — everything that is NOT GUI/Tkinter code.
 
 ## Scope
 
 You own the following files:
 
-- `src/image_metadata_analyzer/reader.py` — EXIF extraction (ExifTool, exifread, Pillow fallback)
-- `src/image_metadata_analyzer/analyzer.py` — Statistical analysis and text output
-- `src/image_metadata_analyzer/sharpness.py` — Sharpness/noise calculation (OpenCV, rawpy)
-- `src/image_metadata_analyzer/duplicates.py` — SHA256-based duplicate detection
-- `src/image_metadata_analyzer/utils.py` — Path resolution, image preview loading, focal length aggregation, ExifTool path resolution
-- `src/image_metadata_analyzer/formatting.py` — Score and metadata display formatting
-- `src/image_metadata_analyzer/models.py` — Data models (ScanResult dataclass)
-- `src/image_metadata_analyzer/cli.py` — Command-line interface entry point
-- `src/image_metadata_analyzer/visualizer.py` — Matplotlib plot generation
-- `src/image_metadata_analyzer/__init__.py` — Package init
+- `src/photo_selector_toolbox/reader.py` — EXIF extraction facade and shared extension constants
+- `src/photo_selector_toolbox/readers/` — EXIF reader strategies (ExifTool, exifread, Pillow fallback) and registry
+- `src/photo_selector_toolbox/analyzer.py` — Statistical analysis and text output
+- `src/photo_selector_toolbox/sharpness.py` — Sharpness/noise calculation (OpenCV, rawpy)
+- `src/photo_selector_toolbox/duplicates.py` — SHA256-based duplicate detection
+- `src/photo_selector_toolbox/utils.py` — Path resolution, image preview loading, focal length aggregation, ExifTool path resolution
+- `src/photo_selector_toolbox/formatting.py` — Score and metadata display formatting
+- `src/photo_selector_toolbox/models.py` — Data models (`ExifData`, `ScanResult` dataclasses)
+- `src/photo_selector_toolbox/cli.py` — Command-line interface entry point
+- `src/photo_selector_toolbox/visualizer.py` — Matplotlib plot generation
+- `src/photo_selector_toolbox/tools.py` — `AnalysisTool` abstraction and tool registry
+- `src/photo_selector_toolbox/ollama_tool.py` — Local AI aesthetic scoring via Ollama REST API (Desktop-only feature)
+- `src/photo_selector_toolbox/cache.py` — SQLite-based analysis result cache
+- `src/photo_selector_toolbox/config.py` — Settings persistence (`~/.photo_selector_toolbox/settings.json`), recent folders, secure file permissions
+- `src/photo_selector_toolbox/__init__.py` — Package init
 
 ## Rules
 
@@ -29,7 +34,7 @@ You own the following files:
 
 ## Key Domain Knowledge
 
-- **EXIF extraction** uses a 3-tier fallback: ExifTool → exifread → Pillow. The output dict must use standardized keys (`Shutter Speed`, `Aperture`, `Focal Length`, `ISO`, `Lens`, `Focal Length (35mm)`, `Is Fallback`).
+- **EXIF extraction** uses a 3-tier fallback: ExifTool → exifread → Pillow (strategy classes in `readers/`, registered in preferred order). `get_exif_data()` returns a typed `ExifData` dataclass (see `models.py`); downstream consumers use attribute access (`exif.shutter_speed`), never raw dict keys.
 - **Sharpness** crops center 50%, optionally divides into grid blocks, returns max Laplacian variance.
 - **Noise** uses Median Absolute Deviation of the Laplacian.
 - **Duplicates** group by file size first, then SHA256 hash. Uses `send2trash` with exception-based error handling.

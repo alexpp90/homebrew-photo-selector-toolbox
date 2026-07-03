@@ -107,6 +107,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.bind_all("<M>", self.on_move_key)
         self.bind_all("<c>", self.on_copy_key)
         self.bind_all("<C>", self.on_copy_key)
+        self.bind_all("<f>", self.on_f_key)
+        self.bind_all("<F>", self.on_f_key)
 
     def _resolve_widget(self, widget_val):
         if isinstance(widget_val, str):
@@ -200,6 +202,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
             return
         self.copy_current_to_selection()
+
+    def on_f_key(self, event):
+        widget = self._resolve_widget(event.widget)
+        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
+            return
+        # Don't trigger if user is typing in a text entry
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+            return
+        if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
+            return
+        self.toggle_focus_mode()
 
     def setup_ui(self):
 
@@ -459,12 +472,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         btn_frame.pack(pady=10, fill="x")
 
         self.prev_btn = ttk.Button(
-            btn_frame, text="◀ Prev", command=self.prev_candidate
+            btn_frame, text="◀ Prev (Left)", command=self.prev_candidate
         )
         self.prev_btn.pack(side="top", fill="x", pady=2)
 
         self.next_btn = ttk.Button(
-            btn_frame, text="Next ▶", command=self.next_candidate
+            btn_frame, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.next_btn.pack(side="top", fill="x", pady=2)
 
@@ -494,7 +507,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
 
         self.focus_toggle_btn = ttk.Button(
-            btn_frame, text="⛶ Focus Mode", command=self.toggle_focus_mode
+            btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
 
@@ -699,9 +712,34 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     raise ValueError("URL must start with http:// or https://")
 
                 from urllib.parse import urlparse
+                import socket
+                import ipaddress
+
                 hostname = urlparse(url).hostname or ""
-                if hostname == "169.254.169.254" or hostname.startswith("169.254."):
+                clean_hostname = hostname.strip("[]")
+
+                def is_forbidden_ip(ip_str):
+                    try:
+                        ip_obj = ipaddress.ip_address(ip_str)
+                        if ip_obj.is_link_local:
+                            return True
+                        if getattr(ip_obj, "ipv4_mapped", None) and ip_obj.ipv4_mapped.is_link_local:
+                            return True
+                        return False
+                    except ValueError:
+                        return False
+
+                if is_forbidden_ip(clean_hostname):
                     raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+
+                try:
+                    addr_info = socket.getaddrinfo(clean_hostname, None)
+                    for res in addr_info:
+                        ip_str = res[4][0]
+                        if is_forbidden_ip(ip_str):
+                            raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
+                except socket.gaierror:
+                    pass
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
@@ -910,7 +948,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
        # Controls Stack
         self.focus_exit_btn = ttk.Button(
             self.focus_right_panel,
-            text="🔙 Exit Focus Mode",
+            text="🔙 Exit Focus Mode (F/Esc)",
             command=self.toggle_focus_mode,
         )
         self.focus_exit_btn.pack(side="top", pady=10, fill="x")
@@ -921,12 +959,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
        # Navigation & Actions
         self.focus_prev_btn = ttk.Button(
-            self.focus_right_panel, text="◀ Previous", command=self.prev_candidate
+            self.focus_right_panel, text="◀ Previous (Left)", command=self.prev_candidate
         )
         self.focus_prev_btn.pack(side="top", pady=5, fill="x")
 
         self.focus_next_btn = ttk.Button(
-            self.focus_right_panel, text="Next ▶", command=self.next_candidate
+            self.focus_right_panel, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.focus_next_btn.pack(side="top", pady=5, fill="x")
 
@@ -1181,9 +1219,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         # Batch fetch all cached scores for paths to prevent N+1 query bottleneck
         cached_scores = cache.get_multiple_scores(paths)
+        updates = {}
 
         for path in paths:
             if self.stop_event.is_set():
+                if updates:
+                    try:
+                        cache.set_multiple_scores(updates)
+                    except Exception as e:
+                        logger.warning(f"Failed to bulk update cache on preload cancel: {e}")
                 break
            # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
             if path not in self.sorted_files:
@@ -1219,9 +1263,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             dhash_str = f"{dhash_num:016x}"
                             res.scores["dhash_8"] = dhash_str
                             res.scores["dhash"] = dhash_str
-                            cache.set_scores(path, {"dhash_8": dhash_str})
+                            updates.setdefault(path, {})["dhash_8"] = dhash_str
                 except Exception as e:
                     logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
+
+        if updates:
+            try:
+                cache.set_multiple_scores(updates)
+            except Exception as e:
+                logger.warning(f"Failed to bulk update cache in background: {e}")
 
     def _start_background_update_scan(self):
        # Stop previous background updates
@@ -1542,9 +1592,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             # Batch fetch all cached scores for missing paths to prevent N+1 query bottleneck
             cached_scores = cache.get_multiple_scores(missing)
+            updates = {}
 
             for idx, path in enumerate(missing):
                 if self.grouping_stop_event.is_set():
+                    if updates:
+                        try:
+                            cache.set_multiple_scores(updates)
+                        except Exception as e:
+                            logger.warning(f"Failed to bulk update cache on grouping cancel: {e}")
                     self.parent.after(0, self._handle_grouping_cancelled)
                     return
                 try:
@@ -1562,7 +1618,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             dhash_num = calculate_dhash(img, hash_size=hash_size)
                             format_str = f"0{hash_size*hash_size//4}x"
                             dhash_str = format(dhash_num, format_str)
-                            cache.set_scores(path, {hash_key: dhash_str})
+                            updates.setdefault(path, {})[hash_key] = dhash_str
                         else:
                             dhash_str = None
 
@@ -1581,6 +1637,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         self.group_status_lbl.config(text=f"👥 Grouping: {int(p)}% ({i}/{total})")
                     )
                 )
+
+            if updates:
+                try:
+                    cache.set_multiple_scores(updates)
+                except Exception as e:
+                    logger.warning(f"Failed to bulk update cache in grouping: {e}")
 
             self.parent.after(0, lambda: self._handle_grouping_finished(level))
 

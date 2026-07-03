@@ -1,9 +1,9 @@
 ---
 name: refactoring-guide
-description: "Refactoring patterns and conventions for the Image Metadata Analyzer project. Read this before performing any refactoring work."
+description: "Refactoring patterns and conventions for the Photo Selector Toolbox project. Read this before performing any refactoring work."
 ---
 
-# Refactoring Guide for Image Metadata Analyzer
+# Refactoring Guide for Photo Selector Toolbox
 
 This skill documents the established patterns and conventions that all agents must follow when refactoring code in this project.
 
@@ -31,7 +31,7 @@ raw_exts = {".arw", ".nef", ".cr2", ...}
 RAW_EXTENSIONS = {".arw", ".nef", ".cr2", ...}
 
 # In sharpness.py — import it
-from image_metadata_analyzer.reader import RAW_EXTENSIONS
+from photo_selector_toolbox.reader import RAW_EXTENSIONS
 ```
 
 ## Pattern 2: Controller/View Separation (GUI)

@@ -42,10 +42,10 @@ This project uses a multi-agent system with **9 specialized subagents** organize
 
 | Agent | Scope | Config File |
 |-------|-------|-------------|
-| **`@backend_agent`** | Core Python logic: `reader.py`, `analyzer.py`, `sharpness.py`, `duplicates.py`, `utils.py`, `formatting.py`, `models.py`, `cli.py`, `visualizer.py` | `.gemini/agents/backend_agent.md` |
-| **`@gui_agent`** | Tkinter GUI: `gui.py`, `sharpness_gui.py`, `controllers.py`, `image_panels.py`, `fullscreen_viewer.py` | `.gemini/agents/gui_agent.md` |
-| **`@test_agent`** | Desktop testing: `tests/`, `benchmarks/` | `.gemini/agents/test_agent.md` |
-| **`@build_agent`** | Desktop build & CI: `scripts/`, `.github/workflows/`, `pyproject.toml` | `.gemini/agents/build_agent.md` |
+| **`@backend_agent`** | Core Python logic: `reader.py`, `readers/`, `analyzer.py`, `sharpness.py`, `duplicates.py`, `utils.py`, `formatting.py`, `models.py`, `cli.py`, `visualizer.py`, `tools.py`, `ollama_tool.py`, `cache.py`, `config.py` | `.gemini/agents/backend_agent.md` |
+| **`@gui_agent`** | Tkinter GUI: `gui.py`, `sharpness_gui.py`, `controllers.py`, `image_panels.py`, `fullscreen_viewer.py`, `gui_utils.py` | `.gemini/agents/gui_agent.md` |
+| **`@test_agent`** | Desktop testing: `tests/` (incl. `tests/visual/`), `benchmarks/` | `.gemini/agents/test_agent.md` |
+| **`@build_agent`** | Desktop build & CI: `scripts/`, desktop GitHub workflows (`build.yml`, `test-python.yml`, `requirements-check.yml`), `Formula/`, `Casks/`, `pyproject.toml` | `.gemini/agents/build_agent.md` |
 
 #### Android Agents (Kotlin/Compose)
 
@@ -92,6 +92,14 @@ The coordinator agent (default) handles:
 - Changes to **Android Gradle build files, CI workflow, or ProGuard rules** → `@android_build_agent`
 - Research on **algorithms, raw files, or metadata standards** → `@photo_researcher_agent`
 - Custom **UX mockups, ergonomic analysis, or layout wireframes** → `@ux_agent` (requires target solution context)
+
+### Learned Lessons (`.Jules/`)
+
+The `.Jules/` directory is the project's persistent memory of hard-won lessons. Read the relevant file before working in a related area, and append a new entry (same format: date, Learning/Vulnerability, Action/Prevention) when you learn something non-obvious that future agents should know:
+
+- `.Jules/bolt.md` — Performance (e.g., avoiding `pathlib`/`lru_cache` overhead in hot file loops, single-pass metadata extraction).
+- `.Jules/palette.md` — UI & accessibility (e.g., Tkinter 'clam' theme focus-state pitfalls, keyboard shortcut discoverability).
+- `.Jules/sentinel.md` — Security (e.g., zip/tar slip prevention on `extractall`, SMB URL path traversal, `posixpath.normpath` for URLs).
 
 ### Shared Skills
 
