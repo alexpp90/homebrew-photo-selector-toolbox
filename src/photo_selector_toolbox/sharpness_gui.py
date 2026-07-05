@@ -9,6 +9,7 @@ from photo_selector_toolbox.gui_utils import ask_directory
 import os
 import json
 import urllib.request
+import urllib.error
 
 import send2trash
 import shutil
@@ -741,8 +742,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 except socket.gaierror:
                     pass
 
+                class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, req, fp, code, msg, headers, newurl):
+                        raise urllib.error.URLError("Redirects are not allowed for SSRF protection.")
+
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                opener = urllib.request.build_opener(NoRedirectHandler())
+                with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
