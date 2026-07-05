@@ -35,7 +35,7 @@ class FullscreenViewer(tk.Toplevel):
         self.configure(bg="black")
 
         # UI Elements
-        self.canvas = tk.Canvas(self, bg="black", highlightthickness=0)
+        self.canvas = tk.Canvas(self, bg="black", highlightthickness=0, cursor="hand2")
         self.canvas.pack(fill="both", expand=True)
 
         self.loading_lbl = ttk.Label(
@@ -82,6 +82,7 @@ class FullscreenViewer(tk.Toplevel):
         self.bind("<Escape>", lambda e: self.destroy())
         self.canvas.bind("<ButtonPress-1>", self.on_drag_start)
         self.canvas.bind("<B1-Motion>", self.on_drag_move)
+        self.canvas.bind("<ButtonRelease-1>", self.on_drag_end)
 
         # Zoom bindings
         self.canvas.bind("<MouseWheel>", self.on_zoom_wheel)  # Windows/MacOS
@@ -489,6 +490,11 @@ class FullscreenViewer(tk.Toplevel):
 
     def on_drag_start(self, event):
         self.drag_start = (event.x, event.y)
+        self.canvas.config(cursor="fleur")
+
+    def on_drag_end(self, event):
+        self.drag_start = None
+        self.canvas.config(cursor="hand2")
 
     def on_drag_move(self, event):
         if not self.drag_start:
