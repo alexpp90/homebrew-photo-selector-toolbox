@@ -32,7 +32,7 @@ def dummy_image_file(tmp_path):
     return img_path
 
 
-@patch("urllib.request.urlopen")
+@patch("urllib.request.OpenerDirector.open")
 def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock Ollama HTTP response payload
     mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."}
@@ -54,7 +54,7 @@ def test_ollama_tool_success(mock_urlopen, dummy_image_file, temp_config_dir):
     assert req.method == "POST"
 
 
-@patch("urllib.request.urlopen")
+@patch("urllib.request.OpenerDirector.open")
 def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_dir):
     # Setup custom configuration
     custom_config = {
@@ -85,7 +85,7 @@ def test_ollama_tool_custom_config(mock_urlopen, dummy_image_file, temp_config_d
     assert body["prompt"] == "Rate the aesthetics of the photo. Score: "
 
 
-@patch("urllib.request.urlopen")
+@patch("urllib.request.OpenerDirector.open")
 def test_ollama_tool_connection_error(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock connection failure (URLError)
     mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
@@ -97,7 +97,7 @@ def test_ollama_tool_connection_error(mock_urlopen, dummy_image_file, temp_confi
     assert "Ollama server connection error" in str(exc_info.value)
 
 
-@patch("urllib.request.urlopen")
+@patch("urllib.request.OpenerDirector.open")
 def test_ollama_tool_parsing_error(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with no float scores in text
     mock_resp_payload = {"response": "This is a photo of a sunset, it looks great but I can't give a number."}
@@ -115,7 +115,7 @@ def test_ollama_tool_parsing_error(mock_urlopen, dummy_image_file, temp_config_d
 
 
 
-@patch("urllib.request.urlopen")
+@patch("urllib.request.OpenerDirector.open")
 def test_ollama_tool_fallback_analysis(mock_urlopen, dummy_image_file, temp_config_dir):
     # Mock response with SCORE but no ANALYSIS tag
     mock_resp_payload = {"response": "The aesthetic quality score of this photo is 8.5."}

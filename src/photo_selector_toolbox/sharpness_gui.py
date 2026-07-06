@@ -35,6 +35,11 @@ from photo_selector_toolbox.image_panels import ImagePanelsMixin
 
 logger = logging.getLogger(__name__)
 
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        from urllib.error import URLError
+        raise URLError("HTTP redirects are not allowed (SSRF protection).")
+
 
 class ImageGroup:
     """Represents a group of visually similar series of images."""
@@ -742,7 +747,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     pass
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                opener = urllib.request.build_opener(NoRedirectHandler)
+                with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
