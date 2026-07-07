@@ -38,7 +38,7 @@ def temp_config_dir(tmp_path):
     sg.CONFIG_FILE = orig_file
     cache._DEFAULT_DB_PATH = None
 
-@patch("urllib.request.urlopen")
+@patch("urllib.request.OpenerDirector.open")
 def test_ollama_tool_blocks_metadata_ip(mock_urlopen, dummy_image_file, temp_config_dir):
     from photo_selector_toolbox.config import save_config
     save_config({
@@ -50,7 +50,7 @@ def test_ollama_tool_blocks_metadata_ip(mock_urlopen, dummy_image_file, temp_con
     with pytest.raises(RuntimeError, match="SSRF Protection: Cloud metadata IPs are not allowed."):
         tool.analyze(dummy_image_file)
 
-@patch("urllib.request.urlopen")
+@patch("urllib.request.OpenerDirector.open")
 @patch("socket.getaddrinfo")
 def test_ollama_tool_blocks_metadata_ip_hex_bypass(mock_getaddrinfo, mock_urlopen, dummy_image_file, temp_config_dir):
     import socket
@@ -69,7 +69,7 @@ def test_ollama_tool_blocks_metadata_ip_hex_bypass(mock_getaddrinfo, mock_urlope
     with pytest.raises(RuntimeError, match="SSRF Protection: Cloud metadata IPs are not allowed."):
         tool.analyze(dummy_image_file)
 
-@patch("urllib.request.urlopen")
+@patch("urllib.request.OpenerDirector.open")
 def test_ollama_tool_blocks_metadata_ipv6_literal(mock_urlopen, dummy_image_file, temp_config_dir):
     from photo_selector_toolbox.config import save_config
     save_config({

@@ -742,7 +742,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     pass
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+
+                class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+                    def http_error_302(self, req, fp, code, msg, headers):
+                        raise urllib.error.URLError("SSRF Protection: HTTP redirects are not allowed.")
+                    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+                opener = urllib.request.build_opener(NoRedirectHandler())
+
+                with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
