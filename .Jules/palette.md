@@ -13,3 +13,7 @@
 ## 2024-05-18 - Discoverability of Global Shortcuts in Desktop App
 **Learning:** Users often miss that actions like Move (M), Copy (C), and Delete (Del) have global keyboard shortcuts unless those shortcuts are explicitly hinted in the corresponding UI button text.
 **Action:** Always append keyboard shortcut hints in parentheses (e.g., "Copy to Selection (C)") directly onto the action buttons themselves.
+
+## 2024-06-25 - Canvas Interaction Affordances in Tkinter
+**Learning:** By default, Tkinter's `Canvas` widget does not provide any visual indication that it is interactive (e.g., draggable). This can lead to poor discoverability of panning features.
+**Action:** When implementing click-and-drag panning on a `tk.Canvas`, enhance UX by setting the default canvas cursor to `hand2`, changing it to `fleur` on `<ButtonPress-1>` to indicate active dragging, and explicitly binding `<ButtonRelease-1>` to restore the `hand2` cursor.

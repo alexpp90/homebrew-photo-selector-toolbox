@@ -217,6 +217,36 @@ def mock_tkinter_and_ttk():
     tk.IntVar = orig_intvar
 
 
+def test_canvas_panning_cursor():
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    path = Path("test_image.jpg")
+    file_list = [path]
+    parent.files_map = {}
+
+    with (
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
+    ):
+        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer.canvas = MagicMock()
+
+        # Simulate start drag
+        event = MagicMock()
+        event.x = 100
+        event.y = 100
+        viewer.on_drag_start(event)
+
+        assert viewer.drag_start == (100, 100)
+        viewer.canvas.config.assert_called_with(cursor="fleur")
+
+        # Simulate end drag
+        viewer.canvas.config.reset_mock()
+        viewer.on_drag_end(event)
+
+        assert viewer.drag_start is None
+        viewer.canvas.config.assert_called_with(cursor="hand2")
+
 def test_sharpness_tool_key_event_filtering():
     from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
