@@ -12,6 +12,31 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
+def _is_hash_similar(prev_res, next_res, hash_keys: List[str], threshold: int) -> bool:
+    """Helper to check if two scan results are similar based on image hashes."""
+    if not prev_res or not next_res:
+        return False
+
+    h1_val, h2_val = None, None
+    for key in hash_keys:
+        if h1_val is None:
+            h1_val = prev_res.scores.get(key)
+        if h2_val is None:
+            h2_val = next_res.scores.get(key)
+
+    if h1_val is not None and h2_val is not None:
+        try:
+            h1 = int(h1_val, 16) if isinstance(h1_val, str) else int(h1_val)
+            h2 = int(h2_val, 16) if isinstance(h2_val, str) else int(h2_val)
+            dist = bin(h1 ^ h2).count("1")
+            return dist <= threshold
+        except (ValueError, TypeError):
+            pass
+
+    return False
+
+
 try:
     import rawpy
 except ImportError:
@@ -469,57 +494,22 @@ def group_files_by_similarity(
             if abs(t2 - t1) <= 30.0 and pref1 == pref2:
                 prev_res = files_map.get(prev_file)
                 next_res = files_map.get(next_file)
-                h1_val = prev_res.scores.get("dhash_8") if prev_res else None
-                h2_val = next_res.scores.get("dhash_8") if next_res else None
-
-                # Fallback to older "dhash" key if "dhash_8" is not present
-                if h1_val is None and prev_res:
-                    h1_val = prev_res.scores.get("dhash")
-                if h2_val is None and next_res:
-                    h2_val = next_res.scores.get("dhash")
-
-                if h1_val is not None and h2_val is not None:
-                    try:
-                        h1 = int(h1_val, 16) if isinstance(h1_val, str) else int(h1_val)
-                        h2 = int(h2_val, 16) if isinstance(h2_val, str) else int(h2_val)
-                        dist = bin(h1 ^ h2).count("1")
-                        if dist <= threshold:
-                            similar = True
-                    except (ValueError, TypeError):
-                        pass
+                if _is_hash_similar(prev_res, next_res, ["dhash_8", "dhash"], threshold):
+                    similar = True
 
         elif group_level == "Detailed Similarity":
             # Level 3: Time diff <= 30.0s, matching prefix, and detailed dHash 16x16 distance <= 24
             if abs(t2 - t1) <= 30.0 and pref1 == pref2:
                 prev_res = files_map.get(prev_file)
                 next_res = files_map.get(next_file)
-                h1_val = prev_res.scores.get("dhash_16") if prev_res else None
-                h2_val = next_res.scores.get("dhash_16") if next_res else None
-
-                if h1_val is not None and h2_val is not None:
-                    try:
-                        h1 = int(h1_val, 16) if isinstance(h1_val, str) else int(h1_val)
-                        h2 = int(h2_val, 16) if isinstance(h2_val, str) else int(h2_val)
-                        dist = bin(h1 ^ h2).count("1")
-                        if dist <= 24:  # Strict threshold for 16x16 (256 bits)
-                            similar = True
-                    except (ValueError, TypeError):
-                        pass
+                if _is_hash_similar(prev_res, next_res, ["dhash_16"], 24):
+                    similar = True
         else:
             # Fallback to legacy behaviour if an unknown level is specified
             prev_res = files_map.get(prev_file)
             next_res = files_map.get(next_file)
-            h1_val = prev_res.scores.get("dhash") if prev_res else None
-            h2_val = next_res.scores.get("dhash") if next_res else None
-            if h1_val is not None and h2_val is not None:
-                try:
-                    h1 = int(h1_val, 16) if isinstance(h1_val, str) else int(h1_val)
-                    h2 = int(h2_val, 16) if isinstance(h2_val, str) else int(h2_val)
-                    dist = bin(h1 ^ h2).count("1")
-                    if dist <= threshold:
-                        similar = True
-                except (ValueError, TypeError):
-                    pass
+            if _is_hash_similar(prev_res, next_res, ["dhash"], threshold):
+                similar = True
 
         if similar:
             current_group.append(next_file)
