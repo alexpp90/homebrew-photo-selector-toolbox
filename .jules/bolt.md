@@ -7,3 +7,6 @@
 ## 2025-02-18 - Batching Cache Writes during Background Analysis
 **Learning:** During background UI tasks (e.g. `_preload_all_metadata_and_dhashes` or `run_calc`), executing single `cache.set_scores()` updates sequentially inside a loop over files creates an N+1 write bottleneck on the SQLite database, drastically increasing latency.
 **Action:** When updating cache during iterations, use a dictionary to accumulate updates and flush them using `cache.set_multiple_scores(updates)` after the loop. Ensure that the accumulated dictionary is flushed even when breaking out of loops early (e.g. `if self.stop_event.is_set():`) to prevent silent data loss.
+## 2024-05-18 - Optimized list containment checks within a loop
+**Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
+**Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
