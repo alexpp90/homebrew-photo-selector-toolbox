@@ -334,7 +334,7 @@ def get_excluded_folder_names() -> frozenset:
     """
     excluded_names = {"selection", "selected"}
     try:
-        from photo_selector_toolbox.ollama_tool import load_config
+        from photo_selector_toolbox.config import load_config
 
         config = load_config()
         custom_folder = config.get("selection_folder", "Selection")

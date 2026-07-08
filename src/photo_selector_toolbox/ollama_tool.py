@@ -13,14 +13,6 @@ from typing import Any, Tuple
 from photo_selector_toolbox.tools import AnalysisTool, ToolRegistry
 from photo_selector_toolbox.utils import load_image_preview
 
-# Re-export for backward compatibility — existing code imports from here
-from photo_selector_toolbox.config import (  # noqa: F401
-    CONFIG_DIR,
-    CONFIG_FILE,
-    DEFAULT_CONFIG,
-    load_config,
-    save_config,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +33,7 @@ class OllamaAestheticTool(AnalysisTool):
     def analyze(self, filepath: Path, **kwargs: Any) -> Tuple[float, str]:
         from photo_selector_toolbox.config import is_ollama_url_external
 
+        from photo_selector_toolbox.config import load_config, DEFAULT_CONFIG
         config = load_config()
         ollama_url = config.get("ollama_url", DEFAULT_CONFIG["ollama_url"])
         model_name = config.get("ollama_model", DEFAULT_CONFIG["ollama_model"])

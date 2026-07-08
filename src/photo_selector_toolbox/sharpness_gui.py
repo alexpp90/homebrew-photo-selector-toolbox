@@ -18,7 +18,7 @@ from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.formatting import format_score, format_meta
-from photo_selector_toolbox.ollama_tool import load_config, save_config
+from photo_selector_toolbox.config import load_config, save_config
 from photo_selector_toolbox.utils import (
     is_excluded_subfolder,
     get_excluded_folder_names,

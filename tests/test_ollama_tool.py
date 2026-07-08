@@ -6,8 +6,8 @@ from PIL import Image
 
 from photo_selector_toolbox.ollama_tool import (
     OllamaAestheticTool,
-    save_config,
     )
+from photo_selector_toolbox.config import save_config
 import photo_selector_toolbox.ollama_tool as ot
 
 
@@ -16,9 +16,7 @@ def temp_config_dir(tmp_path):
     """Fixture to mock CONFIG_DIR and CONFIG_FILE to a temporary path."""
     import photo_selector_toolbox.config as cfg_mod
     with patch.object(cfg_mod, "CONFIG_DIR", tmp_path), \
-         patch.object(cfg_mod, "CONFIG_FILE", tmp_path / "settings.json"), \
-         patch.object(ot, "CONFIG_DIR", tmp_path), \
-         patch.object(ot, "CONFIG_FILE", tmp_path / "settings.json"):
+         patch.object(cfg_mod, "CONFIG_FILE", tmp_path / "settings.json"):
         yield tmp_path
 
 
