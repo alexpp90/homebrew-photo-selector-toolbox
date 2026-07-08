@@ -1,0 +1,11 @@
+--- src/photo_selector_toolbox/cache.py
++++ src/photo_selector_toolbox/cache.py
+@@ -202,7 +202,7 @@
+                     VALUES (?, ?, ?)
+                     ON CONFLICT(filepath) DO UPDATE SET
+                         last_used = excluded.last_used,
+-                        scores = excluded.scores
++                        scores = json_patch(image_cache.scores, excluded.scores)
+                     """,
+                     insert_data,
+                 )
