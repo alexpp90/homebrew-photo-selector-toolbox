@@ -8,7 +8,6 @@ from photo_selector_toolbox.ollama_tool import (
     OllamaAestheticTool,
     )
 from photo_selector_toolbox.config import save_config
-import photo_selector_toolbox.ollama_tool as ot
 
 
 @pytest.fixture
