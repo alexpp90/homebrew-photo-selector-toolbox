@@ -7,3 +7,6 @@
 ## 2025-02-18 - Batching Cache Writes during Background Analysis
 **Learning:** During background UI tasks (e.g. `_preload_all_metadata_and_dhashes` or `run_calc`), executing single `cache.set_scores()` updates sequentially inside a loop over files creates an N+1 write bottleneck on the SQLite database, drastically increasing latency.
 **Action:** When updating cache during iterations, use a dictionary to accumulate updates and flush them using `cache.set_multiple_scores(updates)` after the loop. Ensure that the accumulated dictionary is flushed even when breaking out of loops early (e.g. `if self.stop_event.is_set():`) to prevent silent data loss.
+## 2023-10-27 - Parallelize IO/CPU loops
+**Learning:** Sequential loops containing blocking I/O (like reading EXIF via `get_exif_data`) and CPU operations (like dHash) bottleneck UI and background thread performance severely.
+**Action:** Use `concurrent.futures.ThreadPoolExecutor` to parallelize the iteration. Define a pure worker function that returns extracted data, and use `as_completed` in the main loop to safely apply the results to the shared model, preserving GIL/thread safety.
