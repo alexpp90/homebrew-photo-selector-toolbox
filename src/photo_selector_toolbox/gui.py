@@ -37,7 +37,7 @@ from photo_selector_toolbox.visualizer import (
 )
 from photo_selector_toolbox.duplicates import find_duplicates, move_to_trash
 from photo_selector_toolbox.sharpness_gui import SharpnessTool
-from photo_selector_toolbox.ollama_tool import load_config, save_config
+from photo_selector_toolbox.config import load_config, save_config
 from photo_selector_toolbox.cache import ScoreCache
 
 
