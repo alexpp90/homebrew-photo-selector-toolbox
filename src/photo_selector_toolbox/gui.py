@@ -153,6 +153,7 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
         background=[("active", colors.bg_hover), ("disabled", colors.bg_dark)],
         foreground=[("active", colors.fg_light), ("disabled", colors.fg_muted)],
         bordercolor=[("focus", colors.accent_blue)],
+        focuscolor=[("focus", colors.accent_blue)],
     )
 
     style.configure(
@@ -169,6 +170,7 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
         background=[("active", colors.accent_hover), ("disabled", colors.bg_dark)],
         foreground=[("active", "#FFFFFF"), ("disabled", colors.fg_muted)],
         bordercolor=[("focus", "#FFFFFF")],
+        focuscolor=[("focus", "#FFFFFF")],
     )
 
     style.configure(
@@ -200,6 +202,7 @@ def _configure_input_styles(style: ttk.Style, colors: ThemeColors) -> None:
         bordercolor=[("focus", colors.accent_blue)],
         lightcolor=[("focus", colors.accent_blue)],
         darkcolor=[("focus", colors.accent_blue)],
+        focuscolor=[("focus", colors.accent_blue)],
     )
 
     style.configure(
