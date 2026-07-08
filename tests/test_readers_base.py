@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-import pytest
 
 from photo_selector_toolbox.readers.base import read_exif, ExifReader
 from photo_selector_toolbox.models import ExifData
