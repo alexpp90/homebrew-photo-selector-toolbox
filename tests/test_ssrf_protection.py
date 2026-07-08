@@ -13,8 +13,8 @@ def dummy_image_file(tmp_path):
 @pytest.fixture
 def temp_config_dir(tmp_path):
     from photo_selector_toolbox import config
-    from photo_selector_toolbox import ollama_tool
-    import photo_selector_toolbox.sharpness_gui as sg
+
+
     import photo_selector_toolbox.cache as cache
 
     orig_dir = config.CONFIG_DIR
