@@ -238,3 +238,32 @@ def test_toggle_focus_mode():
         tool.load_triplet_view.assert_called_once_with("some_path")
 
     root.destroy()
+
+def test_resolve_widget():
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+    import tkinter as tk
+    from unittest.mock import patch, MagicMock
+
+    root = tk.Tk()
+    parent = tk.Frame(root)
+    with patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"), \
+         patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"), \
+         patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"), \
+         patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"):
+
+        tool = SharpnessTool(parent)
+
+        # Test non-string widget
+        non_string_widget = MagicMock()
+        assert tool._resolve_widget(non_string_widget) == non_string_widget
+
+        # Test string widget that resolves successfully
+        tool.nametowidget = MagicMock(return_value=non_string_widget)
+        assert tool._resolve_widget("some_widget") == non_string_widget
+        tool.nametowidget.assert_called_once_with("some_widget")
+
+        # Test string widget that throws exception
+        tool.nametowidget.side_effect = Exception("Widget not found")
+        assert tool._resolve_widget("invalid_widget") is None
+
+    root.destroy()
