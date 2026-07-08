@@ -118,9 +118,16 @@ class OllamaAestheticTool(AnalysisTool):
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
+
+            class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    raise urllib.error.HTTPError(req.full_url, code, msg + " - Redirects are blocked for SSRF protection", headers, fp)
+
+            opener = urllib.request.build_opener(NoRedirectHandler())
+
             # Serialize requests to avoid overloading local Ollama server
             with self._lock:
-                with urllib.request.urlopen(req, timeout=60) as response:
+                with opener.open(req, timeout=60) as response:
                     res_data = json.loads(response.read().decode("utf-8"))
                     response_text = res_data.get("response", "")
         except URLError as e:
