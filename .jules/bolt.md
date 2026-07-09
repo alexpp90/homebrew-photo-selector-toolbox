@@ -7,3 +7,6 @@
 ## 2025-02-18 - Batching Cache Writes during Background Analysis
 **Learning:** During background UI tasks (e.g. `_preload_all_metadata_and_dhashes` or `run_calc`), executing single `cache.set_scores()` updates sequentially inside a loop over files creates an N+1 write bottleneck on the SQLite database, drastically increasing latency.
 **Action:** When updating cache during iterations, use a dictionary to accumulate updates and flush them using `cache.set_multiple_scores(updates)` after the loop. Ensure that the accumulated dictionary is flushed even when breaking out of loops early (e.g. `if self.stop_event.is_set():`) to prevent silent data loss.
+## 2025-02-18 - SQLite JSON Updates with json_patch
+**Learning:** Performing read-modify-write loops for JSON columns in SQLite caches creates significant N+1 and latency overhead. In `ScoreCache.set_multiple_scores`, reading existing arrays of records, parsing them into python dicts, updating them, and serializing them back takes up memory and processing time.
+**Action:** Use SQLite's native `json_patch()` function in an `INSERT ... ON CONFLICT DO UPDATE SET` clause to directly let the database engine handle the JSON merging without transferring it back to Python.
