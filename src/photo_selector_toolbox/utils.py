@@ -646,3 +646,13 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
 
     # Return a copy so the cached original is never mutated
     return img.copy()
+
+import urllib.request
+import urllib.error
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.URLError("Redirects are not allowed for security reasons.")
+
+def get_safe_opener():
+    return urllib.request.build_opener(NoRedirectHandler)

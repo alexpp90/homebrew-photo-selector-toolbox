@@ -742,7 +742,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     pass
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                from photo_selector_toolbox.utils import get_safe_opener
+                with get_safe_opener().open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
