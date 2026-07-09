@@ -13,3 +13,7 @@
 ## 2024-05-18 - Discoverability of Global Shortcuts in Desktop App
 **Learning:** Users often miss that actions like Move (M), Copy (C), and Delete (Del) have global keyboard shortcuts unless those shortcuts are explicitly hinted in the corresponding UI button text.
 **Action:** Always append keyboard shortcut hints in parentheses (e.g., "Copy to Selection (C)") directly onto the action buttons themselves.
+
+## 2024-05-19 - Click-and-Drag Canvas Cursors
+**Learning:** When users interact with a `tk.Canvas` to pan or move content (like a large image), relying purely on visual displacement isn't enough. Users often don't realize they *can* drag the canvas if the cursor doesn't indicate it.
+**Action:** Always set the default canvas cursor to `hand2` (to indicate it's grabbable), change it to `fleur` on `<ButtonPress-1>` (to indicate active movement), and restore it to `hand2` on `<ButtonRelease-1>`.
