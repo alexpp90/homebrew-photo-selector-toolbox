@@ -10,6 +10,11 @@ import os
 import json
 import urllib.request
 
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.URLError("HTTP redirects are not allowed for SSRF protection")
+
 import send2trash
 import shutil
 from PIL import ImageTk # noqa: F401
@@ -742,7 +747,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     pass
 
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                opener = urllib.request.build_opener(NoRedirectHandler())
+                with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]

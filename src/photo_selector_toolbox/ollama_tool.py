@@ -4,6 +4,11 @@ import logging
 import re
 import urllib.request
 from urllib.error import URLError
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.URLError("HTTP redirects are not allowed for SSRF protection")
+
 import io
 import threading
 from pathlib import Path
@@ -120,7 +125,8 @@ class OllamaAestheticTool(AnalysisTool):
             )
             # Serialize requests to avoid overloading local Ollama server
             with self._lock:
-                with urllib.request.urlopen(req, timeout=60) as response:
+                opener = urllib.request.build_opener(NoRedirectHandler())
+                with opener.open(req, timeout=60) as response:
                     res_data = json.loads(response.read().decode("utf-8"))
                     response_text = res_data.get("response", "")
         except URLError as e:
