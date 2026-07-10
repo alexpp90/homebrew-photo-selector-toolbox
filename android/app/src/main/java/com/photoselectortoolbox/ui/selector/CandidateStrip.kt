@@ -46,7 +46,7 @@ import com.photoselectortoolbox.ui.theme.Zinc950
 
 // Group indicator colors for visual differentiation
 private val GroupColors = listOf(
-    Color(0xFF8B5CF6), // Violet
+    Color(0xFF6366F1), // Indigo
     Color(0xFF22C55E), // Green
     Color(0xFFF59E0B), // Amber
     Color(0xFFEC4899), // Pink

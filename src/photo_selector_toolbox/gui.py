@@ -48,8 +48,8 @@ class ThemeColors:
     bg_hover: str = "#3F3F46"
     fg_light: str = "#FAFAFA"
     fg_muted: str = "#A1A1AA"
-    accent_blue: str = "#F59E0B"
-    accent_hover: str = "#D97706"
+    accent_blue: str = "#6366F1"
+    accent_hover: str = "#4F46E5"
     border_color: str = "#3F3F46"
 
 
@@ -273,7 +273,7 @@ def apply_dark_theme_to_fig(fig):
         for container in ax.containers:
             for child in container.get_children():
                 if hasattr(child, "set_facecolor"):
-                    child.set_facecolor("#F59E0B")
+                    child.set_facecolor("#6366F1")
 
 
 class QueueHandler(logging.Handler):
@@ -427,7 +427,7 @@ class ImageLibraryStatistics(ttk.Frame):
             fg="#F4F4F5",
             insertbackground="#F4F4F5",
             highlightbackground="#27272A",
-            highlightcolor="#F59E0B",
+            highlightcolor="#6366F1",
             borderwidth=1,
             relief="flat",
         )
@@ -1538,9 +1538,9 @@ class MainApp(tk.Tk):
         style.configure(
             "Splash.Horizontal.TProgressbar",
             troughcolor="#27272A",
-            background="#F59E0B",
-            lightcolor="#F59E0B",
-            darkcolor="#F59E0B",
+            background="#6366F1",
+            lightcolor="#6366F1",
+            darkcolor="#6366F1",
             bordercolor="#27272A",
             thickness=6,
             borderwidth=0,

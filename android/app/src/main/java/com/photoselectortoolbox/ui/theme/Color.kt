@@ -15,11 +15,11 @@ val Zinc800 = Color(0xFF27272A)
 val Zinc900 = Color(0xFF18181B)
 val Zinc950 = Color(0xFF09090B)
 
-// Indigo palette (accent, redefined as Golden Hour Amber)
-val Indigo400 = Color(0xFFFBBF24)
-val Indigo500 = Color(0xFFF59E0B)
-val Indigo600 = Color(0xFFD97706)
-val Indigo700 = Color(0xFFB45309)
+// Indigo palette (accent)
+val Indigo400 = Color(0xFF818CF8)
+val Indigo500 = Color(0xFF6366F1)
+val Indigo600 = Color(0xFF4F46E5)
+val Indigo700 = Color(0xFF4338CA)
 
 // Semantic
 val ErrorRed = Color(0xFFEF4444)

@@ -251,7 +251,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             fg="#F4F4F5",
             insertbackground="#F4F4F5",
             highlightbackground="#27272A",
-            highlightcolor="#F59E0B",
+            highlightcolor="#6366F1",
             borderwidth=1,
             relief="flat"
         )
@@ -421,10 +421,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             selectmode="single",
             bg="#27272A",
             fg="#F4F4F5",
-            selectbackground="#F59E0B",
+            selectbackground="#6366F1",
             selectforeground="#FFFFFF",
             highlightbackground="#27272A",
-            highlightcolor="#F59E0B",
+            highlightcolor="#6366F1",
             borderwidth=1,
             relief="flat"
         )
@@ -683,7 +683,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             fg="#F4F4F5",
             insertbackground="#F4F4F5",
             highlightbackground="#27272A",
-            highlightcolor="#F59E0B",
+            highlightcolor="#6366F1",
             borderwidth=1,
             relief="flat"
         )
