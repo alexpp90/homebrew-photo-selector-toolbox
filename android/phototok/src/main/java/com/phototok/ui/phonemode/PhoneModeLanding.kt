@@ -140,19 +140,11 @@ fun PhoneModeLanding(
             Spacer(modifier = Modifier.height(24.dp))
 
             // ── Hero branding ────────────────────────────────────────
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(colors.primaryContainer.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
-                    contentDescription = "Logo",
-                    modifier = Modifier.size(64.dp),
-                )
-            }
+            Image(
+                painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
+                contentDescription = "Logo",
+                modifier = Modifier.size(120.dp),
+            )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "Photo-Tok",
