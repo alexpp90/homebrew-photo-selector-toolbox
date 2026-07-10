@@ -11,12 +11,43 @@
         android:pivotX="256.0"
         android:pivotY="256.0">
 
-        <!-- Realistic Retro Focus Ring Grip Serrations (Knurled teeth) -->
-        <path
-            android:pathData="M 256,256 m -215,0 a 215,215 0 1,1 430,0 a 215,215 0 1,1 -430,0"
-            android:strokeColor="#3F3F46"
-            android:strokeWidth="16"
-            android:strokeDashArray="6,6" />
+        <!-- Focus Ring Grip Serrations (36 knurled teeth rotated by 10 deg) -->
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="0.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="10.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="20.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="30.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="40.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="50.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="60.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="70.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="80.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="90.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="100.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="110.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="120.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="130.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="140.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="150.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="160.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="170.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="180.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="190.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="200.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="210.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="220.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="230.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="240.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="250.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="260.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="270.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="280.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="290.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="300.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="310.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="320.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="330.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="340.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
+        <group android:pivotX="256.0" android:pivotY="256.0" android:rotation="350.0"><path android:pathData="M 256,33 L 256,49" android:strokeColor="#3F3F46" android:strokeWidth="6" android:strokeLineCap="round" /></group>
 
         <!-- Lens Outer Ring -->
         <path
