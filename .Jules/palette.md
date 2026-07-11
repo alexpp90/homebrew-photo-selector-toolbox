@@ -13,3 +13,7 @@
 ## 2024-05-18 - Discoverability of Global Shortcuts in Desktop App
 **Learning:** Users often miss that actions like Move (M), Copy (C), and Delete (Del) have global keyboard shortcuts unless those shortcuts are explicitly hinted in the corresponding UI button text.
 **Action:** Always append keyboard shortcut hints in parentheses (e.g., "Copy to Selection (C)") directly onto the action buttons themselves.
+
+## 2024-07-11 - Focus Colors in Tkinter Theme Mapping
+**Learning:** Even when `focuscolor` is configured on a `ttk.Style` for a specific widget, it may still not correctly highlight during keyboard navigation in themes like 'clam' unless `focuscolor` is also explicitly mapped using `style.map('Widget', focuscolor=[('focus', color)])`. This was observed on multiple widgets (`TButton`, `Primary.TButton`, `TNotebook.Tab`, `TCombobox`, `TEntry`).
+**Action:** Always verify keyboard accessibility by checking `ttk.Style().map('Widget').get('focuscolor')` and explicitly include `focuscolor` in the `style.map` function alongside other state-driven properties.
