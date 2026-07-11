@@ -34,7 +34,7 @@ When a new feature is requested, the coordinator must evaluate which of the thre
 
 ## Multi-Agent System
 
-This project uses a multi-agent system with **9 specialized subagents** organized into platform groups plus shared consultants. The coordinator (default agent) automatically delegates work to the appropriate subagent based on the task and target solution.
+This project uses a multi-agent system with **10 specialized subagents** organized into platform groups plus shared consultants. The coordinator (default agent) automatically delegates work to the appropriate subagent based on the task and target solution.
 
 ### Agent Roster
 
@@ -61,6 +61,7 @@ This project uses a multi-agent system with **9 specialized subagents** organize
 |-------|-------|-------------|
 | **`@photo_researcher_agent`** | Photographic science, image quality metrics, aesthetics, and requirement elucidation. Consulted by both desktop and Android agents. | `.gemini/agents/photo_researcher_agent.md` |
 | **`@ux_agent`** | Professional design, UX flows, ergonomics, and pattern analysis. Provides solution-specific design guidance (Desktop mouse/keyboard vs. Android Desktop tablet/DeX multi-pane vs. Android Phone portrait/touch-first). | `.gemini/agents/ux_agent.md` |
+| **`@publish_agent`** | Google Play publishing & compliance: `docs/phototok/` (release checklist = single source of truth for open release tasks, privacy policy, Impressum), `LegalLinks.kt`, OAuth scope policy (`drive.file` only), DSA non-trader status, Data Safety answers, target-API deadline watch. | `.gemini/agents/publish_agent.md` |
 
 ### Coordinator Behavior
 
@@ -92,6 +93,7 @@ The coordinator agent (default) handles:
 - Changes to **Android Gradle build files, CI workflow, or ProGuard rules** → `@android_build_agent`
 - Research on **algorithms, raw files, or metadata standards** → `@photo_researcher_agent`
 - Custom **UX mockups, ergonomic analysis, or layout wireframes** → `@ux_agent` (requires target solution context)
+- Changes touching **release/compliance artifacts** (`docs/phototok/`, `LegalLinks.kt`, OAuth scopes, permissions, new network endpoints or SDKs, store metadata) → `@publish_agent` (also consulted as a reviewer whenever a change alters what data the app accesses or transmits)
 
 ### Learned Lessons (`.Jules/`)
 

@@ -24,7 +24,16 @@ class GoogleDriveAuth @Inject constructor(
 ) {
     companion object {
         private const val TAG = "GoogleDriveAuth"
-        private const val SCOPE_DRIVE = "https://www.googleapis.com/auth/drive"
+
+        /**
+         * The ONLY Drive scope this app may request. `drive.file` grants
+         * per-file access to files the user explicitly opened via the Google
+         * Picker plus files/folders the app created itself. It is a
+         * non-restricted ("recommended") scope: no Google restricted-scope
+         * verification or annual CASA security assessment is required to
+         * publish the app. Never add the full `drive` (or `drive.readonly`)
+         * scope back — both are restricted scopes.
+         */
         private const val SCOPE_DRIVE_FILE = "https://www.googleapis.com/auth/drive.file"
     }
 
@@ -37,7 +46,7 @@ class GoogleDriveAuth @Inject constructor(
     private val gso: GoogleSignInOptions by lazy {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-            .requestScopes(Scope(SCOPE_DRIVE), Scope(SCOPE_DRIVE_FILE))
+            .requestScopes(Scope(SCOPE_DRIVE_FILE))
             .build()
     }
 
@@ -101,7 +110,7 @@ class GoogleDriveAuth @Inject constructor(
             val token = com.google.android.gms.auth.GoogleAuthUtil.getToken(
                 context,
                 googleAccount,
-                "oauth2:$SCOPE_DRIVE $SCOPE_DRIVE_FILE"
+                "oauth2:$SCOPE_DRIVE_FILE"
             )
             token
         } catch (e: Exception) {

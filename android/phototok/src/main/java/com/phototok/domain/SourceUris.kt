@@ -7,7 +7,9 @@ package com.phototok.domain
  */
 object SourceUris {
     private const val GDRIVE_PREFIX = "gdrive://"
+    private const val GDRIVE_PICKED_PREFIX = "gdrive-picked://"
 
     /** True when the URI points at a remote (Google Drive) location. */
-    fun isRemote(uri: String?): Boolean = uri?.startsWith(GDRIVE_PREFIX) == true
+    fun isRemote(uri: String?): Boolean =
+        uri?.startsWith(GDRIVE_PREFIX) == true || uri?.startsWith(GDRIVE_PICKED_PREFIX) == true
 }

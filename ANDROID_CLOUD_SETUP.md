@@ -15,10 +15,24 @@ The two apps:
 | `:app` | Photo Selector Toolbox | `com.photoselectortoolbox` |
 | `:phototok` | Photo Tok | `com.phototok` |
 
-**Key constraint you confirmed:** *both* apps need the **same full Google Drive
-read/write access** (the `https://www.googleapis.com/auth/drive` scope). This is a
-Google **restricted scope** and is the single biggest factor in the recommendations
-below.
+**Key constraint you confirmed (since revised for `:phototok`):** originally *both*
+apps needed the **same full Google Drive read/write access** (the
+`https://www.googleapis.com/auth/drive` scope) — a Google **restricted scope** and
+the single biggest factor in the recommendations below.
+
+> **Update (Play Store readiness):** `:phototok` has been refactored to request
+> **only the non-restricted `drive.file` scope**. It no longer browses the user's
+> Drive; users grant access to individual photos through the **Google Picker**
+> (WebView-hosted). Consequences for `:phototok`:
+> - **No restricted-scope verification and no CASA security assessment** are
+>   needed to publish Photo Tok — this removes the recurring annual cost.
+> - The Cloud project needs the **Google Picker API** enabled, plus an **API key**
+>   (exposed to CI/local builds as `PHOTOTOK_PICKER_API_KEY`) and the **project
+>   number** (`PHOTOTOK_GCP_PROJECT_NUMBER`) for the picker's `setAppId`.
+> - The consent screen for `:phototok` lists only `drive.file` + basic
+>   profile/email; it stays out of restricted-scope review entirely.
+> - Statements below about "both apps" needing the restricted `drive` scope now
+>   apply to `:app` (Photo Selector Toolbox) only.
 
 ---
 

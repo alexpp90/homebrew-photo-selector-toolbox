@@ -5,7 +5,7 @@ import android.content.res.Configuration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
-import com.phototok.ui.components.DriveFolderPickerDialog
+import com.phototok.ui.components.DrivePhotoPickerDialog
 import com.phototok.ui.components.ViewerBottomBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.Image
@@ -261,12 +261,13 @@ fun PhoneModeScreen(
         }
     }
 
-    // Google Drive folder picker dialog
+    // Google Drive photo picker (drive.file scope: the user explicitly grants
+    // access to the photos to review; folder browsing is not possible).
     if (showDrivePicker) {
-        DriveFolderPickerDialog(
-            onFolderSelected = { folderId, folderName ->
+        DrivePhotoPickerDialog(
+            onPhotosPicked = { docs ->
                 showDrivePicker = false
-                viewModel.selectDriveFolder(folderId, folderName)
+                viewModel.selectDrivePicked(docs)
             },
             onDismiss = { showDrivePicker = false },
         )
