@@ -10,3 +10,8 @@
 ## 2025-02-18 - Atomic JSON Merging in SQLite Cache
 **Learning:** The previous implementation of `set_scores` and `set_multiple_scores` in `ScoreCache` suffered from N+1 query patterns because it fetched existing JSON records into Python, merged them with `dict.update()`, and then wrote them back. This caused significant database I/O latency, especially for batched cache updates.
 **Action:** Always use SQLite's native `json_patch()` function directly inside the `INSERT ... ON CONFLICT DO UPDATE SET` clause. This allows for atomic merging entirely within the database engine and eliminates the need for any preliminary `SELECT` statements or client-side parsing/serialization, resulting in a ~2-3x speedup on cache writes.
+
+## 2023-10-27 - Parallelize IO/CPU loops
+**Learning:** Sequential loops containing blocking I/O (like reading EXIF via `get_exif_data`) and CPU operations (like dHash) bottleneck UI and background thread performance severely.
+**Action:** Use `concurrent.futures.ThreadPoolExecutor` to parallelize the iteration. Define a pure worker function that returns extracted data, and use `as_completed` in the main loop to safely apply the results to the shared model, preserving GIL/thread safety.
+
