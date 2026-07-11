@@ -202,8 +202,16 @@ Phone Mode (Phone Tok) includes:
 *   **Picture Randomization:** A toggle in settings allows users to randomize the order of pictures shown in the viewer. Enabling this setting shuffles the loaded pictures and overrides orientation-based sorting.
 
 ### 7.4 Touch Interaction Patterns
-*   **Photo Navigation:** Horizontal swipe via HorizontalPager (phone) or tap on prev/next thumbnails (tablet).
-*   **Fullscreen Viewer:** Pinch-to-zoom, double-tap to toggle fit/100%, swipe-down to dismiss, horizontal swipe to navigate.
+*   **Photo Navigation:**
+    - **Tablet / Large Screens:** Tap on prev/next thumbnails or use side controls.
+    - **Phone Client (PhotoTok):** Vertical swipe via `VerticalPager` (up/down) to navigate between images in the feed, and horizontal swipe gestures for keep/discard.
+*   **Fullscreen Viewer / Image Zoom:**
+    - **Tablet / Desktop Fullscreen:** Pinch-to-zoom, double-tap to toggle fit/100%, swipe-down to dismiss, horizontal swipe to navigate.
+    - **Phone Client (PhotoTok):**
+      - Pinch-to-zoom (two fingers) and double-tap zoom (to 2.5x) are supported.
+      - When zoomed in (`scale > 1.05f`), dragging with a single finger pans/moves the image frame, constrained within image boundaries so it does not go off-screen.
+      - While zoomed, normal swipe gestures (vertical paging scroll and horizontal keep/discard swipes) are disabled to prevent conflicts.
+      - Resetting zoom (double-tapping again, or pinch-releasing below the `1.05f` threshold) smoothly animates the scale and offset back to fit-screen size and re-enables swiping mode.
 *   **Selection/Deletion:** Long-press for context menu. Swipe gestures configurable. On the phone client (Phototok), swiping left defaults to a non-blocking temporary deletion where the image is immediately hidden from the viewer and a "Revert Deletion" button is shown. Navigating away from the current image or leaving the viewer finalizes the deletion and deletes the file from disk/Google Drive. Before putting the image into the temporary deletion state, a confirmation dialogue is shown:
     - If trashing is supported (Google Drive files), the **Trash Confirmation** dialog is shown. It includes a "Do not show this dialogue again" checkbox, which toggles the **Trash Confirmation** setting.
     - If trashing is not supported (local files via SAF), the **Direct Delete Confirmation** dialog is shown. It does not have a checkbox in the dialog, but hints that it can be disabled in settings. In settings, this **Direct Delete Confirmation** option is offered with a warning indication.

@@ -1,3 +1,7 @@
+## 2026-07-11 - Jetpack Compose Gesture Conflict Resolution in Scrollable Views
+**Learning:** When implementing custom zoom and pan gestures on an image inside a scrollable parent (like a `VerticalPager` or `HorizontalPager`) and adjacent to drag-triggered swipe actions, standard `pointerInput(Unit)` handlers will conflict unless conditionally intercepted. By checking if the view is zoomed (`scale > 1.05f`) or if there is multi-touch (`pointerCount > 1`), we can selectively consume drag gestures (via `change.consume()`), preventing them from propagating to the pager or sibling drag listeners.
+**Action:** Always selectively consume pointer change events based on the view's current transformation state (`isZoomed`) in scrollable feeds. Use `change.consume()` for single-finger panning when zoomed to prevent accidental page navigation or swipe curation triggers.
+
 ## 2024-05-15 - Tkinter Theming and Accessibility
 **Learning:** In Tkinter using the 'clam' theme via `ttk.Style`, focus states (which provide critical visual feedback for keyboard navigation and screen readers) can be entirely disabled if `focuscolor` is set to an empty string `""` or if state mappings don't account for the `focus` state.
 **Action:** Always explicitly define `focuscolor` (e.g., to an accent color) and map the `focus` state to a visible visual change (like `bordercolor`) when creating or modifying custom `ttk` styles.
