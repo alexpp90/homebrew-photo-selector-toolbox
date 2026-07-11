@@ -13,8 +13,8 @@ def dummy_image_file(tmp_path):
 @pytest.fixture
 def temp_config_dir(tmp_path):
     from photo_selector_toolbox import config
-    from photo_selector_toolbox import ollama_tool
-    import photo_selector_toolbox.sharpness_gui as sg
+
+
     import photo_selector_toolbox.cache as cache
 
     orig_dir = config.CONFIG_DIR
@@ -22,20 +22,12 @@ def temp_config_dir(tmp_path):
 
     config.CONFIG_DIR = tmp_path
     config.CONFIG_FILE = tmp_path / "settings.json"
-    ollama_tool.CONFIG_DIR = config.CONFIG_DIR
-    ollama_tool.CONFIG_FILE = config.CONFIG_FILE
-    sg.CONFIG_DIR = config.CONFIG_DIR
-    sg.CONFIG_FILE = config.CONFIG_FILE
     cache._DEFAULT_DB_PATH = tmp_path / "test_cache.db"
 
     yield tmp_path
 
     config.CONFIG_DIR = orig_dir
     config.CONFIG_FILE = orig_file
-    ollama_tool.CONFIG_DIR = orig_dir
-    ollama_tool.CONFIG_FILE = orig_file
-    sg.CONFIG_DIR = orig_dir
-    sg.CONFIG_FILE = orig_file
     cache._DEFAULT_DB_PATH = None
 
 @patch("urllib.request.urlopen")

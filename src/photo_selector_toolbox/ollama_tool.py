@@ -13,14 +13,7 @@ from typing import Any, Tuple
 from photo_selector_toolbox.tools import AnalysisTool, ToolRegistry
 from photo_selector_toolbox.utils import load_image_preview
 
-# Re-export for backward compatibility — existing code imports from here
-from photo_selector_toolbox.config import (  # noqa: F401
-    CONFIG_DIR,
-    CONFIG_FILE,
-    DEFAULT_CONFIG,
-    load_config,
-    save_config,
-)
+from photo_selector_toolbox.config import DEFAULT_CONFIG, load_config
 
 logger = logging.getLogger(__name__)
 
