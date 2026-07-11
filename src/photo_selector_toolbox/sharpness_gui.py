@@ -1234,7 +1234,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
             if path not in sorted_files_set:
                 return path, None, None, False
-
             res = self.files_map.get(path)
             if not res:
                 return path, None, None, False
@@ -1265,7 +1264,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     else:
                         img = load_image_preview(path, max_size=(150, 150))
                         if img:
-                            dhash_num = calculate_dhash(img, hash_size=8)
                             dhash_update = f"{dhash_num:016x}"
                 except Exception as e:
                     logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
@@ -1677,7 +1675,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     cache.set_multiple_scores(updates)
                 except Exception as e:
                     logger.warning(f"Failed to bulk update cache in grouping: {e}")
-
             self.parent.after(0, lambda: self._handle_grouping_finished(level))
 
         threading.Thread(target=run_calc, daemon=True).start()
