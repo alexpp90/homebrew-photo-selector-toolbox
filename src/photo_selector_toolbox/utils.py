@@ -1,6 +1,8 @@
 import shutil
 import sys
 import os
+import urllib.request
+from urllib.error import URLError
 from urllib.parse import urlparse, unquote
 import logging
 import functools
@@ -636,3 +638,12 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
 
     # Return a copy so the cached original is never mutated
     return img.copy()
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """
+    A custom URL handler that prevents following HTTP redirects.
+    This is critical for preventing SSRF bypasses where an attacker
+    redirects an initially safe request to a prohibited internal IP.
+    """
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise URLError("SSRF Protection: Redirects are not allowed.")
