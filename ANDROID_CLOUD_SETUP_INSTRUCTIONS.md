@@ -32,20 +32,24 @@ Use these names throughout so everything is consistent and self-describing.
 
 ### GitHub repository **secrets** to create
 
-| Secret | Toolbox | Photo Tok |
+| Secret | Toolbox | Photo Tok | Description |
+| --- | --- | --- | --- |
+| Keystore (base64) | `TOOLBOX_KEYSTORE_FILE` | `PHOTOTOK_KEYSTORE_FILE` | Base64-encoded upload keystore |
+| Keystore password | `TOOLBOX_STORE_PASSWORD` | `PHOTOTOK_STORE_PASSWORD` | Keystore store password |
+| Key alias | `TOOLBOX_KEY_ALIAS` | `PHOTOTOK_KEY_ALIAS` | Keystore key alias |
+| Key password | `TOOLBOX_KEY_PASSWORD` | `PHOTOTOK_KEY_PASSWORD` | Keystore key password |
+| Firebase distribution creds | `TOOLBOX_FIREBASE_APP_DISTRIBUTION_CREDENTIALS` | `PHOTOTOK_FIREBASE_APP_DISTRIBUTION_CREDENTIALS` | Firebase Service Account credentials |
+| Play publishing creds | `TOOLBOX_GP_SERVICE_ACCOUNT_JSON` | `PHOTOTOK_GP_SERVICE_ACCOUNT_JSON` | Google Play Console Service Account credentials |
+| Google Picker API Key | - | `PHOTOTOK_PICKER_API_KEY` | Google Cloud API key for WebView Google Picker (optional if using variables) |
+
+### GitHub repository **variables** to create
+
+| Variable | Value | Description |
 | --- | --- | --- |
-| Keystore (base64) | `TOOLBOX_KEYSTORE_FILE` | `PHOTOTOK_KEYSTORE_FILE` |
-| Keystore password | `TOOLBOX_STORE_PASSWORD` | `PHOTOTOK_STORE_PASSWORD` |
-| Key alias | `TOOLBOX_KEY_ALIAS` | `PHOTOTOK_KEY_ALIAS` |
-| Key password | `TOOLBOX_KEY_PASSWORD` | `PHOTOTOK_KEY_PASSWORD` |
-| Firebase distribution creds | `TOOLBOX_FIREBASE_APP_DISTRIBUTION_CREDENTIALS` | `PHOTOTOK_FIREBASE_APP_DISTRIBUTION_CREDENTIALS` |
-| Play publishing creds | `TOOLBOX_GP_SERVICE_ACCOUNT_JSON` | `PHOTOTOK_GP_SERVICE_ACCOUNT_JSON` |
+| `PHOTOTOK_FIREBASE_APP_ID` | the Android App ID from the new `phototok-app` Firebase project (looks like `1:NNN:android:xxxx`) | Firebase App ID |
+| `PHOTOTOK_GCP_PROJECT_NUMBER` | the Google Cloud Project Number (numeric ID) of the project hosting the WebView Google Picker | GCP Project Number (also used as App ID for the picker) |
 
-### GitHub repository **variable** to create
-
-| Variable | Value |
-| --- | --- |
-| `PHOTOTOK_FIREBASE_APP_ID` | the Android App ID from the new `phototok-app` Firebase project (looks like `1:NNN:android:xxxx`) |
+> **Note on Picker Config:** Both `PHOTOTOK_PICKER_API_KEY` and `PHOTOTOK_GCP_PROJECT_NUMBER` can be created as either GitHub Secrets or repository Variables. The CI build workflow handles resolving them from either location. For local builds, you can also place them in `android/local.properties` as `phototok.picker.api.key` and `phototok.gcp.project.number`.
 
 > You can delete the old shared secrets once both apps are migrated:
 > `ANDROID_KEYSTORE_FILE`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`,

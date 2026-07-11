@@ -50,8 +50,8 @@ jobs:
       PHOTOTOK_VERSION_CODE_OFFSET: ${{ vars.PHOTOTOK_VERSION_CODE_OFFSET || 0 }}
       # Google Picker credentials for Photo Tok's drive.file-scoped Drive access
       # (baked into BuildConfig; Drive photo picking is disabled when absent).
-      PHOTOTOK_PICKER_API_KEY: ${{ secrets.PHOTOTOK_PICKER_API_KEY }}
-      PHOTOTOK_GCP_PROJECT_NUMBER: ${{ vars.PHOTOTOK_GCP_PROJECT_NUMBER }}
+      PHOTOTOK_PICKER_API_KEY: ${{ secrets.PHOTOTOK_PICKER_API_KEY || vars.PHOTOTOK_PICKER_API_KEY }}
+      PHOTOTOK_GCP_PROJECT_NUMBER: ${{ secrets.PHOTOTOK_GCP_PROJECT_NUMBER || vars.PHOTOTOK_GCP_PROJECT_NUMBER }}
 
     steps:
       # Re-running a failed workflow reuses github.run_number, so a plain
