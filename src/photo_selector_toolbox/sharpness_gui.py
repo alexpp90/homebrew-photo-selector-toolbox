@@ -1221,8 +1221,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         cached_scores = cache.get_multiple_scores(paths)
         updates = {}
 
-        sorted_files_set = set(self.sorted_files)
-
         for path in paths:
             if self.stop_event.is_set():
                 if updates:
@@ -1232,7 +1230,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         logger.warning(f"Failed to bulk update cache on preload cancel: {e}")
                 break
            # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
-            if path not in sorted_files_set:
+            if path not in self.sorted_files:
                 continue
             res = self.files_map.get(path)
             if not res:
