@@ -15,3 +15,7 @@
 **Learning:** Sequential loops containing blocking I/O (like reading EXIF via `get_exif_data`) and CPU operations (like dHash) bottleneck UI and background thread performance severely.
 **Action:** Use `concurrent.futures.ThreadPoolExecutor` to parallelize the iteration. Define a pure worker function that returns extracted data, and use `as_completed` in the main loop to safely apply the results to the shared model, preserving GIL/thread safety.
 
+## 2024-05-18 - Optimized list containment checks within a loop
+**Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
+**Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
+

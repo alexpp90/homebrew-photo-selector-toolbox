@@ -1225,17 +1225,19 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         cached_scores = cache.get_multiple_scores(paths)
         updates = {}
 
+        sorted_files_set = set(self.sorted_files)
+
         def process_path(path):
             if self.stop_event.is_set():
-                return path, None, None
+                return path, None, None, False
 
             # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
-            if path not in self.sorted_files:
-                return path, None, None
+            if path not in sorted_files_set:
+                return path, None, None, False
 
             res = self.files_map.get(path)
             if not res:
-                return path, None, None
+                return path, None, None, False
 
             exif_res = None
            # 1. Preload EXIF
