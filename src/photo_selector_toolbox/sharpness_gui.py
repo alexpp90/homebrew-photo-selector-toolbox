@@ -26,6 +26,7 @@ from photo_selector_toolbox.utils import (
     group_files_by_similarity,
     select_representative,
     load_image_preview,
+    NoRedirectHandler,
 )
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
 from photo_selector_toolbox.models import ScanResult, ExifData
@@ -741,8 +742,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 except socket.gaierror:
                     pass
 
+                opener = urllib.request.build_opener(NoRedirectHandler)
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
