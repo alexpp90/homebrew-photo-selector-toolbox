@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -31,15 +33,30 @@ android {
         // the non-restricted drive.file scope. Both values come from the app's
         // Google Cloud project (see ANDROID_CLOUD_SETUP.md); Drive access is
         // disabled at runtime when they are missing.
+        val localProperties = Properties().apply {
+            val localPropertiesFile = rootProject.file("local.properties")
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.inputStream().use { load(it) }
+            }
+        }
+        val pickerApiKey = System.getenv("PHOTOTOK_PICKER_API_KEY")
+            ?.takeIf { it.isNotEmpty() }
+            ?: localProperties.getProperty("phototok.picker.api.key")
+            ?: ""
+        val gcpProjectNumber = System.getenv("PHOTOTOK_GCP_PROJECT_NUMBER")
+            ?.takeIf { it.isNotEmpty() }
+            ?: localProperties.getProperty("phototok.gcp.project.number")
+            ?: ""
+
         buildConfigField(
             "String",
             "DRIVE_PICKER_API_KEY",
-            "\"${System.getenv("PHOTOTOK_PICKER_API_KEY") ?: ""}\"",
+            "\"$pickerApiKey\"",
         )
         buildConfigField(
             "String",
             "DRIVE_PICKER_APP_ID",
-            "\"${System.getenv("PHOTOTOK_GCP_PROJECT_NUMBER") ?: ""}\"",
+            "\"$gcpProjectNumber\"",
         )
 
         ndk {
