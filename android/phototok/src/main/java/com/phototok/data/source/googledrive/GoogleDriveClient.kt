@@ -146,13 +146,21 @@ class GoogleDriveClient @Inject constructor(
         images + children.flatten()
     }
 
-    /** List only folders inside a given parent (for the folder picker). */
-    suspend fun listFolders(parentId: String): List<DriveFile> = withContext(Dispatchers.IO) {
+    /**
+     * List every image file the app can access under the `drive.file` scope,
+     * i.e. files the user picked via the Google Picker plus files the app
+     * created itself. There is no parent constraint: under `drive.file` the
+     * Drive API automatically restricts results to app-accessible files.
+     */
+    suspend fun listAccessibleImages(): List<DriveFile> = withContext(Dispatchers.IO) {
         val results = mutableListOf<DriveFile>()
         var pageToken: String? = null
         do {
-            val query = "'$parentId' in parents and mimeType='${DriveFile.MIME_FOLDER}' and trashed=false"
-            val fields = "nextPageToken,files(id,name,mimeType)"
+            val mimeFilter = (IMAGE_MIME_TYPES + "application/octet-stream")
+                .joinToString(" or ") { "mimeType='$it'" }
+            val query = "trashed=false and ($mimeFilter)"
+            val fields = "nextPageToken,files(id,name,mimeType,size,modifiedTime," +
+                "imageMediaMetadata/width,imageMediaMetadata/height)"
 
             val url = buildString {
                 append("$BASE_URL/files?")
@@ -167,11 +175,16 @@ class GoogleDriveClient @Inject constructor(
             val files = json.optJSONArray("files") ?: break
             for (i in 0 until files.length()) {
                 val f = files.getJSONObject(i)
+                val meta = f.optJSONObject("imageMediaMetadata")
                 results.add(
                     DriveFile(
                         id = f.getString("id"),
                         name = f.getString("name"),
                         mimeType = f.getString("mimeType"),
+                        size = f.optLong("size", 0),
+                        modifiedTime = parseRfc3339(f.optString("modifiedTime", "")),
+                        imageWidth = meta?.optInt("width", 0) ?: 0,
+                        imageHeight = meta?.optInt("height", 0) ?: 0,
                     )
                 )
             }
@@ -311,9 +324,24 @@ class GoogleDriveClient @Inject constructor(
         }
     }
 
-    /** Move a file to a different folder (remove old parent, add new parent). */
-    suspend fun moveFile(fileId: String, oldParentId: String, newParentId: String): Boolean {
-        val url = "$BASE_URL/files/$fileId?addParents=$newParentId&removeParents=$oldParentId"
+    /**
+     * Move a file to a different folder: look up the file's actual current
+     * parents and replace them with [newParentId]. (Guessing the old parent is
+     * not possible under `drive.file`, where the app may have file access
+     * without access to the containing folder.)
+     */
+    suspend fun moveFile(fileId: String, newParentId: String): Boolean {
+        val meta = httpGet("$BASE_URL/files/$fileId?fields=parents") ?: return false
+        val parents = meta.optJSONArray("parents")
+        val removeParents = if (parents != null && parents.length() > 0) {
+            (0 until parents.length()).joinToString(",") { parents.getString(it) }
+        } else {
+            null
+        }
+        val url = buildString {
+            append("$BASE_URL/files/$fileId?addParents=$newParentId")
+            if (removeParents != null) append("&removeParents=$removeParents")
+        }
         // Empty JSON body required for PATCH.
         return requestJsonBody("PATCH", url, JSONObject()) != null
     }

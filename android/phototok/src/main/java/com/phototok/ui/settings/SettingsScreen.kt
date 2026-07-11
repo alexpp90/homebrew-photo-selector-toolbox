@@ -22,8 +22,10 @@ import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
@@ -418,6 +420,32 @@ fun SettingsScreen(
                     context.startActivity(intent)
                 },
                 icon = Icons.Default.Code,
+            )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            // Google Play requires the privacy policy to be accessible from
+            // within the app; the Impressum link addresses § 5 DDG (Germany).
+            SettingsClickItem(
+                title = "Privacy Policy",
+                description = "How Photo-Tok handles your data",
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.phototok.domain.LegalLinks.PRIVACY_POLICY))
+                    context.startActivity(intent)
+                },
+                icon = Icons.Default.PrivacyTip,
+            )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            SettingsClickItem(
+                title = "Legal Notice (Impressum)",
+                description = "Provider identification",
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.phototok.domain.LegalLinks.IMPRESSUM))
+                    context.startActivity(intent)
+                },
+                icon = Icons.Default.Gavel,
             )
         }
 

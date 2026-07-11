@@ -11,12 +11,15 @@ import com.phototok.data.model.ExifData
 import com.phototok.data.model.ImageItem
 import com.phototok.data.model.PhoneSettings
 import com.phototok.data.model.RecentPath
+import com.phototok.data.repository.DrivePickedSelection
+import com.phototok.data.repository.DrivePickedStore
 import com.phototok.data.repository.ImageRepository
 import com.phototok.data.repository.SettingsRepository
 import com.phototok.data.source.ExternalStorageDetector
 import com.phototok.data.source.ExternalVolume
 import com.phototok.data.source.googledrive.GoogleDriveAuth
 import com.phototok.data.source.googledrive.GoogleDriveImageSource
+import com.phototok.data.source.googledrive.PickedDriveDoc
 import com.phototok.di.ApplicationScope
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.CopyMoveFeedback
@@ -96,6 +99,7 @@ class PhoneModeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val externalStorageDetector: ExternalStorageDetector,
     private val driveAuth: GoogleDriveAuth,
+    private val drivePickedStore: DrivePickedStore,
     @ApplicationScope private val appScope: CoroutineScope,
 ) : ViewModel() {
 
@@ -231,11 +235,17 @@ class PhoneModeViewModel @Inject constructor(
     /** Re-open a previously used source folder from the recents list. */
     fun selectRecentPath(path: RecentPath) {
         val uri = Uri.parse(path.uri)
-        if (GoogleDriveImageSource.isDriveUri(uri)) {
-            val folderId = GoogleDriveImageSource.extractId(uri) ?: return
-            selectDriveFolder(folderId, path.name.ifEmpty { "Google Drive" })
-        } else {
-            selectSourceFolder(uri)
+        when {
+            GoogleDriveImageSource.isPickedUri(uri) ->
+                selectDriveSource(uri, path.name.ifEmpty { "Drive photos" })
+            GoogleDriveImageSource.isDriveUri(uri) -> {
+                val folderId = GoogleDriveImageSource.extractId(uri) ?: return
+                selectDriveSource(
+                    GoogleDriveImageSource.buildUri(folderId),
+                    path.name.ifEmpty { "Google Drive" },
+                )
+            }
+            else -> selectSourceFolder(uri)
         }
     }
 
@@ -261,8 +271,7 @@ class PhoneModeViewModel @Inject constructor(
         // Google Drive URIs are routed to the Drive loader (single entry-point
         // dispatch; per-image operations are routed inside the data layer).
         if (GoogleDriveImageSource.isDriveUri(uri)) {
-            val folderId = GoogleDriveImageSource.extractId(uri) ?: return
-            selectDriveFolder(folderId, "Google Drive")
+            selectDriveSource(uri, if (GoogleDriveImageSource.isPickedUri(uri)) "Drive photos" else "Google Drive")
             return
         }
         finalizePendingDelete()
@@ -291,9 +300,25 @@ class PhoneModeViewModel @Inject constructor(
         }
     }
 
-    /** Select a Google Drive folder as the source. */
-    fun selectDriveFolder(folderId: String, folderName: String) {
-        val driveUri = GoogleDriveImageSource.buildUri(folderId)
+    /**
+     * Photos were picked in the Google Picker: persist the granted file IDs as
+     * a named selection (needed to re-resolve it later under `drive.file`) and
+     * open it as the source feed.
+     */
+    fun selectDrivePicked(docs: List<PickedDriveDoc>) {
+        if (docs.isEmpty()) return
+        viewModelScope.launch {
+            val key = System.currentTimeMillis().toString()
+            val name = "Drive photos (${docs.size})"
+            drivePickedStore.save(
+                DrivePickedSelection(key = key, name = name, fileIds = docs.map { it.id })
+            )
+            selectDriveSource(GoogleDriveImageSource.buildPickedUri(key), name)
+        }
+    }
+
+    /** Select a Google Drive source (app-created folder or picked selection). */
+    private fun selectDriveSource(driveUri: Uri, sourceName: String) {
         finalizePendingDelete()
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
@@ -302,11 +327,11 @@ class PhoneModeViewModel @Inject constructor(
                     isLoading = true,
                     error = null,
                     sourceFolderUri = driveUri.toString(),
-                    sourceFolderName = folderName,
+                    sourceFolderName = sourceName,
                 )
             }
             settingsRepository.setLastFolderUri(driveUri.toString())
-            settingsRepository.addRecentPath(driveUri.toString(), folderName)
+            settingsRepository.addRecentPath(driveUri.toString(), sourceName)
 
             collectDiscoveredImages(driveUri, restorePosition = false, errorLabel = "Drive images")
         }

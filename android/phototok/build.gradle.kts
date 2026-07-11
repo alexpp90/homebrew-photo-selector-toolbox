@@ -26,6 +26,22 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Google Picker configuration (drive.file scope). The Picker is the only
+        // way users can grant the app access to pre-existing Drive files under
+        // the non-restricted drive.file scope. Both values come from the app's
+        // Google Cloud project (see ANDROID_CLOUD_SETUP.md); Drive access is
+        // disabled at runtime when they are missing.
+        buildConfigField(
+            "String",
+            "DRIVE_PICKER_API_KEY",
+            "\"${System.getenv("PHOTOTOK_PICKER_API_KEY") ?: ""}\"",
+        )
+        buildConfigField(
+            "String",
+            "DRIVE_PICKER_APP_ID",
+            "\"${System.getenv("PHOTOTOK_GCP_PROJECT_NUMBER") ?: ""}\"",
+        )
+
         ndk {
             abiFilters.addAll(setOf("arm64-v8a", "x86_64"))
         }

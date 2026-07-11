@@ -3,16 +3,20 @@ package com.phototok.viewmodel
 import android.net.Uri
 import com.phototok.data.model.ImageItem
 import com.phototok.data.model.PhoneSettings
+import com.phototok.data.repository.DrivePickedSelection
+import com.phototok.data.repository.DrivePickedStore
 import com.phototok.data.repository.ImageRepository
 import com.phototok.data.repository.SettingsRepository
 import com.phototok.data.source.ExternalStorageDetector
 import com.phototok.data.source.googledrive.GoogleDriveAuth
+import com.phototok.data.source.googledrive.PickedDriveDoc
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.SwipeAction
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,6 +77,8 @@ class PhoneModeViewModelTest {
         every { signedInAccount } returns MutableStateFlow(null)
     }
 
+    private val drivePickedStore: DrivePickedStore = mockk(relaxed = true)
+
     private fun image(name: String, modified: Long) = ImageItem(
         uri = "content://photos/$name",
         fileName = name,
@@ -88,6 +94,7 @@ class PhoneModeViewModelTest {
         settingsRepository = settingsRepository,
         externalStorageDetector = externalStorageDetector,
         driveAuth = driveAuth,
+        drivePickedStore = drivePickedStore,
         appScope = CoroutineScope(testDispatcher),
     )
 
@@ -138,6 +145,47 @@ class PhoneModeViewModelTest {
         assertFalse(state.isLoading)
         assertNull(state.error)
         coVerify { settingsRepository.addRecentPath("content://tree/photos", "Photos") }
+    }
+
+    @Test
+    fun `selectDrivePicked persists the granted ids and opens a picked source`() = runTest {
+        every { imageRepository.discoverImages(any()) } returns
+            flowOf(listOf(image("IMG_001.JPG", 1)))
+        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
+        val viewModel = buildViewModel()
+
+        viewModel.selectDrivePicked(
+            listOf(
+                PickedDriveDoc("fileA", "IMG_001.JPG", "image/jpeg", 1, 1),
+                PickedDriveDoc("fileB", "IMG_002.JPG", "image/jpeg", 2, 2),
+            )
+        )
+
+        val savedSelection = slot<DrivePickedSelection>()
+        coVerify { drivePickedStore.save(capture(savedSelection)) }
+        assertEquals(listOf("fileA", "fileB"), savedSelection.captured.fileIds)
+        assertEquals("Drive photos (2)", savedSelection.captured.name)
+
+        val state = viewModel.uiState.value
+        assertEquals("gdrive-picked://${savedSelection.captured.key}", state.sourceFolderUri)
+        assertEquals("Drive photos (2)", state.sourceFolderName)
+        assertEquals(1, state.images.size)
+        coVerify {
+            settingsRepository.addRecentPath(
+                "gdrive-picked://${savedSelection.captured.key}",
+                "Drive photos (2)",
+            )
+        }
+    }
+
+    @Test
+    fun `selectDrivePicked with no docs is a no-op`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.selectDrivePicked(emptyList())
+
+        coVerify(exactly = 0) { drivePickedStore.save(any()) }
+        assertNull(viewModel.uiState.value.sourceFolderUri)
     }
 
     @Test

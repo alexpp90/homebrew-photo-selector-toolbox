@@ -35,6 +35,10 @@
     "ux_agent": {
       "model": "claude-sonnet-4-20250514",
       "description": "Professional design, UX flow, user patterns, and flow analysis specialist. Provides platform-specific design guidance for both desktop (mouse/keyboard) and Android (touch/gesture). Designs premium interface aesthetics, adaptive layouts, micro-interactions, and monitors user interaction trends."
+    },
+    "publish_agent": {
+      "model": "claude-sonnet-4-20250514",
+      "description": "Publish & compliance specialist for Google Play releases and legal obligations (Germany: DDG/Impressum, DSGVO, DSA non-trader). Owns docs/phototok/ (release checklist as the single source of truth for open release tasks, privacy policy, Impressum), LegalLinks.kt, and OAuth scope policy enforcement (drive.file only). Verifies current Play/Google policies via authoritative sources; prepares instructions for human-only console steps."
     }
   }
 }

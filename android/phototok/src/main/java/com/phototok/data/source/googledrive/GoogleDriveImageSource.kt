@@ -10,6 +10,7 @@ import com.phototok.data.reader.AndroidExifReader
 import com.phototok.data.source.ImageSource
 import com.phototok.data.source.LocalImageSourceImpl
 import com.phototok.data.source.SelectionListing
+import com.phototok.domain.PhotoFolders
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -20,28 +21,43 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Google Drive image backend (URIs of the form gdrive://<fileOrFolderId>). */
+/**
+ * Google Drive image backend. Two URI forms are owned by this source:
+ * - `gdrive://<fileOrFolderId>` — a single file, or a folder the app created
+ *   (under the `drive.file` scope only app-created folders are listable).
+ * - `gdrive-picked://<key>` — a set of files the user granted via the Google
+ *   Picker, persisted in [DrivePickedStore].
+ */
 @Singleton
 class GoogleDriveImageSource @Inject constructor(
     @ApplicationContext private val context: Context,
     private val driveClient: GoogleDriveClient,
     private val androidExifReader: AndroidExifReader,
+    private val drivePickedStore: com.phototok.data.repository.DrivePickedStore,
 ) : ImageSource {
 
     companion object {
         private const val TAG = "GoogleDriveImageSource"
         const val SCHEME = "gdrive"
+        const val PICKED_SCHEME = "gdrive-picked"
 
         /** Hard cap for the on-disk Drive download cache. */
         private const val MAX_CACHE_BYTES = 512L * 1024 * 1024
 
         fun buildUri(driveId: String): Uri = Uri.parse("$SCHEME://$driveId")
+        fun buildPickedUri(key: String): Uri = Uri.parse("$PICKED_SCHEME://$key")
         fun extractId(uri: Uri): String? {
             if (uri.scheme != SCHEME) return null
             return uri.host ?: uri.path?.trimStart('/')
         }
-        fun isDriveUri(uri: Uri): Boolean = uri.scheme == SCHEME
-        fun isDriveUri(uriString: String): Boolean = uriString.startsWith("$SCHEME://")
+        fun extractPickedKey(uri: Uri): String? {
+            if (uri.scheme != PICKED_SCHEME) return null
+            return uri.host ?: uri.path?.trimStart('/')
+        }
+        fun isPickedUri(uri: Uri): Boolean = uri.scheme == PICKED_SCHEME
+        fun isDriveUri(uri: Uri): Boolean = uri.scheme == SCHEME || uri.scheme == PICKED_SCHEME
+        fun isDriveUri(uriString: String): Boolean =
+            uriString.startsWith("$SCHEME://") || uriString.startsWith("$PICKED_SCHEME://")
     }
 
     private val cacheDir: File
@@ -52,12 +68,29 @@ class GoogleDriveImageSource @Inject constructor(
     override fun owns(uri: Uri): Boolean = isDriveUri(uri)
 
     override fun discoverImages(folderUri: Uri): Flow<List<ImageItem>> = flow {
-        val folderId = extractId(folderUri)
-        if (folderId == null) {
-            emit(emptyList())
-            return@flow
+        val driveFiles = when {
+            isPickedUri(folderUri) -> {
+                val key = extractPickedKey(folderUri)
+                val selection = key?.let { drivePickedStore.load(it) }
+                if (selection == null) {
+                    emit(emptyList())
+                    return@flow
+                }
+                // Under drive.file the flat listing returns exactly the files the
+                // app can access; intersect with this selection's picked IDs so
+                // other selections and app-created copies stay out of the feed.
+                val pickedIds = selection.fileIds.toSet()
+                driveClient.listAccessibleImages().filter { it.id in pickedIds }
+            }
+            else -> {
+                val folderId = extractId(folderUri)
+                if (folderId == null) {
+                    emit(emptyList())
+                    return@flow
+                }
+                driveClient.listImages(folderId, recursive = true)
+            }
         }
-        val driveFiles = driveClient.listImages(folderId, recursive = true)
         val images = driveFiles
             .filter { !it.isFolder }
             .filter { !it.name.startsWith(".") }
@@ -76,12 +109,21 @@ class GoogleDriveImageSource @Inject constructor(
         emit(images)
     }.flowOn(Dispatchers.IO)
 
-    /** Drive folders need no permission grant; the display name is picker-provided. */
-    override suspend fun prepareSourceFolder(folderUri: Uri): String? =
-        if (extractId(folderUri) != null) "Google Drive" else null
+    /** Drive sources need no permission grant; the display name is picker-provided. */
+    override suspend fun prepareSourceFolder(folderUri: Uri): String? = when {
+        isPickedUri(folderUri) ->
+            extractPickedKey(folderUri)?.let { drivePickedStore.load(it)?.name } ?: "Drive photos"
+        extractId(folderUri) != null -> "Google Drive"
+        else -> null
+    }
 
-    /** Drive folder names are supplied by the picker/recents; nothing to resolve. */
-    override suspend fun resolveFolderName(folderUri: Uri): String? = null
+    /** Picked selections resolve their stored display name; folders are picker-named. */
+    override suspend fun resolveFolderName(folderUri: Uri): String? =
+        if (isPickedUri(folderUri)) {
+            extractPickedKey(folderUri)?.let { drivePickedStore.load(it)?.name }
+        } else {
+            null
+        }
 
     override suspend fun getExifData(uri: Uri): ExifData? {
         val fileId = extractId(uri) ?: return null
@@ -127,14 +169,24 @@ class GoogleDriveImageSource @Inject constructor(
         subfolderName: String,
     ): Boolean {
         val fileId = extractId(sourceUri) ?: return false
-        val destFolderId = extractId(destFolderUri) ?: return false
+        // A picked selection is not a folder — collection actions on picked
+        // sources land in the app-created "PhotoTok" folder in the Drive root
+        // (creating files/folders in the root is allowed under drive.file).
+        val destFolderId = extractId(destFolderUri)
+            ?: driveClient.findOrCreateFolder("root", PhotoFolders.DRIVE_APP_FOLDER)
+            ?: return false
         val targetFolderId = if (sorting) {
             driveClient.findOrCreateFolder(destFolderId, subfolderName) ?: return false
         } else {
             destFolderId
         }
         return if (move) {
-            driveClient.moveFile(fileId, destFolderId, targetFolderId)
+            // Under drive.file, removing the old parent can be rejected when the
+            // app has no access to that parent folder (picked files). Fall back
+            // to copy + trash, which only needs access to the file itself.
+            driveClient.moveFile(fileId, targetFolderId) ||
+                (driveClient.copyFile(fileId, targetFolderId) != null &&
+                    driveClient.trashFile(fileId))
         } else {
             driveClient.copyFile(fileId, targetFolderId) != null
         }

@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed & Fixed
+- **Photo-Tok Google Drive: switched to the non-restricted `drive.file` scope (Play-Store readiness):**
+  - The app no longer requests the restricted full `drive` scope, removing the need for Google restricted-scope verification and the annual CASA security assessment when publishing to Google Play.
+  - The in-app Drive folder browser (`DriveFolderPickerDialog`/`DriveFolderPickerViewModel`) was removed — under `drive.file` the app cannot browse the user's Drive. Users now grant access by multi-selecting photos in the WebView-hosted **Google Picker** (`DrivePhotoPickerDialog` + `DrivePickerViewModel`); folder selection is disabled because a folder grant does not extend to its children under `drive.file`.
+  - Picked photo sets are persisted as named selections (`DrivePickedStore`/`DrivePickedCodec`, capped at 10) and addressed as `gdrive-picked://<key>` source URIs, so they work with recents and last-folder restore. Re-opening a selection intersects the stored IDs with a flat `listAccessibleImages()` listing.
+  - Collection copy/move on picked sources defaults to an app-created `PhotoTok` folder in the Drive root; Drive moves now resolve the file's real parents via the API (previously the destination folder was wrongly assumed to be the old parent) and fall back to copy + trash when a move is rejected.
+  - Picker credentials come from `BuildConfig` (`PHOTOTOK_PICKER_API_KEY`, `PHOTOTOK_GCP_PROJECT_NUMBER` env vars); without them, Drive photo picking is disabled with an explanatory error instead of a crash.
+- **Photo-Tok Play-Store compliance groundwork:**
+  - Added bilingual privacy policy and Impressum pages (`docs/phototok/*.html`, personal-data placeholders to fill in) plus a step-by-step release checklist with Data Safety form answers (`docs/phototok/PLAY_RELEASE_CHECKLIST.md`).
+  - Settings screen now links "Privacy Policy" and "Legal Notice (Impressum)" (URLs centralized in `com.phototok.domain.LegalLinks`), satisfying Play's in-app privacy-policy requirement and § 5 DDG.
 - **Photo-Tok Architecture Refactor:**
   - Introduced an `ImageSource` abstraction (local SAF + Google Drive) with a single resolver; all URI-scheme dispatch now lives in the data layer and `ImageRepository` no longer takes `Context` parameters. Cross-source copy/move is rejected explicitly.
   - Split `PhoneModeViewModel`: the read-only selection viewer moved to `SelectionViewerViewModel` (folder traversal moved into the local image source), and the Drive folder picker to `DriveFolderPickerViewModel`; Compose no longer receives `GoogleDriveClient`/`GoogleDriveAuth` objects (sign-in state is part of the UI state).
