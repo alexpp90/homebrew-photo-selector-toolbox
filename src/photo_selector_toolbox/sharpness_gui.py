@@ -18,7 +18,7 @@ from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.formatting import format_score, format_meta
-from photo_selector_toolbox.ollama_tool import load_config, save_config
+from photo_selector_toolbox.config import load_config, save_config
 from photo_selector_toolbox.utils import (
     is_excluded_subfolder,
     get_excluded_folder_names,
@@ -26,6 +26,7 @@ from photo_selector_toolbox.utils import (
     group_files_by_similarity,
     select_representative,
     load_image_preview,
+    NoRedirectHandler,
 )
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
 from photo_selector_toolbox.models import ScanResult, ExifData
@@ -741,8 +742,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 except socket.gaierror:
                     pass
 
+                opener = urllib.request.build_opener(NoRedirectHandler)
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
@@ -1214,6 +1216,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             ).start()
 
     def _preload_all_metadata_and_dhashes(self, paths):
+        import concurrent.futures
+        import os
         from photo_selector_toolbox.cache import ScoreCache
         cache = ScoreCache()
 
@@ -1221,53 +1225,82 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         cached_scores = cache.get_multiple_scores(paths)
         updates = {}
 
-        for path in paths:
+        sorted_files_set = set(self.sorted_files)
+
+        def process_path(path):
             if self.stop_event.is_set():
-                if updates:
-                    try:
-                        cache.set_multiple_scores(updates)
-                    except Exception as e:
-                        logger.warning(f"Failed to bulk update cache on preload cancel: {e}")
-                break
-           # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
-            if path not in self.sorted_files:
-                continue
+                return path, None, None, False
+
+            # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
+            if path not in sorted_files_set:
+                return path, None, None, False
             res = self.files_map.get(path)
             if not res:
-                continue
+                return path, None, None, False
 
+            exif_res = None
            # 1. Preload EXIF
             if res.exif is None:
                 try:
                     exif = get_exif_data(path)
                     if exif and type(exif).__name__ == "ExifData":
-                        res.exif = exif
+                        exif_res = exif
                     else:
-                        res.exif = ExifData()
+                        exif_res = ExifData()
                 except Exception:
-                    res.exif = ExifData()
+                    exif_res = ExifData()
 
+            dhash_update = None
            # 2. Preload/Calculate dHash
+            dhash_was_cached = False
             if "dhash_8" not in res.scores:
                 try:
                    # Check cache first
                     cached = cached_scores.get(path, {})
                     dhash_val = cached.get("dhash_8") or cached.get("dhash")
                     if dhash_val is not None:
-                        res.scores["dhash_8"] = dhash_val
-                        res.scores["dhash"] = dhash_val
+                        dhash_update = dhash_val
+                        dhash_was_cached = True
                     else:
                         img = load_image_preview(path, max_size=(150, 150))
                         if img:
                             dhash_num = calculate_dhash(img, hash_size=8)
-                            dhash_str = f"{dhash_num:016x}"
-                            res.scores["dhash_8"] = dhash_str
-                            res.scores["dhash"] = dhash_str
-                            updates.setdefault(path, {})["dhash_8"] = dhash_str
+                            dhash_update = f"{dhash_num:016x}"
                 except Exception as e:
                     logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
 
-        if updates:
+            return path, exif_res, dhash_update, dhash_was_cached
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
+            futures = [executor.submit(process_path, p) for p in paths]
+            for future in concurrent.futures.as_completed(futures):
+                if self.stop_event.is_set():
+                    if updates:
+                        try:
+                            cache.set_multiple_scores(updates)
+                        except Exception as e:
+                            logger.warning(f"Failed to bulk update cache on preload cancel: {e}")
+                    for f in futures:
+                        f.cancel()
+                    break
+
+                try:
+                    path, exif_res, dhash_update, dhash_was_cached = future.result()
+
+                    if exif_res is not None or dhash_update is not None:
+                        res = self.files_map.get(path)
+                        if res:
+                            if exif_res is not None:
+                                res.exif = exif_res
+                            if dhash_update is not None:
+                                res.scores["dhash_8"] = dhash_update
+                                res.scores["dhash"] = dhash_update
+                                if not dhash_was_cached:
+                                    updates.setdefault(path, {})["dhash_8"] = dhash_update
+                except Exception as e:
+                    logger.debug(f"Failed to process preload future: {e}")
+
+        if updates and not self.stop_event.is_set():
             try:
                 cache.set_multiple_scores(updates)
             except Exception as e:
@@ -1643,7 +1676,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     cache.set_multiple_scores(updates)
                 except Exception as e:
                     logger.warning(f"Failed to bulk update cache in grouping: {e}")
-
             self.parent.after(0, lambda: self._handle_grouping_finished(level))
 
         threading.Thread(target=run_calc, daemon=True).start()

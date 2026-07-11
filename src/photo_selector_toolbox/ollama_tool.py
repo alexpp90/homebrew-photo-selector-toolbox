@@ -11,16 +11,9 @@ from typing import Any, Tuple
 
 
 from photo_selector_toolbox.tools import AnalysisTool, ToolRegistry
-from photo_selector_toolbox.utils import load_image_preview
+from photo_selector_toolbox.utils import load_image_preview, NoRedirectHandler
 
-# Re-export for backward compatibility — existing code imports from here
-from photo_selector_toolbox.config import (  # noqa: F401
-    CONFIG_DIR,
-    CONFIG_FILE,
-    DEFAULT_CONFIG,
-    load_config,
-    save_config,
-)
+from photo_selector_toolbox.config import DEFAULT_CONFIG, load_config
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +105,7 @@ class OllamaAestheticTool(AnalysisTool):
         }
 
         try:
+            opener = urllib.request.build_opener(NoRedirectHandler)
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
@@ -120,7 +114,7 @@ class OllamaAestheticTool(AnalysisTool):
             )
             # Serialize requests to avoid overloading local Ollama server
             with self._lock:
-                with urllib.request.urlopen(req, timeout=60) as response:
+                with opener.open(req, timeout=60) as response:
                     res_data = json.loads(response.read().decode("utf-8"))
                     response_text = res_data.get("response", "")
         except URLError as e:

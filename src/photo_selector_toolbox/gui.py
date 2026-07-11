@@ -37,7 +37,7 @@ from photo_selector_toolbox.visualizer import (
 )
 from photo_selector_toolbox.duplicates import find_duplicates, move_to_trash
 from photo_selector_toolbox.sharpness_gui import SharpnessTool
-from photo_selector_toolbox.ollama_tool import load_config, save_config
+from photo_selector_toolbox.config import load_config, save_config
 from photo_selector_toolbox.cache import ScoreCache
 
 
@@ -100,6 +100,7 @@ def _configure_container_styles(style: ttk.Style, colors: ThemeColors) -> None:
         foreground=[("selected", colors.accent_blue), ("active", colors.fg_light)],
         lightcolor=[("focus", colors.accent_blue)],
         darkcolor=[("focus", colors.accent_blue)],
+        focuscolor=[("focus", colors.accent_blue)],
     )
 
     style.configure(
@@ -153,6 +154,7 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
         background=[("active", colors.bg_hover), ("disabled", colors.bg_dark)],
         foreground=[("active", colors.fg_light), ("disabled", colors.fg_muted)],
         bordercolor=[("focus", colors.accent_blue)],
+        focuscolor=[("focus", colors.accent_blue)],
     )
 
     style.configure(
@@ -169,6 +171,7 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
         background=[("active", colors.accent_hover), ("disabled", colors.bg_dark)],
         foreground=[("active", "#FFFFFF"), ("disabled", colors.fg_muted)],
         bordercolor=[("focus", "#FFFFFF")],
+        focuscolor=[("focus", "#FFFFFF")],
     )
 
     style.configure(
@@ -200,6 +203,7 @@ def _configure_input_styles(style: ttk.Style, colors: ThemeColors) -> None:
         bordercolor=[("focus", colors.accent_blue)],
         lightcolor=[("focus", colors.accent_blue)],
         darkcolor=[("focus", colors.accent_blue)],
+        focuscolor=[("focus", colors.accent_blue)],
     )
 
     style.configure(
@@ -225,6 +229,7 @@ def _configure_input_styles(style: ttk.Style, colors: ThemeColors) -> None:
         bordercolor=[("focus", colors.accent_blue)],
         lightcolor=[("focus", colors.accent_blue)],
         darkcolor=[("focus", colors.accent_blue)],
+        focuscolor=[("focus", colors.accent_blue)],
     )
 
 
