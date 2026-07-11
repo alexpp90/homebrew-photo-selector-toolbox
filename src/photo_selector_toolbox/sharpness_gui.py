@@ -743,7 +743,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
                 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
                     def redirect_request(self, req, fp, code, msg, headers, newurl):
-                        raise urllib.error.HTTPError(req.full_url, code, msg + " - Redirects are blocked for SSRF protection", headers, fp)
+                        raise urllib.error.HTTPError(
+                            req.full_url,
+                            code,
+                            msg + " - Redirects are blocked for SSRF protection",
+                            headers,
+                            fp
+                        )
 
                 opener = urllib.request.build_opener(NoRedirectHandler())
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")

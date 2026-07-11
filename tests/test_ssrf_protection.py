@@ -52,7 +52,9 @@ def test_ollama_tool_blocks_metadata_ip(mock_opener_open, dummy_image_file, temp
 
 @patch("urllib.request.OpenerDirector.open")
 @patch("socket.getaddrinfo")
-def test_ollama_tool_blocks_metadata_ip_hex_bypass(mock_getaddrinfo, mock_opener_open, dummy_image_file, temp_config_dir):
+def test_ollama_tool_blocks_metadata_ip_hex_bypass(
+    mock_getaddrinfo, mock_opener_open, dummy_image_file, temp_config_dir
+):
     import socket
     # Simulate a successful resolution of the hex IP to the metadata IP, overriding OS-specific behaviors
     mock_getaddrinfo.return_value = [
