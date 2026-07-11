@@ -1264,6 +1264,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     else:
                         img = load_image_preview(path, max_size=(150, 150))
                         if img:
+                            dhash_num = calculate_dhash(img, hash_size=8)
                             dhash_update = f"{dhash_num:016x}"
                 except Exception as e:
                     logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
