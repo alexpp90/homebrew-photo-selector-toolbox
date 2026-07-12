@@ -18,7 +18,7 @@ from photo_selector_toolbox.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.formatting import format_score, format_meta
-from photo_selector_toolbox.config import load_config, save_config
+from photo_selector_toolbox.ollama_tool import load_config, save_config
 from photo_selector_toolbox.utils import (
     is_excluded_subfolder,
     get_excluded_folder_names,
@@ -26,7 +26,6 @@ from photo_selector_toolbox.utils import (
     group_files_by_similarity,
     select_representative,
     load_image_preview,
-    NoRedirectHandler,
 )
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
 from photo_selector_toolbox.models import ScanResult, ExifData
@@ -108,8 +107,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.bind_all("<M>", self.on_move_key)
         self.bind_all("<c>", self.on_copy_key)
         self.bind_all("<C>", self.on_copy_key)
-        self.bind_all("<f>", self.on_f_key)
-        self.bind_all("<F>", self.on_f_key)
 
     def _resolve_widget(self, widget_val):
         if isinstance(widget_val, str):
@@ -203,17 +200,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
             return
         self.copy_current_to_selection()
-
-    def on_f_key(self, event):
-        widget = self._resolve_widget(event.widget)
-        if not widget or widget.winfo_toplevel() != self.winfo_toplevel():
-            return
-        # Don't trigger if user is typing in a text entry
-        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
-            return
-        if self.notebook.select() != str(self.review_frame) and not self.focus_mode:
-            return
-        self.toggle_focus_mode()
 
     def setup_ui(self):
 
@@ -473,12 +459,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         btn_frame.pack(pady=10, fill="x")
 
         self.prev_btn = ttk.Button(
-            btn_frame, text="◀ Prev (Left)", command=self.prev_candidate
+            btn_frame, text="◀ Prev", command=self.prev_candidate
         )
         self.prev_btn.pack(side="top", fill="x", pady=2)
 
         self.next_btn = ttk.Button(
-            btn_frame, text="Next ▶ (Right)", command=self.next_candidate
+            btn_frame, text="Next ▶", command=self.next_candidate
         )
         self.next_btn.pack(side="top", fill="x", pady=2)
 
@@ -508,7 +494,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
 
         self.focus_toggle_btn = ttk.Button(
-            btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
+            btn_frame, text="⛶ Focus Mode", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
 
@@ -713,38 +699,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     raise ValueError("URL must start with http:// or https://")
 
                 from urllib.parse import urlparse
-                import socket
-                import ipaddress
-
                 hostname = urlparse(url).hostname or ""
-                clean_hostname = hostname.strip("[]")
-
-                def is_forbidden_ip(ip_str):
-                    try:
-                        ip_obj = ipaddress.ip_address(ip_str)
-                        if ip_obj.is_link_local:
-                            return True
-                        if getattr(ip_obj, "ipv4_mapped", None) and ip_obj.ipv4_mapped.is_link_local:
-                            return True
-                        return False
-                    except ValueError:
-                        return False
-
-                if is_forbidden_ip(clean_hostname):
+                if hostname == "169.254.169.254" or hostname.startswith("169.254."):
                     raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
 
-                try:
-                    addr_info = socket.getaddrinfo(clean_hostname, None)
-                    for res in addr_info:
-                        ip_str = res[4][0]
-                        if is_forbidden_ip(ip_str):
-                            raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
-                except socket.gaierror:
-                    pass
-
-                opener = urllib.request.build_opener(NoRedirectHandler)
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
-                with opener.open(req, timeout=2.0) as resp:
+                with urllib.request.urlopen(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
                     models = [m["name"] for m in models_list]
@@ -950,7 +910,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
        # Controls Stack
         self.focus_exit_btn = ttk.Button(
             self.focus_right_panel,
-            text="🔙 Exit Focus Mode (F/Esc)",
+            text="🔙 Exit Focus Mode",
             command=self.toggle_focus_mode,
         )
         self.focus_exit_btn.pack(side="top", pady=10, fill="x")
@@ -961,12 +921,12 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
        # Navigation & Actions
         self.focus_prev_btn = ttk.Button(
-            self.focus_right_panel, text="◀ Previous (Left)", command=self.prev_candidate
+            self.focus_right_panel, text="◀ Previous", command=self.prev_candidate
         )
         self.focus_prev_btn.pack(side="top", pady=5, fill="x")
 
         self.focus_next_btn = ttk.Button(
-            self.focus_right_panel, text="Next ▶ (Right)", command=self.next_candidate
+            self.focus_right_panel, text="Next ▶", command=self.next_candidate
         )
         self.focus_next_btn.pack(side="top", pady=5, fill="x")
 
@@ -1216,95 +1176,52 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             ).start()
 
     def _preload_all_metadata_and_dhashes(self, paths):
-        import concurrent.futures
-        import os
         from photo_selector_toolbox.cache import ScoreCache
         cache = ScoreCache()
 
         # Batch fetch all cached scores for paths to prevent N+1 query bottleneck
         cached_scores = cache.get_multiple_scores(paths)
-        updates = {}
 
-        sorted_files_set = set(self.sorted_files)
-
-        def process_path(path):
+        for path in paths:
             if self.stop_event.is_set():
-                return path, None, None, False
-
-            # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
-            if path not in sorted_files_set:
-                return path, None, None, False
+                break
+           # Check if this thread's path list is still relevant (i.e. still in the active sorted_files)
+            if path not in self.sorted_files:
+                continue
             res = self.files_map.get(path)
             if not res:
-                return path, None, None, False
+                continue
 
-            exif_res = None
            # 1. Preload EXIF
             if res.exif is None:
                 try:
                     exif = get_exif_data(path)
                     if exif and type(exif).__name__ == "ExifData":
-                        exif_res = exif
+                        res.exif = exif
                     else:
-                        exif_res = ExifData()
+                        res.exif = ExifData()
                 except Exception:
-                    exif_res = ExifData()
+                    res.exif = ExifData()
 
-            dhash_update = None
            # 2. Preload/Calculate dHash
-            dhash_was_cached = False
             if "dhash_8" not in res.scores:
                 try:
                    # Check cache first
                     cached = cached_scores.get(path, {})
                     dhash_val = cached.get("dhash_8") or cached.get("dhash")
                     if dhash_val is not None:
-                        dhash_update = dhash_val
-                        dhash_was_cached = True
+                        res.scores["dhash_8"] = dhash_val
+                        res.scores["dhash"] = dhash_val
                     else:
                         img = load_image_preview(path, max_size=(150, 150))
                         if img:
                             dhash_num = calculate_dhash(img, hash_size=8)
-                            dhash_update = f"{dhash_num:016x}"
+                            dhash_str = f"{dhash_num:016x}"
+                            res.scores["dhash_8"] = dhash_str
+                            res.scores["dhash"] = dhash_str
+                            cache.set_scores(path, {"dhash_8": dhash_str})
                 except Exception as e:
                     logger.debug(f"Failed to calculate dhash in background for {path.name}: {e}")
-
-            return path, exif_res, dhash_update, dhash_was_cached
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
-            futures = [executor.submit(process_path, p) for p in paths]
-            for future in concurrent.futures.as_completed(futures):
-                if self.stop_event.is_set():
-                    if updates:
-                        try:
-                            cache.set_multiple_scores(updates)
-                        except Exception as e:
-                            logger.warning(f"Failed to bulk update cache on preload cancel: {e}")
-                    for f in futures:
-                        f.cancel()
-                    break
-
-                try:
-                    path, exif_res, dhash_update, dhash_was_cached = future.result()
-
-                    if exif_res is not None or dhash_update is not None:
-                        res = self.files_map.get(path)
-                        if res:
-                            if exif_res is not None:
-                                res.exif = exif_res
-                            if dhash_update is not None:
-                                res.scores["dhash_8"] = dhash_update
-                                res.scores["dhash"] = dhash_update
-                                if not dhash_was_cached:
-                                    updates.setdefault(path, {})["dhash_8"] = dhash_update
-                except Exception as e:
-                    logger.debug(f"Failed to process preload future: {e}")
-
-        if updates and not self.stop_event.is_set():
-            try:
-                cache.set_multiple_scores(updates)
-            except Exception as e:
-                logger.warning(f"Failed to bulk update cache in background: {e}")
 
     def _start_background_update_scan(self):
        # Stop previous background updates
@@ -1625,15 +1542,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             # Batch fetch all cached scores for missing paths to prevent N+1 query bottleneck
             cached_scores = cache.get_multiple_scores(missing)
-            updates = {}
 
             for idx, path in enumerate(missing):
                 if self.grouping_stop_event.is_set():
-                    if updates:
-                        try:
-                            cache.set_multiple_scores(updates)
-                        except Exception as e:
-                            logger.warning(f"Failed to bulk update cache on grouping cancel: {e}")
                     self.parent.after(0, self._handle_grouping_cancelled)
                     return
                 try:
@@ -1651,7 +1562,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             dhash_num = calculate_dhash(img, hash_size=hash_size)
                             format_str = f"0{hash_size*hash_size//4}x"
                             dhash_str = format(dhash_num, format_str)
-                            updates.setdefault(path, {})[hash_key] = dhash_str
+                            cache.set_scores(path, {hash_key: dhash_str})
                         else:
                             dhash_str = None
 
@@ -1671,11 +1582,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     )
                 )
 
-            if updates:
-                try:
-                    cache.set_multiple_scores(updates)
-                except Exception as e:
-                    logger.warning(f"Failed to bulk update cache in grouping: {e}")
             self.parent.after(0, lambda: self._handle_grouping_finished(level))
 
         threading.Thread(target=run_calc, daemon=True).start()

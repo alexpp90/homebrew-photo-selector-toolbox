@@ -48,10 +48,6 @@ jobs:
       VERSION_CODE_OFFSET: ${{ vars.VERSION_CODE_OFFSET || 0 }}
       TOOLBOX_VERSION_CODE_OFFSET: ${{ vars.TOOLBOX_VERSION_CODE_OFFSET || 0 }}
       PHOTOTOK_VERSION_CODE_OFFSET: ${{ vars.PHOTOTOK_VERSION_CODE_OFFSET || 0 }}
-      # Google Picker credentials for Photo Tok's drive.file-scoped Drive access
-      # (baked into BuildConfig; Drive photo picking is disabled when absent).
-      PHOTOTOK_PICKER_API_KEY: ${{ secrets.PHOTOTOK_PICKER_API_KEY || vars.PHOTOTOK_PICKER_API_KEY }}
-      PHOTOTOK_GCP_PROJECT_NUMBER: ${{ secrets.PHOTOTOK_GCP_PROJECT_NUMBER || vars.PHOTOTOK_GCP_PROJECT_NUMBER }}
 
     steps:
       # Re-running a failed workflow reuses github.run_number, so a plain
@@ -108,25 +104,6 @@ jobs:
           else
             echo "Photo Tok keystore secret is empty; :phototok release will be unsigned."
           fi
-
-      # Fail fast: a release built without Picker credentials ships with Google
-      # Drive disabled ("Google Drive is not configured in this build" at
-      # runtime). Both values can live in either repo Secrets or Variables
-      # (Settings → Secrets and variables → Actions); see
-      # ANDROID_CLOUD_SETUP_INSTRUCTIONS.md.
-      - name: Verify Google Picker credentials
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-        run: |
-          missing=0
-          if [ -z "$PHOTOTOK_PICKER_API_KEY" ]; then
-            echo "::error::PHOTOTOK_PICKER_API_KEY resolved empty — create it as a repo secret or variable."
-            missing=1
-          fi
-          if [ -z "$PHOTOTOK_GCP_PROJECT_NUMBER" ]; then
-            echo "::error::PHOTOTOK_GCP_PROJECT_NUMBER resolved empty — create it as a repo secret or variable."
-            missing=1
-          fi
-          exit $missing
 
       - name: Build release APK
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))

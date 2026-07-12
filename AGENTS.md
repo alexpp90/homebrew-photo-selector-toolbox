@@ -8,10 +8,7 @@ Welcome to the Photo Selector Toolbox project. When modifying this codebase, you
 4. **Testing Context:** Review the testing and headless execution requirements in `REQUIREMENTS.md` (e.g., using `xvfb-run`) when running tests or debugging GUI components.
 5. **Write Proper Tests:** For every new feature, bug fix, or logic modification, you MUST write or update corresponding automated tests (unit tests or integration tests) to ensure that the code behaves exactly as expected. Tests must be executed and verify correctness before completing the task.
 6. **No Scratch Files in the Repo:** Never commit temporary or working artifacts (e.g., `scratch*.py`, `pr_desc.txt`, lint/analysis report dumps, debug scripts). Keep them outside the repository or rely on `.gitignore`. Benchmarks belong in `benchmarks/`, never in the repository root.
-7. **Single Source of Truth for Agent Scopes:** The per-agent config files in `.agents/*.md` are canonical for each agent's detailed scope and instructions (`.claude/agents/` and `.agents/` are symlinks to them — never edit through the symlinks' summaries elsewhere). The tables below are a routing summary only — when an agent's scope changes, update the config file first, then this summary and `.gemini/settings.json` in the same change.
-8. **Mandatory Task Lifecycle:** Every task, in every tool, starts and ends with the lifecycle defined in `.skills/self_improvement/SKILL.md` — pre-work reads (requirements, lessons, agent config) and a post-work retrospective (tests, requirements sync, lesson capture, refactoring backlog, framework-drift fixes). This is not optional.
-
-Full framework documentation: [`docs/AGENT_FRAMEWORK.md`](docs/AGENT_FRAMEWORK.md).
+7. **Single Source of Truth for Agent Scopes:** The per-agent config files in `.gemini/agents/*.md` are canonical for each agent's detailed scope and instructions. The tables below are a routing summary only — when an agent's scope changes, update the config file first, then this summary and `.gemini/settings.json` in the same change.
 
 ## Three Independent Solutions
 
@@ -37,7 +34,7 @@ When a new feature is requested, the coordinator must evaluate which of the thre
 
 ## Multi-Agent System
 
-This project uses a multi-agent system with **12 specialized subagents** organized into platform groups plus shared consultants. The coordinator (default agent) automatically delegates work to the appropriate subagent based on the task and target solution.
+This project uses a multi-agent system with **9 specialized subagents** organized into platform groups plus shared consultants. The coordinator (default agent) automatically delegates work to the appropriate subagent based on the task and target solution.
 
 ### Agent Roster
 
@@ -45,28 +42,25 @@ This project uses a multi-agent system with **12 specialized subagents** organiz
 
 | Agent | Scope | Config File |
 |-------|-------|-------------|
-| **`@backend_agent`** | Core Python logic: `reader.py`, `readers/`, `analyzer.py`, `sharpness.py`, `duplicates.py`, `utils.py`, `formatting.py`, `models.py`, `cli.py`, `visualizer.py`, `tools.py`, `ollama_tool.py`, `cache.py`, `config.py` | `.agents/backend_agent.md` |
-| **`@gui_agent`** | Tkinter GUI: `gui.py`, `sharpness_gui.py`, `controllers.py`, `image_panels.py`, `fullscreen_viewer.py`, `gui_utils.py` | `.agents/gui_agent.md` |
-| **`@test_agent`** | Desktop testing: `tests/` (incl. `tests/visual/`), `benchmarks/` | `.agents/test_agent.md` |
-| **`@build_agent`** | Desktop build & CI: `scripts/`, desktop GitHub workflows (`build.yml`, `test-python.yml`, `requirements-check.yml`), `Formula/`, `Casks/`, `pyproject.toml` | `.agents/build_agent.md` |
+| **`@backend_agent`** | Core Python logic: `reader.py`, `analyzer.py`, `sharpness.py`, `duplicates.py`, `utils.py`, `formatting.py`, `models.py`, `cli.py`, `visualizer.py` | `.gemini/agents/backend_agent.md` |
+| **`@gui_agent`** | Tkinter GUI: `gui.py`, `sharpness_gui.py`, `controllers.py`, `image_panels.py`, `fullscreen_viewer.py` | `.gemini/agents/gui_agent.md` |
+| **`@test_agent`** | Desktop testing: `tests/`, `benchmarks/` | `.gemini/agents/test_agent.md` |
+| **`@build_agent`** | Desktop build & CI: `scripts/`, `.github/workflows/`, `pyproject.toml` | `.gemini/agents/build_agent.md` |
 
 #### Android Agents (Kotlin/Compose)
 
 | Agent | Scope | Config File |
 |-------|-------|-------------|
-| **`@android_ui_agent`** | Jetpack Compose UI: All files under `android/app/src/main/.../ui/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/ui/` (Android Phone) | `.agents/android_ui_agent.md` |
-| **`@android_core_agent`** | Android data & domain layers: `android/app/src/main/.../data/`, `android/app/src/main/.../domain/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/data/`, `android/phototok/src/main/java/com/phototok/viewmodel/` (Android Phone) | `.agents/android_core_agent.md` |
-| **`@android_build_agent`** | Android build: `android/build.gradle.kts`, `android/app/build.gradle.kts`, `android/phototok/build.gradle.kts`, `android/settings.gradle.kts`, `android/gradle/`, GitHub Actions Android workflows, ProGuard/R8 | `.agents/android_build_agent.md` |
+| **`@android_ui_agent`** | Jetpack Compose UI: All files under `android/app/src/main/.../ui/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/ui/` (Android Phone) | `.gemini/agents/android_ui_agent.md` |
+| **`@android_core_agent`** | Android data & domain layers: `android/app/src/main/.../data/`, `android/app/src/main/.../domain/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/data/`, `android/phototok/src/main/java/com/phototok/viewmodel/` (Android Phone) | `.gemini/agents/android_core_agent.md` |
+| **`@android_build_agent`** | Android build: `android/build.gradle.kts`, `android/app/build.gradle.kts`, `android/phototok/build.gradle.kts`, `android/settings.gradle.kts`, `android/gradle/`, GitHub Actions Android workflows, ProGuard/R8 | `.gemini/agents/android_build_agent.md` |
 
 #### Shared Consultant Agents (Cross-Platform)
 
 | Agent | Scope | Config File |
 |-------|-------|-------------|
-| **`@photo_researcher_agent`** | Photographic science, image quality metrics, aesthetics, and requirement elucidation. Consulted by both desktop and Android agents. | `.agents/photo_researcher_agent.md` |
-| **`@ux_agent`** | Professional design, UX flows, ergonomics, and pattern analysis. Provides solution-specific design guidance (Desktop mouse/keyboard vs. Android Desktop tablet/DeX multi-pane vs. Android Phone portrait/touch-first). | `.agents/ux_agent.md` |
-| **`@publish_agent`** | Google Play publishing & compliance: `docs/phototok/` (release checklist = single source of truth for open release tasks, privacy policy, Impressum), `LegalLinks.kt`, OAuth scope policy (`drive.file` only), DSA non-trader status, Data Safety answers, target-API deadline watch. | `.agents/publish_agent.md` |
-| **`@code_health_agent`** | Continuous improvement: refactoring backlog (`.Jules/code_health.md`), post-task retrospectives, pattern enforcement, and keeping the agent framework itself up to date (`.agents/`, `.skills/`). | `.agents/code_health_agent.md` |
-| **`@mentor_agent`** | Reflection mentor & memory gatekeeper: reviews candidate lessons/playbooks at end of task with fresh eyes, dedupes against existing memory, decides what gets memorized where. All `.Jules/` and playbook writes go through this gate. | `.agents/mentor_agent.md` |
+| **`@photo_researcher_agent`** | Photographic science, image quality metrics, aesthetics, and requirement elucidation. Consulted by both desktop and Android agents. | `.gemini/agents/photo_researcher_agent.md` |
+| **`@ux_agent`** | Professional design, UX flows, ergonomics, and pattern analysis. Provides solution-specific design guidance (Desktop mouse/keyboard vs. Android Desktop tablet/DeX multi-pane vs. Android Phone portrait/touch-first). | `.gemini/agents/ux_agent.md` |
 
 ### Coordinator Behavior
 
@@ -98,25 +92,17 @@ The coordinator agent (default) handles:
 - Changes to **Android Gradle build files, CI workflow, or ProGuard rules** → `@android_build_agent`
 - Research on **algorithms, raw files, or metadata standards** → `@photo_researcher_agent`
 - Custom **UX mockups, ergonomic analysis, or layout wireframes** → `@ux_agent` (requires target solution context)
-- Changes touching **release/compliance artifacts** (`docs/phototok/`, `LegalLinks.kt`, OAuth scopes, permissions, new network endpoints or SDKs, store metadata) → `@publish_agent` (also consulted as a reviewer whenever a change alters what data the app accesses or transmits)
-- **Refactoring, tech-debt reduction, retro follow-ups, or agent-framework maintenance** → `@code_health_agent` (implements small refactorings itself; hands larger ones to the owning specialist and reviews)
-- **End-of-task reflection and anything to memorize** (`.Jules/` lessons, playbooks) → `@mentor_agent` (mandatory gate — see `.skills/self_improvement/SKILL.md` Phase 2, step 3)
-
-### Learned Lessons (`.Jules/`)
-
-The `.Jules/` directory is the project's persistent memory of hard-won lessons. Read the relevant file before working in a related area, and append a new entry (same format: date, Learning/Vulnerability, Action/Prevention) when you learn something non-obvious that future agents should know:
-
-- `.Jules/bolt.md` — Performance (e.g., avoiding `pathlib`/`lru_cache` overhead in hot file loops, single-pass metadata extraction).
-- `.Jules/palette.md` — UI & accessibility (e.g., Tkinter 'clam' theme focus-state pitfalls, keyboard shortcut discoverability).
-- `.Jules/sentinel.md` — Security (e.g., zip/tar slip prevention on `extractall`, SMB URL path traversal, `posixpath.normpath` for URLs).
-- `.Jules/code_health.md` — Refactoring backlog and structural lessons (owned by `@code_health_agent`; any agent appends candidates found mid-task).
 
 ### Shared Skills
 
-Skills live in `.skills/` (symlinked into `.claude/skills/` and `.gemini/skills/`):
-
-- `.skills/self_improvement/SKILL.md` — the **mandatory task lifecycle** (pre-work reads, post-work retrospective). Runs on every task.
-- `.skills/playbook_*/SKILL.md` — **learned playbooks**: efficient step-by-step procedures for recurring task types, created and improved by the retrospective (template: `.skills/playbook_TEMPLATE/`). Check for a matching playbook before starting a task; improve it after.
-- `.skills/refactoring_guide/SKILL.md` — the **refactoring guide**, documenting the project's established patterns: centralized constants, controller/view separation, thread pool sizing, image loading safety (RGB conversion), the EXIF data contract, and error handling conventions. Read it before any refactoring work.
+All agents have access to the **refactoring guide** skill at `.gemini/skills/refactoring_guide/SKILL.md`. This documents the project's established patterns:
+- Centralized constants
+- Controller/View separation
+- Thread pool sizing
+- Image loading safety (RGB conversion)
+- EXIF data contract
+- Error handling conventions
 
 Android agents should also read `ANDROID_DESIGN.md` for Android-specific architectural decisions, adaptive layout strategies, and platform constraints.
+
+Agents should read the relevant skill before performing refactoring work.

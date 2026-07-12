@@ -208,15 +208,6 @@ fun SettingsScreen(
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
-            SettingsToggleItem(
-                title = "Trash Confirmation",
-                description = "Ask before moving files to trash",
-                checked = uiState.trashConfirmEnabled,
-                onCheckedChange = { viewModel.updateTrashConfirm(it) },
-            )
-
-            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
-
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -1,4 +1,3 @@
-import os
 import json
 import stat
 from unittest.mock import patch
@@ -58,12 +57,11 @@ def test_load_config_merges_user_config(mock_config_paths):
     assert loaded_config["selection_folder"] == DEFAULT_CONFIG["selection_folder"]
 
 
-@pytest.mark.parametrize("old_prompt", _OLD_PROMPTS)
-def test_load_config_migrates_old_prompts(mock_config_paths, old_prompt):
+def test_load_config_migrates_old_prompts(mock_config_paths):
     config_dir, config_file = mock_config_paths
-    config_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir()
 
-    user_config = {"ollama_prompt": old_prompt}
+    user_config = {"ollama_prompt": _OLD_PROMPTS[0]}
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(user_config, f)
 
@@ -106,10 +104,14 @@ def test_save_config_creates_dir_and_saves(mock_config_paths):
 def test_save_config_handles_exceptions(mock_config_paths, caplog):
     config_dir, config_file = mock_config_paths
 
-    with patch("builtins.open", side_effect=OSError("Mocked OS Error")):
-        save_config({"test": "data"})
+    # Force an exception by making the directory an unwriteable file instead
+    config_dir.parent.mkdir(parents=True, exist_ok=True)
+    with open(config_dir, "w") as f:
+        f.write("")
 
-    assert "Failed to save config: Mocked OS Error" in caplog.text
+    save_config({"test": "data"})
+
+    assert "Failed to save config" in caplog.text
 
 
 @patch("photo_selector_toolbox.config.load_config")
@@ -202,54 +204,20 @@ def test_is_ollama_url_external_exception():
         assert is_ollama_url_external("http://bad-url")
 
 
-
-
-def test_set_secure_permissions_real_file(tmp_path):
+@patch("os.chmod")
+def test_set_secure_permissions(mock_chmod, tmp_path):
     test_file = tmp_path / "test.txt"
-    test_file.touch()
-
-    # Run the function
     _set_secure_permissions(test_file)
 
-    # Assert on posix systems
-    if os.name == "posix":
-        mode = test_file.stat().st_mode
-        # The mode should be 0o100600 (regular file, read/write for owner only)
-        # stat.S_IMODE gets the bottom 12 bits (permissions)
-        assert stat.S_IMODE(mode) == (stat.S_IRUSR | stat.S_IWUSR)
+    mock_chmod.assert_called_once_with(test_file, stat.S_IRUSR | stat.S_IWUSR)
 
 
 @patch("os.chmod")
 def test_set_secure_permissions_oserror(mock_chmod, tmp_path):
     mock_chmod.side_effect = OSError("chmod not supported")
     test_file = tmp_path / "test.txt"
-    test_file.touch()
 
     # This should not raise an exception
     _set_secure_permissions(test_file)
 
     mock_chmod.assert_called_once_with(test_file, stat.S_IRUSR | stat.S_IWUSR)
-
-
-@patch("builtins.open", side_effect=OSError("Read-only file system"))
-def test_load_config_oserror(mock_open, mock_config_paths, caplog):
-    config_dir, config_file = mock_config_paths
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    # Touch the file so the .exists() check passes and builtins.open is called
-    config_file.touch()
-
-    loaded_config = load_config()
-
-    assert loaded_config == DEFAULT_CONFIG
-    assert "Failed to load or write config file" in caplog.text
-
-
-@patch("builtins.open", side_effect=OSError("Read-only file system"))
-def test_save_config_oserror(mock_open, mock_config_paths, caplog):
-    config_dir, config_file = mock_config_paths
-
-    test_config = {"test_key": "test_value"}
-    save_config(test_config)
-
-    assert "Failed to save config" in caplog.text

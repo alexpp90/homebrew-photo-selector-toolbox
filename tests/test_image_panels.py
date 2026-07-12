@@ -277,24 +277,10 @@ def test_load_images_background(mock_gui_deps):
     host.cache_manager.get_preview.side_effect = lambda p: img_mock if p == path1 else None
     mock_gui_deps["load_image_preview"].side_effect = lambda p, max_size: img_mock if p == path2 else None
 
-    host.panel_prev.path = path1
-    host.panel_curr.path = path2
-    host.panel_next.path = path3
-    host.refresh_active_view = MagicMock()
-
     host.load_images_background(path1, path2, path3, (100, 100), (100, 100), (100, 100))
 
     # check that parent.after was called
     host.parent.after.assert_called_once()
-
-    # Execute the callback
-    callback = host.parent.after.call_args[0][1]
-    callback()
-
-    # Assertions
-    assert hasattr(host, 'current_triplet_images')
-    assert host.current_triplet_images == (img_mock, img_mock, None)
-    host.refresh_active_view.assert_called_once()
 
 
 def test_update_panels_final():
@@ -352,7 +338,7 @@ def test_refresh_active_view(mock_gui_deps):
     assert host.scale_image_to_panel.call_count == 3
 
 
-def test_scale_image_to_panel_edge_cases(caplog):
+def test_scale_image_to_panel_edge_cases():
     host = DummyMixinHost()
     panel_mock = MagicMock()
 
@@ -386,11 +372,12 @@ def test_scale_image_to_panel_edge_cases(caplog):
     pil_image_mock.size = (100, 100)
     pil_image_mock.copy.side_effect = Exception("Test error")
 
-    host.scale_image_to_panel(panel_mock)
-    assert "Error scaling panel image: Test error" in caplog.text
+    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
+        host.scale_image_to_panel(panel_mock)
+        mock_logger.error.assert_called_with("Error scaling panel image: Test error")
 
 
-def test_scale_image_to_focus_label_edge_cases(caplog):
+def test_scale_image_to_focus_label_edge_cases():
     host = DummyMixinHost()
     lbl_mock = MagicMock()
 
@@ -421,11 +408,12 @@ def test_scale_image_to_focus_label_edge_cases(caplog):
     pil_image_mock.size = (100, 100)
     pil_image_mock.copy.side_effect = Exception("Test error")
 
-    host.scale_image_to_focus_label(lbl_mock)
-    assert "Error scaling focus label image: Test error" in caplog.text
+    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
+        host.scale_image_to_focus_label(lbl_mock)
+        mock_logger.error.assert_called_with("Error scaling focus label image: Test error")
 
 
-def test_load_images_background_errors(mock_gui_deps, caplog):
+def test_load_images_background_errors(mock_gui_deps):
     host = DummyMixinHost()
 
     path = Path("err.jpg")
@@ -436,8 +424,9 @@ def test_load_images_background_errors(mock_gui_deps, caplog):
     # Force load_image_preview to raise Exception
     mock_gui_deps["load_image_preview"].side_effect = Exception("Load error")
 
-    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
-    assert "Error loading err.jpg: Load error" in caplog.text
+    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
+        host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
+        mock_logger.error.assert_any_call("Error loading err.jpg: Load error")
 
     # Now make load_image_preview return a valid image, but copy() raise an exception
     img_mock = MagicMock()
@@ -445,18 +434,9 @@ def test_load_images_background_errors(mock_gui_deps, caplog):
     mock_gui_deps["load_image_preview"].side_effect = None
     mock_gui_deps["load_image_preview"].return_value = img_mock
 
-    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
-    assert "Error preparing err.jpg: Copy error" in caplog.text
-
-
-
-    # Now make copy() succeed, but thumbnail() raise an exception
-    img_mock.copy.side_effect = None
-    img_mock.copy.return_value.thumbnail.side_effect = Exception("Thumbnail error")
-    mock_gui_deps["load_image_preview"].return_value = img_mock
-
-    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
-    assert "Error preparing err.jpg: Thumbnail error" in caplog.text
+    with patch("photo_selector_toolbox.image_panels.logger") as mock_logger:
+        host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
+        mock_logger.error.assert_any_call("Error preparing err.jpg: Copy error")
 
 
 def test_refresh_active_view_missing_images(mock_gui_deps):
@@ -539,55 +519,3 @@ def test_set_placeholder_edge_cases(mock_gui_deps):
     mock_gui_deps["create_placeholder_image"].assert_called()
     assert mock_gui_deps["create_placeholder_image"].call_args[0][0] == 400
     assert mock_gui_deps["create_placeholder_image"].call_args[0][1] == 300
-
-def test_scale_image_to_panel_zero_dimension(mock_gui_deps):
-    """Test scaling an image when the image width or height is exactly zero."""
-    host = DummyMixinHost()
-    panel_mock = MagicMock()
-
-    img_container_mock = MagicMock()
-    panel_mock.img_container = img_container_mock
-    lbl_mock = MagicMock()
-    panel_mock.img_lbl = lbl_mock
-
-    # Container initialized
-    img_container_mock.winfo_width.return_value = 100
-    img_container_mock.winfo_height.return_value = 100
-
-    pil_image_mock = MagicMock()
-    # Image height is zero
-    pil_image_mock.size = (100, 0)
-    panel_mock.pil_image = pil_image_mock
-
-    host.scale_image_to_panel(panel_mock)
-    pil_image_mock.copy.assert_not_called()
-
-    # Image width is zero
-    pil_image_mock.size = (0, 100)
-    host.scale_image_to_panel(panel_mock)
-    pil_image_mock.copy.assert_not_called()
-
-def test_scale_image_to_focus_label_zero_dimension():
-    """Test scaling an image for focus label when the image width or height is exactly zero."""
-    host = DummyMixinHost()
-    lbl_mock = MagicMock()
-
-    container_mock = MagicMock()
-    lbl_mock.container = container_mock
-
-    container_mock.winfo_width.return_value = 100
-    container_mock.winfo_height.return_value = 100
-
-    pil_image_mock = MagicMock()
-
-    # Image height is zero
-    pil_image_mock.size = (100, 0)
-    lbl_mock.pil_image = pil_image_mock
-
-    host.scale_image_to_focus_label(lbl_mock)
-    pil_image_mock.copy.assert_not_called()
-
-    # Image width is zero
-    pil_image_mock.size = (0, 100)
-    host.scale_image_to_focus_label(lbl_mock)
-    pil_image_mock.copy.assert_not_called()

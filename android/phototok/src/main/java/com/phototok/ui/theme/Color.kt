@@ -4,16 +4,16 @@ import androidx.compose.ui.graphics.Color
 
 // ── M3 Tonal Palette (from design mockups) ──────────────────────────────
 
-// Primary (Golden Hour Theme)
-val PtPrimary = Color(0xFFFBBF24)         // Amber 400
-val PtPrimaryContainer = Color(0xFFF97316)  // Sunset Orange 500
-val PtOnPrimary = Color(0xFF451A03)         // Very dark brown
-val PtOnPrimaryContainer = Color(0xFFFEF3C7) // Very light amber
-val PtPrimaryFixed = Color(0xFFFEF3C7)
-val PtPrimaryFixedDim = Color(0xFFFDE68A)
-val PtOnPrimaryFixed = Color(0xFF78350F)
-val PtOnPrimaryFixedVariant = Color(0xFF92400E)
-val PtInversePrimary = Color(0xFFD97706)
+// Primary
+val PtPrimary = Color(0xFFC0C1FF)
+val PtPrimaryContainer = Color(0xFF8083FF)
+val PtOnPrimary = Color(0xFF1000A9)
+val PtOnPrimaryContainer = Color(0xFF0D0096)
+val PtPrimaryFixed = Color(0xFFE1E0FF)
+val PtPrimaryFixedDim = Color(0xFFC0C1FF)
+val PtOnPrimaryFixed = Color(0xFF07006C)
+val PtOnPrimaryFixedVariant = Color(0xFF2F2EBE)
+val PtInversePrimary = Color(0xFF494BD6)
 
 // Secondary
 val PtSecondary = Color(0xFFC8C6C9)
@@ -41,7 +41,7 @@ val PtSurfaceContainer = Color(0xFF1F1F22)
 val PtSurfaceContainerHigh = Color(0xFF2A2A2D)
 val PtSurfaceContainerHighest = Color(0xFF353438)
 val PtSurfaceVariant = Color(0xFF353438)
-val PtSurfaceTint = PtPrimary
+val PtSurfaceTint = Color(0xFFC0C1FF)
 val PtOnSurface = Color(0xFFE4E1E6)
 val PtOnSurfaceVariant = Color(0xFFC7C4D7)
 val PtInverseSurface = Color(0xFFE4E1E6)
@@ -73,7 +73,7 @@ val Indigo500 = PtPrimary
 @Deprecated("Use MaterialTheme.colorScheme.primaryContainer", ReplaceWith("PtPrimaryContainer"))
 val Indigo600 = PtPrimaryContainer
 @Deprecated("Use PtPrimary", ReplaceWith("PtPrimary"))
-val Indigo400 = Color(0xFFFDE68A)
+val Indigo400 = Color(0xFF818CF8)
 @Deprecated("Use PtInversePrimary", ReplaceWith("PtInversePrimary"))
 val Indigo700 = PtInversePrimary
 

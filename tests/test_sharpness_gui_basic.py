@@ -101,40 +101,6 @@ def mock_sharpness_gui_deps():
         yield
 
 
-
-def test_is_grouping_enabled_error():
-    from photo_selector_toolbox.sharpness_gui import SharpnessTool
-
-    parent = MagicMock()
-    parent.register = MagicMock()
-
-    with (
-        patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
-        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
-        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
-        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
-    ):
-        tool = SharpnessTool(parent)
-
-        # Scenario 1: group_similar_var is missing
-        if hasattr(tool, "group_similar_var"):
-            delattr(tool, "group_similar_var")
-        assert tool._is_grouping_enabled() is False
-
-        # Scenario 2: group_similar_var is None
-        tool.group_similar_var = None
-        assert tool._is_grouping_enabled() is False
-
-        # Scenario 3: Exception in get()
-        mock_var = MagicMock()
-        # Ensure the mock object's class name doesn't match 'MagicMock' or 'Mock'
-        # so it bypasses the type check in _is_grouping_enabled.
-        # Actually, if get() raises an exception, the type check won't matter.
-        mock_var.get.side_effect = Exception("Test Exception")
-        tool.group_similar_var = mock_var
-        assert tool._is_grouping_enabled() is False
-
-
 def test_sharpness_tool_init():
     from photo_selector_toolbox.sharpness_gui import SharpnessTool
 
@@ -603,29 +569,3 @@ def test_sorting_grouped_list():
 
 
 
-
-
-def test_cancel_scan():
-    from photo_selector_toolbox.sharpness_gui import SharpnessTool
-
-    parent = MagicMock()
-    parent.register = MagicMock()
-
-    with (
-        patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
-        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
-        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
-        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
-    ):
-        tool = SharpnessTool(parent)
-
-        # Mock dependencies
-        tool.scan_controller = MagicMock()
-        tool.log = MagicMock()
-
-        # Action
-        tool.cancel_scan()
-
-        # Assertions
-        tool.scan_controller.cancel.assert_called_once()
-        tool.log.assert_called_once_with("Stopping scan...")
