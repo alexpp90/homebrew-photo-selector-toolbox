@@ -1,40 +1,40 @@
 {
   "agents": {
     "backend_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "Backend logic specialist for core Python modules (reader, analyzer, sharpness, duplicates, utils, formatting, models, cli, visualizer). No GUI/Tkinter code."
     },
     "gui_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "GUI/Tkinter specialist for gui.py, sharpness_gui.py, controllers.py, image_panels.py, and fullscreen_viewer.py. Handles layout, threading, event handling, and ImageTk constraints."
     },
     "test_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "Testing specialist for the tests/ directory. Writes, organizes, and runs pytest tests with proper mocking patterns."
     },
     "build_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "Build/CI specialist for scripts/, .github/workflows/, and pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing."
     },
     "android_ui_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "Android Jetpack Compose UI specialist for all files under android/app/src/main/.../ui/. Handles Material 3 theming, adaptive layouts (phone/tablet/DeX), navigation, gesture handling, and ViewModels."
     },
     "android_core_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "Android data and domain layer specialist for android/app/src/main/.../data/ and .../domain/. Handles EXIF extraction (AndroidX ExifInterface), image analysis algorithms (OpenCV Android), Room database, repositories, and coroutine-based async processing."
     },
     "android_build_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "Android build specialist for android/build.gradle.kts, android/app/build.gradle.kts, gradle/, and .github/workflows/build-android.yml. Handles Gradle, dependency management, R8, signing, and Android CI/CD."
     },
     "photo_researcher_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "Photo technical and artistic research specialist. Consulted by both desktop and Android agents when requirements are vague, requiring deep domain knowledge in photography, metadata standards, image quality metrics, or color science."
     },
     "ux_agent": {
-      "model": "claude-sonnet-4-20250514",
       "description": "Professional design, UX flow, user patterns, and flow analysis specialist. Provides platform-specific design guidance for both desktop (mouse/keyboard) and Android (touch/gesture). Designs premium interface aesthetics, adaptive layouts, micro-interactions, and monitors user interaction trends."
+    },
+    "publish_agent": {
+      "description": "Publish & compliance specialist for Google Play releases and legal obligations (Germany: DDG/Impressum, DSGVO, DSA non-trader). Owns docs/phototok/ (release checklist as the single source of truth for open release tasks, privacy policy, Impressum), LegalLinks.kt, and OAuth scope policy enforcement (drive.file only). Verifies current Play/Google policies via authoritative sources; prepares instructions for human-only console steps."
+    },
+    "code_health_agent": {
+      "description": "Code health and continuous-improvement specialist: refactoring backlog (.Jules/code_health.md), post-task retrospectives, pattern enforcement, and agent-framework maintenance. Use proactively after feature work."
+    },
+    "mentor_agent": {
+      "description": "Reflection mentor and memory gatekeeper. Consult at end of every task: reviews candidate .Jules/ lessons and playbook changes with fresh eyes, dedupes against existing memory, decides what gets memorized where."
     }
   }
 }

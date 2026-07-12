@@ -1,0 +1,5 @@
+MANDATORY TASK LIFECYCLE (Photo Selector Toolbox — see .skills/self_improvement/SKILL.md):
+
+BEFORE any work: (1) read the relevant REQUIREMENTS.md sections; (2) read the matching .Jules/ lesson file (bolt=perf, palette=UI/a11y, sentinel=security, code_health=refactoring); (3) check .skills/ for a playbook_* skill matching the task type and follow it; (4) identify the target solution (Desktop src/, Android Desktop android/app/, Android Phone android/phototok/) and never leak code between them; (5) delegate to the matching subagent from .claude/agents/.
+
+AFTER any work, run the retrospective before finalizing: tests written+passing; REQUIREMENTS.md updated if behavior changed; non-obvious lessons appended to the matching .Jules/ file (dated Learning/Action format); consult mentor_agent subagent before writing any memory (it gates .Jules/ and playbook writes); unfixed debt filed in .Jules/code_health.md; stale agent/skill instructions fixed in .agents/ or .skills/; recurring task type -> create/improve .skills/playbook_<task>/SKILL.md (efficiency memory); no scratch files committed.

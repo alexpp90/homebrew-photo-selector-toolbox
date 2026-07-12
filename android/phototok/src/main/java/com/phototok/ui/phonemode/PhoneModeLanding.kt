@@ -28,6 +28,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -57,14 +58,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** Source type the user can pick on the landing screen. */
-enum class SourceType { Local, SdCard }
+enum class SourceType { Local, SdCard, GoogleDrive }
 
 /**
- * Redesigned landing screen: hero branding, source grid,
+ * Redesigned landing screen: hero branding, 3-column source grid,
  * pill filter chips, and prominent CTA.
- *
- * Cloud storage (e.g. Google Drive) is reached through the same SAF folder
- * picker as local folders: document providers expose it in the picker UI.
  */
 @Composable
 fun PhoneModeLanding(
@@ -77,6 +75,8 @@ fun PhoneModeLanding(
     onStart: () -> Unit,
     externalVolumes: List<com.phototok.data.source.ExternalVolume> = emptyList(),
     onBrowseExternalVolume: (String) -> Unit = {},
+    onOpenGoogleDrive: () -> Unit = {},
+    isGoogleDriveSignedIn: Boolean = false,
     recentPaths: List<com.phototok.data.model.RecentPath> = emptyList(),
     recentPathsEnabled: Boolean = true,
     recentPathsCount: Int = 3,
@@ -91,9 +91,10 @@ fun PhoneModeLanding(
         mutableStateOf(
             when {
                 sourceFolderUri == null -> SourceType.Local
+                com.phototok.domain.SourceUris.isRemote(sourceFolderUri) -> SourceType.GoogleDrive
                 else -> {
                     val isSdCard = externalVolumes.any { vol ->
-                        sourceFolderUri.contains(vol.path) ||
+                        sourceFolderUri.contains(vol.path) || 
                         (Uri.parse(sourceFolderUri).path?.contains(vol.path) == true)
                     }
                     if (isSdCard) SourceType.SdCard else SourceType.Local
@@ -252,6 +253,16 @@ fun PhoneModeLanding(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                SourceCard(
+                    icon = Icons.Default.Cloud,
+                    label = "Google Drive",
+                    isActive = selectedSource == SourceType.GoogleDrive,
+                    onClick = {
+                        selectedSource = SourceType.GoogleDrive
+                        onOpenGoogleDrive()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             }
 
             if (hasSourceFolder && sourceFolderName.isNotEmpty()) {
@@ -382,6 +393,7 @@ private fun RecentPathRow(
     onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val isDrive = com.phototok.domain.SourceUris.isRemote(recent.uri)
 
     Surface(
         modifier = Modifier
@@ -398,7 +410,7 @@ private fun RecentPathRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.History,
+                imageVector = if (isDrive) Icons.Default.Cloud else Icons.Default.History,
                 contentDescription = null,
                 tint = colors.primary,
                 modifier = Modifier.size(20.dp),

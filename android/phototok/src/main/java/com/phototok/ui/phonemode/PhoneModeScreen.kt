@@ -4,7 +4,10 @@ import android.net.Uri
 import android.content.res.Configuration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
+import com.phototok.ui.components.DrivePhotoPickerDialog
 import com.phototok.ui.components.ViewerBottomBar
+import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.background
@@ -97,16 +100,28 @@ fun PhoneModeScreen(
     }
 
     var showSettingsSheet by remember { mutableStateOf(false) }
+    var showDrivePicker by remember { mutableStateOf(false) }
+    var showTrashConfirmDialog by remember { mutableStateOf(false) }
     var showDirectDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var dontShowAgainChecked by remember { mutableStateOf(false) }
 
     val performDeleteSwipe = {
         if (uiState.leftSwipeAction == SwipeAction.DELETE) {
             val currentImage = uiState.images.getOrNull(uiState.currentIndex)
             if (currentImage != null) {
-                if (uiState.directDeleteConfirmEnabled) {
-                    showDirectDeleteConfirmDialog = true
+                if (currentImage.isRemote) {
+                    if (uiState.trashConfirmEnabled) {
+                        dontShowAgainChecked = false
+                        showTrashConfirmDialog = true
+                    } else {
+                        viewModel.requestDelete()
+                    }
                 } else {
-                    viewModel.requestDelete()
+                    if (uiState.directDeleteConfirmEnabled) {
+                        showDirectDeleteConfirmDialog = true
+                    } else {
+                        viewModel.requestDelete()
+                    }
                 }
             }
         } else {
@@ -116,6 +131,13 @@ fun PhoneModeScreen(
 
     val isViewing = uiState.images.isNotEmpty()
     val isViewingSelection = selectionState.isOpen
+
+    // Google Sign-In launcher (result parsing/errors handled by the ViewModel)
+    val googleSignInLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
+        if (viewModel.handleDriveSignIn(result.data)) {
+            showDrivePicker = true
+        }
+    }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -145,7 +167,50 @@ fun PhoneModeScreen(
         }
     }
 
-    // Direct Delete Confirmation Dialog
+    // Dialogue 1: Trash Confirmation Dialog
+    if (showTrashConfirmDialog) {
+        val currentImage = uiState.images.getOrNull(uiState.currentIndex)
+        AlertDialog(
+            onDismissRequest = { showTrashConfirmDialog = false },
+            title = { Text("Move to Trash") },
+            text = {
+                Column {
+                    Text("Are you sure you want to move \"${currentImage?.fileName ?: ""}\" to the trash?")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { dontShowAgainChecked = !dontShowAgainChecked }
+                    ) {
+                        Checkbox(
+                            checked = dontShowAgainChecked,
+                            onCheckedChange = { dontShowAgainChecked = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Do not show this dialogue again", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTrashConfirmDialog = false
+                    if (dontShowAgainChecked) {
+                        viewModel.updateTrashConfirm(false)
+                    }
+                    viewModel.requestDelete()
+                }) {
+                    Text("Move to Trash", color = colors.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTrashConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = colors.surfaceContainerHigh,
+        )
+    }
+
+    // Dialogue 2: Direct Delete Confirmation Dialog (trash unsupported)
     if (showDirectDeleteConfirmDialog) {
         val currentImage = uiState.images.getOrNull(uiState.currentIndex)
         AlertDialog(
@@ -194,6 +259,18 @@ fun PhoneModeScreen(
                 },
             )
         }
+    }
+
+    // Google Drive photo picker (drive.file scope: the user explicitly grants
+    // access to the photos to review; folder browsing is not possible).
+    if (showDrivePicker) {
+        DrivePhotoPickerDialog(
+            onPhotosPicked = { docs ->
+                showDrivePicker = false
+                viewModel.selectDrivePicked(docs)
+            },
+            onDismiss = { showDrivePicker = false },
+        )
     }
 
     val configuration = LocalConfiguration.current
@@ -385,6 +462,14 @@ fun PhoneModeScreen(
                     onBrowseExternalVolume = { path ->
                         folderPickerLauncher.launch(Uri.parse(path))
                     },
+                    onOpenGoogleDrive = {
+                        if (uiState.isDriveSignedIn) {
+                            showDrivePicker = true
+                        } else {
+                            googleSignInLauncher.launch(viewModel.driveSignInIntent())
+                        }
+                    },
+                    isGoogleDriveSignedIn = uiState.isDriveSignedIn,
                     recentPaths = uiState.recentPaths,
                     recentPathsEnabled = uiState.recentPathsEnabled,
                     recentPathsCount = uiState.recentPathsCount,

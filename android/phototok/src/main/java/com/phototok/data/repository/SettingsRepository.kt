@@ -39,6 +39,7 @@ class SettingsRepository @Inject constructor(
         private val KEY_COLLECTION_URI = stringPreferencesKey("collection_uri")
         private val KEY_LEFT_SWIPE_ACTION = stringPreferencesKey("left_swipe_action")
         private val KEY_LEFT_SWIPE_URI = stringPreferencesKey("left_swipe_uri")
+        private val KEY_TRASH_CONFIRM = booleanPreferencesKey("trash_confirm")
         private val KEY_DIRECT_DELETE_CONFIRM = booleanPreferencesKey("direct_delete_confirm")
         private val KEY_SORT_BY_ORIENTATION = booleanPreferencesKey("sort_by_orientation")
         private val KEY_RANDOMIZE_ORDER = booleanPreferencesKey("randomize_order")
@@ -61,6 +62,7 @@ class SettingsRepository @Inject constructor(
          */
         internal fun phoneSettingsOf(prefs: Preferences): PhoneSettings = PhoneSettings(
             collectionAction = CollectionAction.fromKey(prefs[KEY_COLLECTION_ACTION]),
+            trashConfirmEnabled = prefs[KEY_TRASH_CONFIRM] ?: true,
             directDeleteConfirmEnabled = prefs[KEY_DIRECT_DELETE_CONFIRM] ?: true,
             sortByOrientation = prefs[KEY_SORT_BY_ORIENTATION] ?: false,
             randomizeOrder = prefs[KEY_RANDOMIZE_ORDER] ?: false,
@@ -135,6 +137,11 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_LEFT_SWIPE_URI]
     }
 
+    /** Whether to show trash confirmation dialog (default true). */
+    val phoneTrashConfirmEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_TRASH_CONFIRM] ?: true
+    }
+
     /** Whether to show direct delete confirmation dialog (default true). */
     val phoneDirectDeleteConfirmEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_DIRECT_DELETE_CONFIRM] ?: true
@@ -205,6 +212,10 @@ class SettingsRepository @Inject constructor(
             if (uri != null) prefs[KEY_LEFT_SWIPE_URI] = uri
             else prefs.remove(KEY_LEFT_SWIPE_URI)
         }
+    }
+
+    suspend fun setPhoneTrashConfirmEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_TRASH_CONFIRM] = enabled }
     }
 
     suspend fun setPhoneDirectDeleteConfirmEnabled(enabled: Boolean) {

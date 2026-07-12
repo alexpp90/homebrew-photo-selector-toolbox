@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -25,6 +27,37 @@ android {
             ?: "0.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Google Picker configuration (drive.file scope). The Picker is the only
+        // way users can grant the app access to pre-existing Drive files under
+        // the non-restricted drive.file scope. Both values come from the app's
+        // Google Cloud project (see ANDROID_CLOUD_SETUP.md); Drive access is
+        // disabled at runtime when they are missing.
+        val localProperties = Properties().apply {
+            val localPropertiesFile = rootProject.file("local.properties")
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.inputStream().use { load(it) }
+            }
+        }
+        val pickerApiKey = System.getenv("PHOTOTOK_PICKER_API_KEY")
+            ?.takeIf { it.isNotEmpty() }
+            ?: localProperties.getProperty("phototok.picker.api.key")
+            ?: ""
+        val gcpProjectNumber = System.getenv("PHOTOTOK_GCP_PROJECT_NUMBER")
+            ?.takeIf { it.isNotEmpty() }
+            ?: localProperties.getProperty("phototok.gcp.project.number")
+            ?: ""
+
+        buildConfigField(
+            "String",
+            "DRIVE_PICKER_API_KEY",
+            "\"$pickerApiKey\"",
+        )
+        buildConfigField(
+            "String",
+            "DRIVE_PICKER_APP_ID",
+            "\"$gcpProjectNumber\"",
+        )
 
         ndk {
             abiFilters.addAll(setOf("arm64-v8a", "x86_64"))
@@ -121,6 +154,11 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+
+    // Google Play Services (Google Sign-In for Drive)
+    implementation(libs.play.services.auth)
+    implementation(libs.kotlinx.coroutines.play.services)
+
 
     // Coil (image loading)
     implementation(libs.coil.compose)

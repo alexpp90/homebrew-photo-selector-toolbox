@@ -26,6 +26,7 @@ class PhoneSettingsMapperTest {
         assertEquals(CollectionAction.DEFAULT, settings.collectionAction)
         assertEquals(SwipeAction.DEFAULT, settings.leftSwipeAction)
         assertEquals(FileTypeFilter.DEFAULT, settings.fileTypeFilter)
+        assertEquals(true, settings.trashConfirmEnabled)
         assertEquals(3, settings.recentPathsCount)
         assertEquals(emptyList<Any>(), settings.recentPaths)
     }
@@ -36,6 +37,7 @@ class PhoneSettingsMapperTest {
             stringPreferencesKey("collection_action") to CollectionAction.MOVE.key,
             stringPreferencesKey("left_swipe_action") to SwipeAction.COPY.key,
             stringPreferencesKey("file_type_filter") to FileTypeFilter.RAW.key,
+            booleanPreferencesKey("trash_confirm") to false,
             booleanPreferencesKey("direct_delete_confirm") to false,
             booleanPreferencesKey("sort_by_orientation") to true,
             booleanPreferencesKey("randomize_order") to true,
@@ -50,6 +52,7 @@ class PhoneSettingsMapperTest {
         assertEquals(CollectionAction.MOVE, settings.collectionAction)
         assertEquals(SwipeAction.COPY, settings.leftSwipeAction)
         assertEquals(FileTypeFilter.RAW, settings.fileTypeFilter)
+        assertEquals(false, settings.trashConfirmEnabled)
         assertEquals(false, settings.directDeleteConfirmEnabled)
         assertEquals(true, settings.sortByOrientation)
         assertEquals(true, settings.randomizeOrder)

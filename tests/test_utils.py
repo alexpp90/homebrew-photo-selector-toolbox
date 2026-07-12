@@ -361,7 +361,7 @@ class TestCreatePlaceholderImage(unittest.TestCase):
 
 
 class TestGetExcludedFolderNames(unittest.TestCase):
-    @patch("photo_selector_toolbox.ollama_tool.load_config")
+    @patch("photo_selector_toolbox.config.load_config")
     def test_get_excluded_folder_names_success(self, mock_load_config):
         from photo_selector_toolbox.utils import get_excluded_folder_names
         get_excluded_folder_names.cache_clear()

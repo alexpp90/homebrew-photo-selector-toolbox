@@ -8,11 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed & Fixed
-- **Photo-Tok: removed the dedicated Google Drive integration in favor of SAF (Storage Access Framework):**
-  - Cloud folders (including Google Drive) are now selected through the standard system folder picker, whose document providers expose cloud storage directly — verified working on-device. One generic code path covers local, SD-card, and cloud sources.
-  - Deleted the entire Drive stack: Google Sign-In/auth, Drive REST client, Drive image source and Coil fetcher, the WebView-hosted Google Picker, picked-selection persistence (`gdrive-picked://` URIs), and the `SourceUris`/`ImageItem.isRemote` scheme classification.
-  - Dropped the `play-services-auth` / `kotlinx-coroutines-play-services` dependencies, the Picker `BuildConfig` credentials (`PHOTOTOK_PICKER_API_KEY`, `PHOTOTOK_GCP_PROJECT_NUMBER`), the corresponding CI verification step, and the `INTERNET` permission — the app performs no network I/O of its own.
-  - Removed the Drive-only "Trash Confirmation" dialog and setting; all deletions use the existing Direct Delete Confirmation flow with the revert window.
 - **Photo-Tok Google Drive: switched to the non-restricted `drive.file` scope (Play-Store readiness):**
   - The app no longer requests the restricted full `drive` scope, removing the need for Google restricted-scope verification and the annual CASA security assessment when publishing to Google Play.
   - The in-app Drive folder browser (`DriveFolderPickerDialog`/`DriveFolderPickerViewModel`) was removed — under `drive.file` the app cannot browse the user's Drive. Users now grant access by multi-selecting photos in the WebView-hosted **Google Picker** (`DrivePhotoPickerDialog` + `DrivePickerViewModel`); folder selection is disabled because a folder grant does not extend to its children under `drive.file`.

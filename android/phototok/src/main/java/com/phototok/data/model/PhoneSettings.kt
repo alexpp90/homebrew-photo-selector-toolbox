@@ -10,6 +10,7 @@ import com.phototok.domain.SwipeAction
  */
 data class PhoneSettings(
     val collectionAction: CollectionAction = CollectionAction.DEFAULT,
+    val trashConfirmEnabled: Boolean = true,
     val directDeleteConfirmEnabled: Boolean = true,
     val sortByOrientation: Boolean = false,
     val randomizeOrder: Boolean = false,

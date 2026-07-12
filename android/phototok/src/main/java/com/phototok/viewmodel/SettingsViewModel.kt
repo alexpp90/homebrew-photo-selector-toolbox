@@ -21,6 +21,7 @@ data class SettingsUiState(
     val selectionFolderName: String = "Selection",
     val sortingEnabled: Boolean = true,
     val collectionAction: CollectionAction = CollectionAction.DEFAULT,
+    val trashConfirmEnabled: Boolean = true,
     val directDeleteConfirmEnabled: Boolean = true,
     val sortByOrientation: Boolean = false,
     val randomizeOrder: Boolean = false,
@@ -60,6 +61,7 @@ class SettingsViewModel @Inject constructor(
                         selectionFolderName = selectionFolderName,
                         sortingEnabled = sortingEnabled,
                         collectionAction = phone.collectionAction,
+                        trashConfirmEnabled = phone.trashConfirmEnabled,
                         directDeleteConfirmEnabled = phone.directDeleteConfirmEnabled,
                         sortByOrientation = phone.sortByOrientation,
                         randomizeOrder = phone.randomizeOrder,
@@ -108,6 +110,10 @@ class SettingsViewModel @Inject constructor(
 
     fun updateCollectionAction(action: CollectionAction) {
         viewModelScope.launch { settingsRepository.setPhoneCollectionAction(action) }
+    }
+
+    fun updateTrashConfirm(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPhoneTrashConfirmEnabled(enabled) }
     }
 
     fun updateDirectDeleteConfirm(enabled: Boolean) {

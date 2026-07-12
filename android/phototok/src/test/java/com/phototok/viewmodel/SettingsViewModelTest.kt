@@ -30,6 +30,7 @@ class SettingsViewModelTest {
     private val phoneSettingsFlow = MutableStateFlow(
         PhoneSettings(
             collectionAction = CollectionAction.COPY,
+            trashConfirmEnabled = true,
             directDeleteConfirmEnabled = true,
             sortByOrientation = false,
             randomizeOrder = false,
@@ -76,6 +77,7 @@ class SettingsViewModelTest {
         assertEquals("Selection", state.selectionFolderName)
         assertTrue(state.sortingEnabled)
         assertEquals(CollectionAction.COPY, state.collectionAction)
+        assertTrue(state.trashConfirmEnabled)
         assertTrue(state.directDeleteConfirmEnabled)
         assertFalse(state.sortByOrientation)
         assertFalse(state.randomizeOrder)
@@ -93,6 +95,7 @@ class SettingsViewModelTest {
         coEvery { settingsRepository.setPhoneMoveRelatedFiles(any()) } just Runs
         coEvery { settingsRepository.setPhoneRecentPathsEnabled(any()) } just Runs
         coEvery { settingsRepository.setPhoneRecentPathsCount(any()) } just Runs
+        coEvery { settingsRepository.setPhoneTrashConfirmEnabled(any()) } just Runs
         coEvery { settingsRepository.setPhoneDirectDeleteConfirmEnabled(any()) } just Runs
 
         viewModel.updateMoveRelatedFiles(true)
@@ -103,6 +106,9 @@ class SettingsViewModelTest {
 
         viewModel.updateRecentPathsCount(5)
         coVerify { settingsRepository.setPhoneRecentPathsCount(5) }
+
+        viewModel.updateTrashConfirm(false)
+        coVerify { settingsRepository.setPhoneTrashConfirmEnabled(false) }
 
         viewModel.updateDirectDeleteConfirm(false)
         coVerify { settingsRepository.setPhoneDirectDeleteConfirmEnabled(false) }
@@ -124,13 +130,16 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `state updates when the direct delete confirmation changes`() = runTest {
+    fun `state updates when trash and direct delete confirmations change`() = runTest {
+        assertTrue(viewModel.uiState.value.trashConfirmEnabled)
         assertTrue(viewModel.uiState.value.directDeleteConfirmEnabled)
 
         phoneSettingsFlow.value = phoneSettingsFlow.value.copy(
+            trashConfirmEnabled = false,
             directDeleteConfirmEnabled = false,
         )
 
+        assertFalse(viewModel.uiState.value.trashConfirmEnabled)
         assertFalse(viewModel.uiState.value.directDeleteConfirmEnabled)
     }
 
