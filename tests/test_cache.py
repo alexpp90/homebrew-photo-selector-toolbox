@@ -130,6 +130,10 @@ def test_controller_uses_cache(tmp_path):
             # Execute
             res = _process_single_file(img_path, grid_size=1, tools=tools)
 
+            # Manually simulate the batched writing from the outer loop
+            if res.new_calculations:
+                cache.set_multiple_scores({img_path: res.new_calculations})
+
             # Assert results
             assert res.scores["sharpness"] == 999.0  # restored from cache!
             assert res.scores["noise"] == 1.5  # calculated!
