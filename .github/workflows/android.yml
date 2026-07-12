@@ -197,7 +197,7 @@ jobs:
       # increasing across runs (run 78 attempt 1 → 7801, attempt 2 → 7802,
       # run 79 attempt 1 → 7901). Play only requires codes to increase.
       - name: Compute version code
-        run: echo "VERSION_CODE=$(( ${{ github.run_number }} * 100 + ${{ github.run_attempt }} ))" >> "$GITHUB_ENV"
+        run: echo "VERSION_CODE=$(( 10000 + ${{ github.run_number }} * 100 + ${{ github.run_attempt }} ))" >> "$GITHUB_ENV"
 
       - name: Checkout code
         uses: actions/checkout@v4
