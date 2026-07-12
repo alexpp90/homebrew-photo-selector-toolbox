@@ -20,8 +20,8 @@ sealed interface SelectionListing {
 /**
  * A backend that can enumerate and manipulate images addressed by URI.
  *
- * Implementations: [LocalImageSourceImpl] (SAF/DocumentFile trees) and
- * [com.phototok.data.source.googledrive.GoogleDriveImageSource] (Drive REST).
+ * Implementation: [LocalImageSourceImpl] (SAF/DocumentFile trees). SAF also
+ * covers cloud storage exposed through document providers (e.g. Google Drive).
  *
  * All URI-scheme dispatch lives in [ImageSourceResolver]; code outside the
  * data layer must not branch on URI scheme for per-image operations.
