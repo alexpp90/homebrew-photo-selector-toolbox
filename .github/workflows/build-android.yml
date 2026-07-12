@@ -109,6 +109,25 @@ jobs:
             echo "Photo Tok keystore secret is empty; :phototok release will be unsigned."
           fi
 
+      # Fail fast: a release built without Picker credentials ships with Google
+      # Drive disabled ("Google Drive is not configured in this build" at
+      # runtime). Both values can live in either repo Secrets or Variables
+      # (Settings → Secrets and variables → Actions); see
+      # ANDROID_CLOUD_SETUP_INSTRUCTIONS.md.
+      - name: Verify Google Picker credentials
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        run: |
+          missing=0
+          if [ -z "$PHOTOTOK_PICKER_API_KEY" ]; then
+            echo "::error::PHOTOTOK_PICKER_API_KEY resolved empty — create it as a repo secret or variable."
+            missing=1
+          fi
+          if [ -z "$PHOTOTOK_GCP_PROJECT_NUMBER" ]; then
+            echo "::error::PHOTOTOK_GCP_PROJECT_NUMBER resolved empty — create it as a repo secret or variable."
+            missing=1
+          fi
+          exit $missing
+
       - name: Build release APK
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         working-directory: android
