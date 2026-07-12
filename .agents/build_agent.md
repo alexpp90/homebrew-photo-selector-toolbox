@@ -12,9 +12,7 @@ You are the **Build & CI Agent** for the Photo Selector Toolbox project. You are
 You own the following files:
 
 - `scripts/` — Build tooling: `build.py` (PyInstaller build with ExifTool bundling and platform-specific signing), `generate_icons.py`, `generate_notices.py`, `update_formula.py`, install scripts, `run_tests.sh`
-- `.github/workflows/build.yml` — Desktop build/release workflow (test-gated)
-- `.github/workflows/test-python.yml` — Desktop lint + test + visual regression workflow
-- `.github/workflows/requirements-check.yml` — REQUIREMENTS.md drift-check workflow
+- `.github/workflows/desktop.yml` — Consolidated desktop lint, test, visual regression, build, and release workflow
 - `Formula/` and `Casks/` — Homebrew packaging (stable + nightly)
 - `pyproject.toml` — Project metadata, dependencies, build system config
 - `poetry.lock` — Dependency lock file
@@ -43,7 +41,7 @@ You own the following files:
    - macOS: `macos-latest` (Apple Silicon/ARM64 only — no Intel builds)
    - Linux: `ubuntu-latest` (x64)
 10. **Release publishing.** Uses `softprops/action-gh-release` to publish to the `nightly` tag on every push to `main`, and to a versioned release on `v*` tags. Homebrew Formula/Cask SHA256 hashes are updated automatically via `scripts/update_formula.py`.
-11. **Test gating.** `build.yml` waits for the Python test workflow (`wait-on-check-action`) before building. Keep `test-python.yml` triggers a superset of the paths that can trigger a build of tested code.
+11. **Test gating.** The consolidated `desktop.yml` workflow runs tests and builds sequentially using job dependencies (via `needs:`), ensuring builds only occur if tests pass.
 
 ## Key Domain Knowledge
 

@@ -17,8 +17,7 @@ You own the build, package, and CI configuration files for both modules:
 - `android/settings.gradle.kts` — Gradle settings including both `:app` and `:phototok` modules
 - `android/gradle.properties` — Gradle JVM, AndroidX, and Kotlin properties
 - `android/gradle/` — Gradle wrapper and centralized version catalog (`libs.versions.toml`)
-- `.github/workflows/test-android.yml` — GitHub Actions workflow running JVM and instrumented AVD tests on `android/**`
-- `.github/workflows/build-android.yml` — GitHub Actions workflow building release APKs and AABs
+- `.github/workflows/android.yml` — Consolidated GitHub Actions workflow running tests and building release APKs/AABs for Android solutions
 - `android/app/proguard-rules.pro` — ProGuard/R8 configuration rules for `:app`
 - `android/phototok/proguard-rules.pro` — ProGuard/R8 configuration rules for `:phototok`
 

@@ -19,7 +19,7 @@
       "description": "Android data and domain layer specialist for android/app/src/main/.../data/ and .../domain/. Handles EXIF extraction (AndroidX ExifInterface), image analysis algorithms (OpenCV Android), Room database, repositories, and coroutine-based async processing."
     },
     "android_build_agent": {
-      "description": "Android build specialist for android/build.gradle.kts, android/app/build.gradle.kts, gradle/, and .github/workflows/build-android.yml. Handles Gradle, dependency management, R8, signing, and Android CI/CD."
+      "description": "Android build specialist for android/build.gradle.kts, android/app/build.gradle.kts, gradle/, and .github/workflows/android.yml. Handles Gradle, dependency management, R8, signing, and Android CI/CD."
     },
     "photo_researcher_agent": {
       "description": "Photo technical and artistic research specialist. Consulted by both desktop and Android agents when requirements are vague, requiring deep domain knowledge in photography, metadata standards, image quality metrics, or color science."

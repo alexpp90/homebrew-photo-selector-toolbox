@@ -48,7 +48,7 @@ This project uses a multi-agent system with **12 specialized subagents** organiz
 | **`@backend_agent`** | Core Python logic: `reader.py`, `readers/`, `analyzer.py`, `sharpness.py`, `duplicates.py`, `utils.py`, `formatting.py`, `models.py`, `cli.py`, `visualizer.py`, `tools.py`, `ollama_tool.py`, `cache.py`, `config.py` | `.agents/backend_agent.md` |
 | **`@gui_agent`** | Tkinter GUI: `gui.py`, `sharpness_gui.py`, `controllers.py`, `image_panels.py`, `fullscreen_viewer.py`, `gui_utils.py` | `.agents/gui_agent.md` |
 | **`@test_agent`** | Desktop testing: `tests/` (incl. `tests/visual/`), `benchmarks/` | `.agents/test_agent.md` |
-| **`@build_agent`** | Desktop build & CI: `scripts/`, desktop GitHub workflows (`build.yml`, `test-python.yml`, `requirements-check.yml`), `Formula/`, `Casks/`, `pyproject.toml` | `.agents/build_agent.md` |
+| **`@build_agent`** | Desktop build & CI: `scripts/`, desktop GitHub workflow (`desktop.yml`), `Formula/`, `Casks/`, `pyproject.toml` | `.agents/build_agent.md` |
 
 #### Android Agents (Kotlin/Compose)
 
@@ -56,7 +56,7 @@ This project uses a multi-agent system with **12 specialized subagents** organiz
 |-------|-------|-------------|
 | **`@android_ui_agent`** | Jetpack Compose UI: All files under `android/app/src/main/.../ui/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/ui/` (Android Phone) | `.agents/android_ui_agent.md` |
 | **`@android_core_agent`** | Android data & domain layers: `android/app/src/main/.../data/`, `android/app/src/main/.../domain/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/data/`, `android/phototok/src/main/java/com/phototok/viewmodel/` (Android Phone) | `.agents/android_core_agent.md` |
-| **`@android_build_agent`** | Android build: `android/build.gradle.kts`, `android/app/build.gradle.kts`, `android/phototok/build.gradle.kts`, `android/settings.gradle.kts`, `android/gradle/`, GitHub Actions Android workflows, ProGuard/R8 | `.agents/android_build_agent.md` |
+| **`@android_build_agent`** | Android build: `android/build.gradle.kts`, `android/app/build.gradle.kts`, `android/phototok/build.gradle.kts`, `android/settings.gradle.kts`, `android/gradle/`, GitHub Actions Android workflow (`android.yml`), ProGuard/R8 | `.agents/android_build_agent.md` |
 
 #### Shared Consultant Agents (Cross-Platform)
 
