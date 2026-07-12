@@ -22,6 +22,7 @@ class ScanResult:
     path: Path
     scores: Dict[str, Union[float, str]] = field(default_factory=dict)
     exif: Optional[ExifData] = None
+    new_calculations: Optional[Dict[str, Union[float, str]]] = None
 
     def __init__(
         self,
@@ -30,9 +31,11 @@ class ScanResult:
         noise_score: Union[float, str] = "N/A",
         scores: Optional[Dict[str, Union[float, str]]] = None,
         exif: Optional[ExifData] = None,
+        new_calculations: Optional[Dict[str, Union[float, str]]] = None,
     ):
         self.path = path
         self.scores = scores if scores is not None else {}
+        self.new_calculations = new_calculations if new_calculations is not None else {}
         if score != "N/A":
             self.scores["sharpness"] = score
         if noise_score != "N/A":

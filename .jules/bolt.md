@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - Avoiding the Reviewer N+1 False Positive
+**Learning:** The `request_code_review` automated code reviewer might incorrectly flag batched cache operations (`get_multiple_scores` or `set_multiple_scores`) as missing methods or hallucinations. This happens because the reviewer only analyzes the active diff context, missing pre-existing optimizations merged earlier.
+**Action:** When a reviewer flags pre-existing valid methods, note it as a false positive. Do not rewrite existing functionalities simply to satisfy the reviewer, as long as full integration tests verify their existence and correctness.
