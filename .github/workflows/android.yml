@@ -1,4 +1,9 @@
-name: Android Build
+name: Android CI
+
+# Single pipeline for the Android solutions: tests always run; packaging,
+# signing, and publishing only happen on pushes to main or v* tags (and
+# manual dispatch). Builds depend on tests via `needs:` — no cross-workflow
+# polling gate needed.
 
 on:
   push:
@@ -6,43 +11,178 @@ on:
     tags: ["v*"]
     paths:
       - 'android/**'
-      - '.github/workflows/build-android.yml'
+      - '.github/workflows/android.yml'
   pull_request:
     branches: [main]
     paths:
       - 'android/**'
-      - '.github/workflows/build-android.yml'
+      - '.github/workflows/android.yml'
   workflow_dispatch:
 
 concurrency:
-  group: build-android-${{ github.ref }}
-  cancel-in-progress: true
+  group: android-${{ github.ref }}
+  # Only cancel superseded PR runs; never abort an in-flight main/tag run
+  # that may already be publishing to Play or Firebase.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
 
 jobs:
-  # ── Gate: wait for Android tests ────────────────────────────────
-  preflight:
-    name: Wait for Android tests
+  # ── JVM unit tests (no emulator needed) ─────────────────────────
+  unit-tests:
+    name: Unit tests (JVM)
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for Android test workflow
-        uses: lewagon/wait-on-check-action@v1.8.0
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          check-regexp: 'Unit tests .+'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 15
-          allowed-conclusions: success,skipped
-          # test-android.yml triggers are a superset of this workflow's triggers,
-          # so a missing test run means something is wrong — fail instead of
-          # silently building untested code.
-          fail-on-no-checks: true
+      - uses: actions/checkout@v4
 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # setup-gradle handles Gradle caching (writes on main, read-only on
+      # branches) — no separate actions/cache step needed.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Upload unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: |
+            android/app/build/reports/tests/testDebugUnitTest/
+            android/phototok/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
+
+  # ── Android Lint (advisory for now — tighten once baseline is clean) ──
+  lint:
+    name: Android Lint
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run lint
+        working-directory: android
+        run: ./gradlew :app:lintDebug :phototok:lintDebug --continue --stacktrace
+
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: |
+            android/app/build/reports/lint-results-debug.html
+            android/phototok/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+
+  # ── Instrumented tests on Android emulator ──────────────────────
+  instrumented-tests:
+    name: Instrumented tests (API ${{ matrix.api-level }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Cache the AVD + snapshot so the boot-and-snapshot step only runs on
+      # cache miss instead of on every workflow run.
+      - name: AVD cache
+        id: avd-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-api${{ matrix.api-level }}
+
+      - name: Create AVD and generate snapshot
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          # Give the emulator longer to shut down gracefully before it is killed.
+          # Works around the "stop: Not implemented" hang on snapshot save.
+          # https://github.com/ReactiveCircus/android-emulator-runner/issues/385
+          ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL: 60
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none
+          disable-animations: true
+          script: |
+            echo "AVD snapshot generated"
+            # crashpad_handler can outlive the emulator and block shutdown,
+            # causing "stop: Not implemented" + adb exit code 1. Reap it.
+            killall -INT crashpad_handler || true
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL: 60
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          # -no-snapshot-save: snapshot is already cached, so skip the save on
+          # teardown that triggers the shutdown hang.
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none
+          disable-animations: true
+          working-directory: android
+          script: |
+            ./gradlew :app:connectedDebugAndroidTest :phototok:connectedDebugAndroidTest --stacktrace
+            killall -INT crashpad_handler || true
+
+      - name: Upload instrumented test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-report-api${{ matrix.api-level }}
+          path: |
+            android/app/build/reports/androidTests/connected/
+            android/phototok/build/reports/androidTests/connected/
+          if-no-files-found: ignore
+
+  # ── Build & sign (main / tags / manual dispatch only) ───────────
   build:
     name: Build Android
-    needs: preflight
+    needs: [unit-tests, instrumented-tests]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
     runs-on: ubuntu-latest
     env:
       VERSION_CODE_OFFSET: ${{ vars.VERSION_CODE_OFFSET || 0 }}
@@ -71,23 +211,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties', 'android/**/libs.versions.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug
 
       # Each app has its own upload keystore (full isolation). Decode both.
       - name: Decode Keystores
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         env:
           TOOLBOX_KEYSTORE_BASE64: ${{ secrets.TOOLBOX_KEYSTORE_FILE }}
           PHOTOTOK_KEYSTORE_BASE64: ${{ secrets.PHOTOTOK_KEYSTORE_FILE }}
@@ -106,7 +236,7 @@ jobs:
           fi
 
       - name: Build release APK
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         working-directory: android
         run: ./gradlew assembleRelease
         env:
@@ -118,7 +248,7 @@ jobs:
           PHOTOTOK_STORE_PASSWORD: ${{ secrets.PHOTOTOK_STORE_PASSWORD }}
 
       - name: Build release AAB
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         working-directory: android
         run: ./gradlew bundleRelease
         env:
@@ -130,7 +260,7 @@ jobs:
           PHOTOTOK_STORE_PASSWORD: ${{ secrets.PHOTOTOK_STORE_PASSWORD }}
 
       - name: Prepare Release Assets
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         run: |
           mkdir -p android/release-assets
           cp android/app/build/outputs/apk/release/*.apk android/release-assets/photo-selector-toolbox-android-release.apk
@@ -145,14 +275,14 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
 
       - name: Upload release APK
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-release
           path: android/release-assets/photo-selector-toolbox-android-release.apk
 
       - name: Upload Phototok release APK
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: phototok-android-release
@@ -188,28 +318,27 @@ jobs:
           file: android/release-assets/phototok-android-release.apk
 
       - name: Upload release AAB
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-release-aab
           path: android/release-assets/photo-selector-toolbox-android-release.aab
 
       - name: Upload Phototok release AAB
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: phototok-android-release-aab
           path: android/release-assets/phototok-android-release.aab
 
       - name: Publish Release Assets
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
           name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           files: android/release-assets/*
-
 
   publish-play:
     name: Publish to Google Play
@@ -247,5 +376,3 @@ jobs:
           releaseFiles: release-assets/phototok-android-release.aab
           tracks: internal
           status: completed
-
-
