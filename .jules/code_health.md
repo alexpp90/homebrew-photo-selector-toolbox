@@ -13,6 +13,10 @@ Lessons use the standard `.Jules/` format (Learning/Action).
 
 ---
 
+## 2026-07-12 - GitHub Actions Workflow Rename Run Number Reset
+**Learning:** Renaming or changing a GitHub Actions workflow filename resets the `github.run_number` count back to 1 for that new file. If `github.run_number` is used in version code calculations, the reset causes version code regressions. This will result in Google Play Store rollout errors (such as "does not allow any existing users to upgrade").
+**Action:** When introducing or renaming a CI workflow that determines version codes, always add a baseline offset to ensure version codes remain strictly higher than any previously published builds.
+
 ## 2026-07-11 - Gradle Kotlin DSL 'java' Collision & GitHub Workflow Resilience
 **Learning:** 
 1. In Gradle Kotlin DSL, `java` is a reserved keyword referring to the Gradle Java plugin/extension. Referencing fully qualified names starting with `java.` (e.g. `java.util.Properties`) inside build files yields compiler errors like `Unresolved reference 'util'`.
