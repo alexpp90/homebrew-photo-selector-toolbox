@@ -81,7 +81,7 @@ class SelectionViewerViewModelTest {
     fun `open on unsupported source closes with local-only feedback`() = runTest {
         coEvery { imageRepository.listSelectionImages(any()) } returns SelectionListing.NotSupported
 
-        viewModel.open("gdrive://folder123")
+        viewModel.open("content://tree/unsupported")
 
         val state = viewModel.uiState.value
         assertFalse(state.isOpen)

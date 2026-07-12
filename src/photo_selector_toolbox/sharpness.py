@@ -331,8 +331,6 @@ def find_related_files(filepath: Path) -> List[Path]:
     parent = filepath.parent
     stem = filepath.stem
 
-    seen = set(related)
-
     try:
         # Use glob for efficient filtering instead of O(N) directory iteration.
         # Escape the stem to handle filenames with glob-special characters (e.g. '[', ']', '*').
@@ -342,31 +340,26 @@ def find_related_files(filepath: Path) -> List[Path]:
         # We also check that they are files, not directories.
         for f in parent.glob(f"{escaped_stem}.*"):
             if f.is_file() and f.stem == stem:
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
+                related.append(f)
 
         # Also look for Lightroom editing files starting with stem + "-edit" (case-insensitive)
         for f in parent.glob(f"{escaped_stem}-*"):
             if f.is_file() and f.name.lower().startswith(f"{stem.lower()}-edit"):
-                if f not in seen:
+                if f not in related:
                     related.append(f)
-                    seen.add(f)
 
         # If the file has no extension (e.g. "DSC001"), glob f"{escaped_stem}.*" won't find it.
         # But we must ensure we include the exact match. We don't need glob for it,
         # since we know the exact filename.
         exact_match = parent / stem
-        if exact_match.is_file() and exact_match not in seen:
+        if exact_match.is_file() and exact_match not in related:
             related.append(exact_match)
-            seen.add(exact_match)
 
     except Exception as e:
         logger.warning(f"Error scanning for related files in {parent}: {e}")
         # Fallback: just return the file itself if scan fails
-        if filepath not in seen:
+        if filepath not in related:
             related.append(filepath)
-            seen.add(filepath)
 
     return related
 

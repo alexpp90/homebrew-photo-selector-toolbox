@@ -103,15 +103,27 @@ class ScoreCache:
             filepath_str = str(filepath.resolve())
             now = int(time.time())
             with sqlite3.connect(self.db_path) as conn:
+                # Load existing scores to merge
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT scores FROM image_cache WHERE filepath = ?",
+                    (filepath_str,),
+                )
+                row = cursor.fetchone()
+                existing = json.loads(row[0]) if row else {}
+
+                # Merge
+                existing.update(scores)
+
                 conn.execute(
                     """
                     INSERT INTO image_cache (filepath, last_used, scores)
                     VALUES (?, ?, ?)
                     ON CONFLICT(filepath) DO UPDATE SET
                         last_used = excluded.last_used,
-                        scores = json_patch(image_cache.scores, excluded.scores)
+                        scores = excluded.scores
                     """,
-                    (filepath_str, now, json.dumps(scores)),
+                    (filepath_str, now, json.dumps(existing)),
                 )
                 conn.commit()
                 self._write_count += 1
@@ -176,12 +188,29 @@ class ScoreCache:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 path_map = {str(p.resolve()): p for p in scores_dict.keys()}
+                path_list = list(path_map.keys())
+
+                # Fetch existing entries to merge
+                chunk_size = 500
+                existing_entries = {}
+                for i in range(0, len(path_list), chunk_size):
+                    chunk = path_list[i : i + chunk_size]
+                    placeholders = ",".join("?" for _ in chunk)
+                    cursor.execute(
+                        f"SELECT filepath, scores FROM image_cache WHERE filepath IN ({placeholders})",
+                        chunk,
+                    )
+                    rows = cursor.fetchall()
+                    for fp, score_str in rows:
+                        existing_entries[fp] = json.loads(score_str)
 
                 # Prepare insert batch
                 insert_data = []
                 for fp, orig_path in path_map.items():
                     new_scores = scores_dict[orig_path]
-                    insert_data.append((fp, now, json.dumps(new_scores)))
+                    merged = existing_entries.get(fp, {})
+                    merged.update(new_scores)
+                    insert_data.append((fp, now, json.dumps(merged)))
 
                 cursor.executemany(
                     """
@@ -189,7 +218,7 @@ class ScoreCache:
                     VALUES (?, ?, ?)
                     ON CONFLICT(filepath) DO UPDATE SET
                         last_used = excluded.last_used,
-                        scores = json_patch(image_cache.scores, excluded.scores)
+                        scores = excluded.scores
                     """,
                     insert_data,
                 )

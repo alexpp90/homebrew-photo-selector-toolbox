@@ -67,7 +67,7 @@ def generate_notices():
         "--format=plain-vertical",
         "--with-authors",
         "--with-urls",
-        "--ignore", "photo-selector-toolbox" # Ignore self
+        "--ignore", "image-metadata-analyzer" # Ignore self
     ]
 
     # If we successfully identified prod packages, we can try to filter.

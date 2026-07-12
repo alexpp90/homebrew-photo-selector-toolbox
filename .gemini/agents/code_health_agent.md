@@ -1,1 +1,0 @@
-../../.agents/code_health_agent.md

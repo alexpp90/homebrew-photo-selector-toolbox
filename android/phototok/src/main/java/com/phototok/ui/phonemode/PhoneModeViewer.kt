@@ -58,29 +58,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateCentroid
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import android.content.res.Configuration
@@ -92,7 +83,6 @@ import com.phototok.data.model.ImageItem
 import com.phototok.domain.SwipeAction
 import com.phototok.ui.theme.SuccessGreen
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -131,8 +121,6 @@ fun PhoneModeViewer(
         initialPage = currentIndex,
         pageCount = { images.size },
     )
-
-    var isZoomed by remember { mutableStateOf(false) }
 
     // ── Prefetch upcoming/previous images into Coil caches ───────────────
     val context = LocalContext.current
@@ -186,7 +174,6 @@ fun PhoneModeViewer(
         if (pagerState.currentPage > maxPageSeen.value) {
             maxPageSeen.value = pagerState.currentPage
         }
-        isZoomed = false
     }
     val showFloatingPeeks = maxPageSeen.value < 3
 
@@ -208,7 +195,6 @@ fun PhoneModeViewer(
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            userScrollEnabled = !isZoomed,
             key = { images[it].uri },
             beyondViewportPageCount = 2,
         ) { page ->
@@ -235,12 +221,6 @@ fun PhoneModeViewer(
                 },
                 leftSwipeAction = leftSwipeAction,
                 leftSwipeFolderName = leftSwipeFolderName,
-                isActive = page == pagerState.currentPage,
-                onZoomChanged = { zoomed ->
-                    if (page == pagerState.currentPage) {
-                        isZoomed = zoomed
-                    }
-                }
             )
         }
 
@@ -322,159 +302,25 @@ private fun ImagePage(
     showFloatingPeeks: Boolean,
     leftSwipeAction: SwipeAction,
     leftSwipeFolderName: String,
-    isActive: Boolean,
-    onZoomChanged: (Boolean) -> Unit,
     onSingleTap: () -> Unit,
     onSwipeLeftDelete: () -> Unit,
     onSwipeRightCollect: () -> Unit,
 ) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    var size by remember { mutableStateOf(IntSize.Zero) }
-    val coroutineScope = rememberCoroutineScope()
-
     var horizontalDragOffset by remember { mutableFloatStateOf(0f) }
     val actionThreshold = 200f
     val swipeProgress = (abs(horizontalDragOffset) / actionThreshold).coerceIn(0f, 1f)
     val isSwipingLeft = horizontalDragOffset < -40f   // delete
     val isSwipingRight = horizontalDragOffset > 40f    // collect
 
-    val isZoomed = scale > 1.05f
-
-    LaunchedEffect(isZoomed) {
-        onZoomChanged(isZoomed)
-    }
-
-    LaunchedEffect(isActive) {
-        if (!isActive) {
-            scale = 1f
-            offset = Offset.Zero
-        }
-    }
-
-    suspend fun animateReset() {
-        val startScale = scale
-        val startOffset = offset
-        androidx.compose.animation.core.animate(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-        ) { progress, _ ->
-            scale = startScale + (1f - startScale) * progress
-            offset = startOffset + (Offset.Zero - startOffset) * progress
-        }
-    }
-
-    suspend fun animateZoomTo(targetScale: Float, targetOffset: Offset) {
-        val startScale = scale
-        val startOffset = offset
-        androidx.compose.animation.core.animate(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-        ) { progress, _ ->
-            scale = startScale + (targetScale - startScale) * progress
-            offset = startOffset + (targetOffset - startOffset) * progress
-        }
-    }
-
     val colors = MaterialTheme.colorScheme
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .onSizeChanged { size = it }
-            .pointerInput(isZoomed) {
+            .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { onSingleTap() },
-                    onDoubleTap = { centroid ->
-                        val width = size.width
-                        val height = size.height
-                        if (width > 0 && height > 0) {
-                            if (isZoomed) {
-                                coroutineScope.launch { animateReset() }
-                            } else {
-                                val centroidFromCenter = centroid - Offset(width / 2f, height / 2f)
-                                val targetScale = 2.5f
-                                val targetOffset = centroidFromCenter * (1f - targetScale)
-                                val maxOffsetX = ((targetScale - 1f) * width) / 2f
-                                val maxOffsetY = ((targetScale - 1f) * height) / 2f
-                                val boundedTargetOffset = Offset(
-                                    x = targetOffset.x.coerceIn(-maxOffsetX, maxOffsetX),
-                                    y = targetOffset.y.coerceIn(-maxOffsetY, maxOffsetY)
-                                )
-                                coroutineScope.launch { animateZoomTo(targetScale, boundedTargetOffset) }
-                            }
-                        }
-                    }
                 )
-            }
-            .pointerInput(isZoomed) {
-                awaitEachGesture {
-                    val firstDown = awaitFirstDown(requireUnconsumed = false)
-                    val width = size.width
-                    val height = size.height
-
-                    if (width > 0 && height > 0) {
-                        do {
-                            val event = awaitPointerEvent()
-                            val canceled = event.changes.any { it.isConsumed }
-                            if (!canceled) {
-                                val pointerCount = event.changes.size
-                                if (pointerCount == 1 && isZoomed) {
-                                    val change = event.changes.first()
-                                    val dragAmount = change.position - change.previousPosition
-                                    if (dragAmount != Offset.Zero) {
-                                        val maxOffsetX = ((scale - 1f) * width) / 2f
-                                        val maxOffsetY = ((scale - 1f) * height) / 2f
-                                        offset = Offset(
-                                            x = (offset.x + dragAmount.x).coerceIn(-maxOffsetX, maxOffsetX),
-                                            y = (offset.y + dragAmount.y).coerceIn(-maxOffsetY, maxOffsetY)
-                                        )
-                                        change.consume()
-                                    }
-                                } else if (pointerCount > 1) {
-                                    val zoom = event.calculateZoom()
-                                    val pan = event.calculatePan()
-                                    val centroid = event.calculateCentroid()
-
-                                    if (zoom != 1f || pan != Offset.Zero) {
-                                        val oldScale = scale
-                                        val newScale = (scale * zoom).coerceIn(0.7f, 6f)
-                                        val centroidFromCenter = centroid - Offset(width / 2f, height / 2f)
-
-                                        val targetOffset = centroidFromCenter - (centroidFromCenter - offset) * (newScale / oldScale) + pan
-                                        val maxOffsetX = (maxOf(0f, newScale - 1f) * width) / 2f
-                                        val maxOffsetY = (maxOf(0f, newScale - 1f) * height) / 2f
-
-                                        scale = newScale
-                                        offset = Offset(
-                                            x = targetOffset.x.coerceIn(-maxOffsetX, maxOffsetX),
-                                            y = targetOffset.y.coerceIn(-maxOffsetY, maxOffsetY)
-                                        )
-
-                                        event.changes.forEach { it.consume() }
-                                    }
-                                }
-                            }
-                        } while (event.changes.any { it.pressed })
-
-                        // Gestures released - check if we need to animate reset/coerce
-                        if (scale < 1.05f) {
-                            coroutineScope.launch { animateReset() }
-                        } else if (scale > 4f) {
-                            coroutineScope.launch {
-                                val maxOffsetX = ((4f - 1f) * width) / 2f
-                                val maxOffsetY = ((4f - 1f) * height) / 2f
-                                val boundedOffset = Offset(
-                                    x = offset.x.coerceIn(-maxOffsetX, maxOffsetX),
-                                    y = offset.y.coerceIn(-maxOffsetY, maxOffsetY)
-                                )
-                                animateZoomTo(4f, boundedOffset)
-                            }
-                        }
-                    }
-                }
             },
     ) {
         // ── Image with swipe gestures (rotation + translation) ───────
@@ -487,7 +333,7 @@ private fun ImagePage(
                     alpha = 1f - swipeProgress * 0.3f
                 }
                 .then(
-                    if (readOnly || isZoomed) Modifier else Modifier.pointerInput(Unit) {
+                    if (readOnly) Modifier else Modifier.pointerInput(Unit) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 if (horizontalDragOffset < -actionThreshold) {
@@ -514,12 +360,6 @@ private fun ImagePage(
                 contentDescription = image.fileName,
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offset.x
-                        translationY = offset.y
-                    }
                     .then(
                         if (!isLandscape) {
                             Modifier.padding(top = 64.dp, bottom = 80.dp)

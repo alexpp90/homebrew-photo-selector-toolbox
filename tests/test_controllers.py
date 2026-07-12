@@ -22,7 +22,7 @@ def test_image_cache_manager_queues(mock_load_image):
     manager.queue_full_res(p2)
 
     # give threads a moment to process
-    for _ in range(100):
+    for _ in range(50):
         if p1 in manager.preview_cache and p2 in manager.full_res_cache:
             break
         time.sleep(0.05)
@@ -40,7 +40,7 @@ def test_image_cache_manager_limits(mock_load_image):
     for p in paths:
         manager.queue_preview(p)
 
-    for _ in range(100):
+    for _ in range(50):
         if not manager.preview_queue.empty():
             time.sleep(0.05)
         else:
@@ -55,7 +55,7 @@ def test_image_cache_manager_clear(mock_load_image):
     manager = ImageCacheManager()
     p1 = Path("/tmp/1.jpg")
     manager.queue_preview(p1)
-    for _ in range(100):
+    for _ in range(50):
         if p1 in manager.preview_cache:
             break
         time.sleep(0.05)
@@ -100,10 +100,10 @@ def test_scan_controller_run(tmp_path):
         finished_callback=finished_cb
     )
 
-    for _ in range(100):
+    for _ in range(50):
         if finished_flag:
             break
-        time.sleep(0.1)
+        time.sleep(0.05)
 
     assert finished_flag
     assert len(progress_results) == 1

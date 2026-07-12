@@ -11,7 +11,7 @@ class RecentPathCodecTest {
     fun `encode then decode round-trips entries and order`() {
         val paths = listOf(
             RecentPath("content://tree/a", "Alpha"),
-            RecentPath("gdrive://xyz", "My Drive"),
+            RecentPath("content://tree/b", "Beta"),
         )
 
         val decoded = RecentPathCodec.decode(RecentPathCodec.encode(paths))
