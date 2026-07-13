@@ -19,3 +19,7 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+
+## 2025-02-18 - Path Resolution vs Absolute Path Generation
+**Learning:** `pathlib.Path.resolve()` is extremely slow for bulk operations because it touches the disk to resolve symlinks and check paths at every hierarchy level. When mapping thousands of database cache keys via loops or list comprehensions, this causes severe UI lag.
+**Action:** When you only need an absolute string path representation of a `Path` object (e.g. for a database index or cache key) and don't strictly need symlink resolution, use `os.path.abspath(p)`. It performs standard string manipulation (aside from fetching cwd) and provides a >10x performance improvement in large iterations.
