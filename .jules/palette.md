@@ -25,3 +25,7 @@
 **Learning:** When implementing click-and-drag functionality on a custom element like a Tkinter Canvas, the default cursor provides no affordance. Users may not realize the area is draggable.
 **Action:** Always set the default cursor to a recognizable interactive state (e.g., `hand2` in Tkinter) and explicitly change it to a dragging state (e.g., `fleur`) during active drag operations (`<ButtonPress-1>` to `<ButtonRelease-1>`) to provide continuous visual feedback.
 
+
+## 2024-11-20 - Discoverability of Implicit Interactions
+**Learning:** Actions like double-clicking a list item to enter fullscreen are completely invisible to users unless explicitly hinted.
+**Action:** Always provide inline textual hints for non-obvious mouse interactions. In Tkinter, pair a bold title label with a secondary hint label using the `Muted.TLabel` style (e.g., `(Double-click for fullscreen)`) inside a `ttk.Frame` for proper visual hierarchy.
