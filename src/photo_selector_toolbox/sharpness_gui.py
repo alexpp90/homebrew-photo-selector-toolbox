@@ -364,7 +364,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.sidebar = ttk.Frame(self.paned, width=250, padding=5)
         self.paned.add(self.sidebar, weight=1)
 
-        ttk.Label(self.sidebar, text="🖼️ Images").pack(pady=5)
+        lbl_frame = ttk.Frame(self.sidebar)
+        lbl_frame.pack(fill="x", pady=5)
+        ttk.Label(lbl_frame, text="🖼️ Images", font=("Helvetica", 10, "bold")).pack(side="left")
+        ttk.Label(lbl_frame, text="(Double-click to view fullscreen)", style="Muted.TLabel").pack(side="right")
 
         # Scan button
         self.scan_options_btn = ttk.Button(self.sidebar, text="⚡ Scan for Sharpness/Noise...")
