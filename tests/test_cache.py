@@ -128,7 +128,7 @@ def test_controller_uses_cache(tmp_path):
             mock_calc.return_value = {"noise": 1.5}
 
             # Execute
-            res = _process_single_file(img_path, grid_size=1, tools=tools)
+            res, new_calculations = _process_single_file(img_path, grid_size=1, tools=tools)
 
             # Assert results
             assert res.scores["sharpness"] == 999.0  # restored from cache!
@@ -139,9 +139,10 @@ def test_controller_uses_cache(tmp_path):
 
             # Assert that ToolRegistry.get was NOT called (both are built-in tools)
             mock_tool_registry.assert_not_called()
-            # Check database now has both merged
-            cached = cache.get_scores(img_path)
-            assert cached == {"sharpness": 999.0, "noise": 1.5}
+
+            # Since _process_single_file no longer writes to the cache directly,
+            # we check the new_calculations dictionary instead of the database.
+            assert new_calculations == {"noise": 1.5}
 
     finally:
         set_default_db_path(None)
