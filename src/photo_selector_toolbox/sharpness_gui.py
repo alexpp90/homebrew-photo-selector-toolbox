@@ -1350,30 +1350,54 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
     def _background_update_worker(self, files, grid_size, tools):
         from photo_selector_toolbox.controllers import _process_single_file
+        from photo_selector_toolbox.cache import ScoreCache
         import os
         from concurrent.futures import ProcessPoolExecutor, as_completed
 
+        # Pre-fetch cached scores in a single batch read
+        cache = ScoreCache()
+        prefetched_scores = cache.get_multiple_scores(files)
+
         max_workers = max(1, os.cpu_count() or 4)
+        accumulated_updates = {}
 
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(_process_single_file, f, grid_size, tools): f
+                executor.submit(_process_single_file, f, grid_size, tools, prefetched_scores.get(f, {})): f
                 for f in files
             }
 
             for future in as_completed(futures):
                 if self.bg_stop_event.is_set():
+                    # Flush any remaining accumulated updates before exiting
+                    if accumulated_updates:
+                        cache.set_multiple_scores(accumulated_updates)
+                        accumulated_updates.clear()
                     for pending_future in futures:
                         pending_future.cancel()
                     break
 
                 f = futures[future]
                 try:
-                    res = future.result()
+                    res, new_calculations = future.result()
+
+                    if new_calculations:
+                        accumulated_updates[f] = new_calculations
+
+                    # Batch write periodically
+                    if len(accumulated_updates) >= 50:
+                        cache.set_multiple_scores(accumulated_updates)
+                        accumulated_updates.clear()
+
                    # Schedule UI update on main thread
                     self.parent.after(0, lambda r=res: self._handle_bg_update_result(r))
                 except Exception as e:
                     logger.debug(f"Background update error for {f.name}: {e}")
+
+            # Flush any remaining accumulated updates at the end
+            if accumulated_updates:
+                cache.set_multiple_scores(accumulated_updates)
+                accumulated_updates.clear()
 
     def _handle_bg_update_result(self, result):
        # If we have stopped or active candidates changed, discard
