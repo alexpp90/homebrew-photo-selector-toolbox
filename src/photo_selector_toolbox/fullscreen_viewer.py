@@ -259,9 +259,9 @@ class FullscreenViewer(tk.Toplevel):
         def on_cancel(*args):
             dialog.destroy()
 
-        yes_btn = ttk.Button(btn_frame, text="Yes", command=on_confirm)
+        yes_btn = ttk.Button(btn_frame, text="Yes (Delete)", command=on_confirm)
         yes_btn.pack(side="left", expand=True, padx=5)
-        no_btn = ttk.Button(btn_frame, text="No", command=on_cancel)
+        no_btn = ttk.Button(btn_frame, text="No (Esc)", command=on_cancel)
         no_btn.pack(side="right", expand=True, padx=5)
 
         # Let Tkinter calculate the required size, setting a minimum geometry

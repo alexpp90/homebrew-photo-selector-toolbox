@@ -25,3 +25,6 @@
 **Learning:** When implementing click-and-drag functionality on a custom element like a Tkinter Canvas, the default cursor provides no affordance. Users may not realize the area is draggable.
 **Action:** Always set the default cursor to a recognizable interactive state (e.g., `hand2` in Tkinter) and explicitly change it to a dragging state (e.g., `fleur`) during active drag operations (`<ButtonPress-1>` to `<ButtonRelease-1>`) to provide continuous visual feedback.
 
+## 2026-07-16 - Discoverability of Action Keys in Dialogs
+**Learning:** Users can easily miss global keyboard shortcuts that map to dialog choices (like Escape for No, Delete for Yes) unless these are explicitly displayed.
+**Action:** Always append keyboard shortcut hints in parentheses directly onto dialog action button text (e.g., 'Yes (Delete)', 'No (Esc)') to improve discoverability.
