@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2024-07-17 - Resolving N+1 database write bottlenecks when processing images
+**Learning:** Returning values directly mutating shared state in worker processes causes N+1 writes, which introduces I/O bottlenecks.
+**Action:** Accumulate database writes in the worker loop and use `cache.set_multiple_scores(updates)` to submit them in a batch.

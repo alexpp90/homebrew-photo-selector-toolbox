@@ -1352,8 +1352,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         from photo_selector_toolbox.controllers import _process_single_file
         import os
         from concurrent.futures import ProcessPoolExecutor, as_completed
+        from photo_selector_toolbox.cache import ScoreCache
 
         max_workers = max(1, os.cpu_count() or 4)
+        cache = ScoreCache()
 
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -1361,19 +1363,33 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 for f in files
             }
 
+            accumulated_updates = {}
             for future in as_completed(futures):
                 if self.bg_stop_event.is_set():
+                    if accumulated_updates:
+                        cache.set_multiple_scores(accumulated_updates)
                     for pending_future in futures:
                         pending_future.cancel()
                     break
 
                 f = futures[future]
                 try:
-                    res = future.result()
+                    res, new_calculations = future.result()
+                    if new_calculations:
+                        accumulated_updates[f] = new_calculations
+
+                        if len(accumulated_updates) >= 50:
+                            cache.set_multiple_scores(accumulated_updates)
+                            accumulated_updates.clear()
+
                    # Schedule UI update on main thread
                     self.parent.after(0, lambda r=res: self._handle_bg_update_result(r))
                 except Exception as e:
                     logger.debug(f"Background update error for {f.name}: {e}")
+
+            if accumulated_updates and not self.bg_stop_event.is_set():
+                cache.set_multiple_scores(accumulated_updates)
+                accumulated_updates.clear()
 
     def _handle_bg_update_result(self, result):
        # If we have stopped or active candidates changed, discard
