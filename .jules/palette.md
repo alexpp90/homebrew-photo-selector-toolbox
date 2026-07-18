@@ -17,6 +17,7 @@
 ## 2024-05-18 - Discoverability of Global Shortcuts in Desktop App
 **Learning:** Users often miss that actions like Move (M), Copy (C), and Delete (Del) have global keyboard shortcuts unless those shortcuts are explicitly hinted in the corresponding UI button text.
 **Action:** Always append keyboard shortcut hints in parentheses (e.g., "Copy to Selection (C)") directly onto the action buttons themselves.
+
 ## 2024-07-11 - Focus Colors in Tkinter Theme Mapping
 **Learning:** Even when `focuscolor` is configured on a `ttk.Style` for a specific widget, it may still not correctly highlight during keyboard navigation in themes like 'clam' unless `focuscolor` is also explicitly mapped using `style.map('Widget', focuscolor=[('focus', color)])`. This was observed on multiple widgets (`TButton`, `Primary.TButton`, `TNotebook.Tab`, `TCombobox`, `TEntry`).
 **Action:** Always verify keyboard accessibility by checking `ttk.Style().map('Widget').get('focuscolor')` and explicitly include `focuscolor` in the `style.map` function alongside other state-driven properties.
@@ -25,3 +26,6 @@
 **Learning:** When implementing click-and-drag functionality on a custom element like a Tkinter Canvas, the default cursor provides no affordance. Users may not realize the area is draggable.
 **Action:** Always set the default cursor to a recognizable interactive state (e.g., `hand2` in Tkinter) and explicitly change it to a dragging state (e.g., `fleur`) during active drag operations (`<ButtonPress-1>` to `<ButtonRelease-1>`) to provide continuous visual feedback.
 
+## 2026-10-24 - Discoverability of Double-Click Interactions
+**Learning:** Users frequently miss double-click interactions (like opening an image in fullscreen) in desktop apps unless there is a clear visual hint, as thumbnails only suggest single-click selection.
+**Action:** Always provide explicit textual hints (e.g., "(Double-click for fullscreen)") near the relevant component title using secondary text styling (e.g., `Muted.TLabel`), leveraging layout properties like `ttk.LabelFrame`'s `labelwidget` when applicable.
