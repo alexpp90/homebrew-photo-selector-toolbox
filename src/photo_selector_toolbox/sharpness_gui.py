@@ -450,7 +450,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.top_container.columnconfigure(1, weight=1) # Controls Right
 
         # Current Candidate (Left)
-        self.panel_curr = self.create_image_panel(self.top_container, "📄 Current Image")
+        self.panel_curr = self.create_image_panel(
+            self.top_container, "📄 Current Image", hint="(Double-click for fullscreen)"
+        )
         # Using sticky="nsew" so it expands and centers properly if window shrinks
         self.panel_curr.grid(row=0, column=0, padx=10, sticky="nsew")
 
