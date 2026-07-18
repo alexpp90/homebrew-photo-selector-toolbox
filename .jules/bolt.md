@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - Avoid Path.resolve() overhead in loops
+**Learning:** `Path.resolve()` interacts with the OS file system at each segment to check for symlinks, which introduces significant latency in bulk/iterative operations (like resolving cache keys for a large batch of images).
+**Action:** Use `os.path.abspath()` instead of `Path.resolve()` when generating absolute string paths in performance-critical code where strict symlink resolution is not strictly necessary.
