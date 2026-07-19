@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - Replacing Regex and Pathlib Resolve for Bottleneck Performance
+**Learning:** Instantiating and executing `Path.resolve()` on files inside tight loops (like SQLite queries) adds significant OS I/O overhead due to symlink and existence checks. Additionally, utilizing regular expressions (e.g., `re.sub(r"\d+$", "", stem)`) for simple prefix extraction in loops incurs compilation and engine overhead.
+**Action:** When working in performance-critical areas, replace `str(Path.resolve())` with `os.path.abspath()` for lexical pathing without disk I/O, and replace basic regex substitutions with native string methods like `stem.rstrip("0123456789")` to eliminate engine latency while preserving identical output.

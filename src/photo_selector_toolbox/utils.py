@@ -456,12 +456,12 @@ def group_files_by_similarity(
     if not files:
         return []
 
-    import re
     import os
 
     def get_name_prefix(name: str) -> str:
         stem = name.rsplit(".", 1)[0]
-        return re.sub(r"\d+$", "", stem)
+        # PERFORMANCE: rstrip string method avoids regex compilation/overhead
+        return stem.rstrip("0123456789")
 
     def get_mtime(p: Path) -> float:
         try:
