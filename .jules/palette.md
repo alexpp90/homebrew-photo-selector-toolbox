@@ -25,3 +25,7 @@
 **Learning:** When implementing click-and-drag functionality on a custom element like a Tkinter Canvas, the default cursor provides no affordance. Users may not realize the area is draggable.
 **Action:** Always set the default cursor to a recognizable interactive state (e.g., `hand2` in Tkinter) and explicitly change it to a dragging state (e.g., `fleur`) during active drag operations (`<ButtonPress-1>` to `<ButtonRelease-1>`) to provide continuous visual feedback.
 
+
+## 2024-07-20 - Contextual Hints for Undiscoverable Interactions
+**Learning:** Some UI interactions, like double-clicking an image panel to expand it, are completely undiscoverable to users without explicit visual cues. Placing a muted text hint directly alongside the primary section label helps expose these hidden features without cluttering the interface.
+**Action:** Always provide subtle, contextual hints (e.g., "(Double-click to expand)") wrapped in a secondary style (like `Muted.TLabel`) and assign them to the container's `labelwidget` (for `ttk.LabelFrame`) to ensure advanced features remain discoverable.
