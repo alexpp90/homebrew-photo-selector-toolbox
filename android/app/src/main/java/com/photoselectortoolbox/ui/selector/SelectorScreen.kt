@@ -746,7 +746,7 @@ private fun ThreeColumnSelectorLayout(
                         ) {
                             Icon(Icons.Default.DriveFileMove, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Move", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                            Text("Move (M)", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         }
                         FilledTonalButton(
                             onClick = onCopyToSelection,
@@ -758,7 +758,7 @@ private fun ThreeColumnSelectorLayout(
                         ) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Copy", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                            Text("Copy (C)", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         }
                         Button(
                             onClick = onDelete,
@@ -771,7 +771,7 @@ private fun ThreeColumnSelectorLayout(
                         ) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Delete", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                            Text("Delete (Del)", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
