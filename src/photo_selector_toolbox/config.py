@@ -83,10 +83,25 @@ _OLD_PROMPTS = [
 ]
 
 
+def _set_secure_dir_permissions(path: Path) -> None:
+    """Set directory permissions to owner read/write/execute only (700)."""
+    try:
+        os.chmod(path, stat.S_IRWXU)
+    except OSError:
+        pass  # Best-effort on platforms that don't support chmod
+
+
 def _set_secure_permissions(path: Path) -> None:
     """Set file permissions to owner read/write only (600)."""
     try:
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        if path.suffix == ".db":
+            wal_path = path.with_name(path.name + "-wal")
+            shm_path = path.with_name(path.name + "-shm")
+            if wal_path.exists():
+                os.chmod(wal_path, stat.S_IRUSR | stat.S_IWUSR)
+            if shm_path.exists():
+                os.chmod(shm_path, stat.S_IRUSR | stat.S_IWUSR)
     except OSError:
         pass  # Best-effort on platforms that don't support chmod
 
@@ -96,6 +111,7 @@ def load_config() -> Dict[str, Union[str, bool, List[str]]]:
     try:
         if not CONFIG_DIR.exists():
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            _set_secure_dir_permissions(CONFIG_DIR)
 
         if not CONFIG_FILE.exists():
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -125,6 +141,7 @@ def save_config(config: Dict[str, Union[str, bool, List[str]]]) -> None:
     try:
         if not CONFIG_DIR.exists():
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            _set_secure_dir_permissions(CONFIG_DIR)
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
         _set_secure_permissions(CONFIG_FILE)

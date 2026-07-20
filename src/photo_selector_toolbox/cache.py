@@ -37,9 +37,10 @@ class ScoreCache:
             if _DEFAULT_DB_PATH is not None:
                 db_path = _DEFAULT_DB_PATH
             else:
-                from photo_selector_toolbox.config import CONFIG_DIR
+                from photo_selector_toolbox.config import CONFIG_DIR, _set_secure_dir_permissions
 
                 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                _set_secure_dir_permissions(CONFIG_DIR)
                 db_path = CONFIG_DIR / "scores_cache.db"
         self.db_path = db_path
         self._write_count = 0
