@@ -863,9 +863,9 @@ def test_confirm_delete_image_callbacks():
             no_command = None
             for call in mock_button.call_args_list:
                 args, kwargs = call
-                if kwargs.get('text') == 'Yes':
+                if 'Yes' in kwargs.get('text', ''):
                     yes_command = kwargs.get('command')
-                elif kwargs.get('text') == 'No':
+                elif 'No' in kwargs.get('text', ''):
                     no_command = kwargs.get('command')
 
             assert yes_command is not None
