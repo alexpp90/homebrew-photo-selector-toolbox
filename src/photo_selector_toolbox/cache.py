@@ -63,6 +63,13 @@ class ScoreCache:
                 )
                 conn.commit()
             _set_secure_permissions(self.db_path)
+            # Secure auxiliary SQLite files created in WAL mode
+            wal_path = self.db_path.with_name(self.db_path.name + "-wal")
+            shm_path = self.db_path.with_name(self.db_path.name + "-shm")
+            if wal_path.exists():
+                _set_secure_permissions(wal_path)
+            if shm_path.exists():
+                _set_secure_permissions(shm_path)
         except sqlite3.DatabaseError as e:
             logger.error(
                 f"Score cache database is corrupted or inaccessible: {e}. "
