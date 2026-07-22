@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2024-07-22 - Optimize Path resolution caching
+**Learning:** Path.resolve() traversing symlinks adds massive performance overhead in Python compared to os.path.abspath(), causing slowdowns inside cache lookup logic inside the database wrapper.
+**Action:** Replaced instances of str(Path.resolve()) with os.path.abspath(Path) in loops or batch database operations inside sqlite wrapper where exact symlink resolving behavior is an acceptable tradeoff for speed.
