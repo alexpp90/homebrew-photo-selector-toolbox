@@ -25,3 +25,11 @@
 **Learning:** When implementing click-and-drag functionality on a custom element like a Tkinter Canvas, the default cursor provides no affordance. Users may not realize the area is draggable.
 **Action:** Always set the default cursor to a recognizable interactive state (e.g., `hand2` in Tkinter) and explicitly change it to a dragging state (e.g., `fleur`) during active drag operations (`<ButtonPress-1>` to `<ButtonRelease-1>`) to provide continuous visual feedback.
 
+
+## 2026-07-11 - Double-click hints on Image Panels
+**Learning:** Users may not realize that image preview panels support a double-click to zoom action because standard Tkinter/ttk components do not provide native hover indicators for this specific interaction.
+**Action:** Always provide explicit textual hints for hidden or non-standard interactions (like double-click to zoom) next to the relevant element, ensuring they are visually distinct (e.g., using ) to maintain a clear visual hierarchy.
+
+## 2026-07-11 - Double-click hints on Image Panels
+**Learning:** Users may not realize that image preview panels support a double-click to zoom action because standard Tkinter/ttk components do not provide native hover indicators for this specific interaction.
+**Action:** Always provide explicit textual hints for hidden or non-standard interactions (like double-click to zoom) next to the relevant element, ensuring they are visually distinct (e.g., using a muted label style) to maintain a clear visual hierarchy.
