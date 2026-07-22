@@ -25,3 +25,7 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
+## 2025-03-01 - Secure SQLite WAL/SHM file permissions
+**Vulnerability:** The SQLite database is created in WAL mode which inherently creates `-wal` and `-shm` transient files. If secure permissions are only set on the main database file, the transient files may be readable by unauthorized users and leak sensitive cached information.
+**Learning:** SQLite `-wal` and `-shm` files are dynamically generated with default system permissions and do not inherit the custom permissions set on the main `.db` file using `os.chmod`.
+**Prevention:** Whenever changing permissions on a SQLite database configured in WAL mode, ensure the corresponding `-wal` and `-shm` files (if they exist) also have their permissions explicitly updated using `os.chmod`.
