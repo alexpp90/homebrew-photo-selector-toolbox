@@ -2348,6 +2348,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             return f"{prefix}{path.name}{group_suffix}"
 
     def _refresh_metadata_if_current(self, path):
+        if not self.parent.winfo_exists():
+            return
         if self.panel_curr.path == path:
             self.update_metadata_label(path)
         elif (
@@ -2559,7 +2561,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         logger.debug(f"Failed to load EXIF data dynamically: {e}")
                         exif = ExifData()
                     res.exif = exif
-                    self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                    try:
+                        if self.parent.winfo_exists():
+                            self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                    except RuntimeError:
+                        pass
                 threading.Thread(target=load_exif_async, daemon=True).start()
         else:
             self._set_metadata_labels(current_path, res.exif, res)
@@ -2594,7 +2600,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                     exif = ExifData()
                                 r.exif = exif
-                                self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                try:
+                                    if self.parent.winfo_exists():
+                                        self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                except RuntimeError:
+                                    pass
                             threading.Thread(target=load_prev_exif_async, daemon=True).start()
                             self._set_overlay_label(
                                 self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res
@@ -2633,7 +2643,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                     exif = ExifData()
                                 r.exif = exif
-                                self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                try:
+                                    if self.parent.winfo_exists():
+                                        self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                except RuntimeError:
+                                    pass
                             threading.Thread(target=load_next_exif_async, daemon=True).start()
                             self._set_overlay_label(self.focus_next_overlay, "Next", next_path, ExifData(), next_res)
                     else:

@@ -983,7 +983,7 @@ class AboutDialog(tk.Toplevel):
             try:
                 img = Image.open(logo_path)
                 img = img.resize((96, 96), Image.Resampling.LANCZOS)
-                self.logo_img = ImageTk.PhotoImage(img)
+                self.logo_img = ImageTk.PhotoImage(img, master=self)
             except Exception as e:
                 logger.warning(f"Failed to load logo in AboutDialog: {e}")
 
