@@ -25,3 +25,19 @@
 **Learning:** When implementing click-and-drag functionality on a custom element like a Tkinter Canvas, the default cursor provides no affordance. Users may not realize the area is draggable.
 **Action:** Always set the default cursor to a recognizable interactive state (e.g., `hand2` in Tkinter) and explicitly change it to a dragging state (e.g., `fleur`) during active drag operations (`<ButtonPress-1>` to `<ButtonRelease-1>`) to provide continuous visual feedback.
 
+
+## 2026-07-11 - Double-click hints on Image Panels
+**Learning:** Users may not realize that image preview panels support a double-click to zoom action because standard Tkinter/ttk components do not provide native hover indicators for this specific interaction.
+**Action:** Always provide explicit textual hints for hidden or non-standard interactions (like double-click to zoom) next to the relevant element, ensuring they are visually distinct (e.g., using ) to maintain a clear visual hierarchy.
+
+## 2026-07-11 - Double-click hints on Image Panels
+**Learning:** Users may not realize that image preview panels support a double-click to zoom action because standard Tkinter/ttk components do not provide native hover indicators for this specific interaction.
+**Action:** Always provide explicit textual hints for hidden or non-standard interactions (like double-click to zoom) next to the relevant element, ensuring they are visually distinct (e.g., using a muted label style) to maintain a clear visual hierarchy.
+
+## 2026-07-11 - Thread Safety and Toplevel Destruction in Tkinter
+**Learning:** When executing background threads that update Tkinter UI elements via `after(0, ...)`, a `RuntimeError: main thread is not in main loop` or `_tkinter.TclError: image doesn't exist` can occur if the parent widget (like a Toplevel dialog) is destroyed before the background thread completes or garbage collection deletes images.
+**Action:** Always wrap  calls in background threads with  and verify  to ensure the widget hasn't been destroyed. When creating  objects in dialogs, bind them to the dialog window instance explicitly via the  parameter (e.g., ) to prevent premature garbage collection and Tcl namespace mismatches.
+
+## 2026-07-11 - Thread Safety and Toplevel Destruction in Tkinter
+**Learning:** When executing background threads that update Tkinter UI elements via `after(0, ...)`, a `RuntimeError: main thread is not in main loop` or `_tkinter.TclError: image doesn't exist` can occur if the parent widget (like a Toplevel dialog) is destroyed before the background thread completes or garbage collection deletes images.
+**Action:** Always wrap `after` calls in background threads with `try...except RuntimeError` and verify `self.parent.winfo_exists()` to ensure the widget hasn't been destroyed. When creating `PhotoImage` objects in dialogs, bind them to the dialog window instance explicitly via the `master` parameter (e.g., `ImageTk.PhotoImage(img, master=self)`) to prevent premature garbage collection and Tcl namespace mismatches.

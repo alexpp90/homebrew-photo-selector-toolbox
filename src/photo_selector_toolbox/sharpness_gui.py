@@ -450,7 +450,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.top_container.columnconfigure(1, weight=1) # Controls Right
 
         # Current Candidate (Left)
-        self.panel_curr = self.create_image_panel(self.top_container, "📄 Current Image")
+        self.panel_curr = self.create_image_panel(
+            self.top_container, "📄 Current Image", hint=" (Double-click to zoom)"
+        )
         # Using sticky="nsew" so it expands and centers properly if window shrinks
         self.panel_curr.grid(row=0, column=0, padx=10, sticky="nsew")
 
@@ -518,11 +520,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         # Neighbors
         self.panel_prev = self.create_image_panel(
-            self.bottom_container, "◀ Previous Image"
+            self.bottom_container, "◀ Previous Image", hint=" (Double-click to zoom)"
         )
         self.panel_prev.pack(side="left", fill="both", expand=True, padx=2)
 
-        self.panel_next = self.create_image_panel(self.bottom_container, "Next Image ▶")
+        self.panel_next = self.create_image_panel(
+            self.bottom_container, "Next Image ▶", hint=" (Double-click to zoom)"
+        )
         self.panel_next.pack(side="right", fill="both", expand=True, padx=2)
 
 
@@ -2344,6 +2348,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             return f"{prefix}{path.name}{group_suffix}"
 
     def _refresh_metadata_if_current(self, path):
+        if not self.parent.winfo_exists():
+            return
         if self.panel_curr.path == path:
             self.update_metadata_label(path)
         elif (
@@ -2555,7 +2561,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         logger.debug(f"Failed to load EXIF data dynamically: {e}")
                         exif = ExifData()
                     res.exif = exif
-                    self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                    try:
+                        if self.parent.winfo_exists():
+                            self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                    except RuntimeError:
+                        pass
                 threading.Thread(target=load_exif_async, daemon=True).start()
         else:
             self._set_metadata_labels(current_path, res.exif, res)
@@ -2590,7 +2600,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                     exif = ExifData()
                                 r.exif = exif
-                                self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                try:
+                                    if self.parent.winfo_exists():
+                                        self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                except RuntimeError:
+                                    pass
                             threading.Thread(target=load_prev_exif_async, daemon=True).start()
                             self._set_overlay_label(
                                 self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res
@@ -2629,7 +2643,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                     exif = ExifData()
                                 r.exif = exif
-                                self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                try:
+                                    if self.parent.winfo_exists():
+                                        self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                except RuntimeError:
+                                    pass
                             threading.Thread(target=load_next_exif_async, daemon=True).start()
                             self._set_overlay_label(self.focus_next_overlay, "Next", next_path, ExifData(), next_res)
                     else:

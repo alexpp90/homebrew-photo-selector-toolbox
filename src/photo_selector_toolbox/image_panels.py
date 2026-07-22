@@ -12,8 +12,17 @@ logger = logging.getLogger(__name__)
 class ImagePanelsMixin:
     """Mixin class for SharpnessTool to manage image panel scaling and background loading."""
 
-    def create_image_panel(self, parent, title):
-        frame = ttk.LabelFrame(parent, text=title)
+    def create_image_panel(self, parent, title, hint=None):
+        if hint:
+            frame = ttk.LabelFrame(parent)
+            title_container = ttk.Frame(frame)
+            ttk.Label(title_container, text=title).pack(side="left")
+            ttk.Label(title_container, text=hint, style="Muted.TLabel").pack(
+                side="left"
+            )
+            frame.config(labelwidget=title_container)
+        else:
+            frame = ttk.LabelFrame(parent, text=title)
 
         # Image Container Frame
         img_container = ttk.Frame(frame)
