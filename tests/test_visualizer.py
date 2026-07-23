@@ -81,6 +81,16 @@ def test_get_lens_plot():
     assert fig is not None
 
 
+def test_get_lens_plot_empty():
+    data = []
+    fig = get_lens_plot(data)
+    assert fig is None
+
+    data_none = [ExifData(lens=None)]
+    fig_none = get_lens_plot(data_none)
+    assert fig_none is None
+
+
 def test_get_combination_plot():
     data = [ExifData(aperture=2.8, focal_length=50)]
     fig = get_combination_plot(data)
