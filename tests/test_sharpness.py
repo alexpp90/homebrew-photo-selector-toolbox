@@ -6,6 +6,8 @@ from photo_selector_toolbox.sharpness import (
     calculate_sharpness,
     calculate_noise,
     categorize_sharpness,
+    calculate_highlight_clipping,
+    calculate_shadow_clipping,
     find_related_files,
     SharpnessCategories,
     get_image_data,
@@ -188,4 +190,67 @@ def test_calculate_noise_exception(mock_cv2, mock_get_data):
 
     # The function should catch the exception and return 0.0
     score = calculate_noise(Path("error.jpg"))
+    assert score == 0.0
+
+@patch.object(shp, "get_image_data")
+def test_calculate_highlight_clipping(mock_get_data):
+    # Case 1: No clipping (all pixels are dark)
+    dark_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_get_data.return_value = dark_img
+    score = calculate_highlight_clipping(Path("dark.jpg"))
+    assert score == 0.0
+
+    # Case 2: Some clipping (half pixels are white)
+    mixed_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    mixed_img[:, :50] = 255
+    mock_get_data.return_value = mixed_img
+    score = calculate_highlight_clipping(Path("mixed.jpg"))
+    assert score == 50.0
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_highlight_clipping_none(mock_get_data):
+    mock_get_data.return_value = None
+    score = calculate_highlight_clipping(Path("none.jpg"))
+    assert score == 0.0
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "cv2")
+def test_calculate_highlight_clipping_exception(mock_cv2, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_cv2.cvtColor.side_effect = Exception("Mocked highlight error")
+    score = calculate_highlight_clipping(Path("error.jpg"))
+    assert score == 0.0
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_shadow_clipping(mock_get_data):
+    # Case 1: No clipping (all pixels are bright)
+    bright_img = np.ones((100, 100, 3), dtype=np.uint8) * 255
+    mock_get_data.return_value = bright_img
+    score = calculate_shadow_clipping(Path("bright.jpg"))
+    assert score == 0.0
+
+    # Case 2: Some clipping (half pixels are black)
+    mixed_img = np.ones((100, 100, 3), dtype=np.uint8) * 255
+    mixed_img[:, :50] = 0
+    mock_get_data.return_value = mixed_img
+    score = calculate_shadow_clipping(Path("mixed.jpg"))
+    assert score == 50.0
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_shadow_clipping_none(mock_get_data):
+    mock_get_data.return_value = None
+    score = calculate_shadow_clipping(Path("none.jpg"))
+    assert score == 0.0
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "cv2")
+def test_calculate_shadow_clipping_exception(mock_cv2, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_cv2.cvtColor.side_effect = Exception("Mocked shadow error")
+    score = calculate_shadow_clipping(Path("error.jpg"))
     assert score == 0.0
