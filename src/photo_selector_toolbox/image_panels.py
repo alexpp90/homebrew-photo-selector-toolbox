@@ -1,6 +1,9 @@
 import logging
 from PIL import Image, ImageTk
 from tkinter import ttk
+from dataclasses import dataclass
+from typing import Any, Optional
+from pathlib import Path
 
 # Local imports
 from photo_selector_toolbox.utils import load_image_preview, create_placeholder_image
@@ -8,6 +11,16 @@ from photo_selector_toolbox.formatting import format_score
 
 logger = logging.getLogger(__name__)
 
+
+
+@dataclass
+class PanelUpdateContext:
+    p_img: Any
+    c_img: Any
+    n_img: Any
+    prev_path: Optional[Path]
+    curr_path: Optional[Path]
+    next_path: Optional[Path]
 
 class ImagePanelsMixin:
     """Mixin class for SharpnessTool to manage image panel scaling and background loading."""
@@ -287,16 +300,20 @@ class ImagePanelsMixin:
         n_img = get_image(next_path, size_next)
 
         # Update UI in main thread
-        self.parent.after(0, lambda: self.update_panels_final(p_img, c_img, n_img, prev_path, curr_path, next_path))
+        context = PanelUpdateContext(
+            p_img=p_img, c_img=c_img, n_img=n_img,
+            prev_path=prev_path, curr_path=curr_path, next_path=next_path
+        )
+        self.parent.after(0, lambda: self.update_panels_final(context))
 
-    def update_panels_final(self, p_img, c_img, n_img, prev_path, curr_path, next_path):
+    def update_panels_final(self, update: PanelUpdateContext):
         if (
-            self.panel_prev.path != prev_path
-            or self.panel_curr.path != curr_path
-            or self.panel_next.path != next_path
+            self.panel_prev.path != update.prev_path
+            or self.panel_curr.path != update.curr_path
+            or self.panel_next.path != update.next_path
         ):
             return  # Stale load, ignore
-        self.current_triplet_images = (p_img, c_img, n_img)
+        self.current_triplet_images = (update.p_img, update.c_img, update.n_img)
         self.refresh_active_view()
 
     def refresh_active_view(self):
