@@ -28,7 +28,7 @@ from photo_selector_toolbox.utils import (
     load_image_preview,
     NoRedirectHandler,
 )
-from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
+from photo_selector_toolbox.controllers import ImageCacheManager, ScanController, ScanOptions
 from photo_selector_toolbox.models import ScanResult, ExifData
 from photo_selector_toolbox.reader import get_exif_data, RAW_EXTENSIONS
 from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
@@ -1908,7 +1908,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             "aesthetic": self.tool_aesthetic_var.get(),
         }
 
-        self.scan_controller.run_scan(
+        options = ScanOptions(
             files=self.sorted_files,
             grid_size=grid_size,
             tools=tools,
@@ -1916,6 +1916,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             finished_callback=self._on_scan_finished,
             log_callback=self.log,
         )
+        self.scan_controller.run_scan(options)
         self.after(100, self.update_log_view)
 
     def cancel_scan(self):

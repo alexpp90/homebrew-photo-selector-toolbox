@@ -66,7 +66,7 @@ def test_image_cache_manager_clear(mock_load_image):
 
 
 def test_scan_controller_run(tmp_path):
-    from photo_selector_toolbox.controllers import ScanController
+    from photo_selector_toolbox.controllers import ScanController, ScanOptions
     from PIL import Image
     import numpy as np
 
@@ -92,13 +92,14 @@ def test_scan_controller_run(tmp_path):
         nonlocal finished_flag
         finished_flag = True
 
-    controller.run_scan(
+    options = ScanOptions(
         files=[img_path],
         grid_size=8,
         tools=tools,
         progress_callback=progress_cb,
         finished_callback=finished_cb
     )
+    controller.run_scan(options)
 
     for _ in range(100):
         if finished_flag:
