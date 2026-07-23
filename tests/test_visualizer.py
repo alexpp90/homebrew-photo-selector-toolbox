@@ -45,6 +45,13 @@ def test_get_focal_length_plot():
     assert fig is not None
 
 
+
+def test_get_focal_length_plot_empty():
+    data = [ExifData(focal_length=None)]
+    fig = get_focal_length_plot(data)
+    assert fig is None
+
+
 def test_get_equivalent_focal_length_plot():
     data = [ExifData(focal_length_35mm=50.2), ExifData(focal_length_35mm=84.8)]
     fig = get_equivalent_focal_length_plot(data)
