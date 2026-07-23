@@ -87,6 +87,17 @@ def test_get_combination_plot():
     assert fig is not None
 
 
+
+def test_get_combination_plot_empty():
+    data = []
+    fig = get_combination_plot(data)
+    assert fig is None
+
+def test_get_combination_plot_missing_key():
+    data = [ExifData(aperture=2.8)]
+    fig = get_combination_plot(data)
+    assert fig is None
+
 @patch("photo_selector_toolbox.visualizer._open_file_for_user")
 def test_create_plots(mock_open, tmp_path):
     data = [
