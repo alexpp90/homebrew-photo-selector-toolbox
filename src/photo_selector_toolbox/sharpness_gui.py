@@ -2521,13 +2521,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_meta_lbl.config(text=meta_txt)
             self.focus_meta_lbl.pack(side="top", pady=5, anchor="w")
 
-    def _set_overlay_label(self, overlay, prefix, path, exif, res):
+    def _set_overlay_label(self, overlay, prefix, res):
         score_str = format_score(res.score)
         noise_str = format_score(res.noise_score)
         hl_score = res.scores.get("highlight_clipping", "N/A")
         sd_score = res.scores.get("shadow_clipping", "N/A")
         hl_str = format_score(hl_score) + ("%" if isinstance(hl_score, float) else "")
         sd_str = format_score(sd_score) + ("%" if isinstance(sd_score, float) else "")
+        exif = getattr(res, 'exif', None) or ExifData()
         iso = format_meta(exif.iso if exif else None, "")
         shutter = format_meta(exif.shutter_speed if exif else None, "s")
         aperture = format_meta(exif.aperture if exif else None, "f/")
@@ -2535,6 +2536,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         meta_str = f"{iso} | {shutter} | {aperture} | {focal}"
 
         is_testing = type(self.parent).__name__ in ("MagicMock", "Mock")
+        path = res.path
         lines = [prefix, path.name]
         if res.score != "N/A":
             lbl_pfx = "" if is_testing else "🎯 "
@@ -2627,9 +2629,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             except Exception as e:
                                 logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                 prev_res.exif = ExifData()
-                            self._set_overlay_label(
-                                self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res
-                            )
                         else:
                             def load_prev_exif_async(p=prev_path, r=prev_res):
                                 try:
@@ -2642,13 +2641,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 r.exif = exif
                                 self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
                             threading.Thread(target=load_prev_exif_async, daemon=True).start()
-                            self._set_overlay_label(
-                                self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res
-                            )
-                    else:
-                        self._set_overlay_label(
-                            self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res
-                        )
+
+                    self._set_overlay_label(self.focus_prev_overlay, "Previous", prev_res)
             else:
                 self.focus_prev_overlay.place_forget()
 
@@ -2668,7 +2662,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             except Exception as e:
                                 logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                 next_res.exif = ExifData()
-                            self._set_overlay_label(self.focus_next_overlay, "Next", next_path, next_res.exif, next_res)
                         else:
                             def load_next_exif_async(p=next_path, r=next_res):
                                 try:
@@ -2681,9 +2674,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 r.exif = exif
                                 self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
                             threading.Thread(target=load_next_exif_async, daemon=True).start()
-                            self._set_overlay_label(self.focus_next_overlay, "Next", next_path, ExifData(), next_res)
-                    else:
-                        self._set_overlay_label(self.focus_next_overlay, "Next", next_path, next_res.exif, next_res)
+
+                    self._set_overlay_label(self.focus_next_overlay, "Next", next_res)
             else:
                 self.focus_next_overlay.place_forget()
 
