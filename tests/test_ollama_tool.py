@@ -30,8 +30,12 @@ def dummy_image_file(tmp_path):
     return img_path
 
 
+@patch("socket.getaddrinfo")
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_success(mock_open, dummy_image_file, temp_config_dir):
+def test_ollama_tool_success(mock_open, mock_getaddrinfo, dummy_image_file, temp_config_dir):
+    import socket
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', 0))]
+
     # Mock Ollama HTTP response payload
     mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."}
 
@@ -52,11 +56,15 @@ def test_ollama_tool_success(mock_open, dummy_image_file, temp_config_dir):
     assert req.method == "POST"
 
 
+@patch("socket.getaddrinfo")
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_custom_config(mock_open, dummy_image_file, temp_config_dir):
+def test_ollama_tool_custom_config(mock_open, mock_getaddrinfo, dummy_image_file, temp_config_dir):
+    import socket
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', 0))]
+
     # Setup custom configuration
     custom_config = {
-        "ollama_url": "http://192.168.1.50:11434/",
+        "ollama_url": "http://8.8.8.8:11434/",
         "ollama_model": "qwen-vl",
         "ollama_prompt": "Rate the aesthetics of the photo. Score: ",
     }
@@ -75,7 +83,7 @@ def test_ollama_tool_custom_config(mock_open, dummy_image_file, temp_config_dir)
     assert score == 9.3
     assert tag == "Sharp"
     req = mock_open.call_args[0][0]
-    assert req.full_url == "http://192.168.1.50:11434/api/generate"
+    assert req.full_url == "http://8.8.8.8:11434/api/generate"
 
     # Assert JSON payload parameters match config
     body = json.loads(req.data.decode("utf-8"))
@@ -83,8 +91,12 @@ def test_ollama_tool_custom_config(mock_open, dummy_image_file, temp_config_dir)
     assert body["prompt"] == "Rate the aesthetics of the photo. Score: "
 
 
+@patch("socket.getaddrinfo")
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_connection_error(mock_open, dummy_image_file, temp_config_dir):
+def test_ollama_tool_connection_error(mock_open, mock_getaddrinfo, dummy_image_file, temp_config_dir):
+    import socket
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', 0))]
+
     # Mock connection failure (URLError)
     mock_open.side_effect = urllib.error.URLError("Connection refused")
 
@@ -95,8 +107,12 @@ def test_ollama_tool_connection_error(mock_open, dummy_image_file, temp_config_d
     assert "Ollama server connection error" in str(exc_info.value)
 
 
+@patch("socket.getaddrinfo")
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_parsing_error(mock_open, dummy_image_file, temp_config_dir):
+def test_ollama_tool_parsing_error(mock_open, mock_getaddrinfo, dummy_image_file, temp_config_dir):
+    import socket
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', 0))]
+
     # Mock response with no float scores in text
     mock_resp_payload = {"response": "This is a photo of a sunset, it looks great but I can't give a number."}
 
@@ -113,8 +129,12 @@ def test_ollama_tool_parsing_error(mock_open, dummy_image_file, temp_config_dir)
 
 
 
+@patch("socket.getaddrinfo")
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_fallback_analysis(mock_open, dummy_image_file, temp_config_dir):
+def test_ollama_tool_fallback_analysis(mock_open, mock_getaddrinfo, dummy_image_file, temp_config_dir):
+    import socket
+    mock_getaddrinfo.return_value = [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', 0))]
+
     # Mock response with SCORE but no ANALYSIS tag
     mock_resp_payload = {"response": "The aesthetic quality score of this photo is 8.5."}
 
