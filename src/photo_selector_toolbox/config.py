@@ -91,11 +91,25 @@ def _set_secure_permissions(path: Path) -> None:
         pass  # Best-effort on platforms that don't support chmod
 
 
+def _set_secure_dir_permissions(path: Path) -> None:
+    """Set directory permissions to owner-only access (700)."""
+    try:
+        os.chmod(path, stat.S_IRWXU)
+    except OSError:
+        pass
+
+
+def ensure_config_dir() -> None:
+    """Creates the configuration directory and secures it with owner-only permissions."""
+    if not CONFIG_DIR.exists():
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        _set_secure_dir_permissions(CONFIG_DIR)
+
+
 def load_config() -> Dict[str, Union[str, bool, List[str]]]:
     """Loads settings.json config file, creating it with defaults if it doesn't exist."""
     try:
-        if not CONFIG_DIR.exists():
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        ensure_config_dir()
 
         if not CONFIG_FILE.exists():
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -123,8 +137,7 @@ def load_config() -> Dict[str, Union[str, bool, List[str]]]:
 def save_config(config: Dict[str, Union[str, bool, List[str]]]) -> None:
     """Saves config dict to settings.json."""
     try:
-        if not CONFIG_DIR.exists():
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        ensure_config_dir()
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
         _set_secure_permissions(CONFIG_FILE)
