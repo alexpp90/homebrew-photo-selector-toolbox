@@ -1327,17 +1327,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             grid_size = 1
 
        # Check which candidates have missing values for the enabled tools
+        enabled_tools = tuple(name for name, enabled in tools.items() if enabled)
         files_to_update = []
         for f in self.candidates:
             res = self.files_map.get(f)
             if res:
-                needs_update = False
-                for tool_name, enabled in tools.items():
-                    if enabled and res.scores.get(tool_name, "N/A") == "N/A":
-                        needs_update = True
+                scores = res.scores
+                for t in enabled_tools:
+                    if scores.get(t, "N/A") == "N/A":
+                        files_to_update.append(f)
                         break
-                if needs_update:
-                    files_to_update.append(f)
 
         if not files_to_update:
             return
