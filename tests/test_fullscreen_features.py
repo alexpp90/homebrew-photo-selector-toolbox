@@ -257,7 +257,7 @@ def test_sharpness_tool_key_event_filtering():
 
 
 def test_fullscreen_viewer_init_and_delete():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test_image.jpg")
@@ -266,7 +266,7 @@ def test_fullscreen_viewer_init_and_delete():
     with (
         patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
     ):
-        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=file_list))
 
         # Check that delete button was created and Delete/BackSpace keys bound
         assert hasattr(viewer, "del_btn")
@@ -398,7 +398,7 @@ def test_move_to_selection():
 
 
 def test_fullscreen_viewer_metadata_display():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test_image.jpg")
@@ -410,7 +410,7 @@ def test_fullscreen_viewer_metadata_display():
     with (
         patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
     ):
-        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=file_list))
 
         # Verify metadata labels were created
         assert hasattr(viewer, "meta_panel")
@@ -669,7 +669,7 @@ def test_move_to_selection_with_lightroom_edit():
             mock_edit_tif.rename.assert_called_once_with(mock_dirs["RAW"].__truediv__.return_value)
 
 def test_fullscreen_viewer_update_metadata_error_path():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test_image.jpg")
@@ -681,13 +681,13 @@ def test_fullscreen_viewer_update_metadata_error_path():
         patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer._update_basic_labels") as mock_update,
         patch("photo_selector_toolbox.fullscreen_viewer.logger.debug") as mock_logger,
     ):
-        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=file_list))
         mock_update.side_effect = Exception("Test Exception")
         viewer.update_metadata()
         mock_logger.assert_any_call("Error updating metadata overlay in fullscreen: Test Exception")
 
 def test_fullscreen_viewer_redraw_error_path():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test_image.jpg")
@@ -696,7 +696,7 @@ def test_fullscreen_viewer_redraw_error_path():
     with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"), \
          patch("photo_selector_toolbox.fullscreen_viewer.logger.error") as mock_logger_error:
 
-        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=file_list))
         viewer.pil_image = MagicMock()
         viewer.pil_image.width = 100
         viewer.pil_image.height = 100
@@ -715,7 +715,7 @@ def test_fullscreen_viewer_redraw_error_path():
 
 
 def test_fullscreen_viewer_redraw_canvas_error():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test_image.jpg")
@@ -724,7 +724,7 @@ def test_fullscreen_viewer_redraw_canvas_error():
     with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"), \
          patch("photo_selector_toolbox.fullscreen_viewer.logger.error") as mock_logger_error:
 
-        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=file_list))
         viewer.pil_image = MagicMock()
         viewer.pil_image.width = 100
         viewer.pil_image.height = 100
@@ -797,26 +797,26 @@ def test_fullscreen_viewer_metadata_error_handling():
                 assert type(dummy_res.exif).__name__ == "MockExifData"
 
 def test_confirm_delete_image_no_path():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"):
         # We need a path to initialize FullscreenViewer, but we'll set it to None afterwards
         dummy_path = MagicMock()
         dummy_path.name = "dummy.jpg"
-        viewer = FullscreenViewer(parent, dummy_path, [])
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=dummy_path, file_list=[]))
         viewer.path = None
         with patch("tkinter.Toplevel") as mock_toplevel:
             viewer.confirm_delete_image()
             mock_toplevel.assert_not_called()
 
 def test_confirm_delete_image_prevent_multiple():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test.jpg")
     with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"):
-        viewer = FullscreenViewer(parent, path, [path])
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=[path]))
 
         mock_dialog = MagicMock()
         mock_dialog.winfo_exists.return_value = True
@@ -827,12 +827,12 @@ def test_confirm_delete_image_prevent_multiple():
             mock_toplevel.assert_not_called()
 
 def test_confirm_delete_image_callbacks():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test.jpg")
     with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"):
-        viewer = FullscreenViewer(parent, path, [path])
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=[path]))
 
         viewer.execute_delete_current = MagicMock()
 
@@ -884,12 +884,12 @@ def test_confirm_delete_image_callbacks():
             viewer.execute_delete_current.assert_called_once()
 
 def test_confirm_delete_image_geometry_fallback():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test.jpg")
     with patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"):
-        viewer = FullscreenViewer(parent, path, [path])
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=[path]))
 
         viewer.winfo_rootx = MagicMock(return_value=0)
         viewer.winfo_rooty = MagicMock(return_value=0)
@@ -1044,7 +1044,7 @@ def test_fullscreen_viewer_metadata_exif_load_none():
 
 
 def test_fullscreen_viewer_update_metadata_lift_error_path():
-    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 
     parent = MagicMock()
     path = Path("test_image.jpg")
@@ -1056,7 +1056,7 @@ def test_fullscreen_viewer_update_metadata_lift_error_path():
         patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer._update_basic_labels"),
         patch("photo_selector_toolbox.fullscreen_viewer.logger.debug") as mock_logger,
     ):
-        viewer = FullscreenViewer(parent, path, file_list=file_list)
+        viewer = FullscreenViewer(parent, FullscreenOptions(path=path, file_list=file_list))
         # Mock meta_panel so it exists, but make lift() raise the exception
         viewer.meta_panel = MagicMock()
         viewer.meta_panel.reveal_score = MagicMock() # Mock it just in case

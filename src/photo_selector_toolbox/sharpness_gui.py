@@ -31,7 +31,7 @@ from photo_selector_toolbox.utils import (
 from photo_selector_toolbox.controllers import ImageCacheManager, ScanController
 from photo_selector_toolbox.models import ScanResult, ExifData
 from photo_selector_toolbox.reader import get_exif_data, RAW_EXTENSIONS
-from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer, FullscreenOptions
 from photo_selector_toolbox.image_panels import ImagePanelsMixin
 
 logger = logging.getLogger(__name__)
@@ -1113,9 +1113,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if path and path.exists():
            # Pass candidates so FullscreenViewer can navigate via N/P keys
             file_list = getattr(self, "candidates", [])
-            FullscreenViewer(
-                self, path, initial_mode=mode, focus_point=focus, file_list=file_list
-            )
+            options = FullscreenOptions(path=path, initial_mode=mode, focus_point=focus, file_list=file_list)
+            FullscreenViewer(self, options)
 
     def browse_folder(self):
         initial = self.folder_var.get()

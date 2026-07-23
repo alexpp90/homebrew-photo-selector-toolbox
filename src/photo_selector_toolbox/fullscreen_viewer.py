@@ -2,6 +2,9 @@ import logging
 import threading
 import tkinter as tk
 from tkinter import ttk
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Tuple
 from PIL import Image, ImageTk
 
 # Local imports
@@ -13,23 +16,30 @@ from photo_selector_toolbox.models import ExifData, ScanResult
 logger = logging.getLogger(__name__)
 
 
+
+@dataclass
+class FullscreenOptions:
+    path: Path
+    initial_mode: str = "fit"
+    focus_point: Tuple[float, float] = (0.5, 0.5)
+    file_list: List[Path] = field(default_factory=list)
+
 class FullscreenViewer(tk.Toplevel):
-    def __init__(
-        self, parent, path, initial_mode="fit", focus_point=(0.5, 0.5), file_list=None
-    ):
+    def __init__(self, parent, options: FullscreenOptions):
         super().__init__(parent)
         self.parent = parent
-        self.path = path
-        self.initial_mode = initial_mode
-        self.focus_point = focus_point  # (rel_x, rel_y) 0.0-1.0
-        self.file_list = file_list or []
+        self.path = options.path
+        self.initial_mode = options.initial_mode
+        self.focus_point = options.focus_point  # (rel_x, rel_y) 0.0-1.0
+        self.file_list = options.file_list or []
+
 
         # Track current index
         self.current_idx = -1
         if self.path in self.file_list:
             self.current_idx = self.file_list.index(self.path)
 
-        self.title(f"Fullscreen - {path.name}")
+        self.title(f"Fullscreen - {self.path.name}")
         self.attributes("-fullscreen", True)
         self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}")
         self.configure(bg="black")
