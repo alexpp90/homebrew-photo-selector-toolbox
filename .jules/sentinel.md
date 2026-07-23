@@ -25,3 +25,7 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
+## 2024-05-24 - Fix TOCTOU SSRF in Ollama Tool
+**Vulnerability:** A Time of Check to Time of Use (TOCTOU) vulnerability existed in the Ollama SSRF protection. The code verified the IP address resolved from the given hostname, but then passed the original hostname to `urllib.request`. An attacker could exploit DNS rebinding to return a safe IP during validation but a malicious IP (e.g. cloud metadata) during the request phase.
+**Learning:** Checking a hostname's IP and then making a request with the hostname is inherently racy and allows DNS rebinding.
+**Prevention:** Always pin the verified IP in the request URL to guarantee the validated IP is the one contacted. To maintain compatibility with servers relying on virtual hosting, inject the original hostname into the request's `Host` header.
