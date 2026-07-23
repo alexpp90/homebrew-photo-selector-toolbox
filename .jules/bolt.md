@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - Path Resolution Bottlenecks in Batch File Operations
+**Learning:** Generating string absolute paths from `pathlib.Path` objects using `str(Path.resolve())` in performance-critical paths (e.g., database keys or batch read/writes) introduces massive latency. `Path.resolve()` interacts with the filesystem to canonicalize the path and resolve symlinks, resulting in unnecessary disk I/O overhead.
+**Action:** Always prefer `os.path.abspath(path)` over `str(Path.resolve())` when you only need lexical string generation for file paths, avoiding filesystem queries during bulk operations. Note that this ignores symlinks, which is generally acceptable for caching mechanisms.
