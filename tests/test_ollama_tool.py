@@ -48,7 +48,8 @@ def test_ollama_tool_success(mock_open, dummy_image_file, temp_config_dir):
     mock_open.assert_called_once()
     # Check that URL used default
     req = mock_open.call_args[0][0]
-    assert req.full_url == "http://localhost:11434/api/generate"
+    assert req.get_header("Host") == "localhost:11434"
+    assert req.full_url.endswith("/api/generate")
     assert req.method == "POST"
 
 
