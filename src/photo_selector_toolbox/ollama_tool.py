@@ -93,6 +93,7 @@ class OllamaAestheticTool(AnalysisTool):
         if is_forbidden_ip(clean_hostname):
             raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
 
+        verified_ip = None
         try:
             # Attempt to resolve. socket.getaddrinfo handles more formats than gethostbyname
             addr_info = socket.getaddrinfo(clean_hostname, None)
@@ -100,10 +101,22 @@ class OllamaAestheticTool(AnalysisTool):
                 ip_str = res[4][0]
                 if is_forbidden_ip(ip_str):
                     raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
+            # Save the first resolved IP for TOCTOU prevention
+            if addr_info:
+                verified_ip = addr_info[0][4][0]
         except socket.gaierror:
             pass # Invalid hostname or cannot resolve. Let urllib handle the error later.
 
-        url = f"{ollama_url.rstrip('/')}/api/generate"
+        # Construct target URL using the verified IP to prevent DNS rebinding TOCTOU
+        parsed_url = urlparse(ollama_url)
+        target_netloc = parsed_url.netloc
+        if verified_ip:
+            port_str = f":{parsed_url.port}" if parsed_url.port else ""
+            ip_host = f"[{verified_ip}]" if ":" in verified_ip else verified_ip
+            target_netloc = f"{ip_host}{port_str}"
+
+        safe_url = parsed_url._replace(netloc=target_netloc).geturl()
+        url = f"{safe_url.rstrip('/')}/api/generate"
         payload = {
             "model": model_name,
             "prompt": prompt,
@@ -116,7 +129,10 @@ class OllamaAestheticTool(AnalysisTool):
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Host": parsed_url.netloc
+                },
                 method="POST",
             )
             # Serialize requests to avoid overloading local Ollama server
