@@ -310,7 +310,6 @@ jobs:
         continue-on-error: true
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
-          # TODO: replace with the App ID from the NEW Photo Tok Firebase project.
           appId: ${{ vars.PHOTOTOK_FIREBASE_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.PHOTOTOK_FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
           # Must match a tester-group ALIAS created in the Firebase Console.
