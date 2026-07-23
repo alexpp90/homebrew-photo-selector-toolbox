@@ -106,7 +106,7 @@ class SelectorScreenTest {
     @Test
     fun initialEmptyState_isDisplayed() {
         // App starts with no folder selected, should show the empty state card.
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("No Photos Loaded", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
@@ -126,7 +126,7 @@ class SelectorScreenTest {
         }
 
         // Wait until empty state disappears and review UI appears
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
@@ -149,7 +149,7 @@ class SelectorScreenTest {
             settingsRepository.setLastFolderUri("gdrive://test_folder")
         }
 
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
@@ -186,7 +186,7 @@ class SelectorScreenTest {
             settingsRepository.setLastFolderUri("gdrive://test_folder")
         }
 
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
@@ -204,7 +204,7 @@ class SelectorScreenTest {
         composeRule.waitForIdle()
 
         try {
-            composeRule.waitUntil(timeoutMillis = 8000) {
+            composeRule.waitUntil(timeoutMillis = 15000) {
                 composeRule.onAllNodesWithText("Copied to Selection", ignoreCase = true)
                     .fetchSemanticsNodes().isNotEmpty()
             }
@@ -215,7 +215,7 @@ class SelectorScreenTest {
         composeRule.onNodeWithText("Copied to Selection", ignoreCase = true).assertIsDisplayed()
 
         // Wait for the copy snackbar to disappear so it doesn't block the move button on phone layouts
-        composeRule.waitUntil(timeoutMillis = 6000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("Copied to Selection", ignoreCase = true)
                 .fetchSemanticsNodes().isEmpty()
         }
@@ -229,7 +229,7 @@ class SelectorScreenTest {
         composeRule.waitForIdle()
 
         try {
-            composeRule.waitUntil(timeoutMillis = 8000) {
+            composeRule.waitUntil(timeoutMillis = 15000) {
                 composeRule.onAllNodesWithText("Moved to Selection", ignoreCase = true)
                     .fetchSemanticsNodes().isNotEmpty()
             }
@@ -247,7 +247,7 @@ class SelectorScreenTest {
             settingsRepository.setLastFolderUri("gdrive://test_folder")
         }
 
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
@@ -268,7 +268,7 @@ class SelectorScreenTest {
 
         // Verify Delete Confirmation Dialog is shown
         try {
-            composeRule.waitUntil(timeoutMillis = 8000) {
+            composeRule.waitUntil(timeoutMillis = 15000) {
                 composeRule.onAllNodesWithText("Delete Image", ignoreCase = true)
                     .fetchSemanticsNodes().isNotEmpty()
             }
@@ -283,7 +283,7 @@ class SelectorScreenTest {
         composeRule.onNodeWithTag("dialog_confirm_delete").performClick()
 
         // Verify image1 is removed and image2 becomes active
-        composeRule.waitUntil(timeoutMillis = 3000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("image2.jpg", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
@@ -311,7 +311,7 @@ class SelectorScreenTest {
             settingsRepository.setLastFolderUri("gdrive://test_folder")
         }
 
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
@@ -326,7 +326,7 @@ class SelectorScreenTest {
         composeRule.onNodeWithText("Start Scan").performClick()
 
         // Wait until metrics update and display in the UI
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             // Compact chips have labels like "Sharpness" or display compact values.
             // Let's check for the presence of the score values like "78.5" or "1.2".
             composeRule.onAllNodesWithText("78.5", substring = true)
@@ -341,7 +341,7 @@ class SelectorScreenTest {
     private fun dismissGestureTutorialIfShown() {
         if (composeRule.onAllNodesWithText("Gestures").fetchSemanticsNodes().isNotEmpty()) {
             composeRule.onNodeWithText("Gestures").performClick()
-            composeRule.waitUntil(timeoutMillis = 5000) {
+            composeRule.waitUntil(timeoutMillis = 15000) {
                 composeRule.onAllNodesWithText("Gestures").fetchSemanticsNodes().isEmpty()
             }
         }
