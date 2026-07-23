@@ -3,6 +3,7 @@ import queue
 import threading
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
 from typing import Dict, Optional, Callable, List
 from pathlib import Path
 from PIL import Image
@@ -231,6 +232,16 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
     )
 
 
+
+@dataclass
+class ScanRequest:
+    files: List[Path]
+    grid_size: int
+    tools: Dict[str, bool]
+    progress_callback: Callable[[ScanResult, int, int], None]
+    finished_callback: Callable[[], None]
+    log_callback: Optional[Callable[[str], None]] = None
+
 class ScanController:
     """
     Handles background scanning of images for sharpness and noise.
@@ -241,29 +252,14 @@ class ScanController:
         self.stop_event = threading.Event()
         self.is_scanning = False
 
-    def run_scan(
-        self,
-        files: List[Path],
-        grid_size: int,
-        tools: Dict[str, bool],
-        progress_callback: Callable[[ScanResult, int, int], None],
-        finished_callback: Callable[[], None],
-        log_callback: Optional[Callable[[str], None]] = None,
-    ):
+    def run_scan(self, request: ScanRequest):
         """Starts the scan in a background thread."""
         self.is_scanning = True
         self.stop_event.clear()
 
         thread = threading.Thread(
             target=self._scan_worker,
-            args=(
-                files,
-                grid_size,
-                tools,
-                progress_callback,
-                finished_callback,
-                log_callback,
-            ),
+            args=(request,),
             daemon=True,
         )
         thread.start()
@@ -272,21 +268,13 @@ class ScanController:
         if self.is_scanning:
             self.stop_event.set()
 
-    def _scan_worker(
-        self,
-        files: List[Path],
-        grid_size: int,
-        tools: Dict[str, bool],
-        progress_callback: Callable[[ScanResult, int, int], None],
-        finished_callback: Callable[[], None],
-        log_callback: Optional[Callable[[str], None]] = None,
-    ):
+    def _scan_worker(self, request: ScanRequest):
         def log(msg: str):
-            if log_callback:
-                log_callback(msg)
+            if request.log_callback:
+                request.log_callback(msg)
 
         try:
-            total = len(files)
+            total = len(request.files)
             if total == 0:
                 log("No images to scan.")
                 return
@@ -297,8 +285,8 @@ class ScanController:
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
                 futures = {
-                    executor.submit(_process_single_file, f, grid_size, tools): f
-                    for f in files
+                    executor.submit(_process_single_file, f, request.grid_size, request.tools): f
+                    for f in request.files
                 }
 
                 completed_count = 0
@@ -317,7 +305,7 @@ class ScanController:
                         res = future.result()
                         completed_count += 1
                         # Notify progress
-                        progress_callback(res, completed_count, total)
+                        request.progress_callback(res, completed_count, total)
                     except Exception as e:
                         log(f"Error processing {f.name}: {e}")
                         logger.exception(f"Error processing {f.name}")
@@ -329,4 +317,4 @@ class ScanController:
             logger.exception("Scan worker error")
         finally:
             self.is_scanning = False
-            finished_callback()
+            request.finished_callback()
