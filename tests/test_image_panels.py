@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-from photo_selector_toolbox.image_panels import ImagePanelsMixin
+from photo_selector_toolbox.image_panels import ImagePanelsMixin, PanelUpdateContext
 from photo_selector_toolbox.models import ScanResult
 
 @pytest.fixture(autouse=True)
@@ -302,7 +302,11 @@ def test_update_panels_final():
 
     # Case 1: Stale load
     host.panel_prev.path = Path("old1.jpg")
-    host.update_panels_final(None, None, None, Path("new1.jpg"), Path("new2.jpg"), Path("new3.jpg"))
+    stale_context = PanelUpdateContext(
+        p_img=None, c_img=None, n_img=None,
+        prev_path=Path("new1.jpg"), curr_path=Path("new2.jpg"), next_path=Path("new3.jpg")
+    )
+    host.update_panels_final(stale_context)
     assert not hasattr(host, "current_triplet_images")
 
     # Case 2: Fresh load
@@ -313,7 +317,11 @@ def test_update_panels_final():
     # Mock refresh_active_view
     host.refresh_active_view = MagicMock()
 
-    host.update_panels_final("img1", "img2", "img3", Path("1.jpg"), Path("2.jpg"), Path("3.jpg"))
+    fresh_context = PanelUpdateContext(
+        p_img="img1", c_img="img2", n_img="img3",
+        prev_path=Path("1.jpg"), curr_path=Path("2.jpg"), next_path=Path("3.jpg")
+    )
+    host.update_panels_final(fresh_context)
     assert host.current_triplet_images == ("img1", "img2", "img3")
     host.refresh_active_view.assert_called_once()
 
