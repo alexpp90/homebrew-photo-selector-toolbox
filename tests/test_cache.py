@@ -128,7 +128,10 @@ def test_controller_uses_cache(tmp_path):
             mock_calc.return_value = {"noise": 1.5}
 
             # Execute
-            res = _process_single_file(img_path, grid_size=1, tools=tools)
+            cached_scores = cache.get_scores(img_path)
+            res, new_calcs = _process_single_file(img_path, grid_size=1, tools=tools, cached_scores=cached_scores)
+            if new_calcs:
+                cache.set_scores(img_path, new_calcs)
 
             # Assert results
             assert res.scores["sharpness"] == 999.0  # restored from cache!

@@ -3,7 +3,7 @@ import queue
 import threading
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Dict, Optional, Callable, List
+from typing import Dict, Optional, Callable, List, Tuple, Union
 from pathlib import Path
 from PIL import Image
 
@@ -153,13 +153,18 @@ class ImageCacheManager:
                 logger.debug(f"Full res load error for {path_str}: {e}")
 
 
-def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> ScanResult:
+def _process_single_file(
+    f: Path,
+    grid_size: int,
+    tools: Dict[str, bool],
+    cached_scores: Optional[Dict[str, Union[float, str]]] = None
+) -> Tuple[ScanResult, Dict[str, Union[float, str]]]:
     """Helper module function to process a single image for parallel execution."""
-    cache = ScoreCache()
-    cached = cache.get_scores(f)
+    if cached_scores is None:
+        cached_scores = {}
 
     # Initialize scores with cached values
-    scores = {name: val for name, val in cached.items() if val != "N/A"}
+    scores = {name: val for name, val in cached_scores.items() if val != "N/A"}
     new_calculations = {}
 
     # --- Optimized path: calculate all built-in metrics with a single image load ---
@@ -217,10 +222,6 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
             if tool_name not in scores:
                 scores[tool_name] = "N/A"
 
-    # Save new calculations to cache
-    if new_calculations:
-        cache.set_scores(f, new_calculations)
-
     # Fetch EXIF
     exif = get_exif_data(f)
 
@@ -228,7 +229,7 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
         path=f,
         scores=scores,
         exif=exif,
-    )
+    ), new_calculations
 
 
 class ScanController:
@@ -294,14 +295,21 @@ class ScanController:
             log(f"Scanning {total} images. Starting analysis...")
 
             max_workers = max(1, os.cpu_count() or 4)
+
+            # Bulk fetch cache for all files
+            cache = ScoreCache()
+            cached_scores_dict = cache.get_multiple_scores(files)
+
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
                 futures = {
-                    executor.submit(_process_single_file, f, grid_size, tools): f
+                    executor.submit(_process_single_file, f, grid_size, tools, cached_scores_dict.get(f)): f
                     for f in files
                 }
 
                 completed_count = 0
+                new_calculations_batch = {}
+
                 for future in as_completed(futures):
                     if self.stop_event.is_set():
                         log("Scan cancelled.")
@@ -314,13 +322,25 @@ class ScanController:
                     log(f"Analyzed {f.name}...")
 
                     try:
-                        res = future.result()
+                        res, new_calcs = future.result()
                         completed_count += 1
+
+                        if new_calcs:
+                            new_calculations_batch[f] = new_calcs
+
+                        # Chunking the writes
+                        if len(new_calculations_batch) >= 50:
+                            cache.set_multiple_scores(new_calculations_batch)
+                            new_calculations_batch.clear()
+
                         # Notify progress
                         progress_callback(res, completed_count, total)
                     except Exception as e:
                         log(f"Error processing {f.name}: {e}")
                         logger.exception(f"Error processing {f.name}")
+
+            if new_calculations_batch:
+                cache.set_multiple_scores(new_calculations_batch)
 
             log("Scan complete.")
 
