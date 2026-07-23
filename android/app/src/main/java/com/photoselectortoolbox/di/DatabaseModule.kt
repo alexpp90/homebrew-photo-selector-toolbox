@@ -24,7 +24,9 @@ object DatabaseModule {
             context,
             ScoresDatabase::class.java,
             "scores_cache.db"
-        ).build()
+        )
+            .addMigrations(ScoresDatabase.MIGRATION_1_2)
+            .build()
     }
 
     @Provides

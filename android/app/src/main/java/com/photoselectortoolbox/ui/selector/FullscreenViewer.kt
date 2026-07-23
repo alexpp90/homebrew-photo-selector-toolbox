@@ -36,6 +36,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -410,6 +411,11 @@ private fun FullscreenContent(
                                         label = "Shadow",
                                         value = scores.shadowClipping,
                                         format = "%.1f%%",
+                                    )
+                                    ScoreChip(
+                                        icon = Icons.Default.AutoAwesome,
+                                        label = "Aesthetic",
+                                        value = scores.aestheticScore,
                                     )
                                 }
                             }

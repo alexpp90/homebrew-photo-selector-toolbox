@@ -45,6 +45,10 @@ class SettingsRepository @Inject constructor(
         private val KEY_FULLSCREEN_BUTTONS_ENABLED = booleanPreferencesKey("fullscreen_buttons_enabled")
         private val KEY_FULLSCREEN_GESTURE_ACTION = stringPreferencesKey("fullscreen_gesture_action")
 
+        // Expanded-layout (tablet/DeX) selector view preferences
+        private val KEY_SELECTOR_LAYOUT_FOCUSED = booleanPreferencesKey("selector_layout_focused")
+        private val KEY_HAS_SEEN_NAV_HINT = booleanPreferencesKey("has_seen_nav_hint")
+
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
         const val DEFAULT_SORTING_ENABLED = true
         const val DEFAULT_GROUPING_ENABLED = false
@@ -142,6 +146,39 @@ class SettingsRepository @Inject constructor(
     suspend fun setFullscreenGestureAction(action: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_FULLSCREEN_GESTURE_ACTION] = action
+        }
+    }
+
+    // ── Expanded (tablet/DeX) selector layout ────────────────────────────
+
+    /**
+     * Whether the expanded selector defaults to the stacked "focused" layout
+     * (current image on top, previous/next below). Defaults to true so the
+     * space-efficient stacked view is what users see first; the three-column
+     * side-by-side view is the opt-in alternative.
+     */
+    val selectorLayoutFocused: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SELECTOR_LAYOUT_FOCUSED] ?: true
+    }
+
+    /**
+     * Whether the user has already seen the on-image previous/next navigation
+     * arrows once. After the first viewing they are suppressed to keep the
+     * images unobstructed. Defaults to false (arrows shown on first run).
+     */
+    val hasSeenNavHint: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_HAS_SEEN_NAV_HINT] ?: false
+    }
+
+    suspend fun setSelectorLayoutFocused(focused: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SELECTOR_LAYOUT_FOCUSED] = focused
+        }
+    }
+
+    suspend fun setHasSeenNavHint(seen: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_HAS_SEEN_NAV_HINT] = seen
         }
     }
 

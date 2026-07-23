@@ -10,6 +10,7 @@ import com.photoselectortoolbox.data.cache.ScoreEntity
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.model.ScanResult
 import com.photoselectortoolbox.data.repository.SettingsRepository
+import com.photoselectortoolbox.domain.analysis.AestheticAnalyzer
 import com.photoselectortoolbox.domain.analysis.ClippingAnalyzer
 import com.photoselectortoolbox.domain.analysis.NoiseAnalyzer
 import com.photoselectortoolbox.domain.analysis.SharpnessAnalyzer
@@ -52,10 +53,21 @@ class ScanImagesUseCase @Inject constructor(
     private val sharpnessAnalyzer: SharpnessAnalyzer,
     private val noiseAnalyzer: NoiseAnalyzer,
     private val clippingAnalyzer: ClippingAnalyzer,
+    private val aestheticAnalyzer: AestheticAnalyzer,
     private val scoreDao: ScoreDao,
     private val settingsRepository: SettingsRepository,
     @ApplicationContext private val context: Context
 ) {
+
+    companion object {
+        /**
+         * Minimum sharpness (Laplacian variance) below which an image is
+         * considered too blurry to be worth AI aesthetic scoring — the cheap
+         * OpenCV gate that keeps the expensive model off obvious rejects.
+         * TODO(device): tune against real folders on the target tablet.
+         */
+        private const val MIN_SHARPNESS_FOR_AESTHETIC = 40.0
+    }
 
     /**
      * Scan a list of images, emitting progress updates as a Flow.
@@ -65,7 +77,10 @@ class ScanImagesUseCase @Inject constructor(
      * @param images The images to scan.
      * @return Flow emitting scan progress with accumulated results.
      */
-    operator fun invoke(images: List<ImageItem>): Flow<ScanProgress> = channelFlow {
+    operator fun invoke(
+        images: List<ImageItem>,
+        aestheticEnabled: Boolean = false,
+    ): Flow<ScanProgress> = channelFlow {
         val results = mutableMapOf<String, ScanResult>()
 
         send(ScanProgress(0, images.size, "", results.toMap()))
@@ -84,14 +99,14 @@ class ScanImagesUseCase @Inject constructor(
                     ensureActive()
 
                     // Check cache first
-                    val cached = checkCache(image)
+                    val cached = checkCache(image, aestheticEnabled)
                     if (cached != null) {
                         progressChannel.send(index to (image.fileName to cached))
                         return@withPermit
                     }
 
                     // Compute scores
-                    val scanResult = analyzeImage(image)
+                    val scanResult = analyzeImage(image, aestheticEnabled)
                     if (scanResult != null) {
                         cacheResult(image, scanResult)
                     }
@@ -129,11 +144,18 @@ class ScanImagesUseCase @Inject constructor(
      * Check if a valid cached result exists for this image.
      * Cache is valid if the file path, size, and modification time match.
      */
-    private suspend fun checkCache(image: ImageItem): ScanResult? {
+    private suspend fun checkCache(image: ImageItem, aestheticEnabled: Boolean): ScanResult? {
         val cached = scoreDao.getScore(image.uri) ?: return null
 
         // Validate cache entry matches current file
         if (cached.fileSize != image.fileSize || cached.lastModified != image.lastModified) {
+            return null
+        }
+
+        // If the user now wants an aesthetic score but the cached row predates
+        // it (and a model is available), recompute rather than serving a stale
+        // hit with no aesthetic value.
+        if (aestheticEnabled && cached.aestheticScore == null && aestheticAnalyzer.isAvailable()) {
             return null
         }
 
@@ -145,7 +167,8 @@ class ScanImagesUseCase @Inject constructor(
             sharpnessScore = cached.sharpnessScore,
             noiseLevel = cached.noiseLevel,
             highlightClipping = cached.highlightClipping,
-            shadowClipping = cached.shadowClipping
+            shadowClipping = cached.shadowClipping,
+            aestheticScore = cached.aestheticScore
         )
     }
 
@@ -155,7 +178,10 @@ class ScanImagesUseCase @Inject constructor(
      * Sharpness and noise run in parallel; clipping runs in a third coroutine.
      * Returns null if the image cannot be decoded.
      */
-    private suspend fun analyzeImage(image: ImageItem): ScanResult? = coroutineScope {
+    private suspend fun analyzeImage(
+        image: ImageItem,
+        aestheticEnabled: Boolean,
+    ): ScanResult? = coroutineScope {
         val uri = Uri.parse(image.uri)
 
         // Decode the bitmap once for all analyzers with memory-efficient downsampling
@@ -240,18 +266,40 @@ class ScanImagesUseCase @Inject constructor(
             }
 
             val clippingResult = clippingDeferred.await()
+            val sharpness = sharpnessDeferred.await()
+
+            // AI aesthetic scoring is gated: only when the user enabled it, a
+            // model is available, and the image passes the cheap sharpness floor.
+            val aesthetic = if (
+                aestheticEnabled &&
+                aestheticAnalyzer.isAvailable() &&
+                passesSharpnessGate(sharpness)
+            ) {
+                try {
+                    aestheticAnalyzer.analyze(bitmap)
+                } catch (e: Exception) {
+                    null
+                }
+            } else {
+                null
+            }
 
             ScanResult(
                 filePath = image.uri,
-                sharpnessScore = sharpnessDeferred.await(),
+                sharpnessScore = sharpness,
                 noiseLevel = noiseDeferred.await(),
                 highlightClipping = clippingResult?.first,
-                shadowClipping = clippingResult?.second
+                shadowClipping = clippingResult?.second,
+                aestheticScore = aesthetic
             )
         } finally {
             bitmap.recycle()
         }
     }
+
+    /** The cheap OpenCV gate: skip AI scoring on clearly blurry images. */
+    private fun passesSharpnessGate(sharpness: Double?): Boolean =
+        sharpness == null || sharpness >= MIN_SHARPNESS_FOR_AESTHETIC
 
     /**
      * Cache the scan result for future lookups.
@@ -266,7 +314,8 @@ class ScanImagesUseCase @Inject constructor(
                     sharpnessScore = result.sharpnessScore,
                     noiseLevel = result.noiseLevel,
                     highlightClipping = result.highlightClipping,
-                    shadowClipping = result.shadowClipping
+                    shadowClipping = result.shadowClipping,
+                    aestheticScore = result.aestheticScore
                 )
             )
         } catch (e: Exception) {

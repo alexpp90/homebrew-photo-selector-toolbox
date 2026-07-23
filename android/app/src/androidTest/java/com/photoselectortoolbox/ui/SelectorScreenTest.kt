@@ -155,13 +155,13 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
-        // Determine layout: expanded has "Previous"/"Next" boxes/arrows, compact does not
-        val isCompact = composeRule.onAllNodesWithText("Previous", ignoreCase = true)
-            .fetchSemanticsNodes().isEmpty()
+        // Determine layout: check for compact culling button vs expanded layout
+        val isCompact = composeRule.onAllNodesWithTag("copy_button_compact")
+            .fetchSemanticsNodes().isNotEmpty()
 
         if (isCompact) {
             // In compact layout, swipe left to navigate to next page
-            composeRule.onNodeWithContentDescription("image1.jpg").performTouchInput {
+            composeRule.onAllNodesWithContentDescription("image1.jpg").onFirst().performTouchInput {
                 swipeLeft()
             }
         } else {
@@ -192,8 +192,8 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
-        val isCompact = composeRule.onAllNodesWithText("Previous", ignoreCase = true)
-            .fetchSemanticsNodes().isEmpty()
+        val isCompact = composeRule.onAllNodesWithTag("copy_button_compact")
+            .fetchSemanticsNodes().isNotEmpty()
 
         // Click Copy Button
         if (isCompact) {
@@ -253,8 +253,8 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
-        val isCompact = composeRule.onAllNodesWithText("Previous", ignoreCase = true)
-            .fetchSemanticsNodes().isEmpty()
+        val isCompact = composeRule.onAllNodesWithTag("copy_button_compact")
+            .fetchSemanticsNodes().isNotEmpty()
 
         // Print tree before clicking delete to debug compact layout clicks
         try { composeRule.onRoot().printToLog("SelectorScreenTest_BeforeDelete") } catch (_: Exception) {}

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Tuple
 
 
-from photo_selector_toolbox.tools import AnalysisTool, ToolRegistry
+from photo_selector_toolbox.tools import AnalysisTool
 from photo_selector_toolbox.utils import load_image_preview, NoRedirectHandler
 
 from photo_selector_toolbox.config import DEFAULT_CONFIG, load_config
@@ -18,15 +18,22 @@ from photo_selector_toolbox.config import DEFAULT_CONFIG, load_config
 logger = logging.getLogger(__name__)
 
 
-@ToolRegistry.register
+# NOTE: This tool is intentionally NOT registered under the "aesthetic" name.
+# The registered "aesthetic" tool is ``AestheticTool`` in ``aesthetic_tool.py``,
+# which delegates here only when the Ollama engine is selected (the optional
+# "advanced / deep critique" mode). Keeping this as a plain, directly-callable
+# engine avoids two tools claiming the same registry key.
 class OllamaAestheticTool(AnalysisTool):
     """
-    Optional analysis tool that queries a local Ollama VLM (e.g., LLaVA)
+    Optional analysis engine that queries a local Ollama VLM (e.g., LLaVA)
     to estimate the aesthetic score of an image.
+
+    Retained as an advanced, opt-in engine. Prefer the lighter Apple Vision or
+    NIMA ONNX engines for routine scoring (see ``aesthetic_tool.py``).
     """
 
     name = "aesthetic"
-    display_name = "AI Aesthetic Evaluation"
+    display_name = "AI Aesthetic Evaluation (Ollama)"
 
     # Class-level lock to serialize local Ollama inference requests
     _lock = threading.Lock()

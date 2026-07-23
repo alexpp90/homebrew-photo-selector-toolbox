@@ -46,6 +46,8 @@ data class ScanConfig(
     val noise: Boolean = true,
     val highlightClipping: Boolean = true,
     val shadowClipping: Boolean = true,
+    /** Opt-in on-device AI aesthetic score (off by default; the expensive one). */
+    val aesthetic: Boolean = false,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,7 +79,7 @@ fun ScanConfigSheet(
                 Button(
                     onClick = { onStartScan(config) },
                     enabled = config.sharpness || config.noise ||
-                        config.highlightClipping || config.shadowClipping,
+                        config.highlightClipping || config.shadowClipping || config.aesthetic,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Indigo500,
                         contentColor = Color.White,
@@ -129,7 +131,7 @@ fun ScanConfigSheet(
                     onClick = { onStartScan(config) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = config.sharpness || config.noise ||
-                        config.highlightClipping || config.shadowClipping,
+                        config.highlightClipping || config.shadowClipping || config.aesthetic,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Indigo500,
                         contentColor = Color.White,
@@ -183,6 +185,13 @@ private fun ScanConfigContent(
             description = "Detect underexposed (crushed black) areas",
             checked = config.shadowClipping,
             onCheckedChange = { onConfigChange(config.copy(shadowClipping = it)) },
+        )
+
+        AnalysisCheckbox(
+            label = "AI Aesthetic Score (beta)",
+            description = "On-device aesthetic rating; runs only on sharp images",
+            checked = config.aesthetic,
+            onCheckedChange = { onConfigChange(config.copy(aesthetic = it)) },
         )
     }
 }

@@ -13,7 +13,8 @@ from photo_selector_toolbox.reader import get_exif_data
 from photo_selector_toolbox.tools import ToolRegistry
 from photo_selector_toolbox.cache import ScoreCache
 import photo_selector_toolbox.sharpness
-import photo_selector_toolbox.ollama_tool
+# Registers the dispatcher "aesthetic" tool (Apple Vision / NIMA ONNX / Ollama).
+import photo_selector_toolbox.aesthetic_tool
 
 logger = logging.getLogger(__name__)
 

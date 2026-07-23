@@ -25,3 +25,7 @@
 **Learning:** When implementing click-and-drag functionality on a custom element like a Tkinter Canvas, the default cursor provides no affordance. Users may not realize the area is draggable.
 **Action:** Always set the default cursor to a recognizable interactive state (e.g., `hand2` in Tkinter) and explicitly change it to a dragging state (e.g., `fleur`) during active drag operations (`<ButtonPress-1>` to `<ButtonRelease-1>`) to provide continuous visual feedback.
 
+
+## 2026-07-23 - One-Time On-Image Affordances vs. Permanent Overlay Clutter (Compose)
+**Learning:** Drawing Previous/Next arrows permanently on top of comparison images (Toolbox Expanded selector) obstructs the photo being judged. Users only need the hint once to learn the tiles are tappable. Persisting a `hasSeenNavHint` flag (DataStore) and rendering the arrows only while it is false gives discoverability without permanent clutter. Also: the layout view-toggle and Move/Copy/Delete controls were sub-40dp — below the 48dp accessibility touch-target minimum — and sat over the image.
+**Action:** For image-review UIs, treat on-image directional arrows as a first-run-only coach affordance (persist a "seen" flag, then suppress). Keep interactive controls at ≥48dp targets and positioned around (not over) the image; add a scrim behind controls that float over variable-brightness photos so they stay legible.

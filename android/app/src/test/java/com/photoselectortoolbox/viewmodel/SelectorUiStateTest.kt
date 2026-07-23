@@ -26,6 +26,23 @@ class SelectorUiStateTest {
     }
 
     @Test
+    fun `expanded selector defaults to focused stacked layout`() {
+        val state = SelectorUiState()
+        // The space-efficient stacked view (current on top, prev/next below)
+        // is the default; three-column is the opt-in alternative.
+        assertTrue(state.selectorLayoutFocused)
+    }
+
+    @Test
+    fun `nav hint is unseen by default so first-run arrows show once`() {
+        val state = SelectorUiState()
+        assertFalse(state.hasSeenNavHint)
+        // After it has been shown, arrows are suppressed.
+        val seen = state.copy(hasSeenNavHint = true)
+        assertTrue(seen.hasSeenNavHint)
+    }
+
+    @Test
     fun `copy with loading flag`() {
         val state = SelectorUiState().copy(isLoading = true)
         assertTrue(state.isLoading)
