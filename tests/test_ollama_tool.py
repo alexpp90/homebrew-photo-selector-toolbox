@@ -31,7 +31,11 @@ def dummy_image_file(tmp_path):
 
 
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_success(mock_open, dummy_image_file, temp_config_dir):
+@patch("socket.getaddrinfo")
+def test_ollama_tool_success(mock_getaddrinfo, mock_open, dummy_image_file, temp_config_dir):
+    mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 11434))]
+    import photo_selector_toolbox.config
+    photo_selector_toolbox.config.save_config({"ollama_url": "http://example.com:11434"})
     # Mock Ollama HTTP response payload
     mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."}
 
@@ -48,15 +52,17 @@ def test_ollama_tool_success(mock_open, dummy_image_file, temp_config_dir):
     mock_open.assert_called_once()
     # Check that URL used default
     req = mock_open.call_args[0][0]
-    assert req.full_url == "http://localhost:11434/api/generate"
+    assert req.full_url == "http://example.com:11434/api/generate"
     assert req.method == "POST"
 
 
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_custom_config(mock_open, dummy_image_file, temp_config_dir):
+@patch("socket.getaddrinfo")
+def test_ollama_tool_custom_config(mock_getaddrinfo, mock_open, dummy_image_file, temp_config_dir):
+    mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 11434))]
     # Setup custom configuration
     custom_config = {
-        "ollama_url": "http://192.168.1.50:11434/",
+        "ollama_url": "http://example.com:11434/",
         "ollama_model": "qwen-vl",
         "ollama_prompt": "Rate the aesthetics of the photo. Score: ",
     }
@@ -75,7 +81,7 @@ def test_ollama_tool_custom_config(mock_open, dummy_image_file, temp_config_dir)
     assert score == 9.3
     assert tag == "Sharp"
     req = mock_open.call_args[0][0]
-    assert req.full_url == "http://192.168.1.50:11434/api/generate"
+    assert req.full_url == "http://example.com:11434/api/generate"
 
     # Assert JSON payload parameters match config
     body = json.loads(req.data.decode("utf-8"))
@@ -84,7 +90,11 @@ def test_ollama_tool_custom_config(mock_open, dummy_image_file, temp_config_dir)
 
 
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_connection_error(mock_open, dummy_image_file, temp_config_dir):
+@patch("socket.getaddrinfo")
+def test_ollama_tool_connection_error(mock_getaddrinfo, mock_open, dummy_image_file, temp_config_dir):
+    mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 11434))]
+    import photo_selector_toolbox.config
+    photo_selector_toolbox.config.save_config({"ollama_url": "http://example.com:11434"})
     # Mock connection failure (URLError)
     mock_open.side_effect = urllib.error.URLError("Connection refused")
 
@@ -96,7 +106,11 @@ def test_ollama_tool_connection_error(mock_open, dummy_image_file, temp_config_d
 
 
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_parsing_error(mock_open, dummy_image_file, temp_config_dir):
+@patch("socket.getaddrinfo")
+def test_ollama_tool_parsing_error(mock_getaddrinfo, mock_open, dummy_image_file, temp_config_dir):
+    mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 11434))]
+    import photo_selector_toolbox.config
+    photo_selector_toolbox.config.save_config({"ollama_url": "http://example.com:11434"})
     # Mock response with no float scores in text
     mock_resp_payload = {"response": "This is a photo of a sunset, it looks great but I can't give a number."}
 
@@ -114,7 +128,11 @@ def test_ollama_tool_parsing_error(mock_open, dummy_image_file, temp_config_dir)
 
 
 @patch("urllib.request.OpenerDirector.open")
-def test_ollama_tool_fallback_analysis(mock_open, dummy_image_file, temp_config_dir):
+@patch("socket.getaddrinfo")
+def test_ollama_tool_fallback_analysis(mock_getaddrinfo, mock_open, dummy_image_file, temp_config_dir):
+    mock_getaddrinfo.return_value = [(2, 1, 6, "", ("93.184.216.34", 11434))]
+    import photo_selector_toolbox.config
+    photo_selector_toolbox.config.save_config({"ollama_url": "http://example.com:11434"})
     # Mock response with SCORE but no ANALYSIS tag
     mock_resp_payload = {"response": "The aesthetic quality score of this photo is 8.5."}
 
