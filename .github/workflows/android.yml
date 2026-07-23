@@ -118,38 +118,6 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Cache the AVD + snapshot so the boot-and-snapshot step only runs on
-      # cache miss instead of on every workflow run.
-      - name: AVD cache
-        id: avd-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-api${{ matrix.api-level }}
-
-      - name: Create AVD and generate snapshot
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        env:
-          # Give the emulator longer to shut down gracefully before it is killed.
-          # Works around the "stop: Not implemented" hang on snapshot save.
-          # https://github.com/ReactiveCircus/android-emulator-runner/issues/385
-          ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL: 60
-        with:
-          api-level: ${{ matrix.api-level }}
-          arch: x86_64
-          target: google_apis
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none
-          disable-animations: true
-          script: |
-            echo "AVD snapshot generated"
-            # crashpad_handler can outlive the emulator and block shutdown,
-            # causing "stop: Not implemented" + adb exit code 1. Reap it.
-            killall -INT crashpad_handler || true
-
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -159,14 +127,13 @@ jobs:
           arch: x86_64
           target: google_apis
           force-avd-creation: false
-          # -no-snapshot-save: snapshot is already cached, so skip the save on
-          # teardown that triggers the shutdown hang.
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none
+          disable-snapshot: true
           disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none
           working-directory: android
           script: |
             ./gradlew :app:connectedDebugAndroidTest :phototok:connectedDebugAndroidTest --stacktrace
-            killall -INT crashpad_handler || true
+            killall -9 crashpad_handler || true
 
       - name: Upload instrumented test report
         if: always()

@@ -19,6 +19,14 @@ dependencies = [
     "numpy (>=2.0.0)"
 ]
 
+[project.optional-dependencies]
+# Lightweight aesthetic-scoring engines. Optional so the core install stays
+# slim and Ollama-only users are unaffected.
+#   nima  -> ONNX Runtime for the NIMA (MobileNet) regressor (cross-platform).
+#   apple -> PyObjC Vision bridge for Apple's on-device aesthetics (macOS 15+).
+nima = ["onnxruntime (>=1.17.0)"]
+apple = ["pyobjc-framework-Vision (>=10.0); sys_platform == 'darwin'"]
+
 [project.scripts]
 photo-selector-toolbox = "photo_selector_toolbox.cli:main"
 photo-selector-gui = "photo_selector_toolbox.gui:main"

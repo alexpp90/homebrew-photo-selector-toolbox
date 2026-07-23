@@ -629,3 +629,156 @@ def test_cancel_scan():
         # Assertions
         tool.scan_controller.cancel.assert_called_once()
         tool.log.assert_called_once_with("Stopping scan...")
+
+
+def _make_tool():
+    """Construct a SharpnessTool with the GUI setup patched out."""
+    from photo_selector_toolbox.sharpness_gui import SharpnessTool
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+    with (
+        patch("photo_selector_toolbox.sharpness_gui.tk.Toplevel"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.setup_focus_ui"),
+        patch("photo_selector_toolbox.sharpness_gui.SharpnessTool.bind_all"),
+    ):
+        return SharpnessTool(parent)
+
+
+def _group_fixture(tool):
+    """Set up candidates/groups: expanded A[a1,a2,a3], collapsed B[b1,b2], single C[c1]."""
+    from pathlib import Path
+    from photo_selector_toolbox.sharpness_gui import ImageGroup
+
+    a1, a2, a3, b1, c1 = (Path(p) for p in ["a1", "a2", "a3", "b1", "c1"])
+    tool.group_similar_var.set(True)  # enable grouping
+    tool.candidates = [a1, a2, a3, b1, c1]
+    tool.image_groups = [
+        ImageGroup(representative=a1, files=[a1, a2, a3], expanded=True),
+        ImageGroup(representative=b1, files=[b1, Path("b2")], expanded=False),
+        ImageGroup(representative=c1, files=[c1], expanded=False),
+    ]
+    return a1, a2, a3, b1, c1
+
+
+def test_current_group_bounds_confines_to_expanded_group():
+    tool = _make_tool()
+    _group_fixture(tool)
+
+    # Inside the expanded group A -> contiguous block (0, 2).
+    assert tool._current_group_bounds(0) == (0, 2)
+    assert tool._current_group_bounds(1) == (0, 2)
+    assert tool._current_group_bounds(2) == (0, 2)
+    # Collapsed group B representative and single C fall back to flat nav.
+    assert tool._current_group_bounds(3) is None
+    assert tool._current_group_bounds(4) is None
+
+    # With grouping disabled, everything is flat.
+    tool.group_similar_var.set(False)
+    assert tool._current_group_bounds(0) is None
+
+
+def test_group_limited_nav_index_stops_at_group_boundaries():
+    tool = _make_tool()
+    _group_fixture(tool)
+    tool.candidate_listbox = MagicMock()
+
+    # From a1 (idx 0): next -> a2 (1); prev -> None (group start).
+    tool.candidate_listbox.curselection.return_value = (0,)
+    assert tool._group_limited_nav_index(1) == 1
+    assert tool._group_limited_nav_index(-1) is None
+
+    # From a3 (idx 2, group end): next -> None; prev -> a2 (1).
+    tool.candidate_listbox.curselection.return_value = (2,)
+    assert tool._group_limited_nav_index(1) is None
+    assert tool._group_limited_nav_index(-1) == 1
+
+    # From collapsed B representative (idx 3): flat nav across groups.
+    tool.candidate_listbox.curselection.return_value = (3,)
+    assert tool._group_limited_nav_index(1) == 4
+    assert tool._group_limited_nav_index(-1) == 2
+
+
+def test_scan_requested_during_grouping_is_queued_then_started():
+    tool = _make_tool()
+    tool.log = MagicMock()
+    tool.update_scan_button_state = MagicMock()
+    tool.folder_var.set("/mock/folder")
+
+    # Grouping in progress: start_scan should queue rather than run.
+    tool.is_grouping = True
+    with patch("photo_selector_toolbox.sharpness_gui.Path.exists", return_value=True):
+        tool.start_scan()
+    assert tool._pending_scan is True
+
+    # When grouping completes, the queued scan is started automatically.
+    tool.is_grouping = False
+    started = []
+    tool.start_scan = lambda: started.append(True)
+    tool._start_pending_scan_if_any()
+    assert started == [True]
+    assert tool._pending_scan is False
+
+
+def test_cancel_pending_scan_clears_queue():
+    tool = _make_tool()
+    tool.log = MagicMock()
+    tool.update_scan_button_state = MagicMock()
+    tool._pending_scan = True
+
+    tool.cancel_pending_scan()
+    assert tool._pending_scan is False
+
+
+def _attach_focus_labels(tool):
+    """Attach the focus-mode overlay labels the metadata writer updates."""
+    for name in [
+        "meta_lbl", "focus_score_lbl", "focus_noise_lbl", "focus_hl_lbl",
+        "focus_sd_lbl", "focus_cat_lbl", "focus_filename_lbl", "focus_meta_lbl",
+        "focus_aesthetic_lbl",
+    ]:
+        setattr(tool, name, MagicMock())
+
+
+def test_focus_mode_shows_aesthetic_score_when_present():
+    from pathlib import Path
+
+    tool = _make_tool()
+    _attach_focus_labels(tool)
+
+    res = MagicMock()
+    res.score = 7.0
+    res.noise_score = "N/A"
+    res.scores = {
+        "aesthetic": 7.5,
+        "aesthetic_analysis": "Great Lighting",
+        "highlight_clipping": "N/A",
+        "shadow_clipping": "N/A",
+    }
+
+    tool._set_metadata_labels(Path("a1.jpg"), None, res)
+
+    # The focus-mode aesthetic label is populated and shown.
+    assert tool.focus_aesthetic_lbl.config.called
+    text = tool.focus_aesthetic_lbl.config.call_args.kwargs.get("text", "")
+    assert "Aesthetic Score" in text
+    assert tool.focus_aesthetic_lbl.pack.called
+
+
+def test_focus_mode_hides_aesthetic_score_when_absent():
+    from pathlib import Path
+
+    tool = _make_tool()
+    _attach_focus_labels(tool)
+
+    res = MagicMock()
+    res.score = 7.0
+    res.noise_score = "N/A"
+    res.scores = {"highlight_clipping": "N/A", "shadow_clipping": "N/A"}
+
+    tool._set_metadata_labels(Path("a1.jpg"), None, res)
+
+    # No aesthetic value -> the label is hidden (pack_forget), never packed.
+    assert tool.focus_aesthetic_lbl.pack_forget.called
+    assert not tool.focus_aesthetic_lbl.pack.called

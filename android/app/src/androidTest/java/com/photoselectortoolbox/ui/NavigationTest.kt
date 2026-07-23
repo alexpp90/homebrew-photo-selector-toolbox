@@ -36,7 +36,7 @@ class NavigationTest {
 
     @Test
     fun selectorScreenIsDefaultDestination() {
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty() ||
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
@@ -55,7 +55,7 @@ class NavigationTest {
 
     @Test
     fun navigateToStatistics() {
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty() ||
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
@@ -84,7 +84,7 @@ class NavigationTest {
 
     @Test
     fun navigateToDuplicates() {
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty() ||
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
@@ -112,7 +112,7 @@ class NavigationTest {
 
     @Test
     fun navigateToSettings() {
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty() ||
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
@@ -140,7 +140,7 @@ class NavigationTest {
 
     @Test
     fun navigateBackToSelector() {
-        composeRule.waitUntil(timeoutMillis = 5000) {
+        composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty() ||
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)

@@ -6,5 +6,7 @@ data class ScanResult(
     val noiseLevel: Double? = null,
     val highlightClipping: Double? = null,
     val shadowClipping: Double? = null,
+    /** On-device AI aesthetic score on a 1.0–10.0 scale (null when not computed). */
+    val aestheticScore: Double? = null,
     val exifData: ExifData? = null
 )

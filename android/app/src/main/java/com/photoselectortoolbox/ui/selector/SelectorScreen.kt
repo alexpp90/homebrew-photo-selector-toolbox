@@ -38,6 +38,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.ContentCopy
@@ -263,9 +264,9 @@ fun SelectorScreen(
     // Scan config sheet/dialog
     if (showScanConfig) {
         ScanConfigSheet(
-            onStartScan = {
+            onStartScan = { config ->
                 showScanConfig = false
-                viewModel.startScan()
+                viewModel.startScan(config.aesthetic)
             },
             onDismiss = { showScanConfig = false },
             isExpanded = isExpanded || isMedium,
@@ -562,6 +563,9 @@ fun SelectorScreen(
                 ExpandedSelectorLayout(
                     uiState = uiState,
                     windowSizeClass = windowSizeClass,
+                    focusedLayout = uiState.selectorLayoutFocused,
+                    onToggleLayout = viewModel::toggleSelectorLayout,
+                    onNavHintSeen = viewModel::markNavHintSeen,
                     onNavigateToImage = viewModel::navigateToImage,
                     onNavigateNext = viewModel::navigateNext,
                     onNavigatePrevious = viewModel::navigatePrevious,
@@ -629,6 +633,9 @@ fun SelectorScreen(
 private fun ExpandedSelectorLayout(
     uiState: com.photoselectortoolbox.viewmodel.SelectorUiState,
     windowSizeClass: WindowSizeClass,
+    focusedLayout: Boolean,
+    onToggleLayout: () -> Unit,
+    onNavHintSeen: () -> Unit,
     onNavigateToImage: (Int) -> Unit,
     onNavigateNext: () -> Unit,
     onNavigatePrevious: () -> Unit,
@@ -638,13 +645,22 @@ private fun ExpandedSelectorLayout(
     onCopyToSelection: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    var useFocusedLayout by remember { mutableStateOf(false) }
+    // On-image navigation arrows are only a first-run affordance. Once the
+    // hint has been shown for images, we persist that fact and never draw the
+    // arrows over the photos again (they just clutter the view thereafter).
+    val showNavArrows = !uiState.hasSeenNavHint
+    LaunchedEffect(uiState.images.isNotEmpty(), showNavArrows) {
+        if (uiState.images.isNotEmpty() && showNavArrows) {
+            onNavHintSeen()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (useFocusedLayout) {
+        if (focusedLayout) {
             FocusedSelectorLayout(
                 uiState = uiState,
                 windowSizeClass = windowSizeClass,
+                showNavArrows = showNavArrows,
                 onNavigateToImage = onNavigateToImage,
                 onNavigateNext = onNavigateNext,
                 onNavigatePrevious = onNavigatePrevious,
@@ -657,6 +673,7 @@ private fun ExpandedSelectorLayout(
             ThreeColumnSelectorLayout(
                 uiState = uiState,
                 windowSizeClass = windowSizeClass,
+                showNavArrows = showNavArrows,
                 onNavigateToImage = onNavigateToImage,
                 onNavigateNext = onNavigateNext,
                 onNavigatePrevious = onNavigatePrevious,
@@ -667,19 +684,25 @@ private fun ExpandedSelectorLayout(
             )
         }
 
-        // Layout toggle button (top-right corner)
-        IconButton(
-            onClick = { useFocusedLayout = !useFocusedLayout },
+        // Layout toggle button (top-right corner) — enlarged, comfortable
+        // touch target with a scrim so it stays legible over any image.
+        FilledTonalIconButton(
+            onClick = onToggleLayout,
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = Color.Black.copy(alpha = 0.55f),
+                contentColor = Color.White,
+            ),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(4.dp)
-                .size(32.dp),
+                .padding(8.dp)
+                .size(52.dp)
+                .testTag("layout_toggle")
+                .pointerHoverIcon(PointerIcon.Hand),
         ) {
             Icon(
-                imageVector = if (useFocusedLayout) Icons.Default.GridView else Icons.Default.ViewAgenda,
-                contentDescription = if (useFocusedLayout) "Three column view" else "Focused view",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
+                imageVector = if (focusedLayout) Icons.Default.GridView else Icons.Default.ViewAgenda,
+                contentDescription = if (focusedLayout) "Switch to side-by-side view" else "Switch to stacked view",
+                modifier = Modifier.size(30.dp),
             )
         }
     }
@@ -692,6 +715,7 @@ private fun ExpandedSelectorLayout(
 private fun ThreeColumnSelectorLayout(
     uiState: com.photoselectortoolbox.viewmodel.SelectorUiState,
     windowSizeClass: WindowSizeClass,
+    showNavArrows: Boolean,
     onNavigateToImage: (Int) -> Unit,
     onNavigateNext: () -> Unit,
     onNavigatePrevious: () -> Unit,
@@ -721,6 +745,7 @@ private fun ThreeColumnSelectorLayout(
                 imageItem = prevImage,
                 title = "Previous",
                 isCurrent = false,
+                showNavArrows = showNavArrows,
                 onClick = onNavigatePrevious
             )
 
@@ -742,9 +767,9 @@ private fun ThreeColumnSelectorLayout(
                                 .weight(1f)
                                 .testTag("move_button_expanded")
                                 .pointerHoverIcon(PointerIcon.Hand),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.DriveFileMove, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Move", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         }
@@ -754,9 +779,9 @@ private fun ThreeColumnSelectorLayout(
                                 .weight(1f)
                                 .testTag("copy_button_expanded")
                                 .pointerHoverIcon(PointerIcon.Hand),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Copy", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         }
@@ -767,9 +792,9 @@ private fun ThreeColumnSelectorLayout(
                                 .weight(1f)
                                 .testTag("delete_button_expanded")
                                 .pointerHoverIcon(PointerIcon.Hand),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Delete", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         }
@@ -784,6 +809,7 @@ private fun ThreeColumnSelectorLayout(
                 imageItem = nextImage,
                 title = "Next",
                 isCurrent = false,
+                showNavArrows = showNavArrows,
                 onClick = onNavigateNext
             )
         }
@@ -811,6 +837,7 @@ private fun ThreeColumnSelectorLayout(
 private fun FocusedSelectorLayout(
     uiState: com.photoselectortoolbox.viewmodel.SelectorUiState,
     windowSizeClass: WindowSizeClass,
+    showNavArrows: Boolean,
     onNavigateToImage: (Int) -> Unit,
     onNavigateNext: () -> Unit,
     onNavigatePrevious: () -> Unit,
@@ -891,9 +918,12 @@ private fun FocusedSelectorLayout(
                             containerColor = Color.Black.copy(alpha = 0.6f),
                             contentColor = Color.White
                         ),
-                        modifier = Modifier.size(36.dp).pointerHoverIcon(PointerIcon.Hand)
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("move_button_expanded")
+                            .pointerHoverIcon(PointerIcon.Hand)
                     ) {
-                        Icon(Icons.Default.DriveFileMove, contentDescription = "Move to Selection", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.DriveFileMove, contentDescription = "Move to Selection", modifier = Modifier.size(24.dp))
                     }
 
                     FilledTonalIconButton(
@@ -902,9 +932,12 @@ private fun FocusedSelectorLayout(
                             containerColor = Color.Black.copy(alpha = 0.6f),
                             contentColor = Color.White
                         ),
-                        modifier = Modifier.size(36.dp).pointerHoverIcon(PointerIcon.Hand)
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("copy_button_expanded")
+                            .pointerHoverIcon(PointerIcon.Hand)
                     ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy to Selection", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy to Selection", modifier = Modifier.size(24.dp))
                     }
 
                     FilledTonalIconButton(
@@ -913,9 +946,12 @@ private fun FocusedSelectorLayout(
                             containerColor = Color.Black.copy(alpha = 0.6f),
                             contentColor = Color.White
                         ),
-                        modifier = Modifier.size(36.dp).pointerHoverIcon(PointerIcon.Hand)
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("delete_button_expanded")
+                            .pointerHoverIcon(PointerIcon.Hand)
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
                     }
 
                     FilledTonalIconButton(
@@ -924,9 +960,9 @@ private fun FocusedSelectorLayout(
                             containerColor = Color.Black.copy(alpha = 0.6f),
                             contentColor = Color.White
                         ),
-                        modifier = Modifier.size(36.dp).pointerHoverIcon(PointerIcon.Hand)
+                        modifier = Modifier.size(48.dp).pointerHoverIcon(PointerIcon.Hand)
                     ) {
-                        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", modifier = Modifier.size(24.dp))
                     }
                 }
 
@@ -1013,6 +1049,11 @@ private fun FocusedSelectorLayout(
                                     value = scores.shadowClipping,
                                     format = "%.1f%%",
                                 )
+                                ScoreChip(
+                                    icon = Icons.Default.AutoAwesome,
+                                    label = "Aesthetic",
+                                    value = scores.aestheticScore,
+                                )
                             }
                         }
                     }
@@ -1036,6 +1077,7 @@ private fun FocusedSelectorLayout(
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(10.dp))
                     .background(Zinc950)
+                    .testTag("column_previous")
                     .then(
                         if (prevImage != null) Modifier
                             .pointerHoverIcon(PointerIcon.Hand)
@@ -1061,15 +1103,17 @@ private fun FocusedSelectorLayout(
                         Text("Previous", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
                         Text(prevImage.fileName, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Previous",
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                            .padding(6.dp),
-                    )
+                    if (showNavArrows) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Previous",
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                                .padding(6.dp),
+                        )
+                    }
                 } else {
                     Text("No Previous", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), style = MaterialTheme.typography.bodySmall)
                 }
@@ -1082,6 +1126,7 @@ private fun FocusedSelectorLayout(
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(10.dp))
                     .background(Zinc950)
+                    .testTag("column_next")
                     .then(
                         if (nextImage != null) Modifier
                             .pointerHoverIcon(PointerIcon.Hand)
@@ -1107,15 +1152,17 @@ private fun FocusedSelectorLayout(
                         Text("Next", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
                         Text(nextImage.fileName, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Next",
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                            .padding(6.dp),
-                    )
+                    if (showNavArrows) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Next",
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                                .padding(6.dp),
+                        )
+                    }
                 } else {
                     Text("No Next", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), style = MaterialTheme.typography.bodySmall)
                 }
@@ -1142,6 +1189,7 @@ private fun ImageComparisonColumn(
     imageItem: ImageItem?,
     title: String,
     isCurrent: Boolean,
+    showNavArrows: Boolean = false,
     onClick: () -> Unit,
     actionsContent: (@Composable () -> Unit)? = null
 ) {
@@ -1181,21 +1229,23 @@ private fun ImageComparisonColumn(
                 )
                 
                 if (!isCurrent) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.15f))
-                    )
-                    Icon(
-                        imageVector = if (title == "Previous") Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier
-                            .size(36.dp)
-                            .align(Alignment.Center)
-                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                            .padding(8.dp)
-                    )
+                    if (showNavArrows) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.15f))
+                        )
+                        Icon(
+                            imageVector = if (title == "Previous") Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(36.dp)
+                                .align(Alignment.Center)
+                                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                                .padding(8.dp)
+                        )
+                    }
                 } else {
                     Icon(
                         imageVector = Icons.Default.Fullscreen,
@@ -1263,6 +1313,11 @@ private fun ImageComparisonColumn(
                             label = "Shadow",
                             value = scores.shadowClipping,
                             format = "%.1f%%"
+                        )
+                        ScoreChip(
+                            icon = Icons.Default.AutoAwesome,
+                            label = "Aesthetic",
+                            value = scores.aestheticScore
                         )
                     }
                 }
@@ -1452,6 +1507,11 @@ private fun CompactSelectorLayout(
                                     label = "Shadow",
                                     value = scores.shadowClipping,
                                     format = "%.0f%%",
+                                )
+                                ScoreChip(
+                                    icon = Icons.Default.AutoAwesome,
+                                    label = "Aesthetic",
+                                    value = scores.aestheticScore,
                                 )
                             }
                         }

@@ -50,6 +50,10 @@ data class SelectorUiState(
     val groups: List<List<Int>> = emptyList(),
     val fullscreenButtonsEnabled: Boolean = true,
     val fullscreenGestureAction: String = "copy",
+    /** Expanded layout: true = stacked "focused" view (default), false = three-column. */
+    val selectorLayoutFocused: Boolean = true,
+    /** Whether the one-time on-image nav arrows have already been shown. */
+    val hasSeenNavHint: Boolean = false,
 )
 
 @HiltViewModel
@@ -101,6 +105,18 @@ class SelectorViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.fullscreenGestureAction.collect { action ->
                 _uiState.update { it.copy(fullscreenGestureAction = action) }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.selectorLayoutFocused.collect { focused ->
+                _uiState.update { it.copy(selectorLayoutFocused = focused) }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.hasSeenNavHint.collect { seen ->
+                _uiState.update { it.copy(hasSeenNavHint = seen) }
             }
         }
 
@@ -266,7 +282,7 @@ class SelectorViewModel @Inject constructor(
         }
     }
 
-    fun startScan() {
+    fun startScan(aestheticEnabled: Boolean = false) {
         val images = _uiState.value.images
         if (images.isEmpty()) return
 
@@ -282,7 +298,7 @@ class SelectorViewModel @Inject constructor(
             }
 
             try {
-                scanImagesUseCase(images).collect { progress ->
+                scanImagesUseCase(images, aestheticEnabled).collect { progress ->
                     val fraction = if (progress.total > 0) {
                         progress.processed.toFloat() / progress.total.toFloat()
                     } else {
@@ -505,6 +521,23 @@ class SelectorViewModel @Inject constructor(
     fun setGroupingLevel(level: GroupingLevel) {
         viewModelScope.launch {
             settingsRepository.setGroupingLevel(level)
+        }
+    }
+
+    /** Toggle the expanded selector between stacked "focused" and three-column layouts. */
+    fun toggleSelectorLayout() {
+        viewModelScope.launch {
+            val current = settingsRepository.selectorLayoutFocused.first()
+            settingsRepository.setSelectorLayoutFocused(!current)
+        }
+    }
+
+    /** Persist that the one-time on-image navigation arrows have now been shown. */
+    fun markNavHintSeen() {
+        viewModelScope.launch {
+            if (!settingsRepository.hasSeenNavHint.first()) {
+                settingsRepository.setHasSeenNavHint(true)
+            }
         }
     }
 

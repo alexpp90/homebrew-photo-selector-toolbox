@@ -27,7 +27,6 @@ android/app/build/
 android/phototok/build/
 android/local.properties
 android/.idea/
-android/app/schemas/
 *.apk
 *.aab
 *.jks

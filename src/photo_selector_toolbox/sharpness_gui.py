@@ -52,6 +52,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.log_queue = queue.Queue()
         self.is_scanning = False
         self.is_grouping = False
+        # A scan requested while grouping is still running is queued here and
+        # started automatically once grouping completes.
+        self._pending_scan = False
         self.stop_event = threading.Event()
         self.bg_stop_event = threading.Event()
         self.grouping_stop_event = threading.Event()
@@ -594,7 +597,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         aesthetic_row = ttk.Frame(container)
         aesthetic_row.pack(fill="x", pady=5)
         ttk.Checkbutton(
-            aesthetic_row, text="AI Aesthetic Evaluation (Ollama)", variable=self.tool_aesthetic_var
+            aesthetic_row, text="AI Aesthetic Evaluation", variable=self.tool_aesthetic_var
         ).pack(side="left", padx=5)
 
         config_btn = ttk.Button(
@@ -830,8 +833,25 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
     def update_scan_button_state(self):
         if self.is_scanning:
             self.scan_options_btn.config(text="🛑 Cancel Scan", command=self.cancel_scan)
+        elif getattr(self, "_pending_scan", False):
+            self.scan_options_btn.config(
+                text="⏳ Scan Queued (after grouping)", command=self.cancel_pending_scan
+            )
         else:
             self.scan_options_btn.config(text="⚡ Scan for Sharpness/Noise...", command=self.show_scan_dialog)
+
+    def cancel_pending_scan(self):
+        """Cancel a scan that was queued while grouping was running."""
+        self._pending_scan = False
+        self.log("Queued scan cancelled.")
+        self.update_scan_button_state()
+
+    def _start_pending_scan_if_any(self):
+        """Start a scan that was queued while grouping was running, if any."""
+        if getattr(self, "_pending_scan", False):
+            self._pending_scan = False
+            self.log("Grouping complete — starting queued scan...")
+            self.start_scan()
 
 
     def setup_focus_ui(self):
@@ -1112,7 +1132,18 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
        # Check if file exists
         if path and path.exists():
            # Pass candidates so FullscreenViewer can navigate via N/P keys
-            file_list = getattr(self, "candidates", [])
+            candidates = getattr(self, "candidates", [])
+            file_list = candidates
+           # Confine fullscreen N/P navigation to the current group when the
+           # image belongs to an expanded series (group-limited navigation).
+            try:
+                idx = candidates.index(path)
+                bounds = self._current_group_bounds(idx)
+                if bounds is not None:
+                    lo, hi = bounds
+                    file_list = candidates[lo:hi + 1]
+            except (ValueError, AttributeError):
+                pass
             FullscreenViewer(
                 self, path, initial_mode=mode, focus_point=focus, file_list=file_list
             )
@@ -1610,8 +1641,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.group_similar_chk.state(["disabled"])
         self.group_level_combo.state(["disabled"])
 
-       # Also disable scan options button to prevent concurrent scans
-        self.scan_options_btn.state(["disabled"])
+       # The scan button stays enabled: a scan requested now is queued and
+       # runs automatically once grouping completes (see start_scan).
+        self.update_scan_button_state()
 
         self.log(f"Starting similarity analysis for series grouping on {len(missing)} files...")
 
@@ -1706,6 +1738,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.log("Similarity analysis complete.")
         self.apply_grouping_and_refresh()
 
+       # Start any scan the user queued while grouping was running.
+        self._start_pending_scan_if_any()
+
     def _handle_grouping_cancelled(self):
         self.is_grouping = False
         self.group_progress_frame.pack_forget()
@@ -1730,6 +1765,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.log("Similarity analysis cancelled.")
         self.apply_grouping_and_refresh()
+
+       # Grouping is no longer running, so honour a queued scan if present.
+        self._start_pending_scan_if_any()
 
     def apply_grouping_and_refresh(self, select_path=None):
         selected = self.file_type_var.get()
@@ -1862,8 +1900,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             messagebox.showerror("Error", "Please select a valid folder.")
             return
 
+       # If a similarity-grouping pass is still running, queue the scan and
+       # start it automatically once grouping completes instead of blocking
+       # the user or cancelling the grouping work.
         if self.is_grouping:
-            self.cancel_grouping()
+            self._pending_scan = True
+            self.log("Scan queued — will start automatically after grouping completes.")
+            self.update_scan_button_state()
+            return
 
        # Disable grouping controls
         self.group_similar_chk.state(["disabled"])
@@ -2198,8 +2242,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if type(total).__name__ in ("MagicMock", "Mock"):
             total = 1
 
+        # Confine prev/next availability to the current group's block when the
+        # selected image is part of an expanded series (group-limited nav).
+        bounds = self._current_group_bounds(idx)
+        lo, hi = bounds if bounds is not None else (0, total - 1)
+
         # Previous buttons
-        prev_state = "!disabled" if idx > 0 else "disabled"
+        prev_state = "!disabled" if idx > lo else "disabled"
         for btn in self._cached_buttons["prev"]:
             try:
                 btn.state([prev_state])
@@ -2207,7 +2256,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 pass
 
         # Next buttons
-        next_state = "!disabled" if idx < total - 1 else "disabled"
+        next_state = "!disabled" if idx < hi else "disabled"
         for btn in self._cached_buttons["next"]:
             try:
                 btn.state([next_state])
@@ -2228,12 +2277,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         idx = self.candidates.index(current_path)
 
-        prev_path = self.candidates[idx - 1] if idx > 0 else None
-        next_path = (
-            self.candidates[idx + 1]
-            if idx < len(self.candidates) - 1
-            else None
-        )
+        # Confine the previous/next neighbours to the current group when the
+        # image belongs to an expanded series (group-limited navigation).
+        bounds = self._current_group_bounds(idx)
+        lo, hi = bounds if bounds is not None else (0, len(self.candidates) - 1)
+
+        prev_path = self.candidates[idx - 1] if idx > lo else None
+        next_path = self.candidates[idx + 1] if idx < hi else None
 
        # Store paths in panels for fullscreen access
         self.panel_prev.path = prev_path
@@ -2637,21 +2687,69 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             else:
                 self.focus_next_overlay.place_forget()
 
-    def prev_candidate(self):
+    def _current_group_bounds(self, cur_idx):
+        """Inclusive (start, end) candidate-index bounds of the *expanded*
+        multi-file group containing candidate ``cur_idx``.
+
+        Returns ``None`` when group-limited navigation does not apply — i.e.
+        grouping is disabled, the current image is not in a group, the group
+        has a single file, or the group is collapsed. When a group is
+        expanded it occupies a contiguous block in ``self.candidates`` that
+        starts at its representative, so navigation can simply be clamped to
+        that block to keep the previous/next images within the same series.
+        """
+        if not self._is_grouping_enabled():
+            return None
+        try:
+            cur_path = self.candidates[cur_idx]
+        except (IndexError, TypeError, AttributeError):
+            return None
+        for group in getattr(self, "image_groups", []) or []:
+            if len(group.files) <= 1 or not group.expanded:
+                continue
+            if cur_path == group.representative or cur_path in group.files:
+                try:
+                    start = self.candidates.index(group.representative)
+                except ValueError:
+                    return None
+                end = start + len(group.files) - 1
+                if start <= cur_idx <= end:
+                    return (start, end)
+        return None
+
+    def _group_limited_nav_index(self, direction):
+        """Candidate index to move to for ``direction`` (+1 next / -1 prev),
+        confined to the current expanded group's block (``None`` at its
+        boundaries). Falls back to the full candidate list when not in a
+        group."""
         sel = self.candidate_listbox.curselection()
-        if sel and sel[0] > 0:
+        if not sel:
+            return None
+        cur_idx = sel[0]
+        if type(cur_idx).__name__ in ("MagicMock", "Mock"):
+            return None
+        bounds = self._current_group_bounds(cur_idx)
+        lo, hi = bounds if bounds is not None else (0, len(self.candidates) - 1)
+        new_idx = cur_idx + direction
+        if lo <= new_idx <= hi:
+            return new_idx
+        return None
+
+    def prev_candidate(self):
+        target = self._group_limited_nav_index(-1)
+        if target is not None:
             self.candidate_listbox.selection_clear(0, "end")
-            self.candidate_listbox.selection_set(sel[0] - 1)
+            self.candidate_listbox.selection_set(target)
             self.candidate_listbox.event_generate("<<ListboxSelect>>")
-            self.candidate_listbox.see(sel[0] - 1)
+            self.candidate_listbox.see(target)
 
     def next_candidate(self):
-        sel = self.candidate_listbox.curselection()
-        if sel and sel[0] < self.candidate_listbox.size() - 1:
+        target = self._group_limited_nav_index(1)
+        if target is not None:
             self.candidate_listbox.selection_clear(0, "end")
-            self.candidate_listbox.selection_set(sel[0] + 1)
+            self.candidate_listbox.selection_set(target)
             self.candidate_listbox.event_generate("<<ListboxSelect>>")
-            self.candidate_listbox.see(sel[0] + 1)
+            self.candidate_listbox.see(target)
 
     def delete_current_candidate(self):
         sel = self.candidate_listbox.curselection()

@@ -13,5 +13,7 @@ data class ScoreEntity(
     val noiseLevel: Double? = null,
     val highlightClipping: Double? = null,
     val shadowClipping: Double? = null,
+    /** On-device AI aesthetic score (1.0–10.0), added in DB schema v2. */
+    val aestheticScore: Double? = null,
     val lastAccessTime: Long = System.currentTimeMillis()
 )

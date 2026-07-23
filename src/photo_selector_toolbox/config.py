@@ -17,6 +17,18 @@ CONFIG_DIR = Path.home() / ".photo_selector_toolbox"
 CONFIG_FILE = CONFIG_DIR / "settings.json"
 
 DEFAULT_CONFIG: Dict[str, Union[str, bool, List[str]]] = {
+    # Aesthetic scoring engine selection:
+    #   "auto"         - pick the best available at runtime (Apple Vision on
+    #                    macOS 15+, else NIMA ONNX if a model is configured,
+    #                    else Ollama). Safe default: existing Ollama setups keep
+    #                    working until a lighter engine is provisioned.
+    #   "apple_vision" - Apple Vision aesthetics (macOS 15+, on-device, fast).
+    #   "nima_onnx"    - small NIMA (MobileNet) regressor via ONNX Runtime.
+    #   "ollama"       - original local LLaVA VLM (advanced / "deep critique").
+    "aesthetic_engine": "auto",
+    # Filesystem path to a NIMA model exported to ONNX (used by the nima_onnx
+    # engine). Empty by default — provide a model to enable this engine.
+    "nima_model_path": "",
     "ollama_url": "http://localhost:11434",
     "ollama_model": "llava",
     "ollama_prompt": (
