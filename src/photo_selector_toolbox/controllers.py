@@ -152,7 +152,12 @@ class ImageCacheManager:
                 logger.debug(f"Full res load error for {path_str}: {e}")
 
 
-def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool], cached_scores: Optional[Dict[str, Union[float, str]]] = None) -> Tuple[ScanResult, Dict[str, Union[float, str]]]:
+def _process_single_file(
+    f: Path,
+    grid_size: int,
+    tools: Dict[str, bool],
+    cached_scores: Optional[Dict[str, Union[float, str]]] = None
+) -> Tuple[ScanResult, Dict[str, Union[float, str]]]:
     """Helper module function to process a single image for parallel execution."""
     if cached_scores is None:
         cached_scores = {}
