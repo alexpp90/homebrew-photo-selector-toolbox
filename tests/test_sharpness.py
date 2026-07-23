@@ -189,3 +189,39 @@ def test_calculate_noise_exception(mock_cv2, mock_get_data):
     # The function should catch the exception and return 0.0
     score = calculate_noise(Path("error.jpg"))
     assert score == 0.0
+
+@patch.object(shp, 'get_image_data')
+def test_calculate_shadow_clipping(mock_get_data):
+    # Setup mock to return an image
+    # For shadow clipping, the threshold is <= 2
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+
+    # Let's make 20% of the image crushed shadows (intensity <= 2)
+    img[0:20, :] = 1 # intensity 1
+
+    mock_get_data.return_value = img
+
+    score = shp.calculate_shadow_clipping(Path("dummy.jpg"))
+
+    assert score == 20.0
+
+@patch.object(shp, 'get_image_data')
+@patch.object(shp, 'cv2')
+def test_calculate_shadow_clipping_exception(mock_cv2, mock_get_data):
+    # Setup mock to return a valid dummy image
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    # Mock cvtColor to raise an exception
+    mock_cv2.cvtColor.side_effect = Exception("Mocked shadow error")
+
+    # Call should handle the exception and return 0.0
+    score = shp.calculate_shadow_clipping(Path("dummy.jpg"))
+    assert score == 0.0
+
+@patch.object(shp, "get_image_data")
+def test_calculate_shadow_clipping_none_image(mock_get_data):
+    # Setup mock to return None
+    mock_get_data.return_value = None
+
+    # Call should handle the None case and return 0.0
+    score = shp.calculate_shadow_clipping(Path("dummy.jpg"))
+    assert score == 0.0
