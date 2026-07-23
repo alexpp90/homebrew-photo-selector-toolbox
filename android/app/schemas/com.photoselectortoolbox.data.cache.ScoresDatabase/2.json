@@ -1,0 +1,82 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "f43c7924b06441a304ed9920fa73c02a",
+    "entities": [
+      {
+        "tableName": "scores_cache",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`filePath` TEXT NOT NULL, `fileSize` INTEGER NOT NULL, `lastModified` INTEGER NOT NULL, `sharpnessScore` REAL, `noiseLevel` REAL, `highlightClipping` REAL, `shadowClipping` REAL, `aestheticScore` REAL, `lastAccessTime` INTEGER NOT NULL, PRIMARY KEY(`filePath`))",
+        "fields": [
+          {
+            "fieldPath": "filePath",
+            "columnName": "filePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileSize",
+            "columnName": "fileSize",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "lastModified",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sharpnessScore",
+            "columnName": "sharpnessScore",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "noiseLevel",
+            "columnName": "noiseLevel",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "highlightClipping",
+            "columnName": "highlightClipping",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "shadowClipping",
+            "columnName": "shadowClipping",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "aestheticScore",
+            "columnName": "aestheticScore",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lastAccessTime",
+            "columnName": "lastAccessTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "filePath"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f43c7924b06441a304ed9920fa73c02a')"
+    ]
+  }
+}
