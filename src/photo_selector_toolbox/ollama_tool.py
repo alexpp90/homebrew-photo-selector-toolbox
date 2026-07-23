@@ -93,6 +93,7 @@ class OllamaAestheticTool(AnalysisTool):
         if is_forbidden_ip(clean_hostname):
             raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
 
+        safe_ip = None
         try:
             # Attempt to resolve. socket.getaddrinfo handles more formats than gethostbyname
             addr_info = socket.getaddrinfo(clean_hostname, None)
@@ -100,10 +101,19 @@ class OllamaAestheticTool(AnalysisTool):
                 ip_str = res[4][0]
                 if is_forbidden_ip(ip_str):
                     raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
-        except socket.gaierror:
-            pass # Invalid hostname or cannot resolve. Let urllib handle the error later.
+            if addr_info:
+                safe_ip = addr_info[0][4][0]
+        except socket.gaierror as e:
+            raise RuntimeError(f"DNS resolution failed for {clean_hostname}: {e}")
 
         url = f"{ollama_url.rstrip('/')}/api/generate"
+        parsed_req = urlparse(url)
+        if safe_ip:
+            safe_netloc = f"[{safe_ip}]" if ":" in safe_ip else safe_ip
+            if parsed_req.port:
+                safe_netloc += f":{parsed_req.port}"
+            url = parsed_req._replace(netloc=safe_netloc).geturl()
+
         payload = {
             "model": model_name,
             "prompt": prompt,
@@ -119,6 +129,8 @@ class OllamaAestheticTool(AnalysisTool):
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
+            if safe_ip:
+                req.add_header("Host", parsed_req.netloc)
             # Serialize requests to avoid overloading local Ollama server
             with self._lock:
                 with opener.open(req, timeout=60) as response:

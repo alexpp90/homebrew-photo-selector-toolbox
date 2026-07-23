@@ -736,17 +736,30 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 if is_forbidden_ip(clean_hostname):
                     raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
 
+                safe_ip = None
                 try:
                     addr_info = socket.getaddrinfo(clean_hostname, None)
                     for res in addr_info:
                         ip_str = res[4][0]
                         if is_forbidden_ip(ip_str):
                             raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
-                except socket.gaierror:
-                    pass
+                    if addr_info:
+                        safe_ip = addr_info[0][4][0]
+                except socket.gaierror as e:
+                    raise ValueError(f"DNS resolution failed for {clean_hostname}: {e}")
+
+                req_url = f"{url.rstrip('/')}/api/tags"
+                parsed_req = urlparse(req_url)
+                if safe_ip:
+                    safe_netloc = f"[{safe_ip}]" if ":" in safe_ip else safe_ip
+                    if parsed_req.port:
+                        safe_netloc += f":{parsed_req.port}"
+                    req_url = parsed_req._replace(netloc=safe_netloc).geturl()
 
                 opener = urllib.request.build_opener(NoRedirectHandler)
-                req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
+                req = urllib.request.Request(req_url)
+                if safe_ip:
+                    req.add_header("Host", parsed_req.netloc)
                 with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])
