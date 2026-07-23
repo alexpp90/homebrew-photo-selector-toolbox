@@ -134,3 +134,43 @@ def test_main_success_csv(capsys, tmp_path):
 
     captured = capsys.readouterr()
     assert "filename,shutter_speed,aperture,iso,focal_length,focal_length_35mm,lens" in captured.out
+
+def test_output_csv(capsys):
+    """Test that _output_csv correctly formats the metadata as CSV."""
+    from photo_selector_toolbox.cli import _output_csv
+    from photo_selector_toolbox.models import ExifData
+
+    # Happy path: full data
+    data1 = ExifData(
+        shutter_speed=0.005,
+        aperture=2.8,
+        iso=100,
+        focal_length=50.0,
+        focal_length_35mm=50.0,
+        lens="Test Lens 50mm"
+    )
+    data1._filepath = "path/to/image1.jpg"
+
+    # Edge case: missing / unknown data
+    data2 = ExifData(
+        shutter_speed=None,
+        aperture=None,
+        iso=None,
+        focal_length=None,
+        focal_length_35mm=None,
+        lens="Unknown"
+    )
+
+    _output_csv([data1, data2])
+
+    captured = capsys.readouterr()
+    lines = captured.out.strip().split("\r\n")
+
+    # Assert header
+    assert lines[0] == "filename,shutter_speed,aperture,iso,focal_length,focal_length_35mm,lens"
+
+    # Assert fully populated row
+    assert lines[1] == "path/to/image1.jpg,0.005,2.8,100,50.0,50.0,Test Lens 50mm"
+
+    # Assert missing values row
+    assert lines[2] == ",,,,,,"
