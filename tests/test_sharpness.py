@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 from photo_selector_toolbox.sharpness import (
     calculate_sharpness,
     calculate_noise,
+    calculate_highlight_clipping,
     categorize_sharpness,
     find_related_files,
     SharpnessCategories,
@@ -188,4 +189,17 @@ def test_calculate_noise_exception(mock_cv2, mock_get_data):
 
     # The function should catch the exception and return 0.0
     score = calculate_noise(Path("error.jpg"))
+    assert score == 0.0
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "cv2")
+def test_calculate_highlight_clipping_exception(mock_cv2, mock_get_data):
+    # Setup mock to return a valid dummy image
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    # Mock cvtColor to raise an exception
+    mock_cv2.cvtColor.side_effect = Exception("Mocked error")
+
+    # The function should catch the exception and return 0.0
+    score = calculate_highlight_clipping(Path("error.jpg"))
     assert score == 0.0
