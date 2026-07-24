@@ -746,9 +746,28 @@ class DuplicateFinder(ttk.Frame):
 
         ttk.Button(
             actions_frame,
-            text="🗑️ Delete Selected (Move to Trash)",
+            text="🗑️ Delete Selected (Move to Trash) (Del)",
             command=self.delete_selected,
         ).pack(side="right")
+
+        # Global bindings for Duplicate Finder
+        try:
+            self.winfo_toplevel().bind("<Delete>", self._on_delete_key, add="+")
+            self.winfo_toplevel().bind("<BackSpace>", self._on_delete_key, add="+")
+        except (KeyError, tk.TclError, AttributeError):
+            pass # Handle mock object issues during tests
+
+    def _on_delete_key(self, event):
+        # Ensure we only trigger when the widget is visible (i.e. tab is active)
+        if not self.winfo_ismapped():
+            return
+
+        # Don't trigger if user is typing in a text entry
+        widget = getattr(event, "widget", None)
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+            return
+
+        self.delete_selected()
 
     def browse_root_folder(self):
         initial = self.root_folder_var.get()
