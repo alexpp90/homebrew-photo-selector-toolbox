@@ -103,11 +103,20 @@ def _set_secure_permissions(path: Path) -> None:
         pass  # Best-effort on platforms that don't support chmod
 
 
+def _set_secure_dir_permissions(path: Path) -> None:
+    """Set directory permissions to owner read/write/execute only (700)."""
+    try:
+        os.chmod(path, stat.S_IRWXU)
+    except OSError:
+        pass  # Best-effort on platforms that don't support chmod
+
+
 def load_config() -> Dict[str, Union[str, bool, List[str]]]:
     """Loads settings.json config file, creating it with defaults if it doesn't exist."""
     try:
         if not CONFIG_DIR.exists():
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            _set_secure_dir_permissions(CONFIG_DIR)
 
         if not CONFIG_FILE.exists():
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -137,6 +146,7 @@ def save_config(config: Dict[str, Union[str, bool, List[str]]]) -> None:
     try:
         if not CONFIG_DIR.exists():
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            _set_secure_dir_permissions(CONFIG_DIR)
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
         _set_secure_permissions(CONFIG_FILE)
