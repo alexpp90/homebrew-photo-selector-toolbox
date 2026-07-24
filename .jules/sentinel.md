@@ -25,3 +25,8 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
+## 2026-07-24 - Unmanaged Application Directory and SQLite Cache Auxiliary Permissions
+
+**Vulnerability:** The application was creating its configuration directory (`~/.photo_selector_toolbox`) and SQLite database auxiliary files (`-wal` and `-shm` for the Write-Ahead Log) using default system permissions. This could potentially expose sensitive database caches or configuration settings to unauthorized local users on the system.
+**Learning:** While the primary database file might be secured, SQLite creates transient auxiliary files that can leak data fragments or full database contents if their permissions are not also explicitly managed. Similarly, configuration directories containing these files should be locked down immediately upon creation.
+**Prevention:** Apply explicit owner-only read/write/execute permissions (e.g., `0o700` / `stat.S_IRWXU`) when creating application configuration directories. For SQLite databases operating in WAL mode, check for the existence of `-wal` and `-shm` files immediately after initialization and explicitly restrict their permissions (e.g., `0o600` / `stat.S_IRUSR | stat.S_IWUSR`).

@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-from photo_selector_toolbox.config import _set_secure_permissions
+from photo_selector_toolbox.config import _set_secure_dir_permissions, _set_secure_permissions
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,7 @@ class ScoreCache:
                 from photo_selector_toolbox.config import CONFIG_DIR
 
                 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                _set_secure_dir_permissions(CONFIG_DIR)
                 db_path = CONFIG_DIR / "scores_cache.db"
         self.db_path = db_path
         self._write_count = 0
@@ -63,6 +64,13 @@ class ScoreCache:
                 )
                 conn.commit()
             _set_secure_permissions(self.db_path)
+            # Secure WAL/SHM auxiliary files if they were created
+            wal_path = Path(str(self.db_path) + "-wal")
+            if wal_path.exists():
+                _set_secure_permissions(wal_path)
+            shm_path = Path(str(self.db_path) + "-shm")
+            if shm_path.exists():
+                _set_secure_permissions(shm_path)
         except sqlite3.DatabaseError as e:
             logger.error(
                 f"Score cache database is corrupted or inaccessible: {e}. "
