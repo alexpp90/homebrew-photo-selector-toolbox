@@ -19,3 +19,7 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+
+## 2025-02-23 - Inline Code Comments for Optimizations
+**Learning:** The 'Bolt' agent strictly requires inline code comments explaining *why* an optimization was made (e.g., `# using abspath instead of resolve() to avoid expensive filesystem symlink checks`). Failing to add these comments results in code review penalties.
+**Action:** Always include a descriptive inline comment above any modified line explaining the performance reasoning for the change.
