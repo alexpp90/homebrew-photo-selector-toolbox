@@ -25,3 +25,7 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
+## 2025-07-25 - DNS Rebinding / TOCTOU SSRF Vulnerability in IP Verification
+**Vulnerability:** IP validation using `socket.getaddrinfo` was verifying the hostname's IP, but then passing the un-resolved hostname into `urllib.request.urlopen`.
+**Learning:** This exposes a Time-Of-Check to Time-Of-Use (TOCTOU) DNS rebinding vulnerability, as an attacker could change the DNS record to point to a malicious internal IP between validation and fetching.
+**Prevention:** Always pin the requested URL to the verified IP address and pass the original hostname in the `Host` header to maintain functionality. Additionally, ensure DNS resolution failures fail-close by raising an exception, rather than silently passing and allowing the request to proceed with the unverified hostname.

@@ -4,6 +4,9 @@ import os
 import urllib.request
 from urllib.error import URLError
 from urllib.parse import urlparse, unquote
+import socket
+import http.client
+import ssl
 import logging
 import functools
 from pathlib import Path
@@ -638,6 +641,59 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
 
     # Return a copy so the cached original is never mutated
     return img.copy()
+
+class PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host, port=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                 source_address=None, blocksize=8192, pinned_ip=None):
+        super().__init__(host, port, timeout, source_address, blocksize)
+        self.pinned_ip = pinned_ip
+
+    def connect(self):
+        # Bypass DNS resolution and connect directly to the pinned IP
+        self.sock = socket.create_connection(
+            (self.pinned_ip, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self._tunnel()
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, host, port=None, key_file=None, cert_file=None,
+                 timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None,
+                 *, context=None, check_hostname=None, blocksize=8192, pinned_ip=None):
+        super().__init__(host, port, key_file, cert_file, timeout, source_address,
+                         context=context, check_hostname=check_hostname, blocksize=blocksize)
+        self.pinned_ip = pinned_ip
+
+    def connect(self):
+        # Connect to the pinned IP
+        sock = socket.create_connection(
+            (self.pinned_ip, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+        # Wrap the socket for TLS, using the original host for SNI and validation
+        if self._context is None:
+            self._context = ssl.create_default_context()
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+class PinnedHTTPHandler(urllib.request.HTTPHandler):
+    def __init__(self, pinned_ip):
+        super().__init__()
+        self.pinned_ip = pinned_ip
+
+    def http_open(self, req):
+        def build(host, port=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, **kwargs):
+            return PinnedHTTPConnection(host, port, timeout, pinned_ip=self.pinned_ip, **kwargs)
+        return self.do_open(build, req)
+
+class PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, pinned_ip, context=None):
+        super().__init__(context=context)
+        self.pinned_ip = pinned_ip
+
+    def https_open(self, req):
+        def build(host, port=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, **kwargs):
+            return PinnedHTTPSConnection(host, port, timeout=timeout, pinned_ip=self.pinned_ip, **kwargs)
+        return self.do_open(build, req)
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
