@@ -378,19 +378,19 @@ class SelectorScreenTest {
 
     @Test
     fun scoreLegend_explainsWhatTheScanIconsMean() {
-        fakeRepo.imagesFlow.value = mockImages
-        runBlocking {
-            scoreDao.insertOrUpdate(
-                ScoreEntity(
-                    filePath = "gdrive://test_folder/image1.jpg",
-                    fileSize = 1024L,
-                    lastModified = 1000L,
+        val scannedImages = mockImages.mapIndexed { idx, item ->
+            if (idx == 0) item.copy(
+                scanResult = com.photoselectortoolbox.data.model.ScanResult(
+                    filePath = item.path,
                     sharpnessScore = 78.5,
                     noiseLevel = 1.2,
                     highlightClipping = 2.4,
                     shadowClipping = 0.5,
                 )
-            )
+            ) else item
+        }
+        fakeRepo.imagesFlow.value = scannedImages
+        runBlocking {
             settingsRepository.setLastFolderUri("gdrive://test_folder")
         }
 
@@ -400,11 +400,7 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
-        composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Scan Images").performClick()
-        composeRule.onNodeWithText("Start Scan").performClick()
-
-        // The legend button only appears once there are scores to explain.
+        // The legend button appears once there are scores to explain.
         composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithTag("score_legend_button")
                 .fetchSemanticsNodes().isNotEmpty()
