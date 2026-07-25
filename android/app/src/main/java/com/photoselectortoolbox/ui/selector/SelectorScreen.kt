@@ -38,10 +38,8 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GridView
@@ -779,7 +777,7 @@ private fun ThreeColumnSelectorLayout(
                                 .pointerHoverIcon(PointerIcon.Hand),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Move", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         }
@@ -1149,7 +1147,7 @@ private fun FocusActionRail(
         verticalArrangement = Arrangement.Center,
     ) {
         RailButton(
-            icon = Icons.Default.DriveFileMove,
+            icon = Icons.AutoMirrored.Filled.DriveFileMove,
             description = "Move to Selection",
             onClick = onMoveToSelection,
             modifier = Modifier.testTag("move_button_expanded"),
@@ -1595,7 +1593,7 @@ private fun CompactSelectorLayout(
                                 modifier = Modifier.testTag("move_button_compact")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.DriveFileMove,
+                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
                                     contentDescription = "Move to Selection",
                                 )
                             }

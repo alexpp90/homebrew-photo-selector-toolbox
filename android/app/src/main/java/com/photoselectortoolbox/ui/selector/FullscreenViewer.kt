@@ -38,8 +38,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -296,7 +296,7 @@ private fun FullscreenContent(
                             ),
                         ) {
                             Icon(
-                                imageVector = Icons.Default.DriveFileMove,
+                                imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
                                 contentDescription = "Move to Selection",
                             )
                         }

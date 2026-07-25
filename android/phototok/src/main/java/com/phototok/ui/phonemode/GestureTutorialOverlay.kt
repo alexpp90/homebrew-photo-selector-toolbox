@@ -33,9 +33,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Settings
@@ -232,7 +232,7 @@ private fun rememberControlEntries(
     val leftIcon = when (leftSwipeAction) {
         SwipeAction.DELETE -> Icons.Default.Delete
         SwipeAction.COPY -> Icons.Default.ContentCopy
-        SwipeAction.MOVE -> Icons.Default.DriveFileMove
+        SwipeAction.MOVE -> Icons.AutoMirrored.Filled.DriveFileMove
     }
     val leftDescription = when (leftSwipeAction) {
         SwipeAction.DELETE -> "Send to trash — undo it with Revert"
