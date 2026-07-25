@@ -89,6 +89,7 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import com.phototok.data.model.ExifData
 import com.phototok.data.model.ImageItem
+import com.phototok.domain.FirstRunHint
 import com.phototok.domain.SwipeAction
 import com.phototok.ui.theme.SuccessGreen
 import kotlinx.coroutines.delay
@@ -124,6 +125,7 @@ fun PhoneModeViewer(
     showExifOverlay: Boolean = true,
     showPageCounter: Boolean = true,
     readOnly: Boolean = false,
+    onFirstRunHint: (FirstRunHint) -> Unit = {},
 ) {
     if (images.isEmpty()) return
 
@@ -182,9 +184,14 @@ fun PhoneModeViewer(
     }
 
     val maxPageSeen = remember(images) { mutableStateOf(currentIndex) }
+    val startPage = remember(images) { currentIndex }
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage > maxPageSeen.value) {
             maxPageSeen.value = pagerState.currentPage
+        }
+        // The first actual page change is the user discovering vertical paging.
+        if (!readOnly && pagerState.currentPage != startPage) {
+            onFirstRunHint(FirstRunHint.SWIPE_VERTICAL)
         }
         isZoomed = false
     }
@@ -222,7 +229,11 @@ fun PhoneModeViewer(
                 hudAlpha = hudAlpha,
                 readOnly = readOnly,
                 showFloatingPeeks = showFloatingPeeks,
-                onSingleTap = { hudVisible = !hudVisible },
+                onFirstRunHint = onFirstRunHint,
+                onSingleTap = {
+                    hudVisible = !hudVisible
+                    if (!readOnly) onFirstRunHint(FirstRunHint.TAP_HUD)
+                },
                 onSwipeLeftDelete = {
                     onRequestDelete()
                     if (leftSwipeAction != SwipeAction.DELETE) {
@@ -327,6 +338,7 @@ private fun ImagePage(
     onSingleTap: () -> Unit,
     onSwipeLeftDelete: () -> Unit,
     onSwipeRightCollect: () -> Unit,
+    onFirstRunHint: (FirstRunHint) -> Unit = {},
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -391,6 +403,7 @@ private fun ImagePage(
                         val width = size.width
                         val height = size.height
                         if (width > 0 && height > 0) {
+                            onFirstRunHint(FirstRunHint.DOUBLE_TAP_ZOOM)
                             if (isZoomed) {
                                 coroutineScope.launch { animateReset() }
                             } else {

@@ -731,6 +731,109 @@ def test_cancel_pending_scan_clears_queue():
     assert tool._pending_scan is False
 
 
+# ── Grouping requested while a scan is running (mirror of the above) ──
+
+
+def _prepare_grouping_widgets(tool):
+    for name in [
+        "group_level_combo", "group_similar_chk", "group_progress_frame",
+        "group_status_lbl", "candidate_listbox", "review_status_lbl",
+    ]:
+        setattr(tool, name, MagicMock())
+    tool.group_progress_var = MagicMock()
+    tool.log = MagicMock()
+    tool.update_scan_button_state = MagicMock()
+    tool.apply_grouping_and_refresh = MagicMock()
+
+
+def test_grouping_change_during_scan_is_queued_not_dropped():
+    tool = _make_tool()
+    _prepare_grouping_widgets(tool)
+    tool.is_scanning = True
+    tool.group_similar_var.set(True)
+
+    tool.on_group_similar_change()
+
+    assert tool._pending_grouping is True
+    # The heavy work must not have run while the scan is in flight.
+    tool.apply_grouping_and_refresh.assert_not_called()
+    tool.group_progress_frame.pack.assert_called()
+
+
+def test_queued_grouping_is_applied_when_scan_finishes():
+    tool = _make_tool()
+    _prepare_grouping_widgets(tool)
+    tool._pending_grouping = True
+
+    applied = []
+    tool.on_group_similar_change = lambda: applied.append(True)
+    tool._apply_pending_grouping_if_any()
+
+    assert applied == [True]
+    assert tool._pending_grouping is False
+    tool.group_progress_frame.pack_forget.assert_called()
+
+
+def test_scan_finished_applies_queued_grouping():
+    tool = _make_tool()
+    _prepare_grouping_widgets(tool)
+    tool.candidates = []
+    tool.is_scanning = True
+    tool._pending_grouping = True
+    tool.switch_to_review_mode = MagicMock()
+    tool.candidate_listbox.curselection.return_value = ()
+
+    applied = []
+    tool.on_group_similar_change = lambda: applied.append(True)
+
+    with patch("photo_selector_toolbox.sharpness_gui.messagebox.showinfo"):
+        tool.notebook = MagicMock()
+        tool.scan_finished()
+
+    assert applied == [True]
+    assert tool.is_scanning is False
+
+
+def test_start_scan_leaves_grouping_controls_enabled():
+    tool = _make_tool()
+    _prepare_grouping_widgets(tool)
+    tool.folder_var.set("/mock/folder")
+    tool.group_similar_var.set(True)
+    tool.scan_controller = MagicMock()
+    tool.cache_manager = MagicMock()
+    tool.log_text = MagicMock()
+    tool.progress_var = MagicMock()
+    tool.review_progress_var = MagicMock()
+    tool.switch_to_review_mode = MagicMock()
+    tool.after = MagicMock()
+    tool.grid_size_var.set("4x4")
+
+    with patch("photo_selector_toolbox.sharpness_gui.Path.exists", return_value=True):
+        tool.start_scan()
+
+    # The checkbox must never be disabled — clicking it during a scan queues.
+    disabled_calls = [
+        c for c in tool.group_similar_chk.state.call_args_list
+        if c.args and "disabled" in c.args[0]
+    ]
+    assert disabled_calls == []
+
+
+def test_cancel_grouping_drops_a_queued_change_and_reverts_controls():
+    tool = _make_tool()
+    _prepare_grouping_widgets(tool)
+    tool._pending_grouping = True
+    tool._last_applied_group_similar = False
+    tool._last_applied_group_level = "Time & Filename"
+    tool.group_similar_var.set(True)
+
+    tool.cancel_grouping()
+
+    assert tool._pending_grouping is False
+    assert tool.group_similar_var.get() is False
+    tool.group_progress_frame.pack_forget.assert_called()
+
+
 def _attach_focus_labels(tool):
     """Attach the focus-mode overlay labels the metadata writer updates."""
     for name in [

@@ -3,18 +3,12 @@ package com.photoselectortoolbox.ui.components
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CenterFocusStrong
-import androidx.compose.material.icons.filled.Grain
-import androidx.compose.material.icons.filled.Highlight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -86,32 +80,16 @@ fun ImageCard(
                     .padding(start = 8.dp, bottom = 8.dp, end = 8.dp),
             )
 
-            // Score chips overlay
-            if (scores != null) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    ScoreChip(
-                        icon = Icons.Default.CenterFocusStrong,
-                        label = "Sharpness",
-                        value = scores.sharpnessScore,
-                    )
-                    ScoreChip(
-                        icon = Icons.Default.Grain,
-                        label = "Noise",
-                        value = scores.noiseLevel,
-                    )
-                    ScoreChip(
-                        icon = Icons.Default.Highlight,
-                        label = "Highlight Clipping",
-                        value = scores.highlightClipping,
-                        format = "%.0f%%",
-                    )
-                }
-            }
+            // Score chips overlay. Compact (icon + value only) because a
+            // thumbnail has no room for labels — the legend sheet and the
+            // accessibility descriptions carry the meaning.
+            ScoreChipRow(
+                scores = scores,
+                compact = true,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp),
+            )
         }
     }
 }

@@ -55,6 +55,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         # A scan requested while grouping is still running is queued here and
         # started automatically once grouping completes.
         self._pending_scan = False
+        # The mirror case: a grouping change requested while a scan is running
+        # is queued here and applied automatically once the scan completes.
+        self._pending_grouping = False
         self.stop_event = threading.Event()
         self.bg_stop_event = threading.Event()
         self.grouping_stop_event = threading.Event()
@@ -853,6 +856,20 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.log("Grouping complete — starting queued scan...")
             self.start_scan()
 
+    def _show_grouping_queued_indicator(self):
+        """Reuse the grouping progress area to show that grouping is queued."""
+        self.group_progress_frame.pack(fill="x", pady=(0, 10))
+        self.group_progress_var.set(0.0)
+        self.group_status_lbl.config(text="👥 Grouping queued (runs after scan)")
+
+    def _apply_pending_grouping_if_any(self):
+        """Apply a grouping change requested while a scan was running, if any."""
+        if getattr(self, "_pending_grouping", False):
+            self._pending_grouping = False
+            self.group_progress_frame.pack_forget()
+            self.log("Scan complete — applying queued grouping change...")
+            self.on_group_similar_change()
+
 
     def setup_focus_ui(self):
         """Builds the fullscreen-optimized focus layout."""
@@ -1593,6 +1610,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         else:
             self.group_level_combo.state(["disabled"])
 
+       # A running scan is already walking the same files, and applying a
+       # grouping change now would rebuild the candidate list underneath it.
+       # Queue the request instead of blocking the control, and apply it
+       # automatically once the scan finishes (mirrors start_scan's handling
+       # of a scan requested during grouping).
+        if self.is_scanning:
+            self._pending_grouping = True
+            self.log("Grouping queued — will be applied when the scan finishes.")
+            self._show_grouping_queued_indicator()
+            return
+
         selected = self.file_type_var.get()
         if selected == "All Supported" or not selected:
             base_files = self.sorted_files.copy()
@@ -1713,6 +1741,19 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         threading.Thread(target=run_calc, daemon=True).start()
 
     def cancel_grouping(self):
+       # A queued (not yet started) grouping change is cancelled by dropping
+       # the request and reverting the controls to the last applied state.
+        if getattr(self, "_pending_grouping", False):
+            self._pending_grouping = False
+            self.group_progress_frame.pack_forget()
+            self.group_similar_var.set(self._last_applied_group_similar)
+            self.group_level_var.set(self._last_applied_group_level)
+            if self._last_applied_group_similar:
+                self.group_level_combo.state(["!disabled"])
+            else:
+                self.group_level_combo.state(["disabled"])
+            self.log("Queued grouping change cancelled.")
+
         if self.is_grouping:
             self.grouping_stop_event.set()
             self.log("Stopping similarity analysis...")
@@ -1909,9 +1950,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.update_scan_button_state()
             return
 
-       # Disable grouping controls
-        self.group_similar_chk.state(["disabled"])
-        self.group_level_combo.state(["disabled"])
+       # The grouping controls stay enabled during a scan: a change requested
+       # now is queued and applied automatically once the scan completes
+       # (see on_group_similar_change / _apply_pending_grouping_if_any).
+        if self._is_grouping_enabled():
+            self.group_level_combo.state(["!disabled"])
 
         self.bg_stop_event.set()
         self.is_scanning = True
@@ -2104,6 +2147,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
        # Re-sort list immediately when the scan is finished
         self.apply_grouping_and_refresh(select_path=selected_path)
+
+       # Apply a grouping change the user requested while the scan was running.
+        self._apply_pending_grouping_if_any()
 
         if self.candidates:
             if not self.has_switched_to_review:

@@ -20,4 +20,6 @@ data class PhoneSettings(
     val recentPathsEnabled: Boolean = true,
     val recentPathsCount: Int = 3,
     val recentPaths: List<RecentPath> = emptyList(),
+    /** Keys of the one-time action explanations the user has already seen. */
+    val seenFirstRunHints: Set<String> = emptySet(),
 )

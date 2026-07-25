@@ -16,6 +16,8 @@ import com.phototok.di.ApplicationScope
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.CopyMoveFeedback
 import com.phototok.domain.FileTypeFilter
+import com.phototok.domain.FirstRunHint
+import com.phototok.domain.FirstRunHintText
 import com.phototok.domain.PendingDeleteLogic
 import com.phototok.domain.PhoneFeedOrdering
 import com.phototok.domain.PhotoFolders
@@ -50,7 +52,13 @@ data class PhoneModeUiState(
     val leftSwipeFolderName: String = "",
     val error: String? = null,
     val showGestureTutorial: Boolean = false,
+    /** Set when the user opens the controls guide from the info button. */
+    val showControlsGuide: Boolean = false,
     val lastActionFeedback: ActionFeedback? = null,
+    /** One-time explanation for an action the user just performed for the first time. */
+    val firstRunHint: FirstRunHintUi? = null,
+    /** Hint keys already shown, so each explanation fires exactly once. */
+    val seenFirstRunHints: Set<String> = emptySet(),
     // Settings (observed)
     val collectionAction: CollectionAction = CollectionAction.DEFAULT,
     val directDeleteConfirmEnabled: Boolean = true,
@@ -79,6 +87,14 @@ val PhoneModeUiState.canRevert: Boolean
 data class ActionFeedback(
     val message: String,
     val isError: Boolean = false,
+    val id: Long = System.nanoTime(),
+)
+
+/** A one-time explanation, resolved against the user's current settings. */
+data class FirstRunHintUi(
+    val hint: FirstRunHint,
+    val title: String,
+    val message: String,
     val id: Long = System.nanoTime(),
 )
 
@@ -138,6 +154,7 @@ class PhoneModeViewModel @Inject constructor(
                         recentPathsEnabled = s.recentPathsEnabled,
                         recentPathsCount = s.recentPathsCount,
                         recentPaths = s.recentPaths,
+                        seenFirstRunHints = s.seenFirstRunHints,
                     )
                 }
                 val prev = previous
@@ -383,6 +400,7 @@ class PhoneModeViewModel @Inject constructor(
     /** Swipe right: copy or move the current photo (and optionally siblings) to collection. */
     fun addToCollection() {
         val state = _uiState.value
+        maybeShowFirstRunHint(FirstRunHint.SWIPE_RIGHT)
         copyOrMoveCurrent(
             targetUri = state.collectionFolderUri ?: state.sourceFolderUri,
             isCopy = state.collectionAction == CollectionAction.COPY,
@@ -394,6 +412,7 @@ class PhoneModeViewModel @Inject constructor(
     /** Swipe left (copy/move mode): copy or move the current photo to the custom folder. */
     fun performLeftSwipeCopyOrMove() {
         val state = _uiState.value
+        maybeShowFirstRunHint(FirstRunHint.SWIPE_LEFT_FOLDER)
         copyOrMoveCurrent(
             targetUri = state.leftSwipeFolderUri ?: state.sourceFolderUri,
             isCopy = state.leftSwipeAction == SwipeAction.COPY,
@@ -480,6 +499,8 @@ class PhoneModeViewModel @Inject constructor(
         val state = _uiState.value
         if (state.images.isEmpty()) return
 
+        maybeShowFirstRunHint(leftSwipeHint())
+
         // If there's already a pending deletion, finalize it first.
         finalizePendingDelete()
 
@@ -531,6 +552,8 @@ class PhoneModeViewModel @Inject constructor(
     fun revertDelete() {
         val state = _uiState.value
         val pending = state.pendingDelete ?: return
+
+        maybeShowFirstRunHint(FirstRunHint.REVERT)
 
         val lists = PendingDeleteLogic.restore(
             images = state.images,
@@ -587,6 +610,65 @@ class PhoneModeViewModel @Inject constructor(
             _uiState.update { it.copy(showGestureTutorial = false) }
         }
     }
+
+    // ── Controls guide (info button) ──────────────────────────────────────
+
+    fun showControlsGuide() {
+        _uiState.update { it.copy(showControlsGuide = true) }
+    }
+
+    fun hideControlsGuide() {
+        _uiState.update { it.copy(showControlsGuide = false) }
+    }
+
+    // ── One-time action explanations ──────────────────────────────────────
+
+    /**
+     * Show the explanation for [hint] the first time — and only the first
+     * time — the user triggers that action. The wording is resolved against
+     * the current settings so it describes what actually happened (copy vs.
+     * move, and to which folder).
+     *
+     * The seen-key is persisted immediately and mirrored into the UI state so
+     * a rapid second trigger cannot slip through before DataStore emits.
+     */
+    fun maybeShowFirstRunHint(hint: FirstRunHint) {
+        val state = _uiState.value
+        if (hint.key in state.seenFirstRunHints) return
+        // Never stack a hint on top of the full-screen tutorial.
+        if (state.showGestureTutorial) return
+
+        _uiState.update {
+            it.copy(
+                seenFirstRunHints = it.seenFirstRunHints + hint.key,
+                firstRunHint = FirstRunHintUi(
+                    hint = hint,
+                    title = FirstRunHintText.title(hint),
+                    message = FirstRunHintText.message(
+                        hint = hint,
+                        collectionAction = state.collectionAction,
+                        leftSwipeAction = state.leftSwipeAction,
+                        collectionFolderName = state.collectionFolderName,
+                        leftSwipeFolderName = state.leftSwipeFolderName,
+                    ),
+                ),
+            )
+        }
+
+        viewModelScope.launch { settingsRepository.markFirstRunHintSeen(hint) }
+    }
+
+    fun dismissFirstRunHint() {
+        _uiState.update { it.copy(firstRunHint = null) }
+    }
+
+    /** The hint that matches the configured left-swipe action. */
+    private fun leftSwipeHint(): FirstRunHint =
+        if (_uiState.value.leftSwipeAction == SwipeAction.DELETE) {
+            FirstRunHint.SWIPE_LEFT_DELETE
+        } else {
+            FirstRunHint.SWIPE_LEFT_FOLDER
+        }
 
     // ── Navigation helpers ───────────────────────────────────────────────
 

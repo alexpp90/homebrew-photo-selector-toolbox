@@ -25,13 +25,24 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,19 +56,36 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phototok.domain.CollectionAction
+import com.phototok.domain.SwipeAction
 
 /**
- * Full-screen overlay teaching the three phone-mode gestures.
- * Glassmorphic card design with animated icons.
+ * Full-screen guide to every Photo-Tok control.
+ *
+ * Serves two entry points:
+ *  - the first-launch tutorial (shown automatically), and
+ *  - the info button in the viewer, which opens the same guide on demand.
+ *
+ * The swipe entries are described using the user's *configured* actions rather
+ * than the defaults, so the guide never claims a left swipe deletes when the
+ * user has set it to copy.
  */
 @Composable
 fun GestureTutorialOverlay(
     visible: Boolean,
     onDismiss: () -> Unit,
+    leftSwipeAction: SwipeAction = SwipeAction.DEFAULT,
+    collectionAction: CollectionAction = CollectionAction.DEFAULT,
+    leftSwipeFolderName: String = "",
+    collectionFolderName: String = "",
+    title: String = "How to Photo-Tok",
+    subtitle: String = "Master the curation flow with these simple gestures",
+    dismissLabel: String = "GOT IT",
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -65,15 +93,22 @@ fun GestureTutorialOverlay(
         exit = fadeOut(tween(250)),
     ) {
         val colors = MaterialTheme.colorScheme
+        val entries = rememberControlEntries(
+            leftSwipeAction = leftSwipeAction,
+            collectionAction = collectionAction,
+            leftSwipeFolderName = leftSwipeFolderName,
+            collectionFolderName = collectionFolderName,
+        )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF09090B).copy(alpha = 0.88f))
+                .background(Color(0xFF09090B).copy(alpha = 0.94f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
-                ) { /* absorb taps */ },
+                ) { /* absorb taps */ }
+                .testTag("controls_guide"),
         ) {
             Column(
                 modifier = Modifier
@@ -83,112 +118,53 @@ fun GestureTutorialOverlay(
                     .padding(horizontal = 16.dp)
                     .padding(top = 16.dp, bottom = 24.dp),
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // ── Header ───────────────────────────────────────────
                 Text(
-                    text = "How to Photo-Tok",
+                    text = title,
                     style = MaterialTheme.typography.headlineMedium,
                     color = Color.White,
                     modifier = Modifier.padding(start = 4.dp),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Master the curation flow with these simple gestures",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                // ── Gesture cards ────────────────────────────────────
+                // ── Control list ─────────────────────────────────────
                 val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-                val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                val isLandscape =
+                    configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                val columns = if (isLandscape) 2 else 1
 
-                if (isLandscape) {
-                    Row(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        GestureCard(
-                            icon = Icons.Default.SwapVert,
-                            title = "Swipe Up/Down",
-                            description = "Browse through photos",
-                            iconTint = colors.primary,
-                            circleBorder = colors.primary.copy(alpha = 0.2f),
-                            circleFill = colors.primary.copy(alpha = 0.1f),
-                            animationType = GestureAnimation.VERTICAL,
-                            animDelay = 0,
-                            modifier = Modifier.weight(1f),
-                        )
-                        GestureCard(
-                            icon = Icons.AutoMirrored.Filled.ArrowForward,
-                            title = "Swipe Right",
-                            description = "Add to collection",
-                            iconTint = colors.primary,
-                            circleBorder = colors.primary.copy(alpha = 0.2f),
-                            circleFill = colors.primary.copy(alpha = 0.1f),
-                            animationType = GestureAnimation.SWIPE_RIGHT,
-                            animDelay = 500,
-                            modifier = Modifier.weight(1f),
-                        )
-                        GestureCard(
-                            icon = Icons.AutoMirrored.Filled.ArrowBack,
-                            title = "Swipe Left",
-                            description = "Delete photo",
-                            iconTint = colors.error,
-                            circleBorder = colors.error.copy(alpha = 0.2f),
-                            circleFill = colors.error.copy(alpha = 0.1f),
-                            animationType = GestureAnimation.SWIPE_LEFT,
-                            animDelay = 1000,
-                            modifier = Modifier.weight(1f),
-                        )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    entries.chunked(columns).forEach { rowEntries ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            rowEntries.forEach { entry ->
+                                ControlCard(entry = entry, modifier = Modifier.weight(1f))
+                            }
+                            // Keep the last odd card from stretching across the row.
+                            repeat(columns - rowEntries.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
-                } else {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        GestureCard(
-                            icon = Icons.Default.SwapVert,
-                            title = "Swipe Up/Down",
-                            description = "Browse through your photos",
-                            iconTint = colors.primary,
-                            circleBorder = colors.primary.copy(alpha = 0.2f),
-                            circleFill = colors.primary.copy(alpha = 0.1f),
-                            animationType = GestureAnimation.VERTICAL,
-                            animDelay = 0,
-                        )
-                        GestureCard(
-                            icon = Icons.AutoMirrored.Filled.ArrowForward,
-                            title = "Swipe Right",
-                            description = "Add to your collection",
-                            iconTint = colors.primary,
-                            circleBorder = colors.primary.copy(alpha = 0.2f),
-                            circleFill = colors.primary.copy(alpha = 0.1f),
-                            animationType = GestureAnimation.SWIPE_RIGHT,
-                            animDelay = 500,
-                        )
-                        GestureCard(
-                            icon = Icons.AutoMirrored.Filled.ArrowBack,
-                            title = "Swipe Left",
-                            description = "Delete photo",
-                            iconTint = colors.error,
-                            circleBorder = colors.error.copy(alpha = 0.2f),
-                            circleFill = colors.error.copy(alpha = 0.1f),
-                            animationType = GestureAnimation.SWIPE_LEFT,
-                            animDelay = 1000,
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // ── Sticky bottom "Got it" button with gradient ──────
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    // Gradient fade above button
+                // ── Sticky bottom dismiss button with gradient ───────
+                Box(modifier = Modifier.fillMaxWidth()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -216,7 +192,7 @@ fun GestureTutorialOverlay(
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             Text(
-                                text = "GOT IT",
+                                text = dismissLabel,
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     letterSpacing = 3.sp,
                                 ),
@@ -230,23 +206,108 @@ fun GestureTutorialOverlay(
     }
 }
 
-// ── Gesture card composable ──────────────────────────────────────────────
+// ── Control entries ──────────────────────────────────────────────────────
 
-private enum class GestureAnimation { VERTICAL, DOUBLE_TAP, SWIPE_LEFT, SWIPE_RIGHT }
+private enum class GestureAnimation { NONE, VERTICAL, DOUBLE_TAP, SWIPE_LEFT, SWIPE_RIGHT }
+
+private data class ControlEntry(
+    val icon: ImageVector,
+    val title: String,
+    val description: String,
+    val animation: GestureAnimation = GestureAnimation.NONE,
+    val animDelay: Int = 0,
+    val isDestructive: Boolean = false,
+)
 
 @Composable
-private fun GestureCard(
-    icon: ImageVector,
-    title: String,
-    description: String,
-    iconTint: Color,
-    circleBorder: Color,
-    circleFill: Color,
-    animationType: GestureAnimation,
-    animDelay: Int,
+private fun rememberControlEntries(
+    leftSwipeAction: SwipeAction,
+    collectionAction: CollectionAction,
+    leftSwipeFolderName: String,
+    collectionFolderName: String,
+): List<ControlEntry> {
+    val collectionVerb = if (collectionAction == CollectionAction.COPY) "Copy" else "Move"
+    val collectionTarget = collectionFolderName.ifBlank { "your collection" }
+
+    val leftIcon = when (leftSwipeAction) {
+        SwipeAction.DELETE -> Icons.Default.Delete
+        SwipeAction.COPY -> Icons.Default.ContentCopy
+        SwipeAction.MOVE -> Icons.Default.DriveFileMove
+    }
+    val leftDescription = when (leftSwipeAction) {
+        SwipeAction.DELETE -> "Send to trash — undo it with Revert"
+        SwipeAction.COPY -> "Copy to ${leftSwipeFolderName.ifBlank { "your chosen folder" }}"
+        SwipeAction.MOVE -> "Move to ${leftSwipeFolderName.ifBlank { "your chosen folder" }}"
+    }
+
+    return listOf(
+        ControlEntry(
+            icon = Icons.Default.SwapVert,
+            title = "Swipe up / down",
+            description = "Move through your photos",
+            animation = GestureAnimation.VERTICAL,
+        ),
+        ControlEntry(
+            icon = Icons.AutoMirrored.Filled.ArrowForward,
+            title = "Swipe right",
+            description = "$collectionVerb to $collectionTarget",
+            animation = GestureAnimation.SWIPE_RIGHT,
+            animDelay = 400,
+        ),
+        ControlEntry(
+            icon = leftIcon,
+            title = "Swipe left",
+            description = leftDescription,
+            animation = GestureAnimation.SWIPE_LEFT,
+            animDelay = 800,
+            isDestructive = leftSwipeAction == SwipeAction.DELETE,
+        ),
+        ControlEntry(
+            icon = Icons.Default.TouchApp,
+            title = "Single tap",
+            description = "Hide or show the on-screen info",
+        ),
+        ControlEntry(
+            icon = Icons.Default.ZoomIn,
+            title = "Double tap or pinch",
+            description = "Zoom in on the detail, drag to pan",
+            animation = GestureAnimation.DOUBLE_TAP,
+        ),
+        ControlEntry(
+            icon = Icons.Default.PhotoCamera,
+            title = "Tap the logo",
+            description = "Show or hide the camera settings overlay",
+        ),
+        ControlEntry(
+            icon = Icons.Default.Star,
+            title = "Selection",
+            description = "Browse everything you have kept",
+        ),
+        ControlEntry(
+            icon = Icons.AutoMirrored.Filled.Undo,
+            title = "Revert",
+            description = "Bring back the photo you just deleted",
+        ),
+        ControlEntry(
+            icon = Icons.Default.FolderOpen,
+            title = "Sources",
+            description = "Go back and pick another folder",
+        ),
+        ControlEntry(
+            icon = Icons.Default.Settings,
+            title = "Settings",
+            description = "Change swipe actions, sorting and filters",
+        ),
+    )
+}
+
+@Composable
+private fun ControlCard(
+    entry: ControlEntry,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
+    val tint = if (entry.isDestructive) colors.error else colors.primary
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -265,31 +326,31 @@ private fun GestureCard(
             .border(1.dp, colors.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
     ) {
         Row(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // Animated icon circle
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(circleFill)
-                    .border(1.dp, circleBorder, CircleShape),
+                    .background(tint.copy(alpha = 0.1f))
+                    .border(1.dp, tint.copy(alpha = 0.2f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                AnimatedGestureIcon(animationType, iconTint, animDelay)
+                AnimatedGestureIcon(entry.animation, entry.icon, tint, entry.animDelay)
             }
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
+                    text = entry.title,
+                    style = MaterialTheme.typography.titleSmall,
                     color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = entry.description,
+                    style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant,
                 )
             }
@@ -300,9 +361,20 @@ private fun GestureCard(
 @Composable
 private fun AnimatedGestureIcon(
     type: GestureAnimation,
+    icon: ImageVector,
     tint: Color,
     delayMs: Int,
 ) {
+    if (type == GestureAnimation.NONE) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(24.dp),
+        )
+        return
+    }
+
     val anim = remember { Animatable(0f) }
 
     LaunchedEffect(type) {
@@ -324,43 +396,46 @@ private fun AnimatedGestureIcon(
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(26.dp)
                     .offset { IntOffset(0, offsetY.dp.roundToPx()) },
             )
         }
 
         GestureAnimation.DOUBLE_TAP -> {
-            val scale = if (anim.value < 0.5f) 1f + anim.value * 0.4f else 1.2f - (anim.value - 0.5f) * 0.4f
+            val scale =
+                if (anim.value < 0.5f) 1f + anim.value * 0.4f else 1.2f - (anim.value - 0.5f) * 0.4f
             Icon(
-                imageVector = Icons.Default.TouchApp,
+                imageVector = icon,
                 contentDescription = null,
                 tint = tint,
-                modifier = Modifier.size((32 * scale).dp),
+                modifier = Modifier.size((26 * scale).dp),
             )
         }
 
         GestureAnimation.SWIPE_LEFT -> {
-            val offsetX = (-(anim.value) * 12f)
+            val offsetX = (-(anim.value) * 10f)
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                imageVector = icon,
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(26.dp)
                     .offset { IntOffset(offsetX.dp.roundToPx(), 0) },
             )
         }
 
         GestureAnimation.SWIPE_RIGHT -> {
-            val offsetX = (anim.value * 12f)
+            val offsetX = (anim.value * 10f)
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(26.dp)
                     .offset { IntOffset(offsetX.dp.roundToPx(), 0) },
             )
         }
+
+        GestureAnimation.NONE -> Unit
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PrivacyTip
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
@@ -375,6 +377,24 @@ fun SettingsScreen(
                 options = listOf("1" to "1", "3" to "3", "5" to "5", "10" to "10"),
                 selected = uiState.recentPathsCount.toString(),
                 onSelect = { viewModel.updateRecentPathsCount(it.toIntOrNull() ?: 3) },
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ── Help ─────────────────────────────────────────────────────
+        SettingsSection(title = "Help", icon = Icons.AutoMirrored.Filled.HelpOutline) {
+            var tutorialsReset by remember { mutableStateOf(false) }
+
+            SettingsClickItem(
+                title = "Reset Tutorials",
+                description = if (tutorialsReset) {
+                    "Done — the guides will appear again"
+                } else {
+                    "Show the gesture tutorial and the one-time action tips again"
+                },
+                onClick = { viewModel.resetTutorials { tutorialsReset = true } },
+                icon = Icons.Default.RestartAlt,
             )
         }
 

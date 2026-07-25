@@ -153,4 +153,15 @@ class SettingsViewModel @Inject constructor(
     fun updateLeftSwipeUri(uri: String?) {
         viewModelScope.launch { settingsRepository.setPhoneLeftSwipeUri(uri) }
     }
+
+    /**
+     * Bring back every one-time explanation and the full gesture tutorial.
+     * [onDone] fires after the write so the UI can confirm it happened.
+     */
+    fun resetTutorials(onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            settingsRepository.resetFirstRunHints()
+            onDone()
+        }
+    }
 }

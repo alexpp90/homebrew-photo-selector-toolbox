@@ -7,6 +7,7 @@ import com.phototok.data.repository.ImageRepository
 import com.phototok.data.repository.SettingsRepository
 import com.phototok.data.source.ExternalStorageDetector
 import com.phototok.domain.CollectionAction
+import com.phototok.domain.FirstRunHint
 import com.phototok.domain.SwipeAction
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -247,5 +248,88 @@ class PhoneModeViewModelTest {
 
         assertEquals(1, viewModel.uiState.value.currentIndex)
         coVerify { settingsRepository.setFolderLastPosition("content://tree/photos", 1) }
+    }
+
+    // ── One-time action explanations ─────────────────────────────────────
+
+    @Test
+    fun `first swipe right explains the action and marks it seen`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(collectionAction = CollectionAction.COPY)
+        val viewModel = loadFolder(image("a.jpg", 1), image("b.jpg", 2))
+
+        viewModel.addToCollection()
+
+        val hint = viewModel.uiState.value.firstRunHint
+        assertNotNull(hint)
+        assertEquals(FirstRunHint.SWIPE_RIGHT, hint!!.hint)
+        assertTrue(hint.message.contains("copied"))
+        coVerify { settingsRepository.markFirstRunHintSeen(FirstRunHint.SWIPE_RIGHT) }
+    }
+
+    @Test
+    fun `a hint fires only once per action`() = runTest {
+        val viewModel = loadFolder(image("a.jpg", 1), image("b.jpg", 2))
+
+        viewModel.addToCollection()
+        assertNotNull(viewModel.uiState.value.firstRunHint)
+
+        viewModel.dismissFirstRunHint()
+        viewModel.addToCollection()
+
+        assertNull(viewModel.uiState.value.firstRunHint)
+    }
+
+    @Test
+    fun `hints already persisted as seen never fire`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(
+            seenFirstRunHints = setOf(FirstRunHint.SWIPE_RIGHT.key),
+        )
+        val viewModel = loadFolder(image("a.jpg", 1), image("b.jpg", 2))
+
+        viewModel.addToCollection()
+
+        assertNull(viewModel.uiState.value.firstRunHint)
+        coVerify(exactly = 0) { settingsRepository.markFirstRunHintSeen(any()) }
+    }
+
+    @Test
+    fun `delete uses the delete hint and copy-move uses the folder hint`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(leftSwipeAction = SwipeAction.DELETE)
+        val deleting = loadFolder(image("a.jpg", 1), image("b.jpg", 2))
+        deleting.requestDelete()
+        assertEquals(
+            FirstRunHint.SWIPE_LEFT_DELETE,
+            deleting.uiState.value.firstRunHint?.hint,
+        )
+
+        phoneSettingsFlow.value = PhoneSettings(leftSwipeAction = SwipeAction.MOVE)
+        val moving = loadFolder(image("c.jpg", 1), image("d.jpg", 2))
+        moving.performLeftSwipeCopyOrMove()
+        assertEquals(
+            FirstRunHint.SWIPE_LEFT_FOLDER,
+            moving.uiState.value.firstRunHint?.hint,
+        )
+    }
+
+    @Test
+    fun `no hint is shown while the full tutorial is up`() = runTest {
+        gestureTutorialTsFlow.value = 0L // forces the tutorial to show
+        val viewModel = loadFolder(image("a.jpg", 1), image("b.jpg", 2))
+        assertTrue(viewModel.uiState.value.showGestureTutorial)
+
+        viewModel.addToCollection()
+
+        assertNull(viewModel.uiState.value.firstRunHint)
+    }
+
+    @Test
+    fun `controls guide can be opened and closed`() = runTest {
+        val viewModel = buildViewModel()
+
+        assertFalse(viewModel.uiState.value.showControlsGuide)
+        viewModel.showControlsGuide()
+        assertTrue(viewModel.uiState.value.showControlsGuide)
+        viewModel.hideControlsGuide()
+        assertFalse(viewModel.uiState.value.showControlsGuide)
     }
 }

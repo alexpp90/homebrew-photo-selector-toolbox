@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.Star
@@ -272,6 +273,14 @@ fun PhoneModeScreen(
                             enabled = uiState.canRevert,
                             onClick = { viewModel.revertDelete() },
                         )
+                        // Info: the full list of available controls
+                        SidePanelButton(
+                            icon = Icons.AutoMirrored.Filled.HelpOutline,
+                            description = "Show controls",
+                            isActive = false,
+                            enabled = true,
+                            onClick = { viewModel.showControlsGuide() },
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -294,6 +303,7 @@ fun PhoneModeScreen(
                         leftSwipeFolderName = uiState.leftSwipeFolderName,
                         showExifOverlay = false,
                         showPageCounter = false,
+                        onFirstRunHint = viewModel::maybeShowFirstRunHint,
                     )
                 }
 
@@ -365,6 +375,7 @@ fun PhoneModeScreen(
                     leftSwipeAction = uiState.leftSwipeAction,
                     leftSwipeFolderName = uiState.leftSwipeFolderName,
                     showExifOverlay = uiState.showExifOverlay,
+                    onFirstRunHint = viewModel::maybeShowFirstRunHint,
                 )
             } else if (uiState.isLoading) {
                 PhoneModeLoading(folderName = uiState.sourceFolderName)
@@ -398,11 +409,41 @@ fun PhoneModeScreen(
             GestureTutorialOverlay(
                 visible = uiState.showGestureTutorial,
                 onDismiss = viewModel::dismissGestureTutorial,
+                leftSwipeAction = uiState.leftSwipeAction,
+                collectionAction = uiState.collectionAction,
+                leftSwipeFolderName = uiState.leftSwipeFolderName,
+                collectionFolderName = uiState.collectionFolderName,
+            )
+        }
+
+        // ── Controls guide, opened on demand from the info button ─────────────
+        GestureTutorialOverlay(
+            visible = uiState.showControlsGuide,
+            onDismiss = viewModel::hideControlsGuide,
+            leftSwipeAction = uiState.leftSwipeAction,
+            collectionAction = uiState.collectionAction,
+            leftSwipeFolderName = uiState.leftSwipeFolderName,
+            collectionFolderName = uiState.collectionFolderName,
+            title = "Controls",
+            subtitle = "Everything you can do while reviewing photos",
+            dismissLabel = "CLOSE",
+        )
+
+        // ── One-time explanation of a first-time action ───────────────────────
+        if (!uiState.showGestureTutorial && !uiState.showControlsGuide) {
+            FirstRunHintCard(
+                hint = uiState.firstRunHint,
+                onDismiss = viewModel::dismissFirstRunHint,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = if (isLandscape && isViewing) 24.dp else 96.dp),
             )
         }
 
         // ── Overlay App Bars (Only when not in Landscape Viewer / selection) ──
-        if (!isViewingSelection && !(isLandscape && isViewing) && !uiState.showGestureTutorial) {
+        if (!isViewingSelection && !(isLandscape && isViewing) &&
+            !uiState.showGestureTutorial && !uiState.showControlsGuide
+        ) {
             // ── Top app bar ──────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -424,15 +465,30 @@ fun PhoneModeScreen(
                             interactionSource = remember { MutableInteractionSource() },
                         ) { viewModel.toggleExifOverlay() }
                 )
-                IconButton(
-                    onClick = { showSettingsSheet = true },
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = colors.onSurfaceVariant,
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Info: opens the full list of available controls.
+                    if (isViewing) {
+                        IconButton(
+                            onClick = { viewModel.showControlsGuide() },
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                                contentDescription = "Show controls",
+                                tint = colors.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { showSettingsSheet = true },
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = colors.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 

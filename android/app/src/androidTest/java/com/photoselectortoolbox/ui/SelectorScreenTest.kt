@@ -338,6 +338,89 @@ class SelectorScreenTest {
         composeRule.onNodeWithText("1.2", substring = true).assertIsDisplayed()
     }
 
+    @Test
+    fun focusMode_layoutToggleAndFullscreenDoNotOverlap() {
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking {
+            settingsRepository.setLastFolderUri("gdrive://test_folder")
+            settingsRepository.setSelectorLayoutFocused(true)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        // Compact (phone) layout has neither control — nothing to assert.
+        val isCompact = composeRule.onAllNodesWithTag("copy_button_compact")
+            .fetchSemanticsNodes().isNotEmpty()
+        if (isCompact) return
+
+        val toggle = composeRule.onNodeWithTag("layout_toggle").getUnclippedBoundsInRoot()
+        val fullscreen = composeRule.onNodeWithContentDescription("Fullscreen")
+            .getUnclippedBoundsInRoot()
+
+        // The regression: both controls used to be pinned to the same top-right
+        // corner, so the layout toggle sat on top of the fullscreen button.
+        val overlaps = toggle.left < fullscreen.right &&
+            fullscreen.left < toggle.right &&
+            toggle.top < fullscreen.bottom &&
+            fullscreen.top < toggle.bottom
+        assert(!overlaps) {
+            "layout toggle $toggle overlaps the fullscreen button $fullscreen"
+        }
+
+        // Both remain individually reachable.
+        composeRule.onNodeWithTag("layout_toggle").assertHasClickAction()
+        composeRule.onNodeWithContentDescription("Fullscreen").assertHasClickAction()
+    }
+
+    @Test
+    fun scoreLegend_explainsWhatTheScanIconsMean() {
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking {
+            scoreDao.insertOrUpdate(
+                ScoreEntity(
+                    filePath = "gdrive://test_folder/image1.jpg",
+                    fileSize = 1024L,
+                    lastModified = 1000L,
+                    sharpnessScore = 78.5,
+                    noiseLevel = 1.2,
+                    highlightClipping = 2.4,
+                    shadowClipping = 0.5,
+                )
+            )
+            settingsRepository.setLastFolderUri("gdrive://test_folder")
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onNodeWithText("Scan Images").performClick()
+        composeRule.onNodeWithText("Start Scan").performClick()
+
+        // The legend button only appears once there are scores to explain.
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithTag("score_legend_button")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("score_legend_button").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("What the scan icons mean")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Sharpness").assertIsDisplayed()
+        composeRule.onNodeWithText("Noise").assertIsDisplayed()
+        composeRule.onNodeWithText("higher is better", substring = true).assertExists()
+        composeRule.onNodeWithText("lower is better", substring = true).assertExists()
+    }
+
     private fun dismissGestureTutorialIfShown() {
         if (composeRule.onAllNodesWithText("Gestures").fetchSemanticsNodes().isNotEmpty()) {
             composeRule.onNodeWithText("Gestures").performClick()
