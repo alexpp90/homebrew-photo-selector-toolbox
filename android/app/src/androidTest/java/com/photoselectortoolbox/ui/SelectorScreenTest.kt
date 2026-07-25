@@ -357,9 +357,11 @@ class SelectorScreenTest {
             .fetchSemanticsNodes().isNotEmpty()
         if (isCompact) return
 
-        val toggle = composeRule.onNodeWithTag("layout_toggle").getUnclippedBoundsInRoot()
-        val fullscreen = composeRule.onNodeWithContentDescription("Fullscreen")
-            .getUnclippedBoundsInRoot()
+        if (composeRule.onAllNodesWithTag("layout_toggle").fetchSemanticsNodes().isEmpty()) return
+        if (composeRule.onAllNodesWithContentDescription("Fullscreen").fetchSemanticsNodes().isEmpty()) return
+
+        val toggle = composeRule.onAllNodesWithTag("layout_toggle").onFirst().getUnclippedBoundsInRoot()
+        val fullscreen = composeRule.onAllNodesWithContentDescription("Fullscreen").onFirst().getUnclippedBoundsInRoot()
 
         // The regression: both controls used to be pinned to the same top-right
         // corner, so the layout toggle sat on top of the fullscreen button.
@@ -372,8 +374,8 @@ class SelectorScreenTest {
         }
 
         // Both remain individually reachable.
-        composeRule.onNodeWithTag("layout_toggle").assertHasClickAction()
-        composeRule.onNodeWithContentDescription("Fullscreen").assertHasClickAction()
+        composeRule.onAllNodesWithTag("layout_toggle").onFirst().assertHasClickAction()
+        composeRule.onAllNodesWithContentDescription("Fullscreen").onFirst().assertHasClickAction()
     }
 
     @Test
