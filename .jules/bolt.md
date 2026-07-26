@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - Path.resolve() vs os.path.abspath() in Hot Paths
+**Learning:** `pathlib.Path.resolve()` is extremely slow because it makes multiple system calls to the filesystem to resolve symlinks and check path existence at every directory level. Using this inside batch operations or hot loops (like serializing database keys in `ScoreCache`) introduces significant latency overhead.
+**Action:** When converting `Path` objects to string absolute paths for database keys or hashing—where strict symlink resolution is not actively required for correctness—always use `os.path.abspath(p)`. It is purely string-based, does not touch the filesystem, and is massively faster than `resolve()`.
