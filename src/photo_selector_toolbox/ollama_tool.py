@@ -11,7 +11,7 @@ from typing import Any, Tuple
 
 
 from photo_selector_toolbox.tools import AnalysisTool
-from photo_selector_toolbox.utils import load_image_preview, NoRedirectHandler
+from photo_selector_toolbox.utils import load_image_preview, NoRedirectHandler, get_pinned_handlers
 
 from photo_selector_toolbox.config import DEFAULT_CONFIG, load_config
 
@@ -96,12 +96,14 @@ class OllamaAestheticTool(AnalysisTool):
         try:
             # Attempt to resolve. socket.getaddrinfo handles more formats than gethostbyname
             addr_info = socket.getaddrinfo(clean_hostname, None)
+            safe_ip = None
             for res in addr_info:
                 ip_str = res[4][0]
+                safe_ip = ip_str
                 if is_forbidden_ip(ip_str):
                     raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
         except socket.gaierror:
-            pass # Invalid hostname or cannot resolve. Let urllib handle the error later.
+            raise RuntimeError("SSRF Protection: Cannot resolve hostname.")
 
         url = f"{ollama_url.rstrip('/')}/api/generate"
         payload = {
@@ -112,11 +114,15 @@ class OllamaAestheticTool(AnalysisTool):
         }
 
         try:
-            opener = urllib.request.build_opener(NoRedirectHandler)
+            http_h, https_h = get_pinned_handlers(safe_ip)
+            opener = urllib.request.build_opener(NoRedirectHandler, http_h, https_h)
+            req_headers = {"Content-Type": "application/json"}
+            if hostname:
+                req_headers["Host"] = urlparse(ollama_url).netloc
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
+                headers=req_headers,
                 method="POST",
             )
             # Serialize requests to avoid overloading local Ollama server

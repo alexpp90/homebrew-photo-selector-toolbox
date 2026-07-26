@@ -3,6 +3,8 @@ import sys
 import os
 import urllib.request
 from urllib.error import URLError
+import http.client
+import socket
 from urllib.parse import urlparse, unquote
 import logging
 import functools
@@ -647,3 +649,21 @@ class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise URLError("SSRF Protection: Redirects are not allowed.")
+
+
+def get_pinned_handlers(resolved_ip):
+    class PinnedHTTPConnection(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = socket.create_connection((resolved_ip, self.port), self.timeout, self.source_address)
+    class PinnedHTTPHandler(urllib.request.HTTPHandler):
+        def http_open(self, req): return self.do_open(PinnedHTTPConnection, req)
+    class PinnedHTTPSConnection(http.client.HTTPSConnection):
+        def connect(self):
+            sock = socket.create_connection((resolved_ip, self.port), self.timeout, self.source_address)
+            if getattr(self, "_tunnel_host", None):
+                self.sock = sock
+                self._tunnel()
+            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+    class PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+        def https_open(self, req): return self.do_open(PinnedHTTPSConnection, req)
+    return PinnedHTTPHandler(), PinnedHTTPSHandler()
