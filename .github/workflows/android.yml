@@ -80,6 +80,17 @@ jobs:
         working-directory: android
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      # `testDebugUnitTest` and `lintDebug` never compile `src/androidTest`, so
+      # a typo there used to survive every cheap job and only blow up inside the
+      # emulator job — where the failure surfaces as a bare
+      # "The process '/usr/bin/sh' failed with exit code 1". Building the test
+      # APKs here validates the same sources (Kotlin + kapt/Hilt) in ~2 minutes
+      # with no emulator, so instrumented-test breakage is reported in plain
+      # Kotlin compiler output instead.
+      - name: Compile instrumented test sources
+        working-directory: android
+        run: ./gradlew :app:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
+
       - name: Upload unit test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -156,9 +167,11 @@ jobs:
           arch: x86_64
           target: google_apis
           force-avd-creation: false
-          disable-snapshot: true
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none
+          # `-no-snapshot-save` is what actually prevents the emulator teardown
+          # crash. There is no `disable-snapshot` input on this action (v2), so
+          # passing it was silently ignored and only produced a CI warning.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -no-snapshot-save -camera-back none
           working-directory: android
           script: |
             ./gradlew :app:connectedDebugAndroidTest :phototok:connectedDebugAndroidTest --stacktrace

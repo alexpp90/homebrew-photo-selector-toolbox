@@ -383,7 +383,7 @@ class SelectorScreenTest {
         val scannedImages = mockImages.mapIndexed { idx, item ->
             if (idx == 0) item.copy(
                 scanResult = com.photoselectortoolbox.data.model.ScanResult(
-                    filePath = item.path,
+                    filePath = item.uri,
                     sharpnessScore = 78.5,
                     noiseLevel = 1.2,
                     highlightClipping = 2.4,
@@ -404,10 +404,10 @@ class SelectorScreenTest {
 
         // The legend button appears once there are scores to explain.
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodes(hasTag("score_legend_button"), useUnmergedTree = true)
+            composeRule.onAllNodes(hasTestTag("score_legend_button"), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onAllNodes(hasTag("score_legend_button"), useUnmergedTree = true).onFirst().performClick()
+        composeRule.onAllNodes(hasTestTag("score_legend_button"), useUnmergedTree = true).onFirst().performClick()
 
         composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodes(hasText("What the scan icons mean"), useUnmergedTree = true)
