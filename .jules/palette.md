@@ -57,3 +57,8 @@
 ## 2026-07-23 - One-Time On-Image Affordances vs. Permanent Overlay Clutter (Compose)
 **Learning:** Drawing Previous/Next arrows permanently on top of comparison images (Toolbox Expanded selector) obstructs the photo being judged. Users only need the hint once to learn the tiles are tappable. Persisting a `hasSeenNavHint` flag (DataStore) and rendering the arrows only while it is false gives discoverability without permanent clutter. Also: the layout view-toggle and Move/Copy/Delete controls were sub-40dp — below the 48dp accessibility touch-target minimum — and sat over the image.
 **Action:** For image-review UIs, treat on-image directional arrows as a first-run-only coach affordance (persist a "seen" flag, then suppress). Keep interactive controls at ≥48dp targets and positioned around (not over) the image; add a scrim behind controls that float over variable-brightness photos so they stay legible.
+
+## 2026-07-27 - Scope Semantics Assertions for Dialogs/Sheets to Avoid Duplicate Node Matches (Compose)
+**Learning:** When testing Compose modal bottom sheets or overlays over screens containing metrics or labels, `composeRule.onNode(hasText("..."))` can fail with `AssertionError: Expected exactly '1' node but found '2' nodes` if both the background screen and the sheet display identical labels (such as `ScoreMetric.NOISE`'s `shortLabel` and `displayName` both being `"Noise"`).
+**Action:** Always scope semantics assertions for content inside sheets or dialogs using `hasAnyAncestor(hasTestTag("sheet_tag"))` (e.g. `hasText("Noise") and hasAnyAncestor(hasTestTag("score_legend_sheet"))`) to ensure queries specifically match the intended container element.
+

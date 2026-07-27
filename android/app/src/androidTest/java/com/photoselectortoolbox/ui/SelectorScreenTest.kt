@@ -413,10 +413,11 @@ class SelectorScreenTest {
             composeRule.onAllNodes(hasText("What the scan icons mean"), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNode(hasText("Sharpness"), useUnmergedTree = true).assertExists()
-        composeRule.onNode(hasText("Noise"), useUnmergedTree = true).assertExists()
-        composeRule.onNode(hasText("higher is better", substring = true), useUnmergedTree = true).assertExists()
-        composeRule.onNode(hasText("lower is better", substring = true), useUnmergedTree = true).assertExists()
+        val inLegend = hasAnyAncestor(hasTestTag("score_legend_sheet"))
+        composeRule.onNode(hasText("Sharpness") and inLegend, useUnmergedTree = true).assertExists()
+        composeRule.onNode(hasText("Noise") and inLegend, useUnmergedTree = true).assertExists()
+        composeRule.onNode(hasText("higher is better", substring = true) and inLegend, useUnmergedTree = true).assertExists()
+        composeRule.onNode(hasText("lower is better", substring = true) and inLegend, useUnmergedTree = true).assertExists()
     }
 
     private fun dismissGestureTutorialIfShown() {
