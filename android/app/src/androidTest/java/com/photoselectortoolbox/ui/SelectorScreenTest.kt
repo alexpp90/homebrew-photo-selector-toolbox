@@ -420,11 +420,14 @@ class SelectorScreenTest {
     }
 
     private fun dismissGestureTutorialIfShown() {
-        if (composeRule.onAllNodesWithText("Gestures").fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onNodeWithText("Gestures").performClick()
+        if (composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).onFirst().performClick()
             composeRule.waitUntil(timeoutMillis = 15000) {
-                composeRule.onAllNodesWithText("Gestures").fetchSemanticsNodes().isEmpty()
+                composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).fetchSemanticsNodes().isEmpty()
             }
+        }
+        if (composeRule.onAllNodesWithText("Gestures", ignoreCase = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodesWithText("Gestures", ignoreCase = true).onFirst().performClick()
         }
     }
 }

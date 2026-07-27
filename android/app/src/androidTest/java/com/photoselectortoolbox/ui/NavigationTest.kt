@@ -7,6 +7,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -42,6 +43,7 @@ class NavigationTest {
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        dismissGestureTutorialIfShown()
         val hasDesktopLabel = composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
             .fetchSemanticsNodes().isNotEmpty()
         if (hasDesktopLabel) {
@@ -61,6 +63,7 @@ class NavigationTest {
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        dismissGestureTutorialIfShown()
         val isDesktop = composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
             .fetchSemanticsNodes().isNotEmpty()
         if (!isDesktop) {
@@ -90,6 +93,7 @@ class NavigationTest {
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        dismissGestureTutorialIfShown()
         val isDesktop = composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
             .fetchSemanticsNodes().isNotEmpty()
         if (!isDesktop) {
@@ -118,6 +122,7 @@ class NavigationTest {
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        dismissGestureTutorialIfShown()
         val isDesktop = composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
             .fetchSemanticsNodes().isNotEmpty()
         if (!isDesktop) {
@@ -146,6 +151,7 @@ class NavigationTest {
             composeRule.onAllNodesWithText("Select photos folder", substring = false, ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        dismissGestureTutorialIfShown()
         val isDesktop = composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
             .fetchSemanticsNodes().isNotEmpty()
         if (!isDesktop) {
@@ -170,5 +176,17 @@ class NavigationTest {
 
         composeRule.onNodeWithText("Select a folder to start reviewing and culling your photos.", substring = true, ignoreCase = true)
             .assertIsDisplayed()
+    }
+
+    private fun dismissGestureTutorialIfShown() {
+        if (composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).onFirst().performClick()
+            composeRule.waitUntil(timeoutMillis = 15000) {
+                composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).fetchSemanticsNodes().isEmpty()
+            }
+        }
+        if (composeRule.onAllNodesWithText("Gestures", ignoreCase = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodesWithText("Gestures", ignoreCase = true).onFirst().performClick()
+        }
     }
 }
