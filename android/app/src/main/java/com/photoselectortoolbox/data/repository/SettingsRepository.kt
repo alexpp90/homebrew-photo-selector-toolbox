@@ -48,6 +48,9 @@ class SettingsRepository @Inject constructor(
         // Expanded-layout (tablet/DeX) selector view preferences
         private val KEY_SELECTOR_LAYOUT_FOCUSED = booleanPreferencesKey("selector_layout_focused")
         private val KEY_HAS_SEEN_NAV_HINT = booleanPreferencesKey("has_seen_nav_hint")
+        private val KEY_FILMSTRIP_VISIBLE = booleanPreferencesKey("filmstrip_visible")
+        private val KEY_DETAILS_VISIBLE = booleanPreferencesKey("details_visible")
+        private val KEY_SEEN_FULLSCREEN_HINT = booleanPreferencesKey("seen_fullscreen_gesture_hint")
 
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
         const val DEFAULT_SORTING_ENABLED = true
@@ -179,6 +182,52 @@ class SettingsRepository @Inject constructor(
     suspend fun setHasSeenNavHint(seen: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[KEY_HAS_SEEN_NAV_HINT] = seen
+        }
+    }
+
+    /**
+     * Whether the filmstrip along the bottom edge is shown.
+     *
+     * Persisted because it is the cheapest vertical space to reclaim: hiding it
+     * gives every visible frame roughly 40dp more height, and a photographer
+     * who has decided they do not want it should not have to decide again next
+     * launch.
+     */
+    val filmstripVisible: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FILMSTRIP_VISIBLE] ?: true
+    }
+
+    /** Whether the details panel beside the current frame is shown. */
+    val detailsVisible: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DETAILS_VISIBLE] ?: true
+    }
+
+    suspend fun setFilmstripVisible(visible: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FILMSTRIP_VISIBLE] = visible
+        }
+    }
+
+    suspend fun setDetailsVisible(visible: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DETAILS_VISIBLE] = visible
+        }
+    }
+
+    /**
+     * Whether the fullscreen gesture hint card has been dismissed.
+     *
+     * Fullscreen has no visible affordance for pinch, double-tap or swipe, so
+     * the card is the only place those are taught — but once taught it is pure
+     * obstruction over the frame being inspected, so it shows exactly once.
+     */
+    val hasSeenFullscreenGestureHint: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SEEN_FULLSCREEN_HINT] ?: false
+    }
+
+    suspend fun setHasSeenFullscreenGestureHint(seen: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SEEN_FULLSCREEN_HINT] = seen
         }
     }
 

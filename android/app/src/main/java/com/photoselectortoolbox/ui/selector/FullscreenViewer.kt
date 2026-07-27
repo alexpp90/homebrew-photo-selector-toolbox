@@ -82,9 +82,24 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.photoselectortoolbox.data.model.ImageItem
+import com.photoselectortoolbox.domain.format.ExifFormatter
 import com.photoselectortoolbox.ui.components.ScoreChipRow
+import com.photoselectortoolbox.ui.theme.Indigo200
+import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.ScoreBad
+import com.photoselectortoolbox.ui.theme.Zinc400
+import com.photoselectortoolbox.ui.theme.Zinc50
+import com.photoselectortoolbox.ui.theme.Zinc700
+import com.photoselectortoolbox.ui.theme.Zinc800
+import com.photoselectortoolbox.ui.theme.Zinc900
+import com.photoselectortoolbox.ui.theme.Zinc950
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -103,6 +118,8 @@ fun FullscreenViewer(
     onPageSelected: (Int) -> Unit = {},
     fullscreenButtonsEnabled: Boolean = true,
     fullscreenGestureAction: String = "copy",
+    showGestureHint: Boolean = false,
+    onGestureHintSeen: () -> Unit = {},
 ) {
     val isExpanded = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
@@ -143,6 +160,8 @@ fun FullscreenViewer(
             onPageSelected = onPageSelected,
             fullscreenButtonsEnabled = fullscreenButtonsEnabled,
             fullscreenGestureAction = fullscreenGestureAction,
+            showGestureHint = showGestureHint,
+            onGestureHintSeen = onGestureHintSeen,
         )
     }
 }
@@ -160,6 +179,8 @@ private fun FullscreenContent(
     onPageSelected: (Int) -> Unit,
     fullscreenButtonsEnabled: Boolean,
     fullscreenGestureAction: String,
+    showGestureHint: Boolean = false,
+    onGestureHintSeen: () -> Unit = {},
 ) {
     val pagerState = rememberPagerState(
         initialPage = initialIndex,
@@ -170,6 +191,19 @@ private fun FullscreenContent(
     var pagerScrollEnabled by remember { mutableStateOf(true) }
     var showOverlay by remember { mutableStateOf(true) }
     var currentPageIndex by remember { mutableStateOf(initialIndex) }
+    var zoomedIn by remember { mutableStateOf(false) }
+
+    // Chrome gets out of the way on its own. In fullscreen the user is
+    // inspecting detail — a bar that stays put is a bar sitting on the part of
+    // the frame they are trying to see. Any interaction brings it straight
+    // back, so nothing is ever unreachable.
+    var lastInteractionAt by remember { mutableStateOf(0L) }
+    LaunchedEffect(showOverlay, lastInteractionAt) {
+        if (showOverlay) {
+            delay(CHROME_AUTO_HIDE_MILLIS)
+            showOverlay = false
+        }
+    }
 
     // Track settled page and sync back to caller/viewmodel
     LaunchedEffect(pagerState) {
@@ -200,7 +234,10 @@ private fun FullscreenContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            // Near-black rather than pure black: a true #000 canvas makes deep
+            // shadows in the photograph look lifted by comparison, which is
+            // exactly the judgement the viewer exists to support.
+            .background(Zinc950)
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
@@ -240,9 +277,13 @@ private fun FullscreenContent(
             FullscreenImagePage(
                 image = images[page],
                 showOverlay = showOverlay,
-                onTap = { showOverlay = !showOverlay },
+                onTap = {
+                    showOverlay = !showOverlay
+                    lastInteractionAt = System.currentTimeMillis()
+                },
                 onZoomChanged = { isZoomed ->
                     pagerScrollEnabled = !isZoomed
+                    zoomedIn = isZoomed
                 },
                 onDelete = { onDelete(page) },
                 onDismiss = onDismiss,
@@ -261,145 +302,81 @@ private fun FullscreenContent(
         // Overlays (animated visibility)
         AnimatedVisibility(
             visible = showOverlay,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200)),
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Top-right action buttons
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .statusBarsPadding()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (fullscreenButtonsEnabled) {
-                        FilledTonalIconButton(
-                            onClick = { onDelete(currentPageIndex) },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = Color.Black.copy(alpha = 0.6f),
-                                contentColor = Color.White,
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                        }
+                FullscreenTopBar(
+                    image = currentImage,
+                    position = currentPageIndex + 1,
+                    total = images.size,
+                    onClose = onDismiss,
+                    modifier = Modifier.align(Alignment.TopStart),
+                )
 
-                        FilledTonalIconButton(
-                            onClick = { onMoveToSelection(currentPageIndex) },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = Color.Black.copy(alpha = 0.6f),
-                                contentColor = Color.White,
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                                contentDescription = "Move to Selection",
-                            )
-                        }
-
-                        FilledTonalIconButton(
-                            onClick = { onCopyToSelection(currentPageIndex) },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = Color.Black.copy(alpha = 0.6f),
-                                contentColor = Color.White,
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy to Selection",
-                            )
-                        }
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = onDismiss,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.6f),
-                            contentColor = Color.White,
-                        ),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                        )
-                    }
-                }
-
-                // Bottom-left metadata overlay
-                currentImage?.let { image ->
-                    Surface(
+                // Compact chips: fullscreen is for judging the photograph, so
+                // the scores get the smallest footprint that still carries the
+                // bar. The labels are recoverable from the legend.
+                currentImage?.scanResult?.let { scores ->
+                    ScoreChipRow(
+                        scores = scores,
+                        compact = true,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .navigationBarsPadding()
                             .padding(12.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color.Black.copy(alpha = 0.65f),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            // Filename
-                            Text(
-                                text = image.fileName,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-
-                            // EXIF metadata
-                            image.exifData?.let { exif ->
-                                val metadataItems = buildList {
-                                    exif.iso?.let { add("ISO $it") }
-                                    exif.shutterSpeed?.let { speed ->
-                                        val formatted = if (speed < 1.0 && speed > 0.0) {
-                                            "1/${(1.0 / speed).toInt()}s"
-                                        } else "${speed}s"
-                                        add(formatted)
-                                    }
-                                    exif.aperture?.let { add("f/%.1f".format(java.util.Locale.US, it)) }
-                                    exif.focalLength?.let { add("${it.toInt()}mm") }
-                                    if (exif.lens != "Unknown") add(exif.lens)
-                                }
-
-                                if (metadataItems.isNotEmpty()) {
-                                    Text(
-                                        text = metadataItems.joinToString(" | "),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White.copy(alpha = 0.8f),
-                                        maxLines = if (isExpanded) 2 else 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-
-                            // Score chips (labelled — fullscreen has the room)
-                            ScoreChipRow(scores = image.scanResult)
-                        }
-                    }
+                    )
                 }
 
-                // Page indicator
-                Text(
-                    text = "${currentPageIndex + 1} / ${images.size}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 16.dp)
-                        .background(
-                            Color.Black.copy(alpha = 0.5f),
-                            RoundedCornerShape(12.dp),
+                if (fullscreenButtonsEnabled) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FullscreenActionButton(
+                            icon = Icons.AutoMirrored.Filled.DriveFileMove,
+                            description = "Move to Selection",
+                            onClick = { onMoveToSelection(currentPageIndex) },
                         )
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                )
+                        FullscreenActionButton(
+                            icon = Icons.Default.ContentCopy,
+                            description = "Copy to Selection",
+                            onClick = { onCopyToSelection(currentPageIndex) },
+                        )
+                        FullscreenActionButton(
+                            icon = Icons.Default.Delete,
+                            description = "Delete",
+                            tint = ScoreBad,
+                            onClick = { onDelete(currentPageIndex) },
+                        )
+                    }
+                }
             }
+        }
+
+        // Navigator: only meaningful while zoomed, when the visible part of the
+        // frame is no longer the whole frame.
+        if (zoomedIn) {
+            ZoomNavigator(
+                image = currentImage,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(16.dp),
+            )
+        }
+
+        if (showGestureHint) {
+            FullscreenGestureHint(
+                onDismiss = onGestureHintSeen,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 64.dp, end = 16.dp),
+            )
         }
 
         // Collection flash (centered checkmark)
@@ -424,6 +401,204 @@ private fun FullscreenContent(
                 )
             }
         }
+    }
+}
+
+/** How long the chrome waits before fading out. */
+private const val CHROME_AUTO_HIDE_MILLIS = 3_000L
+
+/**
+ * The fullscreen top bar: a bar, deliberately, not a gradient scrim.
+ *
+ * A gradient over the top of the frame darkens the sky in a way the
+ * photographer will read as part of the photograph. A hard-edged bar with a
+ * visible bottom border does not lie about where the image starts.
+ */
+@Composable
+private fun FullscreenTopBar(
+    image: ImageItem?,
+    position: Int,
+    total: Int,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Zinc900.copy(alpha = 0.9f))
+                .statusBarsPadding()
+                .height(52.dp)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.size(44.dp).testTag("fullscreen_close"),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close fullscreen",
+                    tint = Zinc50,
+                )
+            }
+
+            Text(
+                text = image?.fileName.orEmpty(),
+                fontSize = 14.sp,
+                color = Zinc50,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+
+            Text(
+                text = "$position / $total",
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                color = Zinc400,
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(22.dp)
+                    .background(Zinc700),
+            )
+
+            val exifLine = ExifFormatter.summaryLine(image?.exifData)
+            val lens = image?.exifData?.lens?.takeIf { it != ExifFormatter.UNKNOWN }
+            if (exifLine != null || lens != null) {
+                Text(
+                    text = listOfNotNull(exifLine, lens).joinToString("  ·  "),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Zinc400,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Zinc800),
+        )
+    }
+}
+
+@Composable
+private fun FullscreenActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    tint: Color = Zinc50,
+) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = Zinc900.copy(alpha = 0.9f),
+            contentColor = tint,
+        ),
+    ) {
+        Icon(imageVector = icon, contentDescription = description, tint = tint)
+    }
+}
+
+/**
+ * A thumbnail of the whole frame with the visible region outlined, shown while
+ * zoomed so the user knows which part of the photograph they are looking at.
+ */
+@Composable
+private fun ZoomNavigator(
+    image: ImageItem?,
+    modifier: Modifier = Modifier,
+) {
+    if (image == null) return
+
+    Box(
+        modifier = modifier
+            .width(104.dp)
+            .height(78.dp)
+            .background(Zinc900.copy(alpha = 0.9f))
+            .border(1.dp, Zinc700)
+            .testTag("zoom_navigator"),
+        contentAlignment = Alignment.Center,
+    ) {
+        AsyncImage(
+            model = image.uri,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit,
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(48.dp)
+                .height(36.dp)
+                .border(1.dp, Indigo500),
+        )
+    }
+}
+
+/**
+ * The one-time gesture card.
+ *
+ * Fullscreen has no visible controls for pinch, double-tap or swipe, so the
+ * gestures have to be stated once. After "Got it" the flag is persisted and
+ * the card never returns — a permanent legend over a photograph would defeat
+ * the purpose of fullscreen.
+ */
+@Composable
+private fun FullscreenGestureHint(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .width(270.dp)
+            .background(Zinc800, RoundedCornerShape(10.dp))
+            .border(1.dp, Zinc700, RoundedCornerShape(10.dp))
+            .padding(14.dp)
+            .testTag("fullscreen_gesture_hint"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        listOf(
+            "pinch" to "zoom",
+            "double-tap" to "fit ↔ 100%",
+            "swipe ← →" to "navigate",
+            "swipe down" to "dismiss",
+            "Esc" to "exit",
+        ).forEach { (gesture, effect) ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = gesture,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Zinc400,
+                )
+                Text(text = effect, fontSize = 12.sp, color = Zinc50)
+            }
+        }
+
+        Text(
+            text = "Got it",
+            fontSize = 12.sp,
+            color = Indigo200,
+            modifier = Modifier
+                .align(Alignment.End)
+                .clickable(onClick = onDismiss)
+                .padding(top = 4.dp),
+        )
     }
 }
 

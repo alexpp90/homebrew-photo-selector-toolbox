@@ -79,6 +79,27 @@ fun ScoreLegendSheet(onDismiss: () -> Unit) {
                 LegendRow(metric)
             }
 
+            // The worked example is the point of the sheet. Three sharpness
+            // values on wildly different scales are hard to rank by reading;
+            // the same three as bars are not. Showing them side by side is
+            // what teaches the user to stop reading the digits.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.testTag("legend_bar_example"),
+                ) {
+                    listOf(22.4, 61.9, 88.3).forEach { value ->
+                        ScoreChip(metric = ScoreMetric.SHARPNESS, value = value)
+                    }
+                }
+                Text(
+                    text = "Compare the bars, not the numbers.",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.onSurface,
+                )
+            }
+
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "A badge is only shown when that measurement was part of the scan. " +

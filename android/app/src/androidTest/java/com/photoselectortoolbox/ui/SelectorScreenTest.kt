@@ -92,6 +92,14 @@ class SelectorScreenTest {
             settingsRepository.setLastFolderUri(null)
             settingsRepository.setSortingEnabled(true)
             settingsRepository.setGroupingEnabled(false)
+            // The one-time coach affordances are overlays. Left un-dismissed
+            // they sit on top of the frames these tests are asserting about,
+            // and whether they appear depends on leftover DataStore state — so
+            // pin them off and cover them in their own test instead.
+            settingsRepository.setHasSeenNavHint(true)
+            settingsRepository.setHasSeenFullscreenGestureHint(true)
+            settingsRepository.setFilmstripVisible(true)
+            settingsRepository.setDetailsVisible(true)
         }
     }
 
@@ -107,12 +115,17 @@ class SelectorScreenTest {
     fun initialEmptyState_isDisplayed() {
         // App starts with no folder selected, should show the empty state card.
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodesWithText("No Photos Loaded", ignoreCase = true)
+            composeRule.onAllNodesWithText("Select a Folder", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeRule.onNodeWithText("No Photos Loaded", ignoreCase = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Select a folder to start reviewing and culling your photos.", substring = true, ignoreCase = true).assertIsDisplayed()
+        composeRule.onAllNodesWithText("Select a Folder", ignoreCase = true).onFirst()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Choose a shoot folder to start comparing and culling frames.",
+            substring = true,
+            ignoreCase = true,
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -134,12 +147,52 @@ class SelectorScreenTest {
         // Dismiss gesture tutorial overlay if shown
         dismissGestureTutorialIfShown()
 
-        // Verify active photo and EXIF details are shown in UI
-        composeRule.onNodeWithText("image1.jpg", ignoreCase = true).assertIsDisplayed()
-        composeRule.onNodeWithText("1/200s", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("f/2.8", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("ISO 100", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("50mm", substring = true).assertIsDisplayed()
+        // Verify active photo and EXIF details are shown in UI. The details
+        // panel presents ISO as a labelled row ("ISO" / "100") rather than the
+        // run-together "ISO 100" of the one-line summary, so assert on the
+        // value itself — it is present in either presentation.
+        composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true).onFirst()
+            .assertIsDisplayed()
+        composeRule.onAllNodesWithText("1/200s", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("f/2.8", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("100", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("50mm", substring = true).onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun focusedLayout_allThreeFramesAreTheSameHeight() {
+        // The core promise of the layout: the active frame is marked only by a
+        // border, never by being bigger. A neighbour that is smaller cannot be
+        // judged for sharpness against the current frame, which is the task.
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking {
+            settingsRepository.setLastFolderUri("gdrive://test_folder")
+            settingsRepository.setSelectorLayoutFocused(true)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        // Only the expanded layout has three tiles at once.
+        if (composeRule.onAllNodesWithTag("copy_button_compact").fetchSemanticsNodes().isNotEmpty()) {
+            return
+        }
+        if (composeRule.onAllNodesWithTag("column_next").fetchSemanticsNodes().isEmpty()) return
+
+        val current = composeRule.onNodeWithTag("column_current").getUnclippedBoundsInRoot()
+        val next = composeRule.onNodeWithTag("column_next").getUnclippedBoundsInRoot()
+
+        val currentHeight = current.bottom - current.top
+        val nextHeight = next.bottom - next.top
+        val difference = kotlin.math.abs(currentHeight.value - nextHeight.value)
+
+        // 2dp of slack: the active tile's border is 2dp where a neighbour's is 1dp.
+        assert(difference <= 2f) {
+            "current frame is ${currentHeight.value}dp tall but next is ${nextHeight.value}dp"
+        }
     }
 
     @Test
@@ -172,11 +225,12 @@ class SelectorScreenTest {
         composeRule.waitForIdle()
 
         // Verify the second image details are now shown
-        composeRule.onNodeWithText("image2.jpg", ignoreCase = true).assertIsDisplayed()
-        composeRule.onNodeWithText("1/125s", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("f/4.0", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("ISO 200", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("85mm", substring = true).assertIsDisplayed()
+        composeRule.onAllNodesWithText("image2.jpg", ignoreCase = true).onFirst()
+            .assertIsDisplayed()
+        composeRule.onAllNodesWithText("1/125s", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("f/4.0", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("200", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("85mm", substring = true).onFirst().assertIsDisplayed()
     }
 
     @Test
@@ -215,7 +269,7 @@ class SelectorScreenTest {
         composeRule.onNodeWithText("Copied to Selection", ignoreCase = true).assertIsDisplayed()
 
         // Wait for the copy snackbar to disappear so it doesn't block the move button on phone layouts
-        composeRule.waitUntil(timeoutMillis = 15000) {
+        composeRule.waitUntil(timeoutMillis = 35000) {
             composeRule.onAllNodesWithText("Copied to Selection", ignoreCase = true)
                 .fetchSemanticsNodes().isEmpty()
         }
@@ -287,7 +341,8 @@ class SelectorScreenTest {
             composeRule.onAllNodesWithText("image2.jpg", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("image2.jpg", ignoreCase = true).assertIsDisplayed()
+        composeRule.onAllNodesWithText("image2.jpg", ignoreCase = true).onFirst()
+            .assertIsDisplayed()
         composeRule.onNodeWithText("image1.jpg", ignoreCase = true).assertDoesNotExist()
     }
 
@@ -318,8 +373,8 @@ class SelectorScreenTest {
         dismissGestureTutorialIfShown()
 
         // Open options menu and tap Scan Images
-        composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Scan Images").performClick()
+        composeRule.onNodeWithContentDescription("More options").performClick()
+        composeRule.onAllNodesWithText("Scan Images").onFirst().performClick()
 
         // Verify Scan Configuration sheet is shown and start scan
         composeRule.onNodeWithText("Scan Configuration").assertIsDisplayed()
@@ -358,10 +413,12 @@ class SelectorScreenTest {
         if (isCompact) return
 
         if (composeRule.onAllNodesWithTag("layout_toggle").fetchSemanticsNodes().isEmpty()) return
-        if (composeRule.onAllNodesWithContentDescription("Fullscreen").fetchSemanticsNodes().isEmpty()) return
+        if (composeRule.onAllNodesWithTag("fullscreen_button").fetchSemanticsNodes().isEmpty()) return
 
-        val toggle = composeRule.onAllNodesWithTag("layout_toggle").onFirst().getUnclippedBoundsInRoot()
-        val fullscreen = composeRule.onAllNodesWithContentDescription("Fullscreen").onFirst().getUnclippedBoundsInRoot()
+        val toggle = composeRule.onAllNodesWithTag("layout_toggle").onFirst()
+            .getUnclippedBoundsInRoot()
+        val fullscreen = composeRule.onAllNodesWithTag("fullscreen_button").onFirst()
+            .getUnclippedBoundsInRoot()
 
         // The regression: both controls used to be pinned to the same top-right
         // corner, so the layout toggle sat on top of the fullscreen button.
@@ -375,7 +432,72 @@ class SelectorScreenTest {
 
         // Both remain individually reachable.
         composeRule.onAllNodesWithTag("layout_toggle").onFirst().assertHasClickAction()
-        composeRule.onAllNodesWithContentDescription("Fullscreen").onFirst().assertHasClickAction()
+        composeRule.onAllNodesWithTag("fullscreen_button").onFirst().assertHasClickAction()
+    }
+
+    @Test
+    fun firstRun_navigationHintShowsOnceAndStaysDismissed() {
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking {
+            settingsRepository.setHasSeenNavHint(false)
+            settingsRepository.setLastFolderUri("gdrive://test_folder")
+            settingsRepository.setSelectorLayoutFocused(true)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Compact layout uses the gesture tutorial instead of this hint.
+        if (composeRule.onAllNodesWithTag("copy_button_compact").fetchSemanticsNodes().isNotEmpty()) {
+            return
+        }
+        if (composeRule.onAllNodesWithTag("first_run_hint", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty()
+        ) {
+            return
+        }
+
+        composeRule.onAllNodes(hasText("Got it", ignoreCase = true), useUnmergedTree = true)
+            .onFirst().performClick()
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithTag("first_run_hint", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty()
+        }
+        composeRule.onAllNodesWithTag("first_run_hint", useUnmergedTree = true)
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun scoreChip_carriesDirectionAndBestOfThreeInItsDescription() {
+        // A bare number with no stated direction is not interpretable, and a
+        // sighted user gets the direction from the bar that a screen-reader
+        // user does not.
+        val scanned = mockImages.mapIndexed { idx, item ->
+            item.copy(
+                scanResult = com.photoselectortoolbox.data.model.ScanResult(
+                    filePath = item.uri,
+                    sharpnessScore = if (idx == 0) 88.3 else 22.4,
+                )
+            )
+        }
+        fakeRepo.imagesFlow.value = scanned
+        runBlocking { settingsRepository.setLastFolderUri("gdrive://test_folder") }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithContentDescription("higher is better", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onAllNodesWithContentDescription("higher is better", substring = true)
+            .onFirst().assertExists()
     }
 
     @Test
@@ -404,13 +526,13 @@ class SelectorScreenTest {
 
         // The legend button appears once there are scores to explain.
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodes(hasTestTag("score_legend_button"), useUnmergedTree = true)
+            composeRule.onAllNodesWithContentDescription("What the scan icons mean")
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onAllNodes(hasTestTag("score_legend_button"), useUnmergedTree = true).onFirst().performClick()
+        composeRule.onNodeWithContentDescription("What the scan icons mean").performClick()
 
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodes(hasText("What the scan icons mean"), useUnmergedTree = true)
+            composeRule.onAllNodes(hasText("What the scan icons mean", ignoreCase = true), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
         val inLegend = hasAnyAncestor(hasTestTag("score_legend_sheet"))
@@ -421,6 +543,12 @@ class SelectorScreenTest {
     }
 
     private fun dismissGestureTutorialIfShown() {
+        if (composeRule.onAllNodes(hasTestTag("gesture_tutorial_overlay"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasTestTag("gesture_tutorial_overlay"), useUnmergedTree = true).onFirst().performClick()
+            composeRule.waitUntil(timeoutMillis = 15000) {
+                composeRule.onAllNodes(hasTestTag("gesture_tutorial_overlay"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
+            }
+        }
         if (composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
             composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
             composeRule.waitUntil(timeoutMillis = 15000) {

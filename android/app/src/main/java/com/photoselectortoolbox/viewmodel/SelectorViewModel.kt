@@ -54,7 +54,33 @@ data class SelectorUiState(
     val selectorLayoutFocused: Boolean = true,
     /** Whether the one-time on-image nav arrows have already been shown. */
     val hasSeenNavHint: Boolean = false,
-)
+    /** Whether the filmstrip along the bottom edge is shown (persisted). */
+    val filmstripVisible: Boolean = true,
+    /** Whether the details panel beside the current frame is shown (persisted). */
+    val detailsVisible: Boolean = true,
+    /** Whether the one-time fullscreen gesture hint has already been dismissed. */
+    val hasSeenFullscreenHint: Boolean = false,
+) {
+    /** The frame being judged, or null when no folder is loaded. */
+    val currentImage: ImageItem?
+        get() = images.getOrNull(currentIndex)
+
+    /** The frame before the current one, or null at the start of the folder. */
+    val previousImage: ImageItem?
+        get() = images.getOrNull(currentIndex - 1)
+
+    /** The frame after the current one, or null at the end of the folder. */
+    val nextImage: ImageItem?
+        get() = images.getOrNull(currentIndex + 1)
+
+    /** Human-readable position, 1-based, as shown in the app bar and rails. */
+    val position: Int
+        get() = if (images.isEmpty()) 0 else currentIndex + 1
+
+    /** True once at least one frame carries scores, which is what reveals the legend. */
+    val hasAnyScores: Boolean
+        get() = images.any { it.scanResult != null }
+}
 
 @HiltViewModel
 class SelectorViewModel @Inject constructor(
@@ -111,6 +137,24 @@ class SelectorViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.selectorLayoutFocused.collect { focused ->
                 _uiState.update { it.copy(selectorLayoutFocused = focused) }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.filmstripVisible.collect { visible ->
+                _uiState.update { it.copy(filmstripVisible = visible) }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.detailsVisible.collect { visible ->
+                _uiState.update { it.copy(detailsVisible = visible) }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.hasSeenFullscreenGestureHint.collect { seen ->
+                _uiState.update { it.copy(hasSeenFullscreenHint = seen) }
             }
         }
 
@@ -537,6 +581,29 @@ class SelectorViewModel @Inject constructor(
         viewModelScope.launch {
             if (!settingsRepository.hasSeenNavHint.first()) {
                 settingsRepository.setHasSeenNavHint(true)
+            }
+        }
+    }
+
+    /** Show or hide the filmstrip; the choice survives relaunch. */
+    fun toggleFilmstrip() {
+        viewModelScope.launch {
+            settingsRepository.setFilmstripVisible(!settingsRepository.filmstripVisible.first())
+        }
+    }
+
+    /** Show or hide the details panel; the choice survives relaunch. */
+    fun toggleDetails() {
+        viewModelScope.launch {
+            settingsRepository.setDetailsVisible(!settingsRepository.detailsVisible.first())
+        }
+    }
+
+    /** Persist that the fullscreen gesture hint has been dismissed. */
+    fun markFullscreenHintSeen() {
+        viewModelScope.launch {
+            if (!settingsRepository.hasSeenFullscreenGestureHint.first()) {
+                settingsRepository.setHasSeenFullscreenGestureHint(true)
             }
         }
     }
