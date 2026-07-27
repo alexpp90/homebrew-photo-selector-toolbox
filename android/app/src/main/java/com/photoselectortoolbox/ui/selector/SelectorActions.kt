@@ -6,6 +6,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -464,22 +467,21 @@ fun SelectorSnackbar(
 ) {
     if (message == null) return
 
-    val progressState = remember(message) { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    var animateProgress by remember(message) { androidx.compose.runtime.mutableStateOf(false) }
     LaunchedEffect(message) {
-        val duration = UNDO_WINDOW_MILLIS
-        val startTime = System.currentTimeMillis()
-        while (true) {
-            val elapsed = System.currentTimeMillis() - startTime
-            val remaining = duration - elapsed
-            if (remaining <= 0) {
-                progressState.floatValue = 0f
-                onDismiss()
-                break
-            }
-            progressState.floatValue = remaining.toFloat() / duration.toFloat()
-            kotlinx.coroutines.delay(100)
-        }
+        animateProgress = true
+        kotlinx.coroutines.delay(UNDO_WINDOW_MILLIS)
+        onDismiss()
     }
+
+    val progress by animateFloatAsState(
+        targetValue = if (animateProgress) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = UNDO_WINDOW_MILLIS.toInt(),
+            easing = androidx.compose.animation.core.LinearEasing,
+        ),
+        label = "snackbarProgress",
+    )
 
     Column(
         modifier = modifier
@@ -520,7 +522,7 @@ fun SelectorSnackbar(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progressState.floatValue.coerceIn(0f, 1f))
+                    .fillMaxWidth(progress.coerceIn(0f, 1f))
                     .height(2.dp)
                     .background(Indigo500),
             )
