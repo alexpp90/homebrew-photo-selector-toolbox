@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -32,20 +33,20 @@ class GestureTutorialOverlayTest {
         }
 
         composeTestRule.waitUntil(timeoutMillis = 5000) {
-            composeTestRule.onAllNodesWithText("How to Photo-Tok").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodes(hasText("How to Photo-Tok"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
 
         // Verify the main header title is displayed
-        composeTestRule.onNodeWithText("How to Photo-Tok").assertIsDisplayed()
+        composeTestRule.onNode(hasText("How to Photo-Tok"), useUnmergedTree = true).assertIsDisplayed()
 
         // Verify the instruction text is displayed
-        composeTestRule.onNodeWithText("Master the curation flow with these simple gestures").assertIsDisplayed()
+        composeTestRule.onNode(hasText("Master the curation flow with these simple gestures"), useUnmergedTree = true).assertIsDisplayed()
 
         // Verify the GOT IT button is displayed
-        composeTestRule.onNodeWithText("GOT IT").assertIsDisplayed()
+        composeTestRule.onNode(hasText("GOT IT"), useUnmergedTree = true).assertIsDisplayed()
 
         // Perform click on GOT IT button
-        composeTestRule.onNodeWithText("GOT IT").performClick()
+        composeTestRule.onNode(hasText("GOT IT"), useUnmergedTree = true).performClick()
 
         // Verify dismiss callback was triggered
         assertTrue(dismissClicked)
@@ -83,11 +84,11 @@ class GestureTutorialOverlayTest {
         }
 
         composeTestRule.waitUntil(timeoutMillis = 5000) {
-            composeTestRule.onAllNodesWithText("How to Photo-Tok").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodes(hasText("How to Photo-Tok"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
 
         // Verify the overlay is displayed
-        composeTestRule.onNodeWithText("How to Photo-Tok").assertIsDisplayed()
+        composeTestRule.onNode(hasText("How to Photo-Tok"), useUnmergedTree = true).assertIsDisplayed()
 
         // Verify that Top App Bar and Bottom NavBar are NOT displayed
         composeTestRule.onNodeWithText("Top App Bar Logo").assertDoesNotExist()

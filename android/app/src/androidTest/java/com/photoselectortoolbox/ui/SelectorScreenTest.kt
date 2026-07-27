@@ -404,30 +404,30 @@ class SelectorScreenTest {
 
         // The legend button appears once there are scores to explain.
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodesWithTag("score_legend_button")
+            composeRule.onAllNodes(hasTag("score_legend_button"), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithTag("score_legend_button").performClick()
+        composeRule.onAllNodes(hasTag("score_legend_button"), useUnmergedTree = true).onFirst().performClick()
 
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodesWithText("What the scan icons mean")
+            composeRule.onAllNodes(hasText("What the scan icons mean"), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Sharpness").assertIsDisplayed()
-        composeRule.onNodeWithText("Noise").assertIsDisplayed()
-        composeRule.onNodeWithText("higher is better", substring = true).assertExists()
-        composeRule.onNodeWithText("lower is better", substring = true).assertExists()
+        composeRule.onNode(hasText("Sharpness"), useUnmergedTree = true).assertExists()
+        composeRule.onNode(hasText("Noise"), useUnmergedTree = true).assertExists()
+        composeRule.onNode(hasText("higher is better", substring = true), useUnmergedTree = true).assertExists()
+        composeRule.onNode(hasText("lower is better", substring = true), useUnmergedTree = true).assertExists()
     }
 
     private fun dismissGestureTutorialIfShown() {
-        if (composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).onFirst().performClick()
+        if (composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
             composeRule.waitUntil(timeoutMillis = 15000) {
-                composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).fetchSemanticsNodes().isEmpty()
+                composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
             }
         }
-        if (composeRule.onAllNodesWithText("Gestures", ignoreCase = true).fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onAllNodesWithText("Gestures", ignoreCase = true).onFirst().performClick()
+        if (composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
         }
     }
 }

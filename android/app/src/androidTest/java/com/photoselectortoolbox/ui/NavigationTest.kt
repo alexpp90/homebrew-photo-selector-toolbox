@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -179,14 +180,14 @@ class NavigationTest {
     }
 
     private fun dismissGestureTutorialIfShown() {
-        if (composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).onFirst().performClick()
+        if (composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
             composeRule.waitUntil(timeoutMillis = 15000) {
-                composeRule.onAllNodesWithText("GOT IT", ignoreCase = true).fetchSemanticsNodes().isEmpty()
+                composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
             }
         }
-        if (composeRule.onAllNodesWithText("Gestures", ignoreCase = true).fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onAllNodesWithText("Gestures", ignoreCase = true).onFirst().performClick()
+        if (composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
         }
     }
 }
