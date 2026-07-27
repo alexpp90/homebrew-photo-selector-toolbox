@@ -276,7 +276,8 @@ private fun GestureTutorialOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.75f))
-                .clickable { onDismiss() },
+                .clickable { onDismiss() }
+                .testTag("gesture_tutorial_overlay"),
             contentAlignment = Alignment.Center,
         ) {
             Column(
