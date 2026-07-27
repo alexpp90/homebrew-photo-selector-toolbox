@@ -1,9 +1,12 @@
 package com.photoselectortoolbox.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.photoselectortoolbox.MainActivity
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -36,12 +39,25 @@ class MainActivitySmokeTest {
         }
         val hasDesktopLabel = composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
             .fetchSemanticsNodes().isNotEmpty()
+        dismissGestureTutorialIfShown()
         if (hasDesktopLabel) {
             composeRule.onNodeWithText("Select a Folder", substring = false, ignoreCase = true)
                 .assertIsDisplayed()
         } else {
             composeRule.onNodeWithText("Select photos folder", substring = false, ignoreCase = true)
                 .assertIsDisplayed()
+        }
+    }
+
+    private fun dismissGestureTutorialIfShown() {
+        if (composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
+            composeRule.waitUntil(timeoutMillis = 15000) {
+                composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
+            }
+        }
+        if (composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
         }
     }
 }

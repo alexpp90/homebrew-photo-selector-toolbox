@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,16 +35,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
-import androidx.compose.material.icons.filled.Grain
-import androidx.compose.material.icons.filled.Highlight
-import androidx.compose.material.icons.filled.WbShade
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -90,7 +84,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import com.photoselectortoolbox.data.model.ImageItem
-import com.photoselectortoolbox.ui.components.ScoreChip
+import com.photoselectortoolbox.ui.components.ScoreChipRow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -302,7 +296,7 @@ private fun FullscreenContent(
                             ),
                         ) {
                             Icon(
-                                imageVector = Icons.Default.DriveFileMove,
+                                imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
                                 contentDescription = "Move to Selection",
                             )
                         }
@@ -384,41 +378,8 @@ private fun FullscreenContent(
                                 }
                             }
 
-                            // Score chips
-                            image.scanResult?.let { scores ->
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    ScoreChip(
-                                        icon = Icons.Default.CenterFocusStrong,
-                                        label = "Sharpness",
-                                        value = scores.sharpnessScore,
-                                    )
-                                    ScoreChip(
-                                        icon = Icons.Default.Grain,
-                                        label = "Noise",
-                                        value = scores.noiseLevel,
-                                    )
-                                    ScoreChip(
-                                        icon = Icons.Default.Highlight,
-                                        label = "Highlight",
-                                        value = scores.highlightClipping,
-                                        format = "%.1f%%",
-                                    )
-                                    ScoreChip(
-                                        icon = Icons.Default.WbShade,
-                                        label = "Shadow",
-                                        value = scores.shadowClipping,
-                                        format = "%.1f%%",
-                                    )
-                                    ScoreChip(
-                                        icon = Icons.Default.AutoAwesome,
-                                        label = "Aesthetic",
-                                        value = scores.aestheticScore,
-                                    )
-                                }
-                            }
+                            // Score chips (labelled — fullscreen has the room)
+                            ScoreChipRow(scores = image.scanResult)
                         }
                     }
                 }

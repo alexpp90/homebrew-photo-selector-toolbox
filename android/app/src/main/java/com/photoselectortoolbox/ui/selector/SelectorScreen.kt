@@ -38,22 +38,19 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Highlight
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material.icons.filled.WbShade
+import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -85,6 +82,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.input.pointer.pointerInput
@@ -106,7 +104,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -130,7 +127,8 @@ import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.ui.components.EmptyStateCard
 import com.photoselectortoolbox.ui.components.MetadataPanel
 import com.photoselectortoolbox.ui.components.ProgressIndicatorBar
-import com.photoselectortoolbox.ui.components.ScoreChip
+import com.photoselectortoolbox.ui.components.ScoreChipRow
+import com.photoselectortoolbox.ui.components.ScoreLegendSheet
 import com.photoselectortoolbox.ui.theme.Indigo500
 import com.photoselectortoolbox.ui.theme.Zinc700
 import com.photoselectortoolbox.ui.theme.Zinc800
@@ -174,6 +172,7 @@ fun SelectorScreen(
     var showFullscreen by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showDrivePicker by remember { mutableStateOf(false) }
+    var showScoreLegend by remember { mutableStateOf(false) }
 
     // Google Sign-In launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
@@ -259,6 +258,11 @@ fun SelectorScreen(
             },
             onDismiss = { showDrivePicker = false },
         )
+    }
+
+    // Legend explaining what each post-scan badge means
+    if (showScoreLegend) {
+        ScoreLegendSheet(onDismiss = { showScoreLegend = false })
     }
 
     // Scan config sheet/dialog
@@ -422,6 +426,22 @@ fun SelectorScreen(
                             else
                                 MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+
+                    // Legend: explains the badges the scan produces
+                    if (uiState.images.any { it.scanResult != null }) {
+                        IconButton(
+                            onClick = { showScoreLegend = true },
+                            modifier = Modifier
+                                .testTag("score_legend_button")
+                                .pointerHoverIcon(PointerIcon.Hand)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Info,
+                                contentDescription = "What the scan icons mean",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
 
                     // Scan button
@@ -655,58 +675,47 @@ private fun ExpandedSelectorLayout(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (focusedLayout) {
-            FocusedSelectorLayout(
-                uiState = uiState,
-                windowSizeClass = windowSizeClass,
-                showNavArrows = showNavArrows,
-                onNavigateToImage = onNavigateToImage,
-                onNavigateNext = onNavigateNext,
-                onNavigatePrevious = onNavigatePrevious,
-                onFullscreen = onFullscreen,
-                onMoveToSelection = onMoveToSelection,
-                onCopyToSelection = onCopyToSelection,
-                onDelete = onDelete,
-            )
-        } else {
-            ThreeColumnSelectorLayout(
-                uiState = uiState,
-                windowSizeClass = windowSizeClass,
-                showNavArrows = showNavArrows,
-                onNavigateToImage = onNavigateToImage,
-                onNavigateNext = onNavigateNext,
-                onNavigatePrevious = onNavigatePrevious,
-                onFullscreen = onFullscreen,
-                onMoveToSelection = onMoveToSelection,
-                onCopyToSelection = onCopyToSelection,
-                onDelete = onDelete,
-            )
-        }
-
-        // Layout toggle button (top-right corner) — enlarged, comfortable
-        // touch target with a scrim so it stays legible over any image.
-        FilledTonalIconButton(
-            onClick = onToggleLayout,
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = Color.Black.copy(alpha = 0.55f),
-                contentColor = Color.White,
-            ),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .size(52.dp)
-                .testTag("layout_toggle")
-                .pointerHoverIcon(PointerIcon.Hand),
-        ) {
-            Icon(
-                imageVector = if (focusedLayout) Icons.Default.GridView else Icons.Default.ViewAgenda,
-                contentDescription = if (focusedLayout) "Switch to side-by-side view" else "Switch to stacked view",
-                modifier = Modifier.size(30.dp),
-            )
-        }
+    // The layout toggle used to float over the top-right corner of the whole
+    // Box, which put it straight on top of the focused layout's fullscreen
+    // button. Each layout now owns the toggle inside its own control cluster,
+    // so no two controls can occupy the same spot.
+    if (focusedLayout) {
+        FocusedSelectorLayout(
+            uiState = uiState,
+            windowSizeClass = windowSizeClass,
+            showNavArrows = showNavArrows,
+            onNavigateToImage = onNavigateToImage,
+            onNavigateNext = onNavigateNext,
+            onNavigatePrevious = onNavigatePrevious,
+            onFullscreen = onFullscreen,
+            onMoveToSelection = onMoveToSelection,
+            onCopyToSelection = onCopyToSelection,
+            onDelete = onDelete,
+            onToggleLayout = onToggleLayout,
+        )
+    } else {
+        ThreeColumnSelectorLayout(
+            uiState = uiState,
+            windowSizeClass = windowSizeClass,
+            showNavArrows = showNavArrows,
+            onNavigateToImage = onNavigateToImage,
+            onNavigateNext = onNavigateNext,
+            onNavigatePrevious = onNavigatePrevious,
+            onFullscreen = onFullscreen,
+            onMoveToSelection = onMoveToSelection,
+            onCopyToSelection = onCopyToSelection,
+            onDelete = onDelete,
+            onToggleLayout = onToggleLayout,
+        )
     }
 }
+
+/** Icon + description for the current state of the layout toggle. */
+private fun layoutToggleIcon(focusedLayout: Boolean) =
+    if (focusedLayout) Icons.Default.GridView else Icons.Default.ViewAgenda
+
+private fun layoutToggleDescription(focusedLayout: Boolean) =
+    if (focusedLayout) "Switch to side-by-side view" else "Switch to focus view"
 
 /**
  * Original three-column layout: Previous | Current | Next side by side.
@@ -723,6 +732,7 @@ private fun ThreeColumnSelectorLayout(
     onMoveToSelection: () -> Unit,
     onCopyToSelection: () -> Unit,
     onDelete: () -> Unit,
+    onToggleLayout: () -> Unit,
 ) {
     val currentImage = uiState.images.getOrNull(uiState.currentIndex)
 
@@ -769,7 +779,7 @@ private fun ThreeColumnSelectorLayout(
                                 .pointerHoverIcon(PointerIcon.Hand),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Move", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
                         }
@@ -797,6 +807,22 @@ private fun ThreeColumnSelectorLayout(
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Delete", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        // View switch lives with the other actions instead of
+                        // floating over the "Next" image.
+                        FilledTonalIconButton(
+                            onClick = onToggleLayout,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("layout_toggle")
+                                .pointerHoverIcon(PointerIcon.Hand),
+                        ) {
+                            Icon(
+                                imageVector = layoutToggleIcon(focusedLayout = false),
+                                contentDescription = layoutToggleDescription(focusedLayout = false),
+                                modifier = Modifier.size(22.dp),
+                            )
                         }
                     }
                 }
@@ -828,10 +854,23 @@ private fun ThreeColumnSelectorLayout(
 }
 
 /**
- * Focused layout optimized for tablets:
- * - Top row: large current image with controls on the right side
- * - Bottom row: previous and next images side by side (smaller)
- * Optimized for 3:2 aspect ratio images on typical tablet screens.
+ * Focus mode — the space-efficient tablet layout.
+ *
+ * Geometry: on a 16:10 tablet (Galaxy Tab S11 Ultra and friends) a 4:3 photo
+ * fitted into a full-width top region is height-limited, which leaves a wide
+ * empty letterbox column on each side. That dead space is exactly where the
+ * controls belong, so they never cover the photo and cost no vertical room:
+ *
+ *   ┌─────┬───────────────────────────┬─────┐
+ *   │ nav │      CURRENT (large)      │ act │   ~72% of the free height
+ *   └─────┴───────────────────────────┴─────┘
+ *   ┌───────────────┬───────────────────────┐
+ *   │   PREVIOUS    │         NEXT          │   ~28%
+ *   └───────────────┴───────────────────────┘
+ *   [ candidate strip — collapsible ]
+ *
+ * Padding is kept minimal for the same reason: every dp of chrome is a dp the
+ * photo does not get.
  */
 @Composable
 private fun FocusedSelectorLayout(
@@ -845,6 +884,7 @@ private fun FocusedSelectorLayout(
     onMoveToSelection: () -> Unit,
     onCopyToSelection: () -> Unit,
     onDelete: () -> Unit,
+    onToggleLayout: () -> Unit,
 ) {
     val currentImage = uiState.images.getOrNull(uiState.currentIndex)
     val prevImage = uiState.images.getOrNull(uiState.currentIndex - 1)
@@ -854,331 +894,412 @@ private fun FocusedSelectorLayout(
     var dragAccumulator by remember(uiState.currentIndex) { mutableStateOf(0f) }
     val dragThreshold = 150f
 
+    var showStrip by rememberSaveable { mutableStateOf(true) }
+    var showInfoOverlay by rememberSaveable { mutableStateOf(true) }
+
+    // On a short window (phone landscape, split screen) the neighbour row eats
+    // too much of the little height there is, so shrink its share.
+    val isHeightCompact = windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
+    val currentWeight = if (isHeightCompact) 0.80f else 0.72f
+    val neighbourWeight = 1f - currentWeight
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Top: Large centered current image with overlay details and floating actions
-        Box(
+        // ── Top: navigation rail | current image | action rail ────────────
+        Row(
             modifier = Modifier
-                .weight(0.55f)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Zinc950)
-                .pointerInput(uiState.currentIndex) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            if (dragAccumulator < -dragThreshold) {
-                                onNavigateNext()
-                            } else if (dragAccumulator > dragThreshold) {
-                                onNavigatePrevious()
-                            }
-                            dragAccumulator = 0f
-                        },
-                        onDragCancel = {
-                            dragAccumulator = 0f
-                        },
-                        onVerticalDrag = { _, dragAmount ->
-                            // Dragging up (moving next) is a negative dragAmount in Android coordinates.
-                            // Dragging down (moving previous) is a positive dragAmount in Android coordinates.
-                            dragAccumulator += dragAmount
-                        }
-                    )
-                }
-                .then(
-                    if (currentImage != null) Modifier
-                        .pointerHoverIcon(PointerIcon.Hand)
-                        .clickable { onFullscreen() }
-                    else Modifier
-                ),
-            contentAlignment = Alignment.Center,
+                .weight(currentWeight)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (currentImage != null) {
-                val parsedUri = remember(currentImage.uri) { Uri.parse(currentImage.uri) }
-                AsyncImage(
-                    model = parsedUri,
-                    contentDescription = currentImage.fileName,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit,
-                )
+            FocusNavRail(
+                position = uiState.currentIndex + 1,
+                total = uiState.images.size,
+                canGoPrevious = prevImage != null,
+                canGoNext = nextImage != null,
+                onPrevious = onNavigatePrevious,
+                onNext = onNavigateNext,
+            )
 
-                // Floating Action Buttons (Top Right Corner)
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledTonalIconButton(
-                        onClick = onMoveToSelection,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.6f),
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("move_button_expanded")
-                            .pointerHoverIcon(PointerIcon.Hand)
-                    ) {
-                        Icon(Icons.Default.DriveFileMove, contentDescription = "Move to Selection", modifier = Modifier.size(24.dp))
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = onCopyToSelection,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.6f),
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("copy_button_expanded")
-                            .pointerHoverIcon(PointerIcon.Hand)
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy to Selection", modifier = Modifier.size(24.dp))
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = onDelete,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.6f),
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("delete_button_expanded")
-                            .pointerHoverIcon(PointerIcon.Hand)
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = onFullscreen,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.6f),
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier.size(48.dp).pointerHoverIcon(PointerIcon.Hand)
-                    ) {
-                        Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", modifier = Modifier.size(24.dp))
-                    }
-                }
-
-                // Overlay Info Panel (Bottom Left Corner)
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(12.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.65f),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = currentImage.fileName,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            Text(
-                                text = "${uiState.currentIndex + 1} / ${uiState.images.size}",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Indigo500,
-                            )
-                        }
-
-                        currentImage.exifData?.let { exif ->
-                            val metadataItems = buildList {
-                                exif.iso?.let { add("ISO $it") }
-                                exif.shutterSpeed?.let { speed ->
-                                    val formatted = if (speed < 1.0 && speed > 0.0) {
-                                        "1/${(1.0 / speed).toInt()}s"
-                                    } else "${speed}s"
-                                    add(formatted)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Zinc950)
+                    .pointerInput(uiState.currentIndex) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                if (dragAccumulator < -dragThreshold) {
+                                    onNavigateNext()
+                                } else if (dragAccumulator > dragThreshold) {
+                                    onNavigatePrevious()
                                 }
-                                exif.aperture?.let { add("f/%.1f".format(java.util.Locale.US, it)) }
-                                exif.focalLength?.let { add("${it.toInt()}mm") }
-                                if (exif.lens != "Unknown") add(exif.lens)
-                            }
+                                dragAccumulator = 0f
+                            },
+                            onDragCancel = { dragAccumulator = 0f },
+                            onVerticalDrag = { _, dragAmount ->
+                                // Dragging up (next) is negative in Android coordinates.
+                                dragAccumulator += dragAmount
+                            },
+                        )
+                    }
+                    .then(
+                        if (currentImage != null) Modifier
+                            .pointerHoverIcon(PointerIcon.Hand)
+                            .clickable { onFullscreen() }
+                        else Modifier
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (currentImage != null) {
+                    val parsedUri = remember(currentImage.uri) { Uri.parse(currentImage.uri) }
+                    AsyncImage(
+                        model = parsedUri,
+                        contentDescription = currentImage.fileName,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                    )
 
-                            if (metadataItems.isNotEmpty()) {
+                    // Details sit in the letterbox band at the bottom of the
+                    // frame, behind a scrim so they stay legible over a photo.
+                    if (showInfoOverlay) {
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(8.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.Black.copy(alpha = 0.65f),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
                                 Text(
-                                    text = metadataItems.joinToString("  ·  "),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White.copy(alpha = 0.8f),
+                                    text = currentImage.fileName,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = Color.White,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
-                            }
-                        }
 
-                        currentImage.scanResult?.let { scores ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                ScoreChip(
-                                    icon = Icons.Default.CenterFocusStrong,
-                                    label = "Sharpness",
-                                    value = scores.sharpnessScore,
-                                )
-                                ScoreChip(
-                                    icon = Icons.Default.Grain,
-                                    label = "Noise",
-                                    value = scores.noiseLevel,
-                                )
-                                ScoreChip(
-                                    icon = Icons.Default.Highlight,
-                                    label = "Highlight",
-                                    value = scores.highlightClipping,
-                                    format = "%.1f%%",
-                                )
-                                ScoreChip(
-                                    icon = Icons.Default.WbShade,
-                                    label = "Shadow",
-                                    value = scores.shadowClipping,
-                                    format = "%.1f%%",
-                                )
-                                ScoreChip(
-                                    icon = Icons.Default.AutoAwesome,
-                                    label = "Aesthetic",
-                                    value = scores.aestheticScore,
-                                )
+                                currentImage.exifData?.let { exif ->
+                                    val metadataItems = buildList {
+                                        exif.iso?.let { add("ISO $it") }
+                                        exif.shutterSpeed?.let { speed ->
+                                            val formatted = if (speed < 1.0 && speed > 0.0) {
+                                                "1/${(1.0 / speed).toInt()}s"
+                                            } else "${speed}s"
+                                            add(formatted)
+                                        }
+                                        exif.aperture?.let { add("f/%.1f".format(java.util.Locale.US, it)) }
+                                        exif.focalLength?.let { add("${it.toInt()}mm") }
+                                        if (exif.lens != "Unknown") add(exif.lens)
+                                    }
+
+                                    if (metadataItems.isNotEmpty()) {
+                                        Text(
+                                            text = metadataItems.joinToString("  ·  "),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+
+                                ScoreChipRow(scores = currentImage.scanResult)
                             }
                         }
                     }
+                } else {
+                    Text(
+                        text = "No Image",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    )
                 }
-            } else {
-                Text("No Image", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
             }
+
+            FocusActionRail(
+                onMoveToSelection = onMoveToSelection,
+                onCopyToSelection = onCopyToSelection,
+                onDelete = onDelete,
+                onFullscreen = onFullscreen,
+                onToggleLayout = onToggleLayout,
+                showInfoOverlay = showInfoOverlay,
+                onToggleInfoOverlay = { showInfoOverlay = !showInfoOverlay },
+                showStrip = showStrip,
+                onToggleStrip = { showStrip = !showStrip },
+            )
         }
 
-        // Bottom: Previous and Next side by side (optimized height)
+        // ── Bottom: previous and next side by side ────────────────────────
         Row(
             modifier = Modifier
-                .weight(0.45f)
+                .weight(neighbourWeight)
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // Previous
-            Box(
+            NeighbourTile(
+                image = prevImage,
+                label = "Previous",
+                emptyLabel = "No Previous",
+                arrow = Icons.AutoMirrored.Filled.ArrowBack,
+                showNavArrows = showNavArrows,
+                onClick = onNavigatePrevious,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Zinc950)
-                    .testTag("column_previous")
-                    .then(
-                        if (prevImage != null) Modifier
-                            .pointerHoverIcon(PointerIcon.Hand)
-                            .clickable { onNavigatePrevious() }
-                        else Modifier
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (prevImage != null) {
-                    val parsedPrevUri = remember(prevImage.uri) { Uri.parse(prevImage.uri) }
-                    AsyncImage(
-                        model = parsedPrevUri,
-                        contentDescription = prevImage.fileName,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit,
-                    )
-                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.1f)))
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(8.dp),
-                    ) {
-                        Text("Previous", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                        Text(prevImage.fileName, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (showNavArrows) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Previous",
-                            tint = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                                .padding(6.dp),
-                        )
-                    }
-                } else {
-                    Text("No Previous", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), style = MaterialTheme.typography.bodySmall)
-                }
-            }
-
-            // Next
-            Box(
+                    .testTag("column_previous"),
+            )
+            NeighbourTile(
+                image = nextImage,
+                label = "Next",
+                emptyLabel = "No Next",
+                arrow = Icons.AutoMirrored.Filled.ArrowForward,
+                showNavArrows = showNavArrows,
+                onClick = onNavigateNext,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Zinc950)
-                    .testTag("column_next")
-                    .then(
-                        if (nextImage != null) Modifier
-                            .pointerHoverIcon(PointerIcon.Hand)
-                            .clickable { onNavigateNext() }
-                        else Modifier
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (nextImage != null) {
-                    val parsedNextUri = remember(nextImage.uri) { Uri.parse(nextImage.uri) }
-                    AsyncImage(
-                        model = parsedNextUri,
-                        contentDescription = nextImage.fileName,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit,
-                    )
-                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.1f)))
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(8.dp),
-                    ) {
-                        Text("Next", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                        Text(nextImage.fileName, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (showNavArrows) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Next",
-                            tint = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                                .padding(6.dp),
-                        )
-                    }
-                } else {
-                    Text("No Next", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), style = MaterialTheme.typography.bodySmall)
-                }
-            }
+                    .testTag("column_next"),
+            )
         }
 
-        // Bottom candidate strip
-        CandidateStrip(
-            images = uiState.images,
-            currentIndex = uiState.currentIndex,
-            onImageSelected = onNavigateToImage,
-            groups = if (uiState.groupingEnabled) uiState.groups else null,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 4.dp),
+        // ── Candidate strip (collapsible: it is the cheapest space to reclaim) ──
+        if (showStrip) {
+            CandidateStrip(
+                images = uiState.images,
+                currentIndex = uiState.currentIndex,
+                onImageSelected = onNavigateToImage,
+                groups = if (uiState.groupingEnabled) uiState.groups else null,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/** Left rail: paging controls plus the position counter. */
+@Composable
+private fun FocusNavRail(
+    position: Int,
+    total: Int,
+    canGoPrevious: Boolean,
+    canGoNext: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .width(56.dp)
+            .fillMaxHeight(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        RailButton(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
+            description = "Previous image",
+            enabled = canGoPrevious,
+            onClick = onPrevious,
         )
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = "$position",
+            style = MaterialTheme.typography.labelLarge,
+            color = Indigo500,
+        )
+        Text(
+            text = "of $total",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        RailButton(
+            icon = Icons.AutoMirrored.Filled.ArrowForward,
+            description = "Next image",
+            enabled = canGoNext,
+            onClick = onNext,
+        )
+    }
+}
+
+/** Right rail: the actions that apply to the current image. */
+@Composable
+private fun FocusActionRail(
+    onMoveToSelection: () -> Unit,
+    onCopyToSelection: () -> Unit,
+    onDelete: () -> Unit,
+    onFullscreen: () -> Unit,
+    onToggleLayout: () -> Unit,
+    showInfoOverlay: Boolean,
+    onToggleInfoOverlay: () -> Unit,
+    showStrip: Boolean,
+    onToggleStrip: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .width(56.dp)
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        RailButton(
+            icon = Icons.AutoMirrored.Filled.DriveFileMove,
+            description = "Move to Selection",
+            onClick = onMoveToSelection,
+            modifier = Modifier.testTag("move_button_expanded"),
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        RailButton(
+            icon = Icons.Default.ContentCopy,
+            description = "Copy to Selection",
+            onClick = onCopyToSelection,
+            modifier = Modifier.testTag("copy_button_expanded"),
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        RailButton(
+            icon = Icons.Default.Delete,
+            description = "Delete",
+            onClick = onDelete,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.testTag("delete_button_expanded"),
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        RailButton(
+            icon = Icons.Default.Fullscreen,
+            description = "Fullscreen",
+            onClick = onFullscreen,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        RailButton(
+            icon = layoutToggleIcon(focusedLayout = true),
+            description = layoutToggleDescription(focusedLayout = true),
+            onClick = onToggleLayout,
+            modifier = Modifier.testTag("layout_toggle"),
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        RailButton(
+            icon = Icons.Outlined.Info,
+            description = if (showInfoOverlay) "Hide photo details" else "Show photo details",
+            onClick = onToggleInfoOverlay,
+            tint = if (showInfoOverlay) Indigo500 else Color.White,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        RailButton(
+            icon = Icons.Default.ViewCarousel,
+            description = if (showStrip) "Hide the filmstrip" else "Show the filmstrip",
+            onClick = onToggleStrip,
+            tint = if (showStrip) Indigo500 else Color.White,
+        )
+    }
+}
+
+/**
+ * A rail control. 48dp is the accessibility minimum for a touch target, and
+ * the scrim keeps it legible if a wide photo reaches under it.
+ */
+@Composable
+private fun RailButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tint: Color = Color.White,
+) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        enabled = enabled,
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = Color.Black.copy(alpha = 0.55f),
+            contentColor = tint,
+        ),
+        modifier = modifier
+            .size(48.dp)
+            .pointerHoverIcon(PointerIcon.Hand),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            modifier = Modifier.size(24.dp),
+        )
+    }
+}
+
+/** One of the two neighbour previews under the current image. */
+@Composable
+private fun NeighbourTile(
+    image: ImageItem?,
+    label: String,
+    emptyLabel: String,
+    arrow: androidx.compose.ui.graphics.vector.ImageVector,
+    showNavArrows: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Zinc950)
+            .then(
+                if (image != null) Modifier
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .clickable { onClick() }
+                else Modifier
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (image != null) {
+            val parsedUri = remember(image.uri) { Uri.parse(image.uri) }
+            AsyncImage(
+                model = parsedUri,
+                contentDescription = image.fileName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                )
+                Text(
+                    text = image.fileName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.5f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (showNavArrows) {
+                Icon(
+                    imageVector = arrow,
+                    contentDescription = label,
+                    tint = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                        .padding(6.dp),
+                )
+            }
+        } else {
+            Text(
+                text = emptyLabel,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 }
 
@@ -1287,40 +1408,7 @@ private fun ImageComparisonColumn(
                     )
                 }
 
-                imageItem.scanResult?.let { scores ->
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        ScoreChip(
-                            icon = Icons.Default.CenterFocusStrong,
-                            label = "Sharpness",
-                            value = scores.sharpnessScore
-                        )
-                        ScoreChip(
-                            icon = Icons.Default.Grain,
-                            label = "Noise",
-                            value = scores.noiseLevel
-                        )
-                        ScoreChip(
-                            icon = Icons.Default.Highlight,
-                            label = "Highlight",
-                            value = scores.highlightClipping,
-                            format = "%.1f%%"
-                        )
-                        ScoreChip(
-                            icon = Icons.Default.WbShade,
-                            label = "Shadow",
-                            value = scores.shadowClipping,
-                            format = "%.1f%%"
-                        )
-                        ScoreChip(
-                            icon = Icons.Default.AutoAwesome,
-                            label = "Aesthetic",
-                            value = scores.aestheticScore
-                        )
-                    }
-                }
+                ScoreChipRow(scores = imageItem.scanResult)
                 
                 actionsContent?.let {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -1479,42 +1567,12 @@ private fun CompactSelectorLayout(
                             .background(Zinc900),
                     ) {
                         // Score chips row
-                        currentImage?.scanResult?.let { scores ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                ScoreChip(
-                                    icon = Icons.Default.CenterFocusStrong,
-                                    label = "Sharpness",
-                                    value = scores.sharpnessScore,
-                                )
-                                ScoreChip(
-                                    icon = Icons.Default.Grain,
-                                    label = "Noise",
-                                    value = scores.noiseLevel,
-                                )
-                                ScoreChip(
-                                    icon = Icons.Default.Highlight,
-                                    label = "Highlight",
-                                    value = scores.highlightClipping,
-                                    format = "%.0f%%",
-                                )
-                                ScoreChip(
-                                    icon = Icons.Default.WbShade,
-                                    label = "Shadow",
-                                    value = scores.shadowClipping,
-                                    format = "%.0f%%",
-                                )
-                                ScoreChip(
-                                    icon = Icons.Default.AutoAwesome,
-                                    label = "Aesthetic",
-                                    value = scores.aestheticScore,
-                                )
-                            }
-                        }
+                        ScoreChipRow(
+                            scores = currentImage?.scanResult,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
 
                         // Compact metadata (one-line)
                         currentImage?.exifData?.let { exif ->
@@ -1537,7 +1595,7 @@ private fun CompactSelectorLayout(
                                 modifier = Modifier.testTag("move_button_compact")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.DriveFileMove,
+                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
                                     contentDescription = "Move to Selection",
                                 )
                             }

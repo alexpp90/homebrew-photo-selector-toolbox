@@ -1063,3 +1063,146 @@ def test_fullscreen_viewer_update_metadata_lift_error_path():
         viewer.meta_panel.lift.side_effect = Exception("Test lift error")
         viewer.update_metadata()
         mock_logger.assert_any_call("Error updating metadata overlay in fullscreen: Test lift error")
+
+
+# ── Navigation after Move / Copy / Delete (regression: N stopped working after M) ──
+
+
+def _fake_candidate(name):
+    """A Path-like stand-in that is hashable and comparable by identity."""
+    p = MagicMock(spec=Path)
+    p.name = name
+    p.stem = name.rsplit(".", 1)[0]
+    p.suffix = "." + name.rsplit(".", 1)[1]
+    p.exists.return_value = True
+    return p
+
+
+def _viewer_with_parent(paths, start_index, file_list=None):
+    """Build a FullscreenViewer over *paths* with a minimal parent stub."""
+    from photo_selector_toolbox.fullscreen_viewer import FullscreenViewer
+
+    parent = MagicMock()
+    parent.candidates = list(paths)
+
+    with (
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.load_image"),
+        patch("photo_selector_toolbox.fullscreen_viewer.FullscreenViewer.update_metadata"),
+    ):
+        viewer = FullscreenViewer(
+            parent,
+            paths[start_index],
+            file_list=parent.candidates if file_list is None else file_list,
+        )
+    return viewer, parent
+
+
+def test_next_image_works_after_move_to_selection():
+    """Pressing N after M must advance, not stall on the same image."""
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(5)]
+    viewer, parent = _viewer_with_parent(paths, start_index=1)
+
+    def fake_move(path, idx):
+        # Mirrors SharpnessTool.execute_move_to_selection: the parent removes
+        # the moved file from its own (shared) candidates list.
+        parent.candidates.pop(idx)
+
+    parent.execute_move_to_selection.side_effect = fake_move
+
+    with patch.object(type(viewer), "load_new_path", autospec=True) as mock_load:
+        mock_load.side_effect = lambda self, p: setattr(self, "path", p)
+
+        viewer.move_to_selection()
+        # The successor slid into the moved image's slot.
+        assert viewer.path is paths[2]
+
+        viewer.next_image()
+        assert viewer.path is paths[3]
+
+        viewer.next_image()
+        assert viewer.path is paths[4]
+
+
+def test_move_prunes_stale_entries_when_parent_rebuilds_candidates():
+    """Grouping rebuilds parent.candidates wholesale; the viewer must not
+    keep navigating to files the parent has already dropped."""
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(5)]
+    # file_list is a *separate* list, like the group-bounds slice case.
+    viewer, parent = _viewer_with_parent(paths, start_index=1, file_list=list(paths))
+
+    def fake_move(path, idx):
+        # Rebind (not mutate) — this is what apply_grouping_and_refresh does.
+        parent.candidates = [p for p in parent.candidates if p is not path and p is not paths[4]]
+
+    parent.execute_move_to_selection.side_effect = fake_move
+
+    with patch.object(type(viewer), "load_new_path", autospec=True) as mock_load:
+        mock_load.side_effect = lambda self, p: setattr(self, "path", p)
+        viewer.move_to_selection()
+
+    assert paths[1] not in viewer.file_list, "moved file must be dropped"
+    assert paths[4] not in viewer.file_list, "stale entry must be pruned"
+    assert viewer.file_list == [paths[0], paths[2], paths[3]]
+
+
+def test_move_closes_viewer_when_nothing_is_left():
+    paths = [_fake_candidate("only.jpg")]
+    viewer, parent = _viewer_with_parent(paths, start_index=0)
+    parent.execute_move_to_selection.side_effect = lambda path, idx: parent.candidates.pop(idx)
+
+    with patch.object(type(viewer), "destroy", autospec=True) as mock_destroy:
+        viewer.move_to_selection()
+        mock_destroy.assert_called_once()
+
+
+def test_refocus_is_reasserted_after_move_and_copy():
+    """The parent's listbox update can steal keyboard focus; the viewer has to
+    take it back or the N/P shortcuts silently die."""
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(3)]
+
+    viewer, parent = _viewer_with_parent(paths, start_index=0)
+    parent.execute_move_to_selection.side_effect = lambda path, idx: parent.candidates.pop(idx)
+    with (
+        patch.object(type(viewer), "load_new_path", autospec=True),
+        patch.object(type(viewer), "_refocus", autospec=True) as mock_refocus,
+    ):
+        viewer.move_to_selection()
+        assert mock_refocus.called
+
+    viewer2, parent2 = _viewer_with_parent(paths, start_index=0)
+    with (
+        patch.object(type(viewer2), "load_new_path", autospec=True),
+        patch.object(type(viewer2), "_refocus", autospec=True) as mock_refocus2,
+    ):
+        viewer2.copy_to_selection()
+        assert mock_refocus2.called
+
+
+def test_resync_index_recovers_from_a_shifted_list():
+    """If the parent shifts the list behind the viewer's back, N must still
+    advance relative to the image actually on screen."""
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(5)]
+    viewer, parent = _viewer_with_parent(paths, start_index=3)
+
+    # Something removed two earlier entries without telling the viewer.
+    viewer.file_list[:] = paths[2:]
+    assert viewer.current_idx == 3  # now stale
+
+    with patch.object(type(viewer), "load_new_path", autospec=True) as mock_load:
+        mock_load.side_effect = lambda self, p: setattr(self, "path", p)
+        viewer.next_image()
+
+    assert viewer.path is paths[4]
+
+
+def test_delete_advances_and_prunes():
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(4)]
+    viewer, parent = _viewer_with_parent(paths, start_index=0)
+    parent.execute_delete.side_effect = lambda path, idx: parent.candidates.pop(idx)
+
+    with patch.object(type(viewer), "load_new_path", autospec=True) as mock_load:
+        mock_load.side_effect = lambda self, p: setattr(self, "path", p)
+        viewer.execute_delete_current()
+        assert viewer.path is paths[1]
+        viewer.next_image()
+        assert viewer.path is paths[2]

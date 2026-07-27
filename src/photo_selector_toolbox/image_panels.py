@@ -287,7 +287,10 @@ class ImagePanelsMixin:
         n_img = get_image(next_path, size_next)
 
         # Update UI in main thread
-        self.parent.after(0, lambda: self.update_panels_final(p_img, c_img, n_img, prev_path, curr_path, next_path))
+        try:
+            self.parent.after(0, lambda: self.update_panels_final(p_img, c_img, n_img, prev_path, curr_path, next_path))
+        except RuntimeError:
+            pass  # Tk main loop already destroyed (teardown race)
 
     def update_panels_final(self, p_img, c_img, n_img, prev_path, curr_path, next_path):
         if (

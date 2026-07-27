@@ -183,12 +183,79 @@ class FullscreenViewer(tk.Toplevel):
         if hasattr(self, "copy_btn"):
             self.copy_btn.state(["!disabled"])
 
+    def _refocus(self):
+        """Re-assert keyboard focus on this viewer.
+
+        Move/Copy/Delete delegate to the parent window, which updates its
+        listbox selection and can leave keyboard focus outside this Toplevel.
+        When that happens the ``<n>``/``<p>`` bindings stop firing and
+        navigation appears dead. Re-asserting focus after every parent-side
+        action keeps the shortcuts alive.
+        """
+        try:
+            if self.winfo_exists():
+                self.lift()
+                self.focus_set()
+        except Exception:  # pragma: no cover - defensive, Tk teardown races
+            logger.debug("Could not re-assert fullscreen focus", exc_info=True)
+
+    def _resync_index(self):
+        """Align ``current_idx`` with the path actually on screen.
+
+        ``open_fullscreen`` hands over the parent's live ``candidates`` list
+        (or a slice of it), and the parent mutates or rebuilds that list during
+        move/copy/delete. Deriving the index from ``self.path`` instead of
+        trusting stored arithmetic makes navigation correct even after the
+        list shifted underneath us.
+        """
+        try:
+            if self.path in self.file_list:
+                self.current_idx = self.file_list.index(self.path)
+        except (TypeError, ValueError):  # pragma: no cover - non-list stand-ins
+            pass
+
+    def _prune_file_list(self, removed_path):
+        """Drop *removed_path* plus anything the parent no longer lists.
+
+        The parent rebuilds ``candidates`` wholesale when grouping is enabled,
+        so this viewer's list can silently go stale and navigate to files that
+        were already moved away. Intersecting with the parent's current list
+        keeps navigation pointing at files that still exist.
+        """
+        if removed_path in self.file_list:
+            self.file_list.remove(removed_path)
+
+        parent_candidates = getattr(self.parent, "candidates", None)
+        if isinstance(parent_candidates, list) and parent_candidates:
+            alive = set(parent_candidates)
+            self.file_list[:] = [p for p in self.file_list if p in alive]
+
+    def _advance_after_removal(self):
+        """Show whichever image took the removed one's place.
+
+        Returns ``True`` when a new image is displayed, ``False`` when the
+        viewer closed because nothing is left to review.
+        """
+        if not self.file_list:
+            self.destroy()
+            return False
+
+        if self.current_idx >= len(self.file_list):
+            self.current_idx = len(self.file_list) - 1
+        if self.current_idx < 0:
+            self.current_idx = 0
+
+        self.load_new_path(self.file_list[self.current_idx])
+        return True
+
     def next_image(self, event=None):
+        self._resync_index()
         if self.file_list and self.current_idx < len(self.file_list) - 1:
             self.current_idx += 1
             self.load_new_path(self.file_list[self.current_idx])
 
     def prev_image(self, event=None):
+        self._resync_index()
         if self.file_list and self.current_idx > 0:
             self.current_idx -= 1
             self.load_new_path(self.file_list[self.current_idx])
@@ -221,6 +288,10 @@ class FullscreenViewer(tk.Toplevel):
 
         # Update metadata display
         self.update_metadata()
+
+        # The parent's on_candidate_select above can pull keyboard focus back
+        # to the main window; take it back so N/P keep working.
+        self._refocus()
 
     def confirm_delete_image(self):
         if not self.path:
@@ -291,17 +362,10 @@ class FullscreenViewer(tk.Toplevel):
             idx = self.parent.candidates.index(path)
             self.parent.execute_delete(path, idx)
 
-            if path in self.file_list:
-                self.file_list.remove(path)
-
-            if not self.file_list:
-                self.destroy()
-                return
-
-            if self.current_idx >= len(self.file_list):
-                self.current_idx = len(self.file_list) - 1
-
-            self.load_new_path(self.file_list[self.current_idx])
+            self._resync_index()
+            self._prune_file_list(path)
+            if self._advance_after_removal():
+                self._refocus()
 
     def move_to_selection(self, event=None):
         path = self.path
@@ -311,17 +375,12 @@ class FullscreenViewer(tk.Toplevel):
             idx = self.parent.candidates.index(path)
             self.parent.execute_move_to_selection(path, idx)
 
-            if path in self.file_list:
-                self.file_list.remove(path)
-
-            if not self.file_list:
-                self.destroy()
-                return
-
-            if self.current_idx >= len(self.file_list):
-                self.current_idx = len(self.file_list) - 1
-
-            self.load_new_path(self.file_list[self.current_idx])
+            # Pin the index to the slot the moved file occupied *before* the
+            # parent shifted the list, so the successor lands under it.
+            self._resync_index()
+            self._prune_file_list(path)
+            if self._advance_after_removal():
+                self._refocus()
 
     def copy_to_selection(self, event=None):
         path = self.path
@@ -331,11 +390,14 @@ class FullscreenViewer(tk.Toplevel):
             idx = self.parent.candidates.index(path)
             self.parent.execute_copy_to_selection(path, idx)
 
+            # The original stays in place after a copy, so just step forward.
+            self._resync_index()
             if self.file_list:
                 new_idx = self.current_idx + 1 if self.current_idx < len(self.file_list) - 1 else self.current_idx
                 if new_idx != self.current_idx:
                     self.current_idx = new_idx
                     self.load_new_path(self.file_list[self.current_idx])
+            self._refocus()
 
     def load_image(self):
         if not self.winfo_exists():

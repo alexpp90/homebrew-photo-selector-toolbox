@@ -8,11 +8,13 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.phototok.data.model.PhoneSettings
 import com.phototok.data.model.RecentPath
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FileTypeFilter
+import com.phototok.domain.FirstRunHint
 import com.phototok.domain.SwipeAction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -49,6 +51,7 @@ class SettingsRepository @Inject constructor(
         private val KEY_RECENT_PATHS_ENABLED = booleanPreferencesKey("recent_paths_enabled")
         private val KEY_RECENT_PATHS_COUNT = intPreferencesKey("recent_paths_count")
         private val KEY_RECENT_PATHS = stringPreferencesKey("recent_paths")
+        private val KEY_SEEN_FIRST_RUN_HINTS = stringSetPreferencesKey("seen_first_run_hints")
 
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
         const val DEFAULT_SORTING_ENABLED = true
@@ -71,6 +74,7 @@ class SettingsRepository @Inject constructor(
             recentPathsEnabled = prefs[KEY_RECENT_PATHS_ENABLED] ?: true,
             recentPathsCount = prefs[KEY_RECENT_PATHS_COUNT] ?: DEFAULT_RECENT_PATHS_COUNT,
             recentPaths = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS]),
+            seenFirstRunHints = prefs[KEY_SEEN_FIRST_RUN_HINTS] ?: emptySet(),
         )
     }
 
@@ -183,6 +187,29 @@ class SettingsRepository @Inject constructor(
     /** Most-recently-used source folders, newest first. */
     val phoneRecentPaths: Flow<List<RecentPath>> = context.dataStore.data.map { prefs ->
         RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
+    }
+
+    /** Keys of the one-time action explanations the user has already seen. */
+    val phoneSeenFirstRunHints: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SEEN_FIRST_RUN_HINTS] ?: emptySet()
+    }
+
+    /** Record that [hint] has been shown, so it never fires again. */
+    suspend fun markFirstRunHintSeen(hint: FirstRunHint) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SEEN_FIRST_RUN_HINTS] = (prefs[KEY_SEEN_FIRST_RUN_HINTS] ?: emptySet()) + hint.key
+        }
+    }
+
+    /**
+     * Bring back every one-time explanation *and* the full gesture tutorial,
+     * so the app behaves like a fresh install as far as guidance is concerned.
+     */
+    suspend fun resetFirstRunHints() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(KEY_SEEN_FIRST_RUN_HINTS)
+            prefs[KEY_GESTURE_TUTORIAL_TS] = 0L
+        }
     }
 
     suspend fun setPhoneCollectionAction(action: CollectionAction) {

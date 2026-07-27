@@ -338,12 +338,97 @@ class SelectorScreenTest {
         composeRule.onNodeWithText("1.2", substring = true).assertIsDisplayed()
     }
 
+    @Test
+    fun focusMode_layoutToggleAndFullscreenDoNotOverlap() {
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking {
+            settingsRepository.setLastFolderUri("gdrive://test_folder")
+            settingsRepository.setSelectorLayoutFocused(true)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        // Compact (phone) layout has neither control — nothing to assert.
+        val isCompact = composeRule.onAllNodesWithTag("copy_button_compact")
+            .fetchSemanticsNodes().isNotEmpty()
+        if (isCompact) return
+
+        if (composeRule.onAllNodesWithTag("layout_toggle").fetchSemanticsNodes().isEmpty()) return
+        if (composeRule.onAllNodesWithContentDescription("Fullscreen").fetchSemanticsNodes().isEmpty()) return
+
+        val toggle = composeRule.onAllNodesWithTag("layout_toggle").onFirst().getUnclippedBoundsInRoot()
+        val fullscreen = composeRule.onAllNodesWithContentDescription("Fullscreen").onFirst().getUnclippedBoundsInRoot()
+
+        // The regression: both controls used to be pinned to the same top-right
+        // corner, so the layout toggle sat on top of the fullscreen button.
+        val overlaps = toggle.left < fullscreen.right &&
+            fullscreen.left < toggle.right &&
+            toggle.top < fullscreen.bottom &&
+            fullscreen.top < toggle.bottom
+        assert(!overlaps) {
+            "layout toggle $toggle overlaps the fullscreen button $fullscreen"
+        }
+
+        // Both remain individually reachable.
+        composeRule.onAllNodesWithTag("layout_toggle").onFirst().assertHasClickAction()
+        composeRule.onAllNodesWithContentDescription("Fullscreen").onFirst().assertHasClickAction()
+    }
+
+    @Test
+    fun scoreLegend_explainsWhatTheScanIconsMean() {
+        val scannedImages = mockImages.mapIndexed { idx, item ->
+            if (idx == 0) item.copy(
+                scanResult = com.photoselectortoolbox.data.model.ScanResult(
+                    filePath = item.uri,
+                    sharpnessScore = 78.5,
+                    noiseLevel = 1.2,
+                    highlightClipping = 2.4,
+                    shadowClipping = 0.5,
+                )
+            ) else item
+        }
+        fakeRepo.imagesFlow.value = scannedImages
+        runBlocking {
+            settingsRepository.setLastFolderUri("gdrive://test_folder")
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        // The legend button appears once there are scores to explain.
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodes(hasTestTag("score_legend_button"), useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onAllNodes(hasTestTag("score_legend_button"), useUnmergedTree = true).onFirst().performClick()
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodes(hasText("What the scan icons mean"), useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        val inLegend = hasAnyAncestor(hasTestTag("score_legend_sheet"))
+        composeRule.onNode(hasText("Sharpness") and inLegend, useUnmergedTree = true).assertExists()
+        composeRule.onNode(hasText("Noise") and inLegend, useUnmergedTree = true).assertExists()
+        composeRule.onAllNodes(hasText("higher is better", substring = true) and inLegend, useUnmergedTree = true).onFirst().assertExists()
+        composeRule.onAllNodes(hasText("lower is better", substring = true) and inLegend, useUnmergedTree = true).onFirst().assertExists()
+    }
+
     private fun dismissGestureTutorialIfShown() {
-        if (composeRule.onAllNodesWithText("Gestures").fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onNodeWithText("Gestures").performClick()
+        if (composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
             composeRule.waitUntil(timeoutMillis = 15000) {
-                composeRule.onAllNodesWithText("Gestures").fetchSemanticsNodes().isEmpty()
+                composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
             }
+        }
+        if (composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
         }
     }
 }

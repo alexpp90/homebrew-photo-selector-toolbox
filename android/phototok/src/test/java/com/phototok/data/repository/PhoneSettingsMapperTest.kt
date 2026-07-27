@@ -4,9 +4,11 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.phototok.data.model.PhoneSettings
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FileTypeFilter
+import com.phototok.domain.FirstRunHint
 import com.phototok.domain.SwipeAction
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -72,5 +74,25 @@ class PhoneSettingsMapperTest {
         assertEquals(CollectionAction.DEFAULT, settings.collectionAction)
         assertEquals(SwipeAction.DEFAULT, settings.leftSwipeAction)
         assertEquals(FileTypeFilter.DEFAULT, settings.fileTypeFilter)
+    }
+
+    @Test
+    fun `seen first-run hints are mapped and default to empty`() {
+        assertEquals(
+            emptySet<String>(),
+            SettingsRepository.phoneSettingsOf(preferencesOf()).seenFirstRunHints,
+        )
+
+        val prefs = preferencesOf(
+            stringSetPreferencesKey("seen_first_run_hints") to
+                setOf(FirstRunHint.SWIPE_RIGHT.key, FirstRunHint.TAP_HUD.key),
+        )
+
+        val settings = SettingsRepository.phoneSettingsOf(prefs)
+
+        assertEquals(
+            setOf(FirstRunHint.SWIPE_RIGHT.key, FirstRunHint.TAP_HUD.key),
+            settings.seenFirstRunHints,
+        )
     }
 }
