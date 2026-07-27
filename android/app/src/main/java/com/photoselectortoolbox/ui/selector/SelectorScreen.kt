@@ -391,6 +391,8 @@ fun SelectorScreen(
                             onCopyToSelection = actions.onCopy,
                             onDelete = actions.onDelete,
                             onSwipeDelete = { viewModel.deleteWithSwipe() },
+                            showGestureHint = !uiState.hasSeenFullscreenHint,
+                            onDismissGestureHint = viewModel::markFullscreenHintSeen,
                         )
                     }
                 }

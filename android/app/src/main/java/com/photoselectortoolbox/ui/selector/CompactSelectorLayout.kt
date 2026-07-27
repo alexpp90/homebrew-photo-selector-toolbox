@@ -74,6 +74,8 @@ fun CompactSelectorLayout(
     onCopyToSelection: () -> Unit,
     onDelete: () -> Unit,
     onSwipeDelete: () -> Unit,
+    showGestureHint: Boolean = !uiState.hasSeenFullscreenHint,
+    onDismissGestureHint: () -> Unit = {},
 ) {
     val pagerState = rememberPagerState(
         initialPage = uiState.currentIndex,
@@ -94,12 +96,8 @@ fun CompactSelectorLayout(
 
     val currentImage = uiState.currentImage
 
-    var showGestureTutorial by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState.images.isNotEmpty()) {
-        if (uiState.images.isNotEmpty()) {
-            showGestureTutorial = true
-        }
-    }
+    var userDismissedTutorial by remember { mutableStateOf(false) }
+    val showGestureTutorial = showGestureHint && uiState.images.isNotEmpty() && !userDismissedTutorial
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -256,7 +254,10 @@ fun CompactSelectorLayout(
 
         GestureTutorialOverlay(
             visible = showGestureTutorial,
-            onDismiss = { showGestureTutorial = false },
+            onDismiss = {
+                userDismissedTutorial = true
+                onDismissGestureHint()
+            },
         )
     }
 }
