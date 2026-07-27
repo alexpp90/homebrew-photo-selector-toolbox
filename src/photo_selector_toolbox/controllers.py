@@ -153,10 +153,18 @@ class ImageCacheManager:
                 logger.debug(f"Full res load error for {path_str}: {e}")
 
 
-def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> ScanResult:
+def _process_single_file(
+    f: Path,
+    grid_size: int,
+    tools: Dict[str, bool],
+    cached_scores: Optional[Dict[str, Union[float, str]]] = None,
+) -> ScanResult:
     """Helper module function to process a single image for parallel execution."""
-    cache = ScoreCache()
-    cached = cache.get_scores(f)
+    if cached_scores is None:
+        cache = ScoreCache()
+        cached = cache.get_scores(f)
+    else:
+        cached = cached_scores
 
     # Initialize scores with cached values
     scores = {name: val for name, val in cached.items() if val != "N/A"}
@@ -217,10 +225,6 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
             if tool_name not in scores:
                 scores[tool_name] = "N/A"
 
-    # Save new calculations to cache
-    if new_calculations:
-        cache.set_scores(f, new_calculations)
-
     # Fetch EXIF
     exif = get_exif_data(f)
 
@@ -228,6 +232,7 @@ def _process_single_file(f: Path, grid_size: int, tools: Dict[str, bool]) -> Sca
         path=f,
         scores=scores,
         exif=exif,
+        new_calculations=new_calculations,
     )
 
 
@@ -293,11 +298,16 @@ class ScanController:
 
             log(f"Scanning {total} images. Starting analysis...")
 
+            # Pre-fetch all cached scores in a single batch
+            cache = ScoreCache()
+            all_cached_scores = cache.get_multiple_scores(files)
+
             max_workers = max(1, os.cpu_count() or 4)
+            accumulated_updates = {}
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
                 futures = {
-                    executor.submit(_process_single_file, f, grid_size, tools): f
+                    executor.submit(_process_single_file, f, grid_size, tools, all_cached_scores.get(f, {})): f
                     for f in files
                 }
 
@@ -305,6 +315,8 @@ class ScanController:
                 for future in as_completed(futures):
                     if self.stop_event.is_set():
                         log("Scan cancelled.")
+                        if accumulated_updates:
+                            cache.set_multiple_scores(accumulated_updates)
                         # Attempt to cancel pending futures
                         for pending_future in futures:
                             pending_future.cancel()
@@ -315,12 +327,21 @@ class ScanController:
 
                     try:
                         res = future.result()
+                        if res.new_calculations:
+                            accumulated_updates[f] = res.new_calculations
+                            if len(accumulated_updates) >= cache._PRUNE_INTERVAL:
+                                cache.set_multiple_scores(accumulated_updates)
+                                accumulated_updates.clear()
+
                         completed_count += 1
                         # Notify progress
                         progress_callback(res, completed_count, total)
                     except Exception as e:
                         log(f"Error processing {f.name}: {e}")
                         logger.exception(f"Error processing {f.name}")
+
+                if accumulated_updates:
+                    cache.set_multiple_scores(accumulated_updates)
 
             log("Scan complete.")
 

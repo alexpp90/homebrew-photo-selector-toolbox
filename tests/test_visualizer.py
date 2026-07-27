@@ -75,16 +75,44 @@ def test_get_apsc_equivalent_focal_length_plot_missing_key():
     assert fig is None
 
 
+def test_get_focal_length_plot_empty():
+    data = [ExifData(focal_length=None)]
+    fig = get_focal_length_plot(data)
+    assert fig is None
+
+
 def test_get_lens_plot():
     data = [ExifData(lens="Lens A"), ExifData(lens="Lens B")]
     fig = get_lens_plot(data)
     assert fig is not None
 
 
+def test_get_lens_plot_empty():
+    data = []
+    fig = get_lens_plot(data)
+    assert fig is None
+
+    data_none = [ExifData(lens=None)]
+    fig_none = get_lens_plot(data_none)
+    assert fig_none is None
+
+
 def test_get_combination_plot():
     data = [ExifData(aperture=2.8, focal_length=50)]
     fig = get_combination_plot(data)
     assert fig is not None
+
+
+def test_get_combination_plot_empty():
+    data = []
+    fig = get_combination_plot(data)
+    assert fig is None
+
+
+def test_get_combination_plot_missing_key():
+    data = [ExifData(aperture=2.8)]
+    fig = get_combination_plot(data)
+    assert fig is None
 
 
 @patch("photo_selector_toolbox.visualizer._open_file_for_user")
