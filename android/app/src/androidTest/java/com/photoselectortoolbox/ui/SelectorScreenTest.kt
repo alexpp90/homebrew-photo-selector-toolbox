@@ -416,8 +416,8 @@ class SelectorScreenTest {
         val inLegend = hasAnyAncestor(hasTestTag("score_legend_sheet"))
         composeRule.onNode(hasText("Sharpness") and inLegend, useUnmergedTree = true).assertExists()
         composeRule.onNode(hasText("Noise") and inLegend, useUnmergedTree = true).assertExists()
-        composeRule.onNode(hasText("higher is better", substring = true) and inLegend, useUnmergedTree = true).assertExists()
-        composeRule.onNode(hasText("lower is better", substring = true) and inLegend, useUnmergedTree = true).assertExists()
+        composeRule.onAllNodes(hasText("higher is better", substring = true) and inLegend, useUnmergedTree = true).onFirst().assertExists()
+        composeRule.onAllNodes(hasText("lower is better", substring = true) and inLegend, useUnmergedTree = true).onFirst().assertExists()
     }
 
     private fun dismissGestureTutorialIfShown() {
