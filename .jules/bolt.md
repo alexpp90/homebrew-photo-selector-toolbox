@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - String-based Path Resolution Optimization
+**Learning:** In performance-critical loops (such as formatting dictionary keys for SQLite bulk inserts), converting `pathlib.Path` objects to strings via `str(p.resolve())` incurs massive I/O overhead because `resolve()` interacts with the filesystem to resolve symlinks and check existence. By contrast, `os.path.abspath(p)` is primarily a string manipulation function, bypassing the filesystem entirely.
+**Action:** Always prefer `os.path.abspath()` over `Path.resolve()` for generating string representations of absolute paths when symlink resolution is not strictly required by the application logic, yielding a massive performance boost for bulk data processing.
