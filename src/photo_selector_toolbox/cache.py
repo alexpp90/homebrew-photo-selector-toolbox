@@ -1,4 +1,3 @@
-import os
 import json
 import logging
 import sqlite3
@@ -84,8 +83,7 @@ class ScoreCache:
         Timestamps are refreshed when scores are written via set_scores().
         """
         try:
-            # OPTIMIZATION: Use os.path.abspath instead of Path.resolve() to avoid OS stat calls.
-            filepath_str = os.path.abspath(filepath)
+            filepath_str = str(filepath.resolve())
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
@@ -102,8 +100,7 @@ class ScoreCache:
     def set_scores(self, filepath: Path, scores: Dict[str, Union[float, str]]) -> None:
         """Stores or updates scores for a single image, updating its last_used timestamp and pruning if necessary."""
         try:
-            # OPTIMIZATION: Use os.path.abspath instead of Path.resolve() to avoid OS stat calls.
-            filepath_str = os.path.abspath(filepath)
+            filepath_str = str(filepath.resolve())
             now = int(time.time())
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
@@ -135,8 +132,7 @@ class ScoreCache:
         try:
             now = int(time.time())
             # Map resolved string path to the original Path object
-            # OPTIMIZATION: Use os.path.abspath instead of Path.resolve() to avoid OS stat calls.
-            path_map = {os.path.abspath(p): p for p in filepaths}
+            path_map = {str(p.resolve()): p for p in filepaths}
             path_list = list(path_map.keys())
 
             chunk_size = 500
@@ -157,7 +153,7 @@ class ScoreCache:
 
                 # Bulk update last_used for matches
                 if results:
-                    matched_fps = [os.path.abspath(p) for p in results.keys()]
+                    matched_fps = [str(p.resolve()) for p in results.keys()]
                     update_data = [(now, fp) for fp in matched_fps]
                     conn.executemany(
                         "UPDATE image_cache SET last_used = ? WHERE filepath = ?",
@@ -179,8 +175,7 @@ class ScoreCache:
             now = int(time.time())
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                # OPTIMIZATION: Use os.path.abspath instead of Path.resolve() to avoid OS stat calls.
-                path_map = {os.path.abspath(p): p for p in scores_dict.keys()}
+                path_map = {str(p.resolve()): p for p in scores_dict.keys()}
 
                 # Prepare insert batch
                 insert_data = []
