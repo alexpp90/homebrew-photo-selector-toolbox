@@ -1419,7 +1419,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 try:
                     res = future.result()
                    # Schedule UI update on main thread
-                    self.parent.after(0, lambda r=res: self._handle_bg_update_result(r))
+                    try:
+                        self.parent.after(0, lambda r=res: self._handle_bg_update_result(r))
+                    except RuntimeError:
+                        pass  # Tk main loop already destroyed (teardown race)
                 except Exception as e:
                     logger.debug(f"Background update error for {f.name}: {e}")
 
@@ -1736,7 +1739,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     cache.set_multiple_scores(updates)
                 except Exception as e:
                     logger.warning(f"Failed to bulk update cache in grouping: {e}")
-            self.parent.after(0, lambda: self._handle_grouping_finished(level))
+            try:
+                self.parent.after(0, lambda: self._handle_grouping_finished(level))
+            except RuntimeError:
+                pass  # Tk main loop already destroyed (teardown race)
 
         threading.Thread(target=run_calc, daemon=True).start()
 
@@ -2651,7 +2657,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         logger.debug(f"Failed to load EXIF data dynamically: {e}")
                         exif = ExifData()
                     res.exif = exif
-                    self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                    try:
+                        self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                    except RuntimeError:
+                        pass  # Tk main loop already destroyed (teardown race)
                 threading.Thread(target=load_exif_async, daemon=True).start()
         else:
             self._set_metadata_labels(current_path, res.exif, res)
@@ -2686,7 +2695,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                     exif = ExifData()
                                 r.exif = exif
-                                self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                try:
+                                    self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                except RuntimeError:
+                                    pass  # Tk main loop already destroyed (teardown race)
                             threading.Thread(target=load_prev_exif_async, daemon=True).start()
                             self._set_overlay_label(
                                 self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res
@@ -2725,7 +2737,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                     exif = ExifData()
                                 r.exif = exif
-                                self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                try:
+                                    self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
+                                except RuntimeError:
+                                    pass  # Tk main loop already destroyed (teardown race)
                             threading.Thread(target=load_next_exif_async, daemon=True).start()
                             self._set_overlay_label(self.focus_next_overlay, "Next", next_path, ExifData(), next_res)
                     else:
