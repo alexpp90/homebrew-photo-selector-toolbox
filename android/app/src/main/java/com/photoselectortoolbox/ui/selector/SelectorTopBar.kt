@@ -98,7 +98,7 @@ fun SelectorTopBar(
                 .fillMaxWidth()
                 .height(SelectorTopBarHeight)
                 .padding(start = 12.dp, end = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -297,7 +297,7 @@ private fun BarIconButton(
 ) {
     Box(
         modifier = modifier
-            .size(40.dp)
+            .size(34.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(if (active) TonalIndigo else Color.Transparent)
             .then(
