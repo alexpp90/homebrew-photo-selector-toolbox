@@ -48,7 +48,8 @@ def test_ollama_tool_success(mock_open, dummy_image_file, temp_config_dir):
     mock_open.assert_called_once()
     # Check that URL used default
     req = mock_open.call_args[0][0]
-    assert req.full_url == "http://localhost:11434/api/generate"
+    assert req.full_url.endswith("/api/generate")
+    assert req.get_header("Host") == "localhost"
     assert req.method == "POST"
 
 
@@ -75,7 +76,8 @@ def test_ollama_tool_custom_config(mock_open, dummy_image_file, temp_config_dir)
     assert score == 9.3
     assert tag == "Sharp"
     req = mock_open.call_args[0][0]
-    assert req.full_url == "http://192.168.1.50:11434/api/generate"
+    assert req.full_url.endswith("/api/generate")
+    assert req.get_header("Host") == "192.168.1.50"
 
     # Assert JSON payload parameters match config
     body = json.loads(req.data.decode("utf-8"))
