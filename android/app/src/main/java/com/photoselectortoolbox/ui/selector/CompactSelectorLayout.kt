@@ -209,44 +209,43 @@ fun CompactSelectorLayout(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             )
                         }
+                    }
+                }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                        ) {
-                            FilledTonalIconButton(
-                                onClick = onMoveToSelection,
-                                modifier = Modifier.testTag("move_button_compact"),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                                    contentDescription = "Move to Selection",
-                                )
-                            }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    FilledTonalIconButton(
+                        onClick = onMoveToSelection,
+                        modifier = Modifier.testTag("move_button_compact"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                            contentDescription = "Move to Selection",
+                        )
+                    }
 
-                            FilledTonalIconButton(
-                                onClick = onCopyToSelection,
-                                modifier = Modifier.testTag("copy_button_compact"),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "Copy to Selection",
-                                )
-                            }
+                    FilledTonalIconButton(
+                        onClick = onCopyToSelection,
+                        modifier = Modifier.testTag("copy_button_compact"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy to Selection",
+                        )
+                    }
 
-                            FilledTonalIconButton(
-                                onClick = onDelete,
-                                modifier = Modifier.testTag("delete_button_compact"),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete",
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
+                    FilledTonalIconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.testTag("delete_button_compact"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                        )
                     }
                 }
             }
