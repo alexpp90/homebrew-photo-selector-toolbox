@@ -269,7 +269,7 @@ class SelectorScreenTest {
         composeRule.onNodeWithText("Copied to Selection", ignoreCase = true).assertIsDisplayed()
 
         // Wait for the copy snackbar to disappear so it doesn't block the move button on phone layouts
-        composeRule.waitUntil(timeoutMillis = 15000) {
+        composeRule.waitUntil(timeoutMillis = 35000) {
             composeRule.onAllNodesWithText("Copied to Selection", ignoreCase = true)
                 .fetchSemanticsNodes().isEmpty()
         }

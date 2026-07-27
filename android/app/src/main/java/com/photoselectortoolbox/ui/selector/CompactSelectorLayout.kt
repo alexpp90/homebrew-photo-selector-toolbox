@@ -267,19 +267,16 @@ private fun GestureTutorialOverlay(
     visible: Boolean,
     onDismiss: () -> Unit,
 ) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut(),
+    if (!visible) return
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable { onDismiss() }
+            .testTag("gesture_tutorial_overlay"),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.75f))
-                .clickable { onDismiss() }
-                .testTag("gesture_tutorial_overlay"),
-            contentAlignment = Alignment.Center,
-        ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -363,5 +360,4 @@ private fun GestureTutorialOverlay(
                 )
             }
         }
-    }
 }
