@@ -526,13 +526,13 @@ class SelectorScreenTest {
 
         // The legend button appears once there are scores to explain.
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodes(hasTestTag("score_legend_button"), useUnmergedTree = true)
+            composeRule.onAllNodesWithContentDescription("What the scan icons mean")
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onAllNodes(hasTestTag("score_legend_button"), useUnmergedTree = true).onFirst().performClick()
+        composeRule.onNodeWithContentDescription("What the scan icons mean").performClick()
 
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodes(hasTestTag("score_legend_sheet"), useUnmergedTree = true)
+            composeRule.onAllNodesWithText("What the scan icons mean", ignoreCase = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
         val inLegend = hasAnyAncestor(hasTestTag("score_legend_sheet"))
