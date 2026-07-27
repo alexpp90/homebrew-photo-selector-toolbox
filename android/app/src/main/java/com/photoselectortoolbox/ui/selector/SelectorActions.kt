@@ -467,21 +467,10 @@ fun SelectorSnackbar(
 ) {
     if (message == null) return
 
-    var animateProgress by remember(message) { androidx.compose.runtime.mutableStateOf(false) }
     LaunchedEffect(message) {
-        animateProgress = true
         kotlinx.coroutines.delay(UNDO_WINDOW_MILLIS)
         onDismiss()
     }
-
-    val progress by animateFloatAsState(
-        targetValue = if (animateProgress) 0f else 1f,
-        animationSpec = tween(
-            durationMillis = UNDO_WINDOW_MILLIS.toInt(),
-            easing = androidx.compose.animation.core.LinearEasing,
-        ),
-        label = "snackbarProgress",
-    )
 
     Column(
         modifier = modifier
@@ -518,15 +507,9 @@ fun SelectorSnackbar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(2.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress.coerceIn(0f, 1f))
-                    .height(2.dp)
-                    .background(Indigo500),
-            )
-        }
+                .height(2.dp)
+                .background(Indigo500),
+        )
     }
 }
 
