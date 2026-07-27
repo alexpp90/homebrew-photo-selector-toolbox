@@ -532,7 +532,7 @@ class SelectorScreenTest {
         composeRule.onNodeWithContentDescription("What the scan icons mean").performClick()
 
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodesWithText("What the scan icons mean", ignoreCase = true)
+            composeRule.onAllNodes(hasText("What the scan icons mean", ignoreCase = true), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
         val inLegend = hasAnyAncestor(hasTestTag("score_legend_sheet"))
