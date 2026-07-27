@@ -189,3 +189,61 @@ def test_calculate_noise_exception(mock_cv2, mock_get_data):
     # The function should catch the exception and return 0.0
     score = calculate_noise(Path("error.jpg"))
     assert score == 0.0
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_highlight_clipping(mock_get_data):
+    # Case 1: No clipping (all pixels are dark)
+    dark_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_get_data.return_value = dark_img
+    score = shp.calculate_highlight_clipping(Path("dark.jpg"))
+    assert score == 0.0
+
+    # Case 2: Some clipping (half pixels are white)
+    mixed_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    mixed_img[:, :50] = 255
+    mock_get_data.return_value = mixed_img
+    score = shp.calculate_highlight_clipping(Path("mixed.jpg"))
+    assert score == 50.0
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_highlight_clipping_none(mock_get_data):
+    mock_get_data.return_value = None
+    score = shp.calculate_highlight_clipping(Path("none.jpg"))
+    assert score == 0.0
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "cv2")
+def test_calculate_highlight_clipping_exception(mock_cv2, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_cv2.cvtColor.side_effect = Exception("Mocked highlight clipping error")
+    score = shp.calculate_highlight_clipping(Path("error.jpg"))
+    assert score == 0.0
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_shadow_clipping(mock_get_data):
+    # For shadow clipping, intensity <= 2
+    img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+    img[0:20, :] = 1  # 20% crushed shadows
+    mock_get_data.return_value = img
+    score = shp.calculate_shadow_clipping(Path("dummy.jpg"))
+    assert score == 20.0
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_shadow_clipping_none(mock_get_data):
+    mock_get_data.return_value = None
+    score = shp.calculate_shadow_clipping(Path("none.jpg"))
+    assert score == 0.0
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "cv2")
+def test_calculate_shadow_clipping_exception(mock_cv2, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_cv2.cvtColor.side_effect = Exception("Mocked shadow clipping error")
+    score = shp.calculate_shadow_clipping(Path("error.jpg"))
+    assert score == 0.0

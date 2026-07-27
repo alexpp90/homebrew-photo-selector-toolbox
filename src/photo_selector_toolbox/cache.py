@@ -39,7 +39,7 @@ class ScoreCache:
             else:
                 from photo_selector_toolbox.config import CONFIG_DIR
 
-                CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
                 db_path = CONFIG_DIR / "scores_cache.db"
         self.db_path = db_path
         self._write_count = 0
@@ -63,6 +63,12 @@ class ScoreCache:
                 )
                 conn.commit()
             _set_secure_permissions(self.db_path)
+            wal_path = Path(str(self.db_path) + "-wal")
+            shm_path = Path(str(self.db_path) + "-shm")
+            if wal_path.exists():
+                _set_secure_permissions(wal_path)
+            if shm_path.exists():
+                _set_secure_permissions(shm_path)
         except sqlite3.DatabaseError as e:
             logger.error(
                 f"Score cache database is corrupted or inaccessible: {e}. "

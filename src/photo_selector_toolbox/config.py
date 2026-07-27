@@ -107,7 +107,7 @@ def load_config() -> Dict[str, Union[str, bool, List[str]]]:
     """Loads settings.json config file, creating it with defaults if it doesn't exist."""
     try:
         if not CONFIG_DIR.exists():
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
 
         if not CONFIG_FILE.exists():
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -136,7 +136,7 @@ def save_config(config: Dict[str, Union[str, bool, List[str]]]) -> None:
     """Saves config dict to settings.json."""
     try:
         if not CONFIG_DIR.exists():
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4)
         _set_secure_permissions(CONFIG_FILE)
