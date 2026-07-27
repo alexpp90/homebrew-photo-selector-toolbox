@@ -31,6 +31,10 @@ class GestureTutorialOverlayTest {
             )
         }
 
+        composeTestRule.waitUntil(timeoutMillis = 5000) {
+            composeTestRule.onAllNodesWithText("How to Photo-Tok").fetchSemanticsNodes().isNotEmpty()
+        }
+
         // Verify the main header title is displayed
         composeTestRule.onNodeWithText("How to Photo-Tok").assertIsDisplayed()
 
@@ -76,6 +80,10 @@ class GestureTutorialOverlayTest {
                     onDismiss = {}
                 )
             }
+        }
+
+        composeTestRule.waitUntil(timeoutMillis = 5000) {
+            composeTestRule.onAllNodesWithText("How to Photo-Tok").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Verify the overlay is displayed
