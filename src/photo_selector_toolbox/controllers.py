@@ -3,7 +3,7 @@ import queue
 import threading
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Dict, Optional, Callable, List
+from typing import Dict, Optional, Callable, List, Union
 from pathlib import Path
 from PIL import Image
 
