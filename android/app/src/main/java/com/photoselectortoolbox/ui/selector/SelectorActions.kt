@@ -464,14 +464,21 @@ fun SelectorSnackbar(
 ) {
     if (message == null) return
 
-    val progress = remember(message) { androidx.compose.animation.core.Animatable(1f) }
+    val progressState = remember(message) { androidx.compose.runtime.mutableFloatStateOf(1f) }
     LaunchedEffect(message) {
-        progress.snapTo(1f)
-        progress.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(durationMillis = UNDO_WINDOW_MILLIS.toInt(), easing = { it }),
-        )
-        onDismiss()
+        val duration = UNDO_WINDOW_MILLIS
+        val startTime = System.currentTimeMillis()
+        while (true) {
+            val elapsed = System.currentTimeMillis() - startTime
+            val remaining = duration - elapsed
+            if (remaining <= 0) {
+                progressState.floatValue = 0f
+                onDismiss()
+                break
+            }
+            progressState.floatValue = remaining.toFloat() / duration.toFloat()
+            kotlinx.coroutines.delay(100)
+        }
     }
 
     Column(
@@ -513,7 +520,7 @@ fun SelectorSnackbar(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress.value)
+                    .fillMaxWidth(progressState.floatValue.coerceIn(0f, 1f))
                     .height(2.dp)
                     .background(Indigo500),
             )
