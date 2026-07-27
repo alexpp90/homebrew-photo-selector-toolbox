@@ -25,6 +25,10 @@ enum class ScoreMetric(
     /** How to read the value. */
     val direction: ScoreDirection,
     private val format: String,
+    /** Raw value that maps to goodness 0 for this metric. */
+    private val worstValue: Double,
+    /** Raw value that maps to goodness 1 for this metric. */
+    private val bestValue: Double,
 ) {
     SHARPNESS(
         shortLabel = "Sharp",
@@ -33,6 +37,8 @@ enum class ScoreMetric(
             "motion blur or a missed focus.",
         direction = ScoreDirection.HIGHER_IS_BETTER,
         format = "%.1f",
+        worstValue = 5.0,
+        bestValue = 100.0,
     ),
     NOISE(
         shortLabel = "Noise",
@@ -40,6 +46,8 @@ enum class ScoreMetric(
         description = "Estimated sensor noise in flat areas of the image. Rises with high ISO.",
         direction = ScoreDirection.LOWER_IS_BETTER,
         format = "%.1f",
+        worstValue = 7.0,
+        bestValue = 0.2,
     ),
     HIGHLIGHT_CLIPPING(
         shortLabel = "Highl",
@@ -47,6 +55,8 @@ enum class ScoreMetric(
         description = "Share of pixels blown out to pure white — detail that cannot be recovered.",
         direction = ScoreDirection.LOWER_IS_BETTER,
         format = "%.1f%%",
+        worstValue = 10.0,
+        bestValue = 0.0,
     ),
     SHADOW_CLIPPING(
         shortLabel = "Shad",
@@ -54,6 +64,8 @@ enum class ScoreMetric(
         description = "Share of pixels crushed to pure black — detail that cannot be recovered.",
         direction = ScoreDirection.LOWER_IS_BETTER,
         format = "%.1f%%",
+        worstValue = 14.0,
+        bestValue = 0.0,
     ),
     AESTHETIC(
         shortLabel = "Aesth",
@@ -61,10 +73,40 @@ enum class ScoreMetric(
         description = "On-device AI rating of overall appeal, on a 1–10 scale.",
         direction = ScoreDirection.HIGHER_IS_BETTER,
         format = "%.1f",
+        worstValue = 1.0,
+        bestValue = 10.0,
     );
 
     /** Format a raw value for display, e.g. `512.3` or `1.4%`. */
     fun format(value: Double): String = String.format(Locale.US, format, value)
+
+    /**
+     * Map a raw value onto 0..1 where 1 is always "good", regardless of which
+     * direction the underlying number runs.
+     *
+     * This is what lets a single bar be read the same way for every metric: a
+     * long green bar means a good frame whether the metric is sharpness (high
+     * is good) or noise (low is good). Comparing bar lengths across metrics is
+     * the point — the raw numbers live on wildly different scales and cannot be
+     * compared by eye.
+     */
+    fun goodness(value: Double): Double {
+        val span = bestValue - worstValue
+        if (span == 0.0) return 1.0
+        return ((value - worstValue) / span).coerceIn(0.0, 1.0)
+    }
+
+    /**
+     * Which of [values] is the best frame for this metric, as an index, or null
+     * when fewer than two frames carry a value (a "best of one" badge is noise).
+     * Ties resolve to the first frame so the marker never flickers between
+     * identical neighbours.
+     */
+    fun bestIndexOf(values: List<Double?>): Int? {
+        val scored = values.withIndex().filter { it.value != null }
+        if (scored.size < 2) return null
+        return scored.maxByOrNull { goodness(it.value!!) }?.index
+    }
 
     /** Pull this metric's value out of a scan result, or null if not computed. */
     fun valueOf(result: ScanResult): Double? = when (this) {
@@ -75,9 +117,18 @@ enum class ScoreMetric(
         AESTHETIC -> result.aestheticScore
     }
 
-    /** Screen-reader / tooltip text: name, value and how to read it. */
-    fun accessibilityLabel(value: Double): String =
-        "$displayName ${format(value)}, ${direction.hint}"
+    /**
+     * Screen-reader / tooltip text: name, value, how to read it, and whether
+     * this is the best of the frames currently on screen.
+     *
+     * The direction hint is not optional decoration — a number with no stated
+     * direction is not interpretable, and a sighted user gets the direction
+     * from the bar, which a screen-reader user does not.
+     */
+    fun accessibilityLabel(value: Double, isBestOfVisible: Boolean = false): String {
+        val base = "$displayName ${format(value)}, ${direction.hint}"
+        return if (isBestOfVisible) "$base, best of the three visible frames" else base
+    }
 
     companion object {
         /** Metrics that actually have a value in [result], in display order. */

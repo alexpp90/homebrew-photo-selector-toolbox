@@ -13,6 +13,16 @@ Lessons use the standard `.Jules/` format (Learning/Action).
 
 ---
 
+## [OPEN] 2026-07-27 - No Repository-Level Undo, So the Selector Snackbar Cannot Offer One
+**Where:** `android/app/.../data/repository/ImageRepository.kt`, `ImageRepositoryImpl.kt`, `domain/usecase/MoveToSelectionUseCase.kt`, `viewmodel/SelectorViewModel.kt`, `ui/selector/SelectorActions.kt` (`SelectorSnackbar`)
+**Debt:** The selector refresh specifies a 30-second undo window on Move / Copy / Delete, and `SelectorSnackbar` renders the countdown line for it, but `onUndo` is wired to `null` because nothing below the UI can reverse an action. `ImageRepository.moveImage`/`copyImage` return only `Boolean` and discard the destination URI, and `SelectorViewModel` stores `lastDeletedImage`/`lastDeletedIndex` but never uses them. An UNDO button that silently did nothing would be worse than none, so the affordance is currently absent rather than broken.
+**Proposal:** Have `moveImage`/`copyImage` return the destination URI (or a small `FileOperationResult`) the way `MoveToSelectionUseCase.MoveResult` already does, and add `undoLastOperation()` to the view model that moves the file back / restores from MediaStore trash where `canTrash` is true. Then pass a non-null `onUndo` for the operations that are genuinely reversible and keep it null for the ones that are not — per `.skills/refactoring_guide/SKILL.md`, the result type belongs in the data layer, not in the composable.
+
+## [OPEN] 2026-07-27 - Scan Config, Score Legend and Settings Still Use the Pre-Refresh Visual Language
+**Where:** `android/app/.../ui/selector/ScanConfigSheet.kt`, `ui/components/ScoreLegendSheet.kt`, `ui/settings/SettingsScreen.kt`, `ui/navigation/AdaptiveNavigation.kt`
+**Debt:** The selector, filmstrip, chips and fullscreen viewer were rebuilt to the design handoff (right-side sheets, 72dp nav rail with 32dp app mark, two-pane settings, outlined-not-elevated surfaces), but these four surfaces were explicitly out of scope for that pass and still use Material defaults — `ModalBottomSheet` where the design specifies a 400/440dp right-side sheet, a single-pane settings list, and elevation where the rest of the app now uses 1dp outlines. The app currently reads as two different products depending on which surface is open.
+**Proposal:** Second pass, one surface at a time, reusing the tokens and primitives already added in `ui/theme/Color.kt` and `ui/selector/SelectorChrome.kt` (`SelectorRail`, `RailButton`, `ImageTile`, `DetailsPanel`) rather than introducing parallel components. The score legend already carries the new `ScoreChip`, so it is the cheapest starting point.
+
 ## 2026-07-12 - GitHub Actions Workflow Rename Run Number Reset
 **Learning:** Renaming or changing a GitHub Actions workflow filename resets the `github.run_number` count back to 1 for that new file. If `github.run_number` is used in version code calculations, the reset causes version code regressions. This will result in Google Play Store rollout errors (such as "does not allow any existing users to upgrade").
 **Action:** When introducing or renaming a CI workflow that determines version codes, always add a baseline offset to ensure version codes remain strictly higher than any previously published builds.

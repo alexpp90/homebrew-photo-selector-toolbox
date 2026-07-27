@@ -1,6 +1,7 @@
 package com.photoselectortoolbox.viewmodel
 
 import com.photoselectortoolbox.data.model.ImageItem
+import com.photoselectortoolbox.data.model.ScanResult
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -88,4 +89,65 @@ class SelectorUiStateTest {
         assertEquals(3, state.groups[0].size)
         assertEquals(2, state.groups[1].size)
     }
+
+    @Test
+    fun `filmstrip and details are shown by default`() {
+        val state = SelectorUiState()
+        assertTrue(state.filmstripVisible)
+        assertTrue(state.detailsVisible)
+    }
+
+    @Test
+    fun `neighbours resolve around the current frame`() {
+        val state = SelectorUiState(images = threeImages, currentIndex = 1)
+        assertEquals("b.jpg", state.currentImage?.fileName)
+        assertEquals("a.jpg", state.previousImage?.fileName)
+        assertEquals("c.jpg", state.nextImage?.fileName)
+    }
+
+    @Test
+    fun `the folder edges have no neighbour rather than wrapping around`() {
+        // Wrapping would silently take the photographer back to the start of
+        // the shoot mid-comparison.
+        val first = SelectorUiState(images = threeImages, currentIndex = 0)
+        assertNull(first.previousImage)
+        assertEquals("b.jpg", first.nextImage?.fileName)
+
+        val last = SelectorUiState(images = threeImages, currentIndex = 2)
+        assertEquals("b.jpg", last.previousImage?.fileName)
+        assertNull(last.nextImage)
+    }
+
+    @Test
+    fun `position is one-based and zero for an empty folder`() {
+        assertEquals(2, SelectorUiState(images = threeImages, currentIndex = 1).position)
+        assertEquals(0, SelectorUiState().position)
+    }
+
+    @Test
+    fun `hasAnyScores gates the legend on there being something to explain`() {
+        assertFalse(SelectorUiState(images = threeImages).hasAnyScores)
+
+        val scanned = threeImages.toMutableList().also { list ->
+            list[1] = list[1].copy(
+                scanResult = ScanResult(filePath = list[1].uri, sharpnessScore = 40.0)
+            )
+        }
+        assertTrue(SelectorUiState(images = scanned).hasAnyScores)
+    }
+
+    @Test
+    fun `a current image out of range does not crash`() {
+        // Deletes shrink the list; the index is coerced afterwards, but the UI
+        // may read state in between.
+        val state = SelectorUiState(images = threeImages, currentIndex = 99)
+        assertNull(state.currentImage)
+        assertNull(state.nextImage)
+    }
+
+    private val threeImages = listOf(
+        ImageItem("uri1", "a.jpg", 100, 1000, "image/jpeg"),
+        ImageItem("uri2", "b.jpg", 200, 2000, "image/jpeg"),
+        ImageItem("uri3", "c.jpg", 300, 3000, "image/jpeg"),
+    )
 }

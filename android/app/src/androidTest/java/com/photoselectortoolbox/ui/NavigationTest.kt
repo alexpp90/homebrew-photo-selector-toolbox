@@ -48,7 +48,7 @@ class NavigationTest {
         val hasDesktopLabel = composeRule.onAllNodesWithText("Select a Folder", substring = false, ignoreCase = true)
             .fetchSemanticsNodes().isNotEmpty()
         if (hasDesktopLabel) {
-            composeRule.onNodeWithText("Select a folder to start reviewing and culling your photos.", substring = true, ignoreCase = true)
+            composeRule.onNodeWithText("Choose a shoot folder to start comparing and culling frames.", substring = true, ignoreCase = true)
                 .assertIsDisplayed()
         } else {
             composeRule.onNodeWithText("Select photos folder", substring = false, ignoreCase = true)
@@ -175,7 +175,7 @@ class NavigationTest {
         ).performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("Select a folder to start reviewing and culling your photos.", substring = true, ignoreCase = true)
+        composeRule.onNodeWithText("Choose a shoot folder to start comparing and culling frames.", substring = true, ignoreCase = true)
             .assertIsDisplayed()
     }
 

@@ -5,10 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,13 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CenterFocusStrong
-import androidx.compose.material.icons.filled.Grain
-import androidx.compose.material.icons.filled.Highlight
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -31,31 +24,50 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Text
 import coil.compose.AsyncImage
 import com.photoselectortoolbox.data.model.ImageItem
+import com.photoselectortoolbox.domain.format.SelectorLabels
+import com.photoselectortoolbox.domain.scoring.ScoreMetric
+import com.photoselectortoolbox.ui.components.goodnessColor
 import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.Indigo600
+import com.photoselectortoolbox.ui.theme.Zinc500
 import com.photoselectortoolbox.ui.theme.Zinc700
 import com.photoselectortoolbox.ui.theme.Zinc800
-import com.photoselectortoolbox.ui.theme.Zinc950
+import com.photoselectortoolbox.ui.theme.Zinc900
 
-// Group indicator colors for visual differentiation
-private val GroupColors = listOf(
-    Color(0xFF6366F1), // Indigo
-    Color(0xFF22C55E), // Green
-    Color(0xFFF59E0B), // Amber
-    Color(0xFFEC4899), // Pink
-    Color(0xFF06B6D4), // Cyan
-    Color(0xFFA855F7), // Purple
-    Color(0xFFF97316), // Orange
-    Color(0xFF14B8A6), // Teal
-)
+/** Total height of the filmstrip, including its border and padding. */
+val FilmstripHeight = 76.dp
 
+private val ThumbnailHeight = 56.dp
+private val LandscapeThumbnailWidth = 78.dp
+private val PortraitThumbnailWidth = 44.dp
+
+/** Extra space that separates one burst from the next. */
+private val BurstGap = 10.dp
+
+/**
+ * The filmstrip along the bottom edge: where the current frame sits in the
+ * folder, and roughly how good its neighbours are.
+ *
+ * Thumbnails carry a single score dot rather than text. At 56dp there is no
+ * room for a legible number, and the question the strip answers is "is there
+ * anything better nearby", which a colour answers faster than digits. Sharpness
+ * is the metric shown because it is the one that most often decides a cull.
+ */
 @Composable
 fun CandidateStrip(
     images: List<ImageItem>,
@@ -66,55 +78,90 @@ fun CandidateStrip(
 ) {
     val listState = rememberLazyListState()
 
-    // Build a map from image index to group index for fast lookup
+    // Index -> burst id, so a thumbnail knows both which burst it belongs to
+    // and whether it starts a new one.
     val indexToGroup = remember(groups) {
         if (groups == null) {
             emptyMap()
         } else {
             buildMap {
                 groups.forEachIndexed { groupIdx, memberIndices ->
-                    memberIndices.forEach { imageIdx ->
-                        put(imageIdx, groupIdx)
-                    }
+                    memberIndices.forEach { imageIdx -> put(imageIdx, groupIdx) }
                 }
             }
         }
     }
+    val currentGroup = indexToGroup[currentIndex]
 
-    // Auto-scroll to keep the current image visible
+    // Keep the current frame visible without yanking the strip about: scrolling
+    // to a fixed offset puts it left-of-centre, where the frames the user is
+    // about to reach are still on screen.
     LaunchedEffect(currentIndex) {
         if (images.isNotEmpty() && currentIndex in images.indices) {
-            listState.animateScrollToItem(
-                index = currentIndex,
-                scrollOffset = -200, // offset to center roughly
-            )
+            listState.animateScrollToItem(index = currentIndex, scrollOffset = -200)
         }
     }
 
-    LazyRow(
+    val visibleRange by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo.visibleItemsInfo
+            if (info.isEmpty()) null else info.first().index to info.last().index
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Zinc950)
-            .padding(vertical = 6.dp),
-        state = listState,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp),
+            .height(FilmstripHeight)
+            .background(Zinc900)
+            .testTag("filmstrip"),
     ) {
-        itemsIndexed(
-            items = images,
-            key = { _, image -> image.uri },
-        ) { index, image ->
-            val isCurrent = index == currentIndex
-            val groupIndex = indexToGroup[index]
-            val groupColor = groupIndex?.let {
-                GroupColors[it % GroupColors.size]
-            }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Zinc800)
+                .align(Alignment.TopStart),
+        )
 
-            CandidateThumbnail(
-                image = image,
-                isCurrent = isCurrent,
-                groupColor = groupColor,
-                onClick = { onImageSelected(index) },
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().align(Alignment.CenterStart),
+            state = listState,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            contentPadding = PaddingValues(horizontal = 8.dp),
+        ) {
+            itemsIndexed(
+                items = images,
+                key = { _, image -> image.uri },
+            ) { index, image ->
+                val group = indexToGroup[index]
+                val startsNewBurst = group != null && group != indexToGroup[index - 1]
+
+                CandidateThumbnail(
+                    image = image,
+                    isCurrent = index == currentIndex,
+                    inCurrentBurst = group != null && group == currentGroup,
+                    position = index + 1,
+                    total = images.size,
+                    onClick = { onImageSelected(index) },
+                    modifier = Modifier.padding(
+                        start = if (startsNewBurst) BurstGap else 0.dp,
+                    ),
+                )
+            }
+        }
+
+        visibleRange?.let { (first, last) ->
+            Text(
+                text = SelectorLabels.filmstripRange(first, last, images.size),
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                color = Zinc500,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .background(Zinc900)
+                    .padding(horizontal = 8.dp),
             )
         }
     }
@@ -124,96 +171,75 @@ fun CandidateStrip(
 private fun CandidateThumbnail(
     image: ImageItem,
     isCurrent: Boolean,
-    groupColor: Color?,
+    inCurrentBurst: Boolean,
+    position: Int,
+    total: Int,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    val shape = RoundedCornerShape(3.dp)
+    val width = if (image.isLandscape) LandscapeThumbnailWidth else PortraitThumbnailWidth
+
+    Box(
+        modifier = modifier
+            .height(ThumbnailHeight + if (inCurrentBurst) 4.dp else 0.dp)
+            .width(width),
+        contentAlignment = Alignment.TopStart,
     ) {
         Box(
             modifier = Modifier
-                .height(64.dp)
-                .aspectRatio(1.5f)
-                .clip(RoundedCornerShape(6.dp))
-                .then(
-                    if (isCurrent) {
-                        Modifier.border(
-                            width = 3.dp,
-                            color = Indigo500,
-                            shape = RoundedCornerShape(6.dp),
-                        )
-                    } else Modifier
+                .height(ThumbnailHeight)
+                .width(width)
+                // Neighbours are held back a little so the current frame reads
+                // first, but never so far that their content is unreadable.
+                .alpha(if (isCurrent) 1f else 0.85f)
+                .clip(shape)
+                .background(Zinc800)
+                .border(
+                    width = if (isCurrent) 2.dp else 1.dp,
+                    color = if (isCurrent) Indigo500 else Zinc700,
+                    shape = shape,
                 )
                 .pointerHoverIcon(PointerIcon.Hand)
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+                .semantics { contentDescription = "${image.fileName}, $position of $total" },
         ) {
-            // Group color indicator (left border)
-            if (groupColor != null) {
-                Box(
-                    modifier = Modifier
-                        .width(3.dp)
-                        .height(64.dp)
-                        .background(groupColor)
-                        .align(Alignment.CenterStart),
-                )
-            }
-
             AsyncImage(
                 model = image.uri,
-                contentDescription = image.fileName,
-                modifier = Modifier
-                    .matchParentSize()
-                    .padding(start = if (groupColor != null) 3.dp else 0.dp),
+                contentDescription = null,
+                modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
             )
-        }
 
-        // Tiny score icons below thumbnail
-        image.scanResult?.let { scores ->
-            Row(
-                modifier = Modifier.padding(top = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                if (scores.sharpnessScore != null) {
-                    Icon(
-                        imageVector = Icons.Default.CenterFocusStrong,
-                        contentDescription = null,
-                        modifier = Modifier.size(10.dp),
-                        tint = scoreColor(scores.sharpnessScore, isHighGood = true),
-                    )
-                }
-                if (scores.noiseLevel != null) {
-                    Icon(
-                        imageVector = Icons.Default.Grain,
-                        contentDescription = null,
-                        modifier = Modifier.size(10.dp),
-                        tint = scoreColor(scores.noiseLevel, isHighGood = false),
-                    )
-                }
-                if (scores.highlightClipping != null) {
-                    Icon(
-                        imageVector = Icons.Default.Highlight,
-                        contentDescription = null,
-                        modifier = Modifier.size(10.dp),
-                        tint = scoreColor(scores.highlightClipping, isHighGood = false),
-                    )
-                }
+            image.scanResult?.sharpnessScore?.let { sharpness ->
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(3.dp)
+                        .size(6.dp)
+                        .background(
+                            goodnessColor(ScoreMetric.SHARPNESS.goodness(sharpness)),
+                            CircleShape,
+                        ),
+                )
             }
         }
+
+        // Burst underline: the frames that belong to the same series as the
+        // current one, so a photographer can see the shape of the burst they
+        // are inside without reading filenames.
+        if (inCurrentBurst) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .width(width)
+                    .height(2.dp)
+                    .background(Indigo600),
+            )
+        }
     }
 }
 
-/**
- * Returns a color indicating score quality.
- * For sharpness, higher is better (green). For noise / clipping, lower is better.
- */
-private fun scoreColor(value: Double, isHighGood: Boolean): Color {
-    val normalized = value.coerceIn(0.0, 100.0) / 100.0
-    val quality = if (isHighGood) normalized else 1.0 - normalized
-
-    return when {
-        quality >= 0.7 -> Color(0xFF22C55E) // Green
-        quality >= 0.4 -> Color(0xFFF59E0B) // Amber
-        else -> Color(0xFFEF4444)           // Red
-    }
-}
+/** Kept for callers that only need the dot colour. */
+internal fun sharpnessDotColor(sharpness: Double): Color =
+    goodnessColor(ScoreMetric.SHARPNESS.goodness(sharpness))
