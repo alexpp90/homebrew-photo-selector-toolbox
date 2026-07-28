@@ -1576,11 +1576,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if level == "Time & Filename":
             return []
 
-        import re
         import os
         def get_name_prefix(name: str) -> str:
             stem = name.rsplit(".", 1)[0]
-            return re.sub(r"\d+$", "", stem)
+            # Use native rstrip for performance over regex
+            return stem.rstrip("0123456789")
 
         def get_mtime(p: Path) -> float:
             try:
