@@ -136,6 +136,13 @@ jobs:
   instrumented-tests:
     name: Instrumented tests (API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
+    # The emulator job is the slowest and least readable in the pipeline (~15
+    # min vs ~2 min). `unit-tests` already compiles :app and :phototok
+    # androidTest sources, so gating on it means a Kotlin/KSP break in a test
+    # source is reported as plain compiler output in 2 minutes instead of
+    # burning a full emulator boot and surfacing as "process '/usr/bin/sh'
+    # failed with exit code 1".
+    needs: unit-tests
     strategy:
       fail-fast: false
       matrix:
@@ -166,7 +173,12 @@ jobs:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           target: google_apis
-          force-avd-creation: false
+          # AVD snapshot caching is deliberately not used (see commit cf1baa9 —
+          # snapshot/emulator-version mismatches produced flaky boot failures).
+          # Without a cached AVD there is nothing to reuse, so this must be
+          # `true`; `false` would ask the action to reuse an AVD that never
+          # exists and only adds a boot-time lookup.
+          force-avd-creation: true
           disable-animations: true
           # `-no-snapshot-save` is what actually prevents the emulator teardown
           # crash. There is no `disable-snapshot` input on this action (v2), so
@@ -188,6 +200,14 @@ jobs:
           if-no-files-found: ignore
 
   # ── Build & sign (main / tags / manual dispatch only) ───────────
+  #
+  # NOTE on workflow_dispatch: the job runs, but every signing/publishing step
+  # below is gated on `github.event_name == 'push'`, so a manual dispatch
+  # produces the debug APK only — it never signs, uploads to Firebase, or
+  # publishes to Play. That is intentional (manual runs are for smoke-checking
+  # the build, not for shipping). The conditions used to also carry
+  # `|| github.event_name == 'workflow_dispatch'` *inside* the push guard,
+  # which could never evaluate true and only made the intent unreadable.
   build:
     name: Build Android
     needs: [unit-tests, instrumented-tests, detect-changes]
@@ -249,10 +269,10 @@ jobs:
         working-directory: android
         run: |
           TASKS=""
-          if [ "${{ needs.detect-changes.outputs.toolbox }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [ "${{ needs.detect-changes.outputs.toolbox }}" = "true" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TASKS="$TASKS :app:assembleRelease"
           fi
-          if [ "${{ needs.detect-changes.outputs.phototok }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [ "${{ needs.detect-changes.outputs.phototok }}" = "true" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TASKS="$TASKS :phototok:assembleRelease"
           fi
           if [ -n "$TASKS" ]; then
@@ -273,10 +293,10 @@ jobs:
         working-directory: android
         run: |
           TASKS=""
-          if [ "${{ needs.detect-changes.outputs.toolbox }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [ "${{ needs.detect-changes.outputs.toolbox }}" = "true" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TASKS="$TASKS :app:bundleRelease"
           fi
-          if [ "${{ needs.detect-changes.outputs.phototok }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [ "${{ needs.detect-changes.outputs.phototok }}" = "true" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TASKS="$TASKS :phototok:bundleRelease"
           fi
           if [ -n "$TASKS" ]; then
@@ -309,29 +329,37 @@ jobs:
             cp android/phototok/build/outputs/bundle/release/*.aab android/release-assets/phototok-android-release.aab
           fi
 
+      # `if-no-files-found` defaults to `warn`, which turns a broken build into
+      # a yellow annotation and an empty artifact — and the empty artifact then
+      # fails confusingly two jobs later in `publish-play`. Every upload below
+      # is guarded by a condition that guarantees the file exists, so `error`
+      # is correct: it fails at the step that actually went wrong.
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-debug
           path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
 
       - name: Upload release APK
-        if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-release
           path: android/release-assets/photo-selector-toolbox-android-release.apk
+          if-no-files-found: error
 
       - name: Upload Phototok release APK
-        if: github.event_name == 'push' && (needs.detect-changes.outputs.phototok == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
         with:
           name: phototok-android-release
           path: android/release-assets/phototok-android-release.apk
+          if-no-files-found: error
 
       # Each app lives in its own Firebase project with its own service-account credential.
       - name: Upload Photo Selector Toolbox to Firebase App Distribution
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect-changes.outputs.toolbox == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v'))
         # Tester distribution is a convenience and must not block the Play Store
         # release that runs later in this job. The "groups" alias below must exist
         # in the Firebase project, otherwise distribution 404s.
@@ -347,7 +375,7 @@ jobs:
           file: android/release-assets/photo-selector-toolbox-android-release.apk
 
       - name: Upload Photo Tok to Firebase App Distribution
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect-changes.outputs.phototok == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
         continue-on-error: true
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
@@ -359,21 +387,23 @@ jobs:
           file: android/release-assets/phototok-android-release.apk
 
       - name: Upload release AAB
-        if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-release-aab
           path: android/release-assets/photo-selector-toolbox-android-release.aab
+          if-no-files-found: error
 
       - name: Upload Phototok release AAB
-        if: github.event_name == 'push' && (needs.detect-changes.outputs.phototok == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
         with:
           name: phototok-android-release-aab
           path: android/release-assets/phototok-android-release.aab
+          if-no-files-found: error
 
       - name: Publish Release Assets
-        if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || needs.detect-changes.outputs.phototok == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
@@ -384,26 +414,26 @@ jobs:
   publish-play:
     name: Publish to Google Play
     needs: [build, detect-changes]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && (needs.detect-changes.outputs.toolbox == 'true' || needs.detect-changes.outputs.phototok == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && (needs.detect-changes.outputs.toolbox == 'true' || needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
 
     steps:
       - name: Download Photo Selector Toolbox AAB
-        if: needs.detect-changes.outputs.toolbox == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        if: needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/download-artifact@v4
         with:
           name: photo-selector-toolbox-android-release-aab
           path: release-assets
 
       - name: Download Photo Tok AAB
-        if: needs.detect-changes.outputs.phototok == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        if: needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/download-artifact@v4
         with:
           name: phototok-android-release-aab
           path: release-assets
 
       - name: Upload Photo Selector Toolbox AAB to Google Play
-        if: needs.detect-changes.outputs.toolbox == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        if: needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v')
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.TOOLBOX_GP_SERVICE_ACCOUNT_JSON }}
@@ -413,7 +443,7 @@ jobs:
           status: completed
 
       - name: Upload Photo Tok AAB to Google Play
-        if: needs.detect-changes.outputs.phototok == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        if: needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v')
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PHOTOTOK_GP_SERVICE_ACCOUNT_JSON }}

@@ -119,6 +119,16 @@ jobs:
           Xvfb :99 -screen 0 1280x1024x24 &
           sleep 1
 
+      # The coverage threshold is enforced on Linux ONLY, deliberately.
+      # tests/conftest.py skips tests by platform (`linux_only`, `mac_only`,
+      # `windows_only`) and `gui_required` skips when no display is present, so
+      # each OS legitimately executes a different subset and reaches a
+      # different coverage number. Applying one threshold to all three made
+      # coverage a per-OS lottery: a change could pass on the contributor's Mac
+      # and fail `--cov-fail-under` only on the Windows runner, with nothing
+      # reproducible locally. Linux runs the largest subset, so it is the
+      # authoritative gate; the other OSes still run the full test suite and
+      # still fail on any real test failure.
       - name: Run tests (excluding visual)
         run: >-
           poetry run pytest
@@ -126,7 +136,7 @@ jobs:
           --junitxml=test-results.xml
           --cov=photo_selector_toolbox
           --cov-report=xml
-          --cov-fail-under=60
+          ${{ runner.os == 'Linux' && '--cov-fail-under=60' || '' }}
           -m "not visual"
         env:
           DISPLAY: ${{ runner.os == 'Linux' && ':99' || '' }}
