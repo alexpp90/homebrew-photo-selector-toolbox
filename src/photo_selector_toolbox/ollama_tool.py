@@ -101,7 +101,7 @@ class OllamaAestheticTool(AnalysisTool):
                 if is_forbidden_ip(ip_str):
                     raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
         except socket.gaierror:
-            pass # Invalid hostname or cannot resolve. Let urllib handle the error later.
+            raise RuntimeError("SSRF Protection: Cannot resolve hostname.")
 
         url = f"{ollama_url.rstrip('/')}/api/generate"
         payload = {

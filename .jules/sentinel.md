@@ -25,3 +25,7 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
+## 2026-07-28 - Fix SSRF Vulnerability in Socket Hostname Resolution
+**Vulnerability:** A fail-open vulnerability existed in the SSRF protection mechanism where catching a `socket.gaierror` (failed hostname resolution) was silently ignored with a `pass`. This allowed attackers to bypass the metadata IP restriction if they could cause DNS resolution to fail during validation but succeed during the subsequent fetch.
+**Learning:** Security validations involving hostname resolution must fail securely (fail-close). If an address cannot be validated as safe, it must be considered unsafe.
+**Prevention:** Always raise an exception when a security-critical check (like DNS resolution for SSRF mitigation) fails, preventing the operation from proceeding with unverified input.

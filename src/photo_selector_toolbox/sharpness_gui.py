@@ -746,7 +746,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         if is_forbidden_ip(ip_str):
                             raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
                 except socket.gaierror:
-                    pass
+                    raise ValueError("SSRF Protection: Cannot resolve hostname.")
 
                 opener = urllib.request.build_opener(NoRedirectHandler)
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
