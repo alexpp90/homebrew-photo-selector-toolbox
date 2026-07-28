@@ -70,3 +70,7 @@
 **Learning:** When testing Compose modal bottom sheets or overlays over screens containing metrics or labels, `composeRule.onNode(hasText("..."))` can fail with `AssertionError: Expected exactly '1' node but found '2' nodes` if both the background screen and the sheet display identical labels (such as `ScoreMetric.NOISE`'s `shortLabel` and `displayName` both being `"Noise"`).
 **Action:** Always scope semantics assertions for content inside sheets or dialogs using `hasAnyAncestor(hasTestTag("sheet_tag"))` (e.g. `hasText("Noise") and hasAnyAncestor(hasTestTag("score_legend_sheet"))`) to ensure queries specifically match the intended container element.
 
+
+## 2026-07-28 - Contextual Hints in Tkinter LabelFrames
+**Learning:** To add rich elements like contextual hints alongside the title of a Tkinter `ttk.LabelFrame`, construct a `ttk.Frame` containing the desired layout (e.g., labels for title and hint), and assign it to the frame's `labelwidget` configuration property.
+**Action:** Use `labelwidget` instead of the `text` property when appending muted instructional text (like "Double-click to expand") to section titles to improve discoverability without cluttering the primary UI.

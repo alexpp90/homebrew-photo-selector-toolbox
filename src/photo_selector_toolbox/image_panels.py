@@ -13,7 +13,11 @@ class ImagePanelsMixin:
     """Mixin class for SharpnessTool to manage image panel scaling and background loading."""
 
     def create_image_panel(self, parent, title):
-        frame = ttk.LabelFrame(parent, text=title)
+        frame = ttk.LabelFrame(parent)
+        label_widget = ttk.Frame(frame)
+        ttk.Label(label_widget, text=title, style="TLabelframe.Label").pack(side="left")
+        ttk.Label(label_widget, text=" (Double-click to expand)", style="Muted.TLabel").pack(side="left")
+        frame.configure(labelwidget=label_widget)
 
         # Image Container Frame
         img_container = ttk.Frame(frame)
