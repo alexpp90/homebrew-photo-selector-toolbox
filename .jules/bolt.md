@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2024-05-18 - Replacing Regex with String Methods for Performance
+**Learning:** Native string methods like `rstrip` are significantly faster than compiling and executing regular expressions via `re.sub` for simple character removal tasks, especially in performance-critical loops.
+**Action:** Prefer native string methods (`rstrip`, `replace`, etc.) over `re` module functions when manipulating simple string patterns.
