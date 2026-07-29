@@ -101,27 +101,9 @@ class OllamaAestheticTool(AnalysisTool):
                 if is_forbidden_ip(ip_str):
                     raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
         except socket.gaierror:
-            raise RuntimeError("SSRF Protection: Hostname resolution failed.")
+            pass # Invalid hostname or cannot resolve. Let urllib handle the error later.
 
-        api_url = ollama_url.rstrip('/')
-        parsed = None
-        # If hostname successfully resolved, replace the hostname with IP in the URL to prevent DNS rebinding
-        if addr_info:
-            resolved_ip = addr_info[0][4][0]
-            if ':' in resolved_ip:
-                resolved_ip = f'[{resolved_ip}]'
-            parsed = urlparse(api_url)
-
-            # Reconstruct netloc safely instead of string replace
-            port_str = f':{parsed.port}' if parsed.port else ''
-            userinfo = f'{parsed.username}' if parsed.username else ''
-            userinfo += f':{parsed.password}' if parsed.password else ''
-            userinfo += '@' if userinfo else ''
-
-            new_netloc = f'{userinfo}{resolved_ip}{port_str}'
-            api_url = parsed._replace(netloc=new_netloc).geturl()
-
-        url = f"{api_url}/api/generate"
+        url = f"{ollama_url.rstrip('/')}/api/generate"
         payload = {
             "model": model_name,
             "prompt": prompt,
@@ -134,7 +116,7 @@ class OllamaAestheticTool(AnalysisTool):
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json", "Host": f"{parsed.hostname}:{parsed.port}" if parsed and parsed.port else (parsed.hostname if parsed and parsed.hostname else clean_hostname)},
+                headers={"Content-Type": "application/json"},
                 method="POST",
             )
             # Serialize requests to avoid overloading local Ollama server

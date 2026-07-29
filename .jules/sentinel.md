@@ -25,7 +25,3 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
-## 2025-02-28 - DNS Rebinding SSRF Protection
-**Vulnerability:** DNS rebinding (TOCTOU) vulnerability where `getaddrinfo` validates the hostname's IP, but `urllib` then re-resolves the hostname for the request, allowing an attacker to return a malicious IP during the fetch. Additionally, exceptions during resolution were silently passed.
-**Learning:** Checking for DNS rebinding requires modifying the actual HTTP request to use the pre-validated IP address instead of the hostname. String replacement on URLs can be brittle and break IPv6 literals or credentials, so safe URL reconstruction via `urllib.parse` is necessary. Setting the `Host` header ensures APIs still function properly.
-**Prevention:** Fail-close on DNS resolution errors. Reconstruct the request URL with the resolved IP (wrapped in `[]` for IPv6) and explicitly set the `Host` header to the original hostname.
