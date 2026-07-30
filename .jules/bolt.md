@@ -19,3 +19,9 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - String Slicing and OS Calls vs Pathlib Overheads
+**Learning:** In loops over files (e.g. grouping UI lists), instantiating `pathlib.Path` objects just to call `.stem` or `p.stat().st_mtime` adds massive cumulative performance overhead compared to basic string manipulation (`name.rsplit(".", 1)[0]`) and `os.stat`. Additionally, wrapping a function in `@functools.lru_cache` provides zero benefit if the input parameter is always unique across the list iteration (e.g., unique full file names passed to `get_name_prefix`), merely adding cache management overhead.
+**Action:** When working with thousands of files inside loops, bypass `pathlib` for lightweight extraction and stick to `os` and `str` methods. Always ensure that functions marked with `lru_cache` actually receive overlapping input values before adding the decorator.
+## 2025-02-18 - Regex vs Native String Methods in Tight Loops
+**Learning:** When stripping specific trailing characters (like digits) from strings in performance-critical Python loops, using regular expressions (e.g., `re.sub(r'\d+$', '', stem)`) introduces unnecessary overhead from module loading, regex compilation, and engine execution. Replacing this with native string methods like `stem.rstrip('0123456789')` avoids this overhead entirely and is significantly faster.
+**Action:** Always prefer native string methods (like `rstrip`, `lstrip`, `split`) over regular expressions for simple string manipulations inside loops where milliseconds matter.
