@@ -739,17 +739,32 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 if is_forbidden_ip(clean_hostname):
                     raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
 
+                safe_ip = clean_hostname
                 try:
                     addr_info = socket.getaddrinfo(clean_hostname, None)
+                    if addr_info:
+                        safe_ip = addr_info[0][4][0]
                     for res in addr_info:
                         ip_str = res[4][0]
                         if is_forbidden_ip(ip_str):
                             raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
                 except socket.gaierror:
-                    pass
+                    raise ValueError("SSRF Protection: DNS resolution failed.")
+
+                parsed_url = urlparse(url)
+                port_str = f":{parsed_url.port}" if parsed_url.port else ""
+                pinned_ip = f"[{safe_ip}]" if ":" in safe_ip else safe_ip
+                auth_str = ""
+                if parsed_url.username:
+                    auth_str = parsed_url.username
+                    if parsed_url.password:
+                        auth_str += f":{parsed_url.password}"
+                    auth_str += "@"
+                pinned_netloc = f"{auth_str}{pinned_ip}{port_str}"
+                pinned_base_url = parsed_url._replace(netloc=pinned_netloc).geturl()
 
                 opener = urllib.request.build_opener(NoRedirectHandler)
-                req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
+                req = urllib.request.Request(f"{pinned_base_url.rstrip('/')}/api/tags", headers={"Host": hostname})
                 with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                     models_list = data.get("models", [])

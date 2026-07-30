@@ -25,3 +25,8 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
+
+## 2025-02-28 - SSRF via DNS Rebinding (TOCTOU)
+**Vulnerability:** The application validated a user-supplied URL's hostname by resolving it to an IP and checking against a forbidden list (e.g., metadata IPs), but then passed the original URL (containing the hostname) directly to `urllib.request`. An attacker could exploit this by configuring a DNS server to return a safe IP during validation, but rapidly change the record to a malicious/internal IP right before `urllib` resolves it a second time (Time-of-Check to Time-of-Use).
+**Learning:** You must not decouple validation from connection. If you validate an IP, you must connect directly to that exact IP.
+**Prevention:** Pin the validated IP address by injecting it into the URL used for the actual connection (e.g., `http://[safe-ip]:port/path`), and move the original hostname into the `Host` HTTP header to preserve routing. Ensure you handle IPv6 literal formatting properly when constructing the URL.

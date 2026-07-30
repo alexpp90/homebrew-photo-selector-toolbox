@@ -93,17 +93,32 @@ class OllamaAestheticTool(AnalysisTool):
         if is_forbidden_ip(clean_hostname):
             raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
 
+        safe_ip = clean_hostname
         try:
             # Attempt to resolve. socket.getaddrinfo handles more formats than gethostbyname
             addr_info = socket.getaddrinfo(clean_hostname, None)
+            if addr_info:
+                safe_ip = addr_info[0][4][0]
             for res in addr_info:
                 ip_str = res[4][0]
                 if is_forbidden_ip(ip_str):
                     raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
         except socket.gaierror:
-            pass # Invalid hostname or cannot resolve. Let urllib handle the error later.
+            raise RuntimeError("SSRF Protection: DNS resolution failed.")
 
-        url = f"{ollama_url.rstrip('/')}/api/generate"
+        parsed_url = urlparse(ollama_url)
+        port_str = f":{parsed_url.port}" if parsed_url.port else ""
+        pinned_ip = f"[{safe_ip}]" if ":" in safe_ip else safe_ip
+        auth_str = ""
+        if parsed_url.username:
+            auth_str = parsed_url.username
+            if parsed_url.password:
+                auth_str += f":{parsed_url.password}"
+            auth_str += "@"
+        pinned_netloc = f"{auth_str}{pinned_ip}{port_str}"
+        pinned_base_url = parsed_url._replace(netloc=pinned_netloc).geturl()
+        url = f"{pinned_base_url.rstrip('/')}/api/generate"
+
         payload = {
             "model": model_name,
             "prompt": prompt,
@@ -116,7 +131,7 @@ class OllamaAestheticTool(AnalysisTool):
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "Host": hostname},
                 method="POST",
             )
             # Serialize requests to avoid overloading local Ollama server
