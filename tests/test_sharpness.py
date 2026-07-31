@@ -247,3 +247,19 @@ def test_calculate_shadow_clipping_exception(mock_cv2, mock_get_data):
     mock_cv2.cvtColor.side_effect = Exception("Mocked shadow clipping error")
     score = shp.calculate_shadow_clipping(Path("error.jpg"))
     assert score == 0.0
+
+def test__calculate_sharpness_from_gray_small_image():
+    gray = np.zeros((8, 8), dtype=np.uint8)
+    score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
+    assert score == 0.0
+
+def test__calculate_sharpness_from_gray_small_blocks():
+    gray = np.zeros((30, 30), dtype=np.uint8)
+    score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
+    assert score == 0.0
+
+def test__calculate_sharpness_from_gray_grid():
+    gray = np.zeros((100, 100), dtype=np.uint8)
+    gray[30:50, 30:50] = np.random.randint(0, 255, (20, 20), dtype=np.uint8)
+    score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
+    assert score > 0.0
