@@ -72,16 +72,16 @@ import com.phototok.domain.SwipeLabels
  * so the coach marks label the icons rather than covering them. Must stay in
  * sync with the top bar in [PhoneModeScreen].
  */
-private val TOP_BAR_HEIGHT = 28.dp
+private val TOP_BAR_HEIGHT = 12.dp
 
 /** Height of the real [com.phototok.ui.components.ViewerBottomBar] (48dp + padding). */
-private val BOTTOM_BAR_HEIGHT = 28.dp
+private val BOTTOM_BAR_HEIGHT = 12.dp
 
 /**
  * Space the up/down swipe callouts take above and below the photo frame
  * (36dp circle + label, twice, plus the 4dp gaps).
  */
-private val VERTICAL_CALLOUTS_HEIGHT = 100.dp
+private val VERTICAL_CALLOUTS_HEIGHT = 80.dp
 
 /**
  * Coach-mark overlay explaining every Photo-Tok control **in place**.
@@ -148,7 +148,7 @@ fun GestureTutorialOverlay(
 
                 TopBarCoachMarks()
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = title,
@@ -181,7 +181,7 @@ fun GestureTutorialOverlay(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
+                        .height(36.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { onDismiss() },
                     shape = RoundedCornerShape(12.dp),
@@ -199,7 +199,7 @@ fun GestureTutorialOverlay(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 // ── Bottom-bar coach marks, above the real bottom bar ────
                 BottomBarCoachMarks()
@@ -367,7 +367,7 @@ private fun GestureStage(
         // fraction of the height: a fraction overflows on short screens, where the
         // two callouts (~68dp each) are a large share of the available space.
         val frameHeight = (maxHeight - VERTICAL_CALLOUTS_HEIGHT).coerceIn(
-            minimumValue = 36.dp,
+            minimumValue = 24.dp,
             maximumValue = if (compact) 132.dp else 260.dp,
         )
 
