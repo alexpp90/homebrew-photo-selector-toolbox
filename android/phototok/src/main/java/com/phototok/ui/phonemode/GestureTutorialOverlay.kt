@@ -72,16 +72,16 @@ import com.phototok.domain.SwipeLabels
  * so the coach marks label the icons rather than covering them. Must stay in
  * sync with the top bar in [PhoneModeScreen].
  */
-private val TOP_BAR_HEIGHT = 52.dp
+private val TOP_BAR_HEIGHT = 48.dp
 
 /** Height of the real [com.phototok.ui.components.ViewerBottomBar] (48dp + padding). */
-private val BOTTOM_BAR_HEIGHT = 72.dp
+private val BOTTOM_BAR_HEIGHT = 48.dp
 
 /**
  * Space the up/down swipe callouts take above and below the photo frame
  * (44dp circle + label, twice, plus the 6dp gaps).
  */
-private val VERTICAL_CALLOUTS_HEIGHT = 148.dp
+private val VERTICAL_CALLOUTS_HEIGHT = 120.dp
 
 /**
  * Coach-mark overlay explaining every Photo-Tok control **in place**.
@@ -148,7 +148,7 @@ fun GestureTutorialOverlay(
 
                 TopBarCoachMarks()
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
                     text = title,
@@ -181,7 +181,7 @@ fun GestureTutorialOverlay(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(44.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { onDismiss() },
                     shape = RoundedCornerShape(12.dp),
@@ -199,7 +199,7 @@ fun GestureTutorialOverlay(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // ── Bottom-bar coach marks, above the real bottom bar ────
                 BottomBarCoachMarks()
