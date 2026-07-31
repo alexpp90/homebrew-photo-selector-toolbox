@@ -1206,3 +1206,22 @@ def test_delete_advances_and_prunes():
         assert viewer.path is paths[1]
         viewer.next_image()
         assert viewer.path is paths[2]
+
+def test_resync_index_ignores_errors():
+    """Verify that _resync_index correctly suppresses ValueError and TypeError
+    when searching for the current path in file_list fails, preserving current_idx."""
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(2)]
+    viewer, parent = _viewer_with_parent(paths, start_index=0)
+
+    mock_file_list = MagicMock()
+    mock_file_list.__contains__.return_value = True
+    mock_file_list.index.side_effect = ValueError("Test ValueError")
+    viewer.file_list = mock_file_list
+    viewer.current_idx = 42
+
+    viewer._resync_index()
+    assert viewer.current_idx == 42
+
+    mock_file_list.index.side_effect = TypeError("Test TypeError")
+    viewer._resync_index()
+    assert viewer.current_idx == 42

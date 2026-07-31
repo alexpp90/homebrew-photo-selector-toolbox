@@ -211,7 +211,7 @@ class FullscreenViewer(tk.Toplevel):
         try:
             if self.path in self.file_list:
                 self.current_idx = self.file_list.index(self.path)
-        except (TypeError, ValueError):  # pragma: no cover - non-list stand-ins
+        except (TypeError, ValueError):
             pass
 
     def _prune_file_list(self, removed_path):
