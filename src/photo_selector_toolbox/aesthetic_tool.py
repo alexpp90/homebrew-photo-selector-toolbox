@@ -256,12 +256,20 @@ class NimaOnnxAestheticEngine:
         mean = np.array([0.485, 0.456, 0.406], dtype="float32")
         std = np.array([0.229, 0.224, 0.225], dtype="float32")
         arr = (arr - mean) / std
-        # NCHW batch of 1. TODO(device): some NIMA exports expect NHWC — adjust
-        # to match the specific model you provide.
-        arr = np.transpose(arr, (2, 0, 1))[None, ...]
-
         session = self._get_session(model_path)
-        input_name = session.get_inputs()[0].name
+        input_info = session.get_inputs()[0]
+        input_name = input_info.name
+        input_shape = input_info.shape
+
+        # The image array is currently HWC (224, 224, 3).
+        # Check if the model expects NCHW (channels at index 1) or NHWC.
+        if len(input_shape) >= 4 and input_shape[1] == 3:
+            # NCHW batch of 1
+            arr = np.transpose(arr, (2, 0, 1))[None, ...]
+        else:
+            # NHWC batch of 1
+            arr = arr[None, ...]
+
         outputs = session.run(None, {input_name: arr})
         probs = np.asarray(outputs[0]).reshape(-1).tolist()
         score = nima_distribution_to_score(probs)
