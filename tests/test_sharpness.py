@@ -247,3 +247,19 @@ def test_calculate_shadow_clipping_exception(mock_cv2, mock_get_data):
     mock_cv2.cvtColor.side_effect = Exception("Mocked shadow clipping error")
     score = shp.calculate_shadow_clipping(Path("error.jpg"))
     assert score == 0.0
+
+def test_calculate_shadow_clipping_from_gray_empty():
+    gray = np.array([])
+    assert shp._calculate_shadow_clipping_from_gray(gray) == 0.0
+
+def test_calculate_shadow_clipping_from_gray_no_clipping():
+    gray = np.array([3, 4, 100, 255])
+    assert shp._calculate_shadow_clipping_from_gray(gray) == 0.0
+
+def test_calculate_shadow_clipping_from_gray_some_clipping():
+    gray = np.array([0, 1, 2, 3, 4])
+    assert shp._calculate_shadow_clipping_from_gray(gray) == 60.0
+
+def test_calculate_shadow_clipping_from_gray_all_clipping():
+    gray = np.array([0, 1, 2])
+    assert shp._calculate_shadow_clipping_from_gray(gray) == 100.0
