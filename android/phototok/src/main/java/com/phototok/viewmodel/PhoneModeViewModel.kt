@@ -18,6 +18,7 @@ import com.phototok.domain.CopyMoveFeedback
 import com.phototok.domain.FileTypeFilter
 import com.phototok.domain.FirstRunHint
 import com.phototok.domain.FirstRunHintText
+import com.phototok.domain.OptimisticFeed
 import com.phototok.domain.PendingDeleteLogic
 import com.phototok.domain.PhoneFeedOrdering
 import com.phototok.domain.PhotoFolders
@@ -43,6 +44,12 @@ data class PhoneModeUiState(
     val allImages: List<ImageItem> = emptyList(),
     val currentIndex: Int = 0,
     val isLoading: Boolean = false,
+    /**
+     * True while the folder is still being enumerated in the background. The
+     * feed is already usable — this only tells the UI that the photo count is
+     * still growing.
+     */
+    val isDiscovering: Boolean = false,
     val sourceFolderUri: String? = null,
     val sourceFolderName: String = "",
     val collectionFolderUri: String? = null,
@@ -117,6 +124,22 @@ class PhoneModeViewModel @Inject constructor(
     /** Active folder-discovery collection; cancelled when a new folder is selected. */
     private var discoveryJob: Job? = null
     private var dimensionsJob: Job? = null
+
+    /**
+     * Every URI published for the current folder. Discovery streams cumulative
+     * batches, and the user may remove photos from the feed while it is still
+     * running, so "absent from the feed" must not be read as "newly found".
+     */
+    private val publishedUris = mutableSetOf<String>()
+
+    /** URIs whose dimensions have been read, so batch restarts do no double I/O. */
+    private val dimensionsResolved = mutableSetOf<String>()
+
+    /** Saved feed position still to be restored as more photos stream in. */
+    private var pendingRestoreIndex: Int? = null
+
+    /** Set once the user changes page themselves, which cancels position restore. */
+    private var userHasNavigated = false
 
     companion object {
         private const val TAG = "PhoneModeVM"
@@ -230,9 +253,23 @@ class PhoneModeViewModel @Inject constructor(
     fun selectSourceFolder(uri: Uri) {
         finalizePendingDelete()
         discoveryJob?.cancel()
+        dimensionsJob?.cancel()
+        publishedUris.clear()
+        dimensionsResolved.clear()
         discoveryJob = viewModelScope.launch {
+            // The previous folder's feed is dropped up front: batches are merged
+            // by appending, so a stale list would be prefixed to the new folder.
             _uiState.update {
-                it.copy(isLoading = true, error = null, sourceFolderUri = uri.toString())
+                it.copy(
+                    isLoading = true,
+                    isDiscovering = true,
+                    error = null,
+                    sourceFolderUri = uri.toString(),
+                    images = emptyList(),
+                    allImages = emptyList(),
+                    currentIndex = 0,
+                    portraitSectionStart = -1,
+                )
             }
 
             val folderName = imageRepository.prepareSourceFolder(uri)
@@ -240,6 +277,7 @@ class PhoneModeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        isDiscovering = false,
                         error = "Cannot access folder. Permission may have been revoked.",
                     )
                 }
@@ -254,42 +292,107 @@ class PhoneModeViewModel @Inject constructor(
         }
     }
 
-    /** Shared tail of folder selection: discover, filter, sort, publish. */
+    /**
+     * Shared tail of folder selection: stream, filter, order, publish.
+     *
+     * Discovery emits progressively (a small first batch, then chunks), so this
+     * publishes each batch as it arrives instead of waiting for the whole tree.
+     * The user is swiping from the first batch onwards.
+     */
     private suspend fun collectDiscoveredImages(
         folderUri: Uri,
         restorePosition: Boolean,
         errorLabel: String,
     ) {
+        publishedUris.clear()
+        dimensionsResolved.clear()
+        userHasNavigated = false
+        // Read once here rather than per batch: on a fresh launch the observed
+        // settings may not have emitted into uiState yet.
+        val settings = settingsRepository.phoneSettings.first()
+        pendingRestoreIndex = if (restorePosition) {
+            settingsRepository.getFolderLastPosition(folderUri.toString()).takeIf { it > 0 }
+        } else {
+            null
+        }
+
         try {
-            imageRepository.discoverImages(folderUri).collect { images ->
-                val filtered = PhoneFeedOrdering.filterByType(images, _uiState.value.fileTypeFilter)
-                val sorted = sortImages(filtered)
-                val startIndex = if (restorePosition) {
-                    settingsRepository.getFolderLastPosition(folderUri.toString())
-                        .coerceIn(0, (sorted.images.size - 1).coerceAtLeast(0))
-                } else {
-                    0
-                }
-                _uiState.update {
-                    it.copy(
-                        allImages = images,
-                        images = sorted.images,
-                        portraitSectionStart = sorted.portraitSectionStart,
-                        currentIndex = startIndex,
-                        isLoading = false,
-                    )
-                }
-                checkGestureTutorial()
-                loadExifForCurrent()
-                loadDimensionsAsynchronously(images)
+            imageRepository.discoverImages(folderUri).collect { discovered ->
+                publishBatch(discovered, settings)
             }
+            // Enumeration finished: pick up the tail of missing dimensions.
+            _uiState.update { it.copy(isLoading = false, isDiscovering = false) }
+            loadDimensionsAsynchronously(force = true)
         } catch (e: CancellationException) {
+            // A newer discovery job owns the state now — do not touch it.
             throw e
         } catch (e: Exception) {
             _uiState.update {
-                it.copy(isLoading = false, error = "Failed to load $errorLabel: ${e.message}")
+                it.copy(
+                    isLoading = false,
+                    isDiscovering = false,
+                    error = "Failed to load $errorLabel: ${e.message}",
+                )
             }
         }
+    }
+
+    /**
+     * Merge one discovery batch into the feed.
+     *
+     * Batches are **appended**, never re-sorted into the existing feed, so a
+     * photo the user has already swiped past cannot jump back in front of them
+     * while the folder is still loading.
+     */
+    private fun publishBatch(discovered: List<ImageItem>, settings: PhoneSettings) {
+        val state = _uiState.value
+        val isFirstBatch = state.images.isEmpty() && state.allImages.isEmpty()
+        val fresh = PhoneFeedOrdering.newItems(discovered, publishedUris)
+        if (fresh.isEmpty() && !isFirstBatch) {
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        publishedUris += fresh.map { it.uri }
+
+        val freshFiltered = PhoneFeedOrdering.filterByType(fresh, settings.fileTypeFilter)
+        val merged = PhoneFeedOrdering.appendBatch(
+            current = state.images,
+            fresh = freshFiltered,
+            randomize = settings.randomizeOrder,
+            sortByOrientation = settings.sortByOrientation,
+        )
+
+        // Resolved outside the update lambda: it consumes pendingRestoreIndex and
+        // must run exactly once per batch.
+        val nextIndex = resolveFeedIndex(state.currentIndex, merged.images.size)
+
+        _uiState.update {
+            it.copy(
+                allImages = state.allImages + fresh,
+                images = merged.images,
+                portraitSectionStart = merged.portraitSectionStart,
+                currentIndex = nextIndex,
+                isLoading = false,
+            )
+        }
+
+        if (isFirstBatch) checkGestureTutorial()
+        loadExifForCurrent()
+        loadDimensionsAsynchronously()
+    }
+
+    /**
+     * The index to show after a batch landed: honour a saved position while it
+     * is still out of reach of the partially loaded feed, otherwise leave the
+     * user exactly where they are.
+     */
+    private fun resolveFeedIndex(currentIndex: Int, size: Int): Int {
+        if (size == 0) return 0
+        val target = pendingRestoreIndex
+        if (target == null || userHasNavigated) return currentIndex.coerceIn(0, size - 1)
+        val restored = target.coerceAtMost(size - 1)
+        if (restored == target) pendingRestoreIndex = null
+        return restored
     }
 
     fun selectCollectionFolder(uri: Uri) {
@@ -372,6 +475,12 @@ class PhoneModeViewModel @Inject constructor(
     fun navigateToImage(index: Int) {
         if (index in _uiState.value.images.indices) {
             val state = _uiState.value
+            if (index != state.currentIndex) {
+                // A real page change means the user has taken over; stop chasing
+                // the saved position as further batches arrive.
+                userHasNavigated = true
+                pendingRestoreIndex = null
+            }
             val newUri = state.images.getOrNull(index)?.uri
             if (state.pendingDelete != null && newUri != state.pendingDelete.revertAllowedUri) {
                 finalizePendingDelete()
@@ -422,9 +531,17 @@ class PhoneModeViewModel @Inject constructor(
     }
 
     /**
-     * Copy or move the current image plus its related siblings, tracking each
-     * file's result individually so partial failures are reported accurately
-     * and only files that actually moved disappear from the feed.
+     * Copy or move the current image plus its related siblings.
+     *
+     * The feed is updated **before** any I/O runs — a move drops the photo out
+     * of the feed, a copy advances to the next one — so the next photo is on
+     * screen the instant the gesture completes. The transfer itself runs on the
+     * application scope, which means it also finishes when the user immediately
+     * leaves the screen.
+     *
+     * Each file's result is tracked individually: partial failures are reported
+     * accurately, and any file that did **not** actually move is put back into
+     * the feed at its original position rather than silently disappearing.
      */
     private fun copyOrMoveCurrent(
         targetUri: String?,
@@ -439,8 +556,16 @@ class PhoneModeViewModel @Inject constructor(
         val currentImage = state.images[state.currentIndex]
         val related = if (state.moveRelatedFiles) relatedImages(currentImage) else emptyList()
         val targets = listOf(currentImage) + related
+        val slots = OptimisticFeed.slotsOf(state.images, state.allImages, targets)
 
-        viewModelScope.launch {
+        // ── Optimistic UI: show the next photo, then do the work ──────────
+        if (isCopy) {
+            advanceToNextImage()
+        } else {
+            removeImagesFromLists(targets.map { it.uri }.toSet())
+        }
+
+        appScope.launch {
             try {
                 val sortingEnabled = settingsRepository.sortingEnabled.first()
                 val folderUri = Uri.parse(targetUri)
@@ -466,9 +591,9 @@ class PhoneModeViewModel @Inject constructor(
                     if (ok) succeededUris.add(img.uri) else failed++
                 }
 
-                if (!isCopy && succeededUris.isNotEmpty()) {
-                    // Only files that actually moved leave the feed.
-                    removeImagesFromLists(succeededUris)
+                if (!isCopy && failed > 0) {
+                    // The optimistic removal was wrong for these files.
+                    restoreToFeed(slots.filter { it.image.uri !in succeededUris })
                 }
 
                 val message = CopyMoveFeedback.message(
@@ -487,10 +612,39 @@ class PhoneModeViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
+                if (!isCopy) restoreToFeed(slots)
                 _uiState.update {
                     it.copy(lastActionFeedback = ActionFeedback("Failed: ${e.message}", isError = true))
                 }
             }
+        }
+    }
+
+    /** Move to the next photo without waiting for anything. */
+    private fun advanceToNextImage() {
+        val state = _uiState.value
+        val next = state.currentIndex + 1
+        if (next in state.images.indices) navigateToImage(next)
+    }
+
+    /** Put optimistically removed photos back where they were. */
+    private fun restoreToFeed(slots: List<OptimisticFeed.Slot>) {
+        if (slots.isEmpty()) return
+        val state = _uiState.value
+        val lists = OptimisticFeed.restore(
+            images = state.images,
+            allImages = state.allImages,
+            slots = slots,
+            currentIndex = state.currentIndex,
+            sortByOrientation = state.sortByOrientation,
+        )
+        _uiState.update {
+            it.copy(
+                images = lists.images,
+                allImages = lists.allImages,
+                currentIndex = lists.currentIndex,
+                portraitSectionStart = lists.portraitSectionStart,
+            )
         }
     }
 
@@ -676,7 +830,19 @@ class PhoneModeViewModel @Inject constructor(
     fun goBackToLanding() {
         finalizePendingDelete()
         discoveryJob?.cancel()
-        _uiState.update { it.copy(images = emptyList(), allImages = emptyList(), currentIndex = 0) }
+        dimensionsJob?.cancel()
+        publishedUris.clear()
+        dimensionsResolved.clear()
+        pendingRestoreIndex = null
+        _uiState.update {
+            it.copy(
+                images = emptyList(),
+                allImages = emptyList(),
+                currentIndex = 0,
+                portraitSectionStart = -1,
+                isDiscovering = false,
+            )
+        }
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────
@@ -738,26 +904,36 @@ class PhoneModeViewModel @Inject constructor(
     }
 
     /**
-     * Load missing dimensions for all images, nearest-to-current first.
+     * Load missing dimensions for the current feed, nearest-to-current first.
      * Results are applied in batches of [DIMENSION_BATCH_SIZE]: one state update
      * (and one recomposition) per batch instead of per image, which matters in
      * folders with thousands of photos.
+     *
+     * Discovery calls this once per streamed batch, so it deliberately does
+     * **not** restart a run that is still in flight — cancelling and re-sorting
+     * on every batch would throw away in-progress work and re-read dimensions
+     * that were already resolved. [dimensionsResolved] makes each URI read once.
+     * Pass [force] to restart (used when enumeration has finished).
      */
-    private fun loadDimensionsAsynchronously(images: List<ImageItem>) {
+    private fun loadDimensionsAsynchronously(force: Boolean = false) {
+        if (!force && dimensionsJob?.isActive == true) return
         dimensionsJob?.cancel()
         dimensionsJob = viewModelScope.launch {
+            val images = _uiState.value.images
             val currentIndex = _uiState.value.currentIndex
             val sortedIndices = images.indices.sortedBy { abs(it - currentIndex) }
 
             val batch = mutableMapOf<String, Pair<Int, Int>>()
             for (idx in sortedIndices) {
                 val image = images.getOrNull(idx) ?: continue
+                if (image.uri in dimensionsResolved) continue
                 if (image.imageWidth == 0 && image.imageHeight == 0) {
                     val (w, h) = try {
                         imageRepository.getImageDimensions(Uri.parse(image.uri))
                     } catch (e: Exception) {
                         Pair(0, 0)
                     }
+                    dimensionsResolved.add(image.uri)
                     if (w > 0 && h > 0) {
                         batch[image.uri] = Pair(w, h)
                         if (batch.size >= DIMENSION_BATCH_SIZE) {

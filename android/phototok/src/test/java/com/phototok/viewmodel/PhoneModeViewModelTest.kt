@@ -13,12 +13,15 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -331,5 +334,235 @@ class PhoneModeViewModelTest {
         assertTrue(viewModel.uiState.value.showControlsGuide)
         viewModel.hideControlsGuide()
         assertFalse(viewModel.uiState.value.showControlsGuide)
+    }
+
+    // ── Optimistic copy / move (the swipe must not wait for I/O) ─────────
+
+    @Test
+    fun `copy advances to the next photo before the copy finishes`() = runTest {
+        val gate = CompletableDeferred<Boolean>()
+        coEvery { imageRepository.copyImage(any(), any(), any(), any()) } coAnswers { gate.await() }
+        val viewModel = loadFolder(image("a.jpg", 2), image("b.jpg", 1))
+
+        viewModel.addToCollection()
+
+        // The next photo is already on screen while the copy is still in flight.
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+        assertNull(viewModel.uiState.value.lastActionFeedback)
+
+        gate.complete(true)
+        advanceUntilIdle()
+        assertEquals("Copied to collection", viewModel.uiState.value.lastActionFeedback?.message)
+        assertEquals(2, viewModel.uiState.value.images.size)
+    }
+
+    @Test
+    fun `move removes the photo from the feed before the move finishes`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(collectionAction = CollectionAction.MOVE)
+        val gate = CompletableDeferred<Boolean>()
+        coEvery { imageRepository.moveImage(any(), any(), any(), any()) } coAnswers { gate.await() }
+        val viewModel = loadFolder(image("a.jpg", 2), image("b.jpg", 1))
+        val moved = viewModel.uiState.value.images[0].fileName
+
+        viewModel.addToCollection()
+
+        // Gone from the feed immediately; the transfer is still running.
+        assertEquals(1, viewModel.uiState.value.images.size)
+        assertFalse(viewModel.uiState.value.images.any { it.fileName == moved })
+        assertNull(viewModel.uiState.value.lastActionFeedback)
+
+        gate.complete(true)
+        advanceUntilIdle()
+        assertEquals("Moved to collection", viewModel.uiState.value.lastActionFeedback?.message)
+        assertEquals(1, viewModel.uiState.value.images.size)
+    }
+
+    @Test
+    fun `a failed move puts the photo back into the feed`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(collectionAction = CollectionAction.MOVE)
+        coEvery { imageRepository.moveImage(any(), any(), any(), any()) } returns false
+        val viewModel = loadFolder(image("a.jpg", 3), image("b.jpg", 2), image("c.jpg", 1))
+        val target = viewModel.uiState.value.images[0].fileName
+
+        viewModel.addToCollection()
+
+        val state = viewModel.uiState.value
+        assertEquals(3, state.images.size)
+        assertTrue("a failed move must not lose the photo", state.images.any { it.fileName == target })
+        assertEquals(target, state.images[0].fileName)
+        assertTrue(state.lastActionFeedback?.isError == true)
+    }
+
+    @Test
+    fun `a move that throws puts the photo back into the feed`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(collectionAction = CollectionAction.MOVE)
+        coEvery {
+            imageRepository.moveImage(any(), any(), any(), any())
+        } throws IllegalStateException("card removed")
+        val viewModel = loadFolder(image("a.jpg", 2), image("b.jpg", 1))
+        val target = viewModel.uiState.value.images[0].fileName
+
+        viewModel.addToCollection()
+
+        val state = viewModel.uiState.value
+        assertEquals(2, state.images.size)
+        assertTrue(state.images.any { it.fileName == target })
+        assertTrue(state.lastActionFeedback?.isError == true)
+    }
+
+    @Test
+    fun `a failed copy does not rewind the feed`() = runTest {
+        // A copy leaves the source in place, so there is nothing to restore — the
+        // user should stay on the photo they advanced to.
+        coEvery { imageRepository.copyImage(any(), any(), any(), any()) } returns false
+        val viewModel = loadFolder(image("a.jpg", 2), image("b.jpg", 1))
+
+        viewModel.addToCollection()
+
+        val state = viewModel.uiState.value
+        assertEquals(2, state.images.size)
+        assertEquals(1, state.currentIndex)
+        assertTrue(state.lastActionFeedback?.isError == true)
+    }
+
+    @Test
+    fun `copy on the last photo stays put instead of running off the end`() = runTest {
+        coEvery { imageRepository.copyImage(any(), any(), any(), any()) } returns true
+        val viewModel = loadFolder(image("a.jpg", 2), image("b.jpg", 1))
+        viewModel.navigateToImage(1)
+
+        viewModel.addToCollection()
+
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+    }
+
+    // ── Progressive discovery of large folders ───────────────────────────
+
+    @Test
+    fun `the viewer opens on the first batch while discovery continues`() = runTest {
+        val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
+        every { imageRepository.discoverImages(any()) } returns discovery
+        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
+        val viewModel = buildViewModel()
+
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        discovery.emit(listOf(image("a.jpg", 3), image("b.jpg", 2)))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(2, state.images.size)
+        assertFalse("the user must be able to swipe already", state.isLoading)
+        assertTrue("the count is still growing", state.isDiscovering)
+    }
+
+    @Test
+    fun `later batches are appended without reordering the visible feed`() = runTest {
+        val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
+        every { imageRepository.discoverImages(any()) } returns discovery
+        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
+        val viewModel = buildViewModel()
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+
+        val first = listOf(image("old_a.jpg", 10), image("old_b.jpg", 20))
+        discovery.emit(first)
+        advanceUntilIdle()
+        val orderAfterFirstBatch = viewModel.uiState.value.images.map { it.fileName }
+
+        // Cumulative emission: the same two files plus two *newer* ones. A global
+        // re-sort would put the newer files first and yank the feed under the user.
+        discovery.emit(first + listOf(image("new_a.jpg", 900), image("new_b.jpg", 800)))
+        advanceUntilIdle()
+
+        val names = viewModel.uiState.value.images.map { it.fileName }
+        assertEquals(4, names.size)
+        assertEquals(orderAfterFirstBatch, names.take(2))
+        assertEquals(listOf("new_a.jpg", "new_b.jpg"), names.drop(2))
+    }
+
+    @Test
+    fun `a photo removed during discovery is not resurrected by the next batch`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(collectionAction = CollectionAction.MOVE)
+        coEvery { imageRepository.moveImage(any(), any(), any(), any()) } returns true
+        val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
+        every { imageRepository.discoverImages(any()) } returns discovery
+        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
+        val viewModel = buildViewModel()
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+
+        val first = listOf(image("a.jpg", 20), image("b.jpg", 10))
+        discovery.emit(first)
+        advanceUntilIdle()
+        val moved = viewModel.uiState.value.images[0].fileName
+        viewModel.addToCollection()
+        assertFalse(viewModel.uiState.value.images.any { it.fileName == moved })
+
+        discovery.emit(first + listOf(image("c.jpg", 5)))
+        advanceUntilIdle()
+
+        val names = viewModel.uiState.value.images.map { it.fileName }
+        assertFalse("the moved photo must stay gone", names.contains(moved))
+        assertTrue(names.contains("c.jpg"))
+    }
+
+    @Test
+    fun `a saved position beyond the first batch is restored as photos stream in`() = runTest {
+        val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
+        every { imageRepository.discoverImages(any()) } returns discovery
+        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 4
+        val viewModel = buildViewModel()
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+
+        val first = (1..3).map { image("b1_$it.jpg", it.toLong()) }
+        discovery.emit(first)
+        advanceUntilIdle()
+        // Clamped to what is loaded so far.
+        assertEquals(2, viewModel.uiState.value.currentIndex)
+
+        discovery.emit(first + (4..8).map { image("b2_$it.jpg", it.toLong()) })
+        advanceUntilIdle()
+        assertEquals(4, viewModel.uiState.value.currentIndex)
+    }
+
+    @Test
+    fun `swiping during discovery cancels the pending position restore`() = runTest {
+        val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
+        every { imageRepository.discoverImages(any()) } returns discovery
+        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 7
+        val viewModel = buildViewModel()
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+
+        val first = (1..3).map { image("b1_$it.jpg", it.toLong()) }
+        discovery.emit(first)
+        advanceUntilIdle()
+        viewModel.navigateToImage(0) // the user takes over
+
+        discovery.emit(first + (4..9).map { image("b2_$it.jpg", it.toLong()) })
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+    }
+
+    @Test
+    fun `selecting another folder does not prepend the previous folder's photos`() = runTest {
+        val viewModel = loadFolder(image("first_a.jpg", 2), image("first_b.jpg", 1))
+        assertEquals(2, viewModel.uiState.value.images.size)
+
+        every { imageRepository.discoverImages(any()) } returns
+            flowOf(listOf(image("second_a.jpg", 5)))
+        viewModel.selectSourceFolder(Uri.parse("content://tree/other"))
+
+        val names = viewModel.uiState.value.images.map { it.fileName }
+        assertEquals(listOf("second_a.jpg"), names)
+    }
+
+    @Test
+    fun `isDiscovering clears when enumeration completes`() = runTest {
+        val viewModel = loadFolder(image("a.jpg", 1))
+
+        assertFalse(viewModel.uiState.value.isDiscovering)
+        assertFalse(viewModel.uiState.value.isLoading)
     }
 }

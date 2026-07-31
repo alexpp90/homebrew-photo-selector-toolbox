@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,59 +22,83 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.SwipeAction
+import com.phototok.domain.SwipeLabels
 
 /**
- * Full-screen guide to every Photo-Tok control.
+ * Height of the real top app bar (36dp logo + 8dp vertical padding), kept clear
+ * so the coach marks label the icons rather than covering them. Must stay in
+ * sync with the top bar in [PhoneModeScreen].
+ */
+private val TOP_BAR_HEIGHT = 52.dp
+
+/** Height of the real [com.phototok.ui.components.ViewerBottomBar] (48dp + padding). */
+private val BOTTOM_BAR_HEIGHT = 72.dp
+
+/**
+ * Space the up/down swipe callouts take above and below the photo frame
+ * (44dp circle + label, twice, plus the 6dp gaps).
+ */
+private val VERTICAL_CALLOUTS_HEIGHT = 148.dp
+
+/**
+ * Coach-mark overlay explaining every Photo-Tok control **in place**.
  *
  * Serves two entry points:
  *  - the first-launch tutorial (shown automatically), and
- *  - the info button in the viewer, which opens the same guide on demand.
+ *  - the help button in the viewer, which opens the same guide on demand.
  *
- * The swipe entries are described using the user's *configured* actions rather
- * than the defaults, so the guide never claims a left swipe deletes when the
- * user has set it to copy.
+ * Deliberately *not* a list. The controls it describes are all on screen
+ * already, so the overlay dims the viewer and labels them where they actually
+ * are — logo and buttons in the top bar, Sources / Selection / Revert in the
+ * bottom bar — while the middle of the screen animates the three swipe
+ * directions over the photo they act on. Nothing scrolls: everything the user
+ * needs is visible at a glance, which a ten-row card list never was.
+ *
+ * All wording comes from [SwipeLabels] and the user's *configured* actions, so
+ * the guide can never claim a left swipe deletes when it is set to copy.
  */
 @Composable
 fun GestureTutorialOverlay(
@@ -93,17 +118,16 @@ fun GestureTutorialOverlay(
         exit = fadeOut(tween(250)),
     ) {
         val colors = MaterialTheme.colorScheme
-        val entries = rememberControlEntries(
-            leftSwipeAction = leftSwipeAction,
-            collectionAction = collectionAction,
-            leftSwipeFolderName = leftSwipeFolderName,
-            collectionFolderName = collectionFolderName,
-        )
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation ==
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF09090B).copy(alpha = 0.94f))
+                // A scrim rather than an opaque sheet: the controls being explained
+                // stay faintly visible underneath, which is the whole point.
+                .background(Color(0xFF09090B).copy(alpha = 0.88f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
@@ -115,327 +139,469 @@ fun GestureTutorialOverlay(
                     .fillMaxSize()
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 16.dp, bottom = 24.dp),
+                    .padding(horizontal = 16.dp),
             ) {
-                Spacer(modifier = Modifier.height(8.dp))
+                // The real top app bar keeps drawing above this scrim; leave its
+                // height clear so the callouts sit *under* the icons they label
+                // instead of on top of them.
+                Spacer(modifier = Modifier.height(TOP_BAR_HEIGHT))
 
-                // ── Header ───────────────────────────────────────────
+                TopBarCoachMarks()
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineSmall,
                     color = Color.White,
-                    modifier = Modifier.padding(start = 4.dp),
+                    fontWeight = FontWeight.Bold,
                 )
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp),
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // ── Control list ─────────────────────────────────────
-                val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-                val isLandscape =
-                    configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                val columns = if (isLandscape) 2 else 1
-
-                Column(
+                // ── Gesture stage: the three swipes over the photo area ───
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    entries.chunked(columns).forEach { rowEntries ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            rowEntries.forEach { entry ->
-                                ControlCard(entry = entry, modifier = Modifier.weight(1f))
-                            }
-                            // Keep the last odd card from stretching across the row.
-                            repeat(columns - rowEntries.size) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-
-                // ── Sticky bottom dismiss button with gradient ───────
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .align(Alignment.TopCenter)
-                            .offset(y = (-48).dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color(0xFF09090B)),
-                                ),
-                            ),
+                    GestureStage(
+                        leftSwipeAction = leftSwipeAction,
+                        collectionAction = collectionAction,
+                        leftSwipeFolderName = leftSwipeFolderName,
+                        collectionFolderName = collectionFolderName,
+                        compact = isLandscape,
                     )
+                }
 
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onDismiss() },
-                        shape = RoundedCornerShape(12.dp),
-                        color = colors.primaryContainer,
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onDismiss() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = colors.primaryContainer,
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize(),
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            Text(
-                                text = dismissLabel,
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    letterSpacing = 3.sp,
-                                ),
-                                color = colors.onPrimaryContainer,
-                            )
-                        }
+                        Text(
+                            text = dismissLabel,
+                            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 3.sp),
+                            color = colors.onPrimaryContainer,
+                        )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // ── Bottom-bar coach marks, above the real bottom bar ────
+                BottomBarCoachMarks()
+
+                Spacer(modifier = Modifier.height(BOTTOM_BAR_HEIGHT))
             }
         }
     }
 }
 
-// ── Control entries ──────────────────────────────────────────────────────
+// ── Coach marks anchored to the real chrome ──────────────────────────────
 
-private enum class GestureAnimation { NONE, VERTICAL, DOUBLE_TAP, SWIPE_LEFT, SWIPE_RIGHT }
-
-private data class ControlEntry(
-    val icon: ImageVector,
-    val title: String,
-    val description: String,
-    val animation: GestureAnimation = GestureAnimation.NONE,
-    val animDelay: Int = 0,
-    val isDestructive: Boolean = false,
-)
-
+/**
+ * Labels for the top app bar: the logo on the left, help and settings on the
+ * right — in the same order and alignment as [PhoneModeScreen] renders them.
+ */
 @Composable
-private fun rememberControlEntries(
+private fun TopBarCoachMarks() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        CoachMark(
+            icon = null,
+            label = "Tap the logo",
+            description = "Show or hide the camera info on each photo",
+            pointsUp = true,
+            modifier = Modifier.width(150.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CoachMark(
+                icon = Icons.AutoMirrored.Filled.HelpOutline,
+                label = "Help",
+                description = "This guide",
+                pointsUp = true,
+                modifier = Modifier.width(70.dp),
+            )
+            CoachMark(
+                icon = Icons.Default.Settings,
+                label = "Settings",
+                description = "Swipe actions, sorting, filters",
+                pointsUp = true,
+                modifier = Modifier.width(96.dp),
+            )
+        }
+    }
+}
+
+/** Labels for the three bottom-bar buttons, in their real order. */
+@Composable
+private fun BottomBarCoachMarks() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        CoachMark(
+            icon = Icons.Default.FolderOpen,
+            label = "Sources",
+            description = "Pick another folder",
+            pointsUp = false,
+            modifier = Modifier.width(96.dp),
+        )
+        CoachMark(
+            icon = Icons.Default.Star,
+            label = "Selection",
+            description = "Everything you filed away",
+            pointsUp = false,
+            modifier = Modifier.width(104.dp),
+        )
+        CoachMark(
+            icon = Icons.AutoMirrored.Filled.Undo,
+            label = "Revert",
+            description = "Undo the last delete",
+            pointsUp = false,
+            modifier = Modifier.width(96.dp),
+        )
+    }
+}
+
+/**
+ * One callout: an optional glyph, a title, a one-line description and a
+ * connector line pointing towards the control it describes.
+ */
+@Composable
+private fun CoachMark(
+    icon: ImageVector?,
+    label: String,
+    description: String,
+    pointsUp: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (pointsUp) Connector(colors.primary)
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = colors.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Text(
+            text = description,
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+
+        if (!pointsUp) Connector(colors.primary)
+    }
+}
+
+/** The short vertical leader line that ties a callout to its control. */
+@Composable
+private fun Connector(color: Color) {
+    Box(
+        modifier = Modifier
+            .padding(vertical = 3.dp)
+            .width(1.dp)
+            .height(12.dp)
+            .background(color.copy(alpha = 0.5f)),
+    )
+}
+
+// ── Gesture stage ────────────────────────────────────────────────────────
+
+/**
+ * The centre of the overlay: a photo-shaped frame with the three swipe
+ * directions animating outwards from it, each labelled with what it does under
+ * the user's current settings, plus the two tap gestures underneath.
+ */
+@Composable
+private fun GestureStage(
     leftSwipeAction: SwipeAction,
     collectionAction: CollectionAction,
     leftSwipeFolderName: String,
     collectionFolderName: String,
-): List<ControlEntry> {
-    val collectionVerb = if (collectionAction == CollectionAction.COPY) "Copy" else "Move"
-    val collectionTarget = collectionFolderName.ifBlank { "your collection" }
-
-    val leftIcon = when (leftSwipeAction) {
-        SwipeAction.DELETE -> Icons.Default.Delete
-        SwipeAction.COPY -> Icons.Default.ContentCopy
-        SwipeAction.MOVE -> Icons.AutoMirrored.Filled.DriveFileMove
-    }
-    val leftDescription = when (leftSwipeAction) {
-        SwipeAction.DELETE -> "Send to trash — undo it with Revert"
-        SwipeAction.COPY -> "Copy to ${leftSwipeFolderName.ifBlank { "your chosen folder" }}"
-        SwipeAction.MOVE -> "Move to ${leftSwipeFolderName.ifBlank { "your chosen folder" }}"
-    }
-
-    return listOf(
-        ControlEntry(
-            icon = Icons.Default.SwapVert,
-            title = "Swipe up / down",
-            description = "Move through your photos",
-            animation = GestureAnimation.VERTICAL,
-        ),
-        ControlEntry(
-            icon = Icons.AutoMirrored.Filled.ArrowForward,
-            title = "Swipe right",
-            description = "$collectionVerb to $collectionTarget",
-            animation = GestureAnimation.SWIPE_RIGHT,
-            animDelay = 400,
-        ),
-        ControlEntry(
-            icon = leftIcon,
-            title = "Swipe left",
-            description = leftDescription,
-            animation = GestureAnimation.SWIPE_LEFT,
-            animDelay = 800,
-            isDestructive = leftSwipeAction == SwipeAction.DELETE,
-        ),
-        ControlEntry(
-            icon = Icons.Default.TouchApp,
-            title = "Single tap",
-            description = "Hide or show the on-screen info",
-        ),
-        ControlEntry(
-            icon = Icons.Default.ZoomIn,
-            title = "Double tap or pinch",
-            description = "Zoom in on the detail, drag to pan",
-            animation = GestureAnimation.DOUBLE_TAP,
-        ),
-        ControlEntry(
-            icon = Icons.Default.PhotoCamera,
-            title = "Tap the logo",
-            description = "Show or hide the camera settings overlay",
-        ),
-        ControlEntry(
-            icon = Icons.Default.Star,
-            title = "Selection",
-            description = "Browse everything you have kept",
-        ),
-        ControlEntry(
-            icon = Icons.AutoMirrored.Filled.Undo,
-            title = "Revert",
-            description = "Bring back the photo you just deleted",
-        ),
-        ControlEntry(
-            icon = Icons.Default.FolderOpen,
-            title = "Sources",
-            description = "Go back and pick another folder",
-        ),
-        ControlEntry(
-            icon = Icons.Default.Settings,
-            title = "Settings",
-            description = "Change swipe actions, sorting and filters",
-        ),
-    )
-}
-
-@Composable
-private fun ControlCard(
-    entry: ControlEntry,
-    modifier: Modifier = Modifier,
+    compact: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
-    val tint = if (entry.isDestructive) colors.error else colors.primary
+    val destructive = SwipeLabels.leftIsDestructive(leftSwipeAction)
+    val leftTint = if (destructive) colors.error else colors.primary
 
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color.Transparent,
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        colors.surfaceContainerHigh.copy(alpha = 0.5f),
-                        colors.surfaceContainerLow.copy(alpha = 0.8f),
-                    ),
-                ),
-                shape = RoundedCornerShape(12.dp),
-            )
-            .border(1.dp, colors.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        // Derived from what is left after the up/down callouts rather than as a
+        // fraction of the height: a fraction overflows on short screens, where the
+        // two callouts (~68dp each) are a large share of the available space.
+        val frameHeight = (maxHeight - VERTICAL_CALLOUTS_HEIGHT).coerceIn(
+            minimumValue = 72.dp,
+            maximumValue = if (compact) 132.dp else 260.dp,
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(tint.copy(alpha = 0.1f))
-                    .border(1.dp, tint.copy(alpha = 0.2f), CircleShape),
-                contentAlignment = Alignment.Center,
+            // ── Up ────────────────────────────────────────────────────
+            SwipeCallout(
+                icon = Icons.Default.KeyboardArrowUp,
+                label = "Next photo",
+                tint = colors.secondary,
+                axis = DriftAxis.UP,
+                delayMs = 0,
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                AnimatedGestureIcon(entry.animation, entry.icon, tint, entry.animDelay)
+                // ── Left ──────────────────────────────────────────────
+                SwipeCallout(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    actionIcon = leftSwipeActionIcon(leftSwipeAction),
+                    label = SwipeLabels.leftLabel(leftSwipeAction),
+                    description = SwipeLabels.leftDescription(leftSwipeAction, leftSwipeFolderName),
+                    tint = leftTint,
+                    axis = DriftAxis.LEFT,
+                    delayMs = 600,
+                    modifier = Modifier.width(92.dp),
+                )
+
+                // ── The photo the gestures act on ─────────────────────
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(frameHeight)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.surfaceContainerHigh.copy(alpha = 0.35f))
+                        .border(
+                            1.dp,
+                            colors.outlineVariant.copy(alpha = 0.4f),
+                            RoundedCornerShape(14.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        TapHint(
+                            icon = Icons.Default.TouchApp,
+                            label = "Single tap",
+                            description = "Hide the overlays",
+                        )
+                        TapHint(
+                            icon = Icons.Default.ZoomIn,
+                            label = "Double tap or pinch",
+                            description = "Zoom in, drag to pan",
+                        )
+                    }
+                }
+
+                // ── Right ─────────────────────────────────────────────
+                SwipeCallout(
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    actionIcon = collectionActionIcon(collectionAction),
+                    label = SwipeLabels.rightLabel(collectionAction),
+                    description = SwipeLabels.rightDescription(
+                        collectionAction,
+                        collectionFolderName,
+                    ),
+                    tint = colors.primary,
+                    axis = DriftAxis.RIGHT,
+                    delayMs = 300,
+                    modifier = Modifier.width(92.dp),
+                )
             }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = entry.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = entry.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
-                )
-            }
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // ── Down ──────────────────────────────────────────────────
+            SwipeCallout(
+                icon = Icons.Default.KeyboardArrowDown,
+                label = "Previous photo",
+                tint = colors.secondary,
+                axis = DriftAxis.DOWN,
+                delayMs = 900,
+            )
         }
     }
 }
 
+/** A tap gesture explained inside the photo frame. */
 @Composable
-private fun AnimatedGestureIcon(
-    type: GestureAnimation,
-    icon: ImageVector,
-    tint: Color,
-    delayMs: Int,
-) {
-    if (type == GestureAnimation.NONE) {
+private fun TapHint(icon: ImageVector, label: String, description: String) {
+    val colors = MaterialTheme.colorScheme
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(24.dp),
+            tint = colors.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
         )
-        return
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
+}
 
-    val anim = remember { Animatable(0f) }
+/**
+ * A swipe direction: an arrow drifting the way the finger goes, the glyph of
+ * the action it triggers, and the caption naming the effect.
+ */
+@Composable
+private fun SwipeCallout(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    axis: DriftAxis,
+    delayMs: Int,
+    actionIcon: ImageVector? = null,
+    description: String? = null,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
 
-    LaunchedEffect(type) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(tint.copy(alpha = 0.12f))
+                .border(1.dp, tint.copy(alpha = 0.25f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            DriftingIcon(icon = icon, tint = tint, axis = axis, delayMs = delayMs)
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            if (actionIcon != null) {
+                Icon(
+                    imageVector = actionIcon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        if (description != null) {
+            Text(
+                text = description,
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+// ── Animation ────────────────────────────────────────────────────────────
+
+private enum class DriftAxis { UP, DOWN, LEFT, RIGHT }
+
+/** An arrow that drifts in [axis] on a loop, so the gesture reads as motion. */
+@Composable
+private fun DriftingIcon(icon: ImageVector, tint: Color, axis: DriftAxis, delayMs: Int) {
+    val progress = remember { Animatable(0f) }
+
+    LaunchedEffect(axis) {
         kotlinx.coroutines.delay(delayMs.toLong())
-        anim.animateTo(
+        progress.animateTo(
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1800, easing = LinearEasing),
+                animation = tween(1600, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
             ),
         )
     }
 
-    when (type) {
-        GestureAnimation.VERTICAL -> {
-            val offsetY = ((anim.value * 2f - 1f) * 8f)
-            Icon(
-                imageVector = Icons.Default.SwapVert,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier
-                    .size(26.dp)
-                    .offset { IntOffset(0, offsetY.dp.roundToPx()) },
-            )
-        }
+    // Ease out at the end of each cycle so the arrow fades as it travels.
+    val travel = progress.value * 9f
+    val alpha = 1f - progress.value * 0.55f
 
-        GestureAnimation.DOUBLE_TAP -> {
-            val scale =
-                if (anim.value < 0.5f) 1f + anim.value * 0.4f else 1.2f - (anim.value - 0.5f) * 0.4f
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size((26 * scale).dp),
-            )
-        }
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint.copy(alpha = alpha),
+        modifier = Modifier
+            .size(24.dp)
+            .offset {
+                when (axis) {
+                    DriftAxis.UP -> IntOffset(0, (-travel).dp.roundToPx())
+                    DriftAxis.DOWN -> IntOffset(0, travel.dp.roundToPx())
+                    DriftAxis.LEFT -> IntOffset((-travel).dp.roundToPx(), 0)
+                    DriftAxis.RIGHT -> IntOffset(travel.dp.roundToPx(), 0)
+                }
+            },
+    )
+}
 
-        GestureAnimation.SWIPE_LEFT -> {
-            val offsetX = (-(anim.value) * 10f)
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier
-                    .size(26.dp)
-                    .offset { IntOffset(offsetX.dp.roundToPx(), 0) },
-            )
-        }
+// ── Icon mapping (mirrors the viewer's indicators) ───────────────────────
 
-        GestureAnimation.SWIPE_RIGHT -> {
-            val offsetX = (anim.value * 10f)
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier
-                    .size(26.dp)
-                    .offset { IntOffset(offsetX.dp.roundToPx(), 0) },
-            )
-        }
+private fun collectionActionIcon(action: CollectionAction): ImageVector = when (action) {
+    CollectionAction.COPY -> Icons.Default.ContentCopy
+    CollectionAction.MOVE -> Icons.AutoMirrored.Filled.DriveFileMove
+}
 
-        GestureAnimation.NONE -> Unit
-    }
+private fun leftSwipeActionIcon(action: SwipeAction): ImageVector = when (action) {
+    SwipeAction.DELETE -> Icons.Default.Delete
+    SwipeAction.COPY -> Icons.Default.ContentCopy
+    SwipeAction.MOVE -> Icons.AutoMirrored.Filled.DriveFileMove
 }

@@ -2,8 +2,10 @@ package com.phototok.data.source
 
 import android.content.Context
 import android.content.Intent
+import android.database.Cursor
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.phototok.data.model.ExifData
@@ -13,12 +15,14 @@ import com.phototok.data.reader.MediaStoreReader
 import com.phototok.domain.PhotoExtensions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.coroutineContext
 
 /** Local (SAF / DocumentFile) image backend. */
 interface LocalImageSource : ImageSource
@@ -43,6 +47,32 @@ class LocalImageSourceImpl @Inject constructor(
         )
 
         private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "phototok_selection")
+
+        /**
+         * How many images to gather before the very first emission. Small on
+         * purpose: it is the number of photos the user needs before they can
+         * start swiping, and the rest of the tree keeps streaming in behind
+         * them. Must be > the viewer's prefetch radius so paging stays warm.
+         */
+        internal const val FIRST_BATCH_SIZE = 24
+
+        /** How many further images to gather between subsequent emissions. */
+        internal const val BATCH_SIZE = 250
+
+        /**
+         * One query per directory returning everything needed to build an
+         * [ImageItem]. `DocumentFile` instead costs a separate ContentResolver
+         * query per file *per attribute* (`name`, `length`, `lastModified`,
+         * `type`), i.e. ~5 binder round-trips per photo — which is what made
+         * opening a folder of a few thousand photos take tens of seconds.
+         */
+        private val CHILD_PROJECTION = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+        )
     }
 
     // ── ImageSource ───────────────────────────────────────────────────────
@@ -51,19 +81,37 @@ class LocalImageSourceImpl @Inject constructor(
     override fun owns(uri: Uri): Boolean =
         uri.scheme == "content" || uri.scheme == "file"
 
+    /**
+     * Walk the tree and emit the feed **progressively**: a first small batch as
+     * soon as [FIRST_BATCH_SIZE] photos are known, then every [BATCH_SIZE]
+     * photos, then a final complete list. Each emission is the cumulative list.
+     *
+     * The user can therefore start swiping while a folder with thousands of
+     * photos is still being enumerated, instead of waiting for the whole tree.
+     * Consumers must treat the emissions as append-only (see
+     * `PhoneFeedOrdering.appendBatch`) so already-visible photos do not move.
+     */
     override fun discoverImages(folderUri: Uri): Flow<List<ImageItem>> = flow {
-        val folder = DocumentFile.fromTreeUri(context, folderUri)
-        if (folder == null || !folder.isDirectory) {
+        val rootDocumentId = treeDocumentIdOf(folderUri)
+        if (rootDocumentId == null) {
             Log.w(TAG, "Invalid folder URI: $folderUri")
             emit(emptyList())
             return@flow
         }
 
         val images = mutableListOf<ImageItem>()
-        enumerateImages(folder, images)
+        var nextEmitAt = FIRST_BATCH_SIZE
 
-        val sorted = images.sortedBy { it.fileName.lowercase() }
-        emit(sorted)
+        walkImages(folderUri, rootDocumentId) { image ->
+            images.add(image)
+            if (images.size >= nextEmitAt) {
+                emit(images.toList())
+                nextEmitAt = images.size + BATCH_SIZE
+            }
+        }
+
+        // Final snapshot — also the only emission for folders smaller than a batch.
+        emit(images.toList())
     }.flowOn(Dispatchers.IO)
 
     override suspend fun prepareSourceFolder(folderUri: Uri): String? =
@@ -152,10 +200,12 @@ class LocalImageSourceImpl @Inject constructor(
         if (selectionDir == null || !selectionDir.exists()) {
             return@withContext SelectionListing.Missing
         }
-        // Enumerate the sub-folder directly: passing a child document URI through
+        // Walk the sub-folder directly: passing a child document URI through
         // discoverImages() would re-resolve to the tree root via fromTreeUri().
+        val selectionDocumentId = documentIdOf(selectionDir.uri)
+            ?: return@withContext SelectionListing.Missing
         val images = mutableListOf<ImageItem>()
-        enumerateImages(selectionDir, images)
+        walkImages(folderUri, selectionDocumentId) { images.add(it) }
         SelectionListing.Available(
             images = images.sortedByDescending { it.lastModified },
             folderName = selectionDir.name ?: "Selection",
@@ -183,41 +233,117 @@ class LocalImageSourceImpl @Inject constructor(
         }
     }
 
-    /** Recursively collect supported images, skipping excluded/hidden entries. */
-    private fun enumerateImages(folder: DocumentFile, results: MutableList<ImageItem>) {
-        val files = folder.listFiles()
+    /** The tree document id of a `content://…/tree/<id>` URI, or null. */
+    private fun treeDocumentIdOf(treeUri: Uri): String? = try {
+        DocumentsContract.getTreeDocumentId(treeUri)
+    } catch (e: Exception) {
+        Log.w(TAG, "Not a tree URI: $treeUri", e)
+        null
+    }
 
-        for (file in files) {
-            if (file.isDirectory) {
-                val folderName = file.name?.lowercase() ?: continue
-                if (folderName in EXCLUDED_FOLDER_NAMES) {
-                    Log.d(TAG, "Skipping excluded folder: ${file.name}")
-                    continue
+    /** The document id of a document URI inside a tree, or null. */
+    private fun documentIdOf(documentUri: Uri): String? = try {
+        DocumentsContract.getDocumentId(documentUri)
+    } catch (e: Exception) {
+        Log.w(TAG, "Not a document URI: $documentUri", e)
+        null
+    }
+
+    /**
+     * Breadth-first walk of [treeUri] starting at [startDocumentId], invoking
+     * [onImage] for every supported image found. Sub-folders whose name is in
+     * [EXCLUDED_FOLDER_NAMES] are skipped, as are hidden files.
+     *
+     * Iterative rather than recursive (deep trees must not risk the stack) and
+     * cursor-based rather than `DocumentFile`-based, which is what makes it
+     * fast enough to stream: one query per directory instead of roughly five
+     * per file. [onImage] is suspending so callers can emit mid-walk.
+     */
+    private suspend fun walkImages(
+        treeUri: Uri,
+        startDocumentId: String,
+        onImage: suspend (ImageItem) -> Unit,
+    ) {
+        val queue = ArrayDeque<String>()
+        val seenDirectories = mutableSetOf(startDocumentId)
+        queue.addLast(startDocumentId)
+
+        while (queue.isNotEmpty()) {
+            coroutineContext.ensureActive()
+            val parentId = queue.removeFirst()
+            val cursor = queryChildren(treeUri, parentId) ?: continue
+
+            cursor.use { c ->
+                val idIndex = c.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIndex = c.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeIndex = c.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                val sizeIndex = c.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+                val modifiedIndex = c.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                if (idIndex < 0 || nameIndex < 0 || mimeIndex < 0) {
+                    Log.w(TAG, "Document provider omitted required columns for $parentId")
+                    return@use
                 }
-                enumerateImages(file, results)
-                continue
+
+                while (c.moveToNext()) {
+                    coroutineContext.ensureActive()
+                    val documentId = c.getStringOrNull(idIndex) ?: continue
+                    val name = c.getStringOrNull(nameIndex) ?: continue
+                    val mimeType = c.getStringOrNull(mimeIndex)
+
+                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        if (name.lowercase() in EXCLUDED_FOLDER_NAMES) {
+                            Log.d(TAG, "Skipping excluded folder: $name")
+                            continue
+                        }
+                        if (seenDirectories.add(documentId)) queue.addLast(documentId)
+                        continue
+                    }
+
+                    if (name.startsWith(".")) continue
+                    if (name.substringAfterLast('.', "").lowercase() !in SUPPORTED_EXTENSIONS) {
+                        continue
+                    }
+
+                    onImage(
+                        ImageItem(
+                            uri = DocumentsContract
+                                .buildDocumentUriUsingTree(treeUri, documentId)
+                                .toString(),
+                            fileName = name,
+                            fileSize = if (sizeIndex >= 0) c.getLongOrZero(sizeIndex) else 0L,
+                            lastModified = if (modifiedIndex >= 0) c.getLongOrZero(modifiedIndex) else 0L,
+                            mimeType = mimeType,
+                            imageWidth = 0,
+                            imageHeight = 0,
+                        )
+                    )
+                }
             }
-
-            if (!file.isFile) continue
-
-            val fileName = file.name ?: continue
-            if (fileName.startsWith(".")) continue
-            val extension = fileName.substringAfterLast('.', "").lowercase()
-
-            if (extension !in SUPPORTED_EXTENSIONS) continue
-
-            val imageItem = ImageItem(
-                uri = file.uri.toString(),
-                fileName = fileName,
-                fileSize = file.length(),
-                lastModified = file.lastModified(),
-                mimeType = file.type,
-                imageWidth = 0,
-                imageHeight = 0,
-            )
-            results.add(imageItem)
         }
     }
+
+    /** Children of [parentDocumentId] with everything needed for an [ImageItem]. */
+    private fun queryChildren(treeUri: Uri, parentDocumentId: String): Cursor? {
+        val childrenUri = try {
+            DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocumentId)
+        } catch (e: Exception) {
+            Log.w(TAG, "Cannot build children URI for $parentDocumentId", e)
+            return null
+        }
+        return try {
+            context.contentResolver.query(childrenUri, CHILD_PROJECTION, null, null, null)
+        } catch (e: Exception) {
+            // A single unreadable directory must not abort the whole walk.
+            Log.w(TAG, "Cannot list children of $parentDocumentId", e)
+            null
+        }
+    }
+
+    private fun Cursor.getStringOrNull(index: Int): String? =
+        if (isNull(index)) null else getString(index)
+
+    private fun Cursor.getLongOrZero(index: Int): Long =
+        if (isNull(index)) 0L else getLong(index)
 
     private fun copyImageInternal(
         sourceUri: Uri,
