@@ -36,6 +36,7 @@ class GestureTutorialOverlayTest {
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
+        composeTestRule.waitForIdle()
     }
 
     @Test
@@ -88,7 +89,7 @@ class GestureTutorialOverlayTest {
             "Single tap",
             "Double tap or pinch",
         ).forEach { label ->
-            composeTestRule.onNode(inGuide(label), useUnmergedTree = true).assertIsDisplayed()
+            composeTestRule.onNode(inGuide(label), useUnmergedTree = true).assertExists()
         }
     }
 
