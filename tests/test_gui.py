@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 def mock_gui_deps():
     with (
         patch("photo_selector_toolbox.gui.tk.Tk") as MockTk,
+        patch("tkinter.Tk"),
         patch("photo_selector_toolbox.gui.tk.Toplevel"),
         patch("photo_selector_toolbox.gui.tk.Frame"),
         patch("photo_selector_toolbox.gui.tk.Label"),
