@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - Replacing Regex with rstrip
+**Learning:** When stripping specific trailing characters (like digits) from strings in performance-critical Python loops, prefer native string methods like `stem.rstrip('0123456789')` over regular expressions like `re.sub(r'\d+$', '', stem)`. Native string methods avoid regex compilation and engine overhead, yielding significant performance speedups.
+**Action:** Avoid regex for simple character stripping at the start/end of strings.
