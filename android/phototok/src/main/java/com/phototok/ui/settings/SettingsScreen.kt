@@ -1,6 +1,8 @@
 package com.phototok.ui.settings
 
 import android.content.Intent
+import android.content.ActivityNotFoundException
+import android.widget.Toast
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -428,7 +430,11 @@ fun SettingsScreen(
                 description = "View on GitHub",
                 onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/alexpp90/homebrew-photo-selector-toolbox"))
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        Toast.makeText(context, "No app found to open link", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 icon = Icons.Default.Code,
             )
@@ -442,7 +448,11 @@ fun SettingsScreen(
                 description = "How Photo-Tok handles your data",
                 onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.phototok.domain.LegalLinks.PRIVACY_POLICY))
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        Toast.makeText(context, "No app found to open link", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 icon = Icons.Default.PrivacyTip,
             )
@@ -454,7 +464,11 @@ fun SettingsScreen(
                 description = "Provider identification",
                 onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.phototok.domain.LegalLinks.IMPRESSUM))
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        Toast.makeText(context, "No app found to open link", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 icon = Icons.Default.Gavel,
             )
