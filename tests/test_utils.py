@@ -172,7 +172,7 @@ class TestResolvePath(unittest.TestCase):
         self.assertEqual(str(result), str(Path(path_str)))
 
     @patch("sys.platform", "linux")
-    @patch("photo_selector_toolbox.utils.os.getuid", side_effect=AttributeError)
+    @patch("photo_selector_toolbox.utils.os.getuid", side_effect=AttributeError, create=True)
     def test_smb_linux_no_getuid(self, mock_getuid):
         """Tests fallback when os.getuid is missing on Linux."""
         path_str = "smb://myserver/myshare/file.jpg"
