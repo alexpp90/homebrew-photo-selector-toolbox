@@ -16,6 +16,13 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Defense-in-depth: Validate intent
+        if (intent?.action != null && intent?.action != android.content.Intent.ACTION_MAIN) {
+            finish()
+            return
+        }
+
         enableEdgeToEdge()
         setContent {
             PhotoSelectorToolboxTheme {
