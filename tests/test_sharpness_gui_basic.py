@@ -259,22 +259,22 @@ def test_get_candidate_listbox_text():
 
                 # Test case 1: No scan result (or all scores are N/A)
                 tool.files_map[path] = ScanResult(path=path)
-                assert tool._get_candidate_listbox_text(path) == "img1.jpg"
+                assert tool._get_candidate_listbox_text(path, {}) == "img1.jpg"
 
                 # Test case 2: Sharpness calculated, others not
                 tool.files_map[path] = ScanResult(path=path, score=42.5)
-                assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5)"
+                assert tool._get_candidate_listbox_text(path, {}) == "img1.jpg (42.5)"
 
                 # Test case 3: Sharpness and Noise calculated
                 tool.files_map[path] = ScanResult(path=path, score=42.5, noise_score=1.2)
-                assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5, 1.2)"
+                assert tool._get_candidate_listbox_text(path, {}) == "img1.jpg (42.5, 1.2)"
 
                 # Test case 4: Sharpness, Noise, and Highlight/Shadow clipping calculated
                 res = ScanResult(path=path, score=42.5, noise_score=1.2)
                 res.scores["highlight_clipping"] = 0.5
                 res.scores["shadow_clipping"] = 1.0
                 tool.files_map[path] = res
-                assert tool._get_candidate_listbox_text(path) == "img1.jpg (42.5, 1.2, 0.5%, 1.0%)"
+                assert tool._get_candidate_listbox_text(path, {}) == "img1.jpg (42.5, 1.2, 0.5%, 1.0%)"
         finally:
             sg.format_score = original_format_score
     finally:
@@ -419,6 +419,7 @@ def test_throttled_listbox_updates():
         tool.candidate_listbox = MagicMock()
         tool.candidates = [Path("img1.jpg"), Path("img2.jpg")]
         tool._get_candidate_listbox_text = MagicMock(return_value="mock_text")
+        tool._get_group_info_map = MagicMock(return_value={})
 
         # Test that calling update buffers the path and schedules flush only once
         path1 = Path("img1.jpg")
