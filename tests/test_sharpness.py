@@ -247,3 +247,25 @@ def test_calculate_shadow_clipping_exception(mock_cv2, mock_get_data):
     mock_cv2.cvtColor.side_effect = Exception("Mocked shadow clipping error")
     score = shp.calculate_shadow_clipping(Path("error.jpg"))
     assert score == 0.0
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "cv2")
+def test_calculate_all_scores_cvtColor_exception(mock_cv2, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_cv2.cvtColor.side_effect = Exception("Mocked cvtColor error")
+
+    tools = {
+        "sharpness": True,
+        "noise": True,
+        "highlight_clipping": True,
+        "shadow_clipping": True,
+    }
+
+    res = shp.calculate_all_scores(Path("error.jpg"), tools=tools)
+
+    assert res == {
+        "sharpness": 0.0,
+        "noise": 0.0,
+        "highlight_clipping": 0.0,
+        "shadow_clipping": 0.0,
+    }
