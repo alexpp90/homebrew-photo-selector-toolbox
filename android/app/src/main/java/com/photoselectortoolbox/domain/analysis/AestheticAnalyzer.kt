@@ -28,10 +28,9 @@ import javax.inject.Singleton
  *   aesthetic score is shown until a model is provided.
  * - Intended to run **only on images that pass the cheap OpenCV technical gate**
  *   (see `ScanImagesUseCase`) to conserve battery.
- * - Input/preprocessing assumes a float32 224×224×3 NHWC input normalised with
- *   ImageNet mean/std. TODO(device): adjust [INPUT_SIZE], quantisation, and the
- *   normalisation to match the exact model you ship, then verify on the Galaxy
- *   Tab-Ultra emulator.
+ * - Input/preprocessing dynamically adjusts to the bundled model's
+ *   expected input size and quantisation (Float32 or UINT8). Float32 models
+ *   are assumed to use ImageNet mean/std normalisation.
  */
 @Singleton
 class AestheticAnalyzer @Inject constructor(
@@ -44,7 +43,6 @@ class AestheticAnalyzer @Inject constructor(
         /** Bundle a NIMA-MobileNet model at this assets path to enable scoring. */
         private const val MODEL_ASSET = "nima_mobilenet.tflite"
 
-        private const val INPUT_SIZE = 224
         private const val NUM_RATINGS = 10
 
         // ImageNet normalisation (typical for MobileNet-based NIMA exports).
@@ -54,6 +52,12 @@ class AestheticAnalyzer @Inject constructor(
 
     @Volatile
     private var interpreter: Interpreter? = null
+
+    @Volatile
+    private var inputSize = 224
+
+    @Volatile
+    private var isQuantized = false
 
     @Volatile
     private var initialised = false
@@ -85,7 +89,14 @@ class AestheticAnalyzer @Inject constructor(
                 setNumThreads(2)
                 // NNAPI/GPU delegates can be added here on capable devices.
             }
-            interpreter = Interpreter(model, options)
+            interpreter = Interpreter(model, options).apply {
+                val tensor = getInputTensor(0)
+                val shape = tensor.shape()
+                if (shape.size == 4) {
+                    inputSize = shape[1] // Assuming NHWC format
+                }
+                isQuantized = tensor.dataType() == org.tensorflow.lite.DataType.UINT8
+            }
             modelAvailable = true
         } catch (e: Throwable) {
             Log.w(TAG, "Failed to initialise aesthetic model; scoring disabled.", e)
@@ -132,18 +143,25 @@ class AestheticAnalyzer @Inject constructor(
     }
 
     private fun preprocess(bitmap: Bitmap): ByteBuffer {
-        val scaled = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, true)
-        val buffer = ByteBuffer.allocateDirect(4 * INPUT_SIZE * INPUT_SIZE * 3)
+        val scaled = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
+        val bytesPerChannel = if (isQuantized) 1 else 4
+        val buffer = ByteBuffer.allocateDirect(bytesPerChannel * inputSize * inputSize * 3)
         buffer.order(ByteOrder.nativeOrder())
-        val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
-        scaled.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+        val pixels = IntArray(inputSize * inputSize)
+        scaled.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
         for (pixel in pixels) {
-            val r = ((pixel shr 16) and 0xFF) / 255.0f
-            val g = ((pixel shr 8) and 0xFF) / 255.0f
-            val b = (pixel and 0xFF) / 255.0f
-            buffer.putFloat((r - MEAN[0]) / STD[0])
-            buffer.putFloat((g - MEAN[1]) / STD[1])
-            buffer.putFloat((b - MEAN[2]) / STD[2])
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            if (isQuantized) {
+                buffer.put(r.toByte())
+                buffer.put(g.toByte())
+                buffer.put(b.toByte())
+            } else {
+                buffer.putFloat((r / 255.0f - MEAN[0]) / STD[0])
+                buffer.putFloat((g / 255.0f - MEAN[1]) / STD[1])
+                buffer.putFloat((b / 255.0f - MEAN[2]) / STD[2])
+            }
         }
         if (scaled != bitmap) scaled.recycle()
         buffer.rewind()
