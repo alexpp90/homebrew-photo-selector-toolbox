@@ -253,3 +253,8 @@ def test_save_config_oserror(mock_open, mock_config_paths, caplog):
     save_config(test_config)
 
     assert "Failed to save config" in caplog.text
+
+def test_set_secure_permissions_file_not_found(tmp_path):
+    test_file = tmp_path / "does_not_exist.txt"
+    # This should not raise an exception, testing the OSError catch block
+    _set_secure_permissions(test_file)
