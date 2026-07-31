@@ -741,14 +741,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
                 try:
                     addr_info = socket.getaddrinfo(clean_hostname, None)
+                    safe_ips = []
                     for res in addr_info:
                         ip_str = res[4][0]
                         if is_forbidden_ip(ip_str):
                             raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
-                except socket.gaierror:
-                    pass
+                        safe_ips.append(ip_str)
+                except socket.gaierror as e:
+                    raise ValueError(f"SSRF Protection: Could not resolve hostname {clean_hostname}: {e}")
 
-                opener = urllib.request.build_opener(NoRedirectHandler)
+                from photo_selector_toolbox.utils import SafeSSRFHTTPHandler, SafeSSRFHTTPSHandler
+                opener = urllib.request.build_opener(NoRedirectHandler, SafeSSRFHTTPHandler(safe_ips), SafeSSRFHTTPSHandler(safe_ips))
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))

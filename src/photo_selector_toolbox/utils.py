@@ -647,3 +647,82 @@ class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise URLError("SSRF Protection: Redirects are not allowed.")
+
+import socket
+import http.client
+
+class SafeSSRFConnection(http.client.HTTPConnection):
+    def __init__(self, *args, safe_ips=None, **kwargs):
+        self.safe_ips = safe_ips
+        super().__init__(*args, **kwargs)
+
+    def connect(self):
+        if self.safe_ips:
+            last_err = None
+            for safe_ip in self.safe_ips:
+                try:
+                    self.sock = self._create_connection(
+                        (safe_ip, self.port), self.timeout, self.source_address)
+                    self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    break
+                except OSError as err:
+                    last_err = err
+                    if self.sock:
+                        self.sock.close()
+                        self.sock = None
+            else:
+                if last_err:
+                    raise last_err
+                else:
+                    raise OSError("getaddrinfo returns an empty list")
+        else:
+            super().connect()
+
+class SafeSSRFHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args, safe_ips=None, **kwargs):
+        self.safe_ips = safe_ips
+        super().__init__(*args, **kwargs)
+
+    def connect(self):
+        if self.safe_ips:
+            last_err = None
+            for safe_ip in self.safe_ips:
+                try:
+                    self.sock = self._create_connection(
+                        (safe_ip, self.port), self.timeout, self.source_address)
+                    self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    break
+                except OSError as err:
+                    last_err = err
+                    if self.sock:
+                        self.sock.close()
+                        self.sock = None
+            else:
+                if last_err:
+                    raise last_err
+                else:
+                    raise OSError("getaddrinfo returns an empty list")
+
+            if self._tunnel_host:
+                self._tunnel()
+
+            self.sock = self._context.wrap_socket(self.sock,
+                                                  server_hostname=self.host)
+        else:
+            super().connect()
+
+class SafeSSRFHTTPHandler(urllib.request.HTTPHandler):
+    def __init__(self, safe_ips, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.safe_ips = safe_ips
+
+    def http_open(self, req):
+        return self.do_open(lambda *args, **kwargs: SafeSSRFConnection(*args, safe_ips=self.safe_ips, **kwargs), req)
+
+class SafeSSRFHTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, safe_ips, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.safe_ips = safe_ips
+
+    def https_open(self, req):
+        return self.do_open(lambda *args, **kwargs: SafeSSRFHTTPSConnection(*args, safe_ips=self.safe_ips, context=self._context, check_hostname=self._check_hostname, **kwargs), req)

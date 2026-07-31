@@ -96,12 +96,14 @@ class OllamaAestheticTool(AnalysisTool):
         try:
             # Attempt to resolve. socket.getaddrinfo handles more formats than gethostbyname
             addr_info = socket.getaddrinfo(clean_hostname, None)
+            safe_ips = []
             for res in addr_info:
                 ip_str = res[4][0]
                 if is_forbidden_ip(ip_str):
                     raise RuntimeError("SSRF Protection: Cloud metadata IPs are not allowed.")
-        except socket.gaierror:
-            pass # Invalid hostname or cannot resolve. Let urllib handle the error later.
+                safe_ips.append(ip_str)
+        except socket.gaierror as e:
+            raise RuntimeError(f"SSRF Protection: Could not resolve hostname {clean_hostname}: {e}")
 
         url = f"{ollama_url.rstrip('/')}/api/generate"
         payload = {
@@ -112,7 +114,8 @@ class OllamaAestheticTool(AnalysisTool):
         }
 
         try:
-            opener = urllib.request.build_opener(NoRedirectHandler)
+            from photo_selector_toolbox.utils import SafeSSRFHTTPHandler, SafeSSRFHTTPSHandler
+            opener = urllib.request.build_opener(NoRedirectHandler, SafeSSRFHTTPHandler(safe_ips), SafeSSRFHTTPSHandler(safe_ips))
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
