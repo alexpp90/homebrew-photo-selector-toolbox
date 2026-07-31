@@ -334,6 +334,56 @@ fun SettingsScreen(
                         color = Zinc400,
                     )
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Blur Rejection Threshold",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = String.format("%.1f", uiState.minSharpnessForAesthetic),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Indigo500,
+                    )
+                }
+                Text(
+                    text = "Minimum sharpness (Laplacian variance) for AI scoring",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Slider(
+                    value = uiState.minSharpnessForAesthetic.toFloat(),
+                    onValueChange = { viewModel.updateMinSharpnessForAesthetic(it.toDouble()) },
+                    valueRange = 10f..100f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Indigo500,
+                        activeTrackColor = Indigo500,
+                        inactiveTrackColor = Zinc700,
+                        activeTickColor = Color.Transparent,
+                        inactiveTickColor = Color.Transparent,
+                    ),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "10 (Permissive)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Zinc400,
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "100 (Strict)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Zinc400,
+                    )
+                }
             }
         }
 

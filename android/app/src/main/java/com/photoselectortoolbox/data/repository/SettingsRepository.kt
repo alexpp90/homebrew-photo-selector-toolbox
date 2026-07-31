@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -33,6 +34,7 @@ class SettingsRepository @Inject constructor(
         private val KEY_GROUPING_LEVEL = stringPreferencesKey("grouping_level")
         private val KEY_LAST_FOLDER_URI = stringPreferencesKey("last_folder_uri")
         private val KEY_ANALYSIS_THREAD_COUNT = intPreferencesKey("analysis_thread_count")
+        private val KEY_MIN_SHARPNESS_FOR_AESTHETIC = doublePreferencesKey("min_sharpness_for_aesthetic")
 
         // Phone-mode settings
         private val KEY_PHONE_COLLECTION_ACTION = stringPreferencesKey("phone_collection_action")
@@ -57,6 +59,7 @@ class SettingsRepository @Inject constructor(
         const val DEFAULT_GROUPING_ENABLED = false
         val DEFAULT_GROUPING_LEVEL = GroupingLevel.TIME_FILENAME
         val DEFAULT_ANALYSIS_THREAD_COUNT = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+        const val DEFAULT_MIN_SHARPNESS_FOR_AESTHETIC = 40.0
     }
 
     val selectionFolderName: Flow<String> = context.dataStore.data.map { prefs ->
@@ -90,6 +93,10 @@ class SettingsRepository @Inject constructor(
 
     val analysisThreadCount: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[KEY_ANALYSIS_THREAD_COUNT] ?: DEFAULT_ANALYSIS_THREAD_COUNT
+    }
+
+    val minSharpnessForAesthetic: Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[KEY_MIN_SHARPNESS_FOR_AESTHETIC] ?: DEFAULT_MIN_SHARPNESS_FOR_AESTHETIC
     }
 
     val fullscreenButtonsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -137,6 +144,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setAnalysisThreadCount(count: Int) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ANALYSIS_THREAD_COUNT] = count.coerceIn(1, 4)
+        }
+    }
+
+    suspend fun setMinSharpnessForAesthetic(sharpness: Double) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_MIN_SHARPNESS_FOR_AESTHETIC] = sharpness
         }
     }
 

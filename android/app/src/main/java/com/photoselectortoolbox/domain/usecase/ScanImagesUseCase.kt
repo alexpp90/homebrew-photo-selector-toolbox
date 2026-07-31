@@ -59,16 +59,6 @@ class ScanImagesUseCase @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    companion object {
-        /**
-         * Minimum sharpness (Laplacian variance) below which an image is
-         * considered too blurry to be worth AI aesthetic scoring — the cheap
-         * OpenCV gate that keeps the expensive model off obvious rejects.
-         * TODO(device): tune against real folders on the target tablet.
-         */
-        private const val MIN_SHARPNESS_FOR_AESTHETIC = 40.0
-    }
-
     /**
      * Scan a list of images, emitting progress updates as a Flow.
      * Results are cached and retrieved from cache when available.
@@ -87,6 +77,7 @@ class ScanImagesUseCase @Inject constructor(
 
         // Read thread count setting (default: min(4, availableProcessors))
         val threadCount = settingsRepository.analysisThreadCount.first()
+        val minSharpnessForAesthetic = settingsRepository.minSharpnessForAesthetic.first()
         val semaphore = Semaphore(threadCount)
 
         // Channel for progress updates from concurrent workers
@@ -106,7 +97,7 @@ class ScanImagesUseCase @Inject constructor(
                     }
 
                     // Compute scores
-                    val scanResult = analyzeImage(image, aestheticEnabled)
+                    val scanResult = analyzeImage(image, aestheticEnabled, minSharpnessForAesthetic)
                     if (scanResult != null) {
                         cacheResult(image, scanResult)
                     }
@@ -181,6 +172,7 @@ class ScanImagesUseCase @Inject constructor(
     private suspend fun analyzeImage(
         image: ImageItem,
         aestheticEnabled: Boolean,
+        minSharpnessForAesthetic: Double,
     ): ScanResult? = coroutineScope {
         val uri = Uri.parse(image.uri)
 
@@ -273,7 +265,7 @@ class ScanImagesUseCase @Inject constructor(
             val aesthetic = if (
                 aestheticEnabled &&
                 aestheticAnalyzer.isAvailable() &&
-                passesSharpnessGate(sharpness)
+                passesSharpnessGate(sharpness, minSharpnessForAesthetic)
             ) {
                 try {
                     aestheticAnalyzer.analyze(bitmap)
@@ -298,8 +290,8 @@ class ScanImagesUseCase @Inject constructor(
     }
 
     /** The cheap OpenCV gate: skip AI scoring on clearly blurry images. */
-    private fun passesSharpnessGate(sharpness: Double?): Boolean =
-        sharpness == null || sharpness >= MIN_SHARPNESS_FOR_AESTHETIC
+    private fun passesSharpnessGate(sharpness: Double?, minSharpnessForAesthetic: Double): Boolean =
+        sharpness == null || sharpness >= minSharpnessForAesthetic
 
     /**
      * Cache the scan result for future lookups.

@@ -20,6 +20,7 @@ data class SettingsUiState(
     val groupingEnabled: Boolean = false,
     val groupingLevel: GroupingLevel = GroupingLevel.TIME_FILENAME,
     val analysisThreadCount: Int = 4,
+    val minSharpnessForAesthetic: Double = 40.0,
     val cachedScoreCount: Int = 0,
     val phoneCollectionUri: String? = null,
     val fullscreenButtonsEnabled: Boolean = true,
@@ -43,6 +44,7 @@ class SettingsViewModel @Inject constructor(
                 settingsRepository.groupingEnabled,
                 settingsRepository.groupingLevel,
                 settingsRepository.analysisThreadCount,
+                settingsRepository.minSharpnessForAesthetic,
                 settingsRepository.fullscreenButtonsEnabled,
                 settingsRepository.fullscreenGestureAction
             ) { arrays ->
@@ -52,8 +54,9 @@ class SettingsViewModel @Inject constructor(
                     groupingEnabled = arrays[2] as Boolean,
                     groupingLevel = arrays[3] as GroupingLevel,
                     analysisThreadCount = arrays[4] as Int,
-                    fullscreenButtonsEnabled = arrays[5] as Boolean,
-                    fullscreenGestureAction = arrays[6] as String,
+                    minSharpnessForAesthetic = arrays[5] as Double,
+                    fullscreenButtonsEnabled = arrays[6] as Boolean,
+                    fullscreenGestureAction = arrays[7] as String,
                     cachedScoreCount = _uiState.value.cachedScoreCount,
                     phoneCollectionUri = _uiState.value.phoneCollectionUri,
                 )
@@ -101,6 +104,12 @@ class SettingsViewModel @Inject constructor(
     fun updateThreadCount(count: Int) {
         viewModelScope.launch {
             settingsRepository.setAnalysisThreadCount(count)
+        }
+    }
+
+    fun updateMinSharpnessForAesthetic(sharpness: Double) {
+        viewModelScope.launch {
+            settingsRepository.setMinSharpnessForAesthetic(sharpness)
         }
     }
 
