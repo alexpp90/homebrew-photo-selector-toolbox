@@ -196,12 +196,9 @@ def test_is_ollama_url_external_fallback_external(mock_load):
 
 
 def test_is_ollama_url_external_exception():
-    # Provide an invalid URL that will cause urlparse to fail or another exception
-    # e.g., something that throws a ValueError during parsing, or we can mock it
-    with patch("urllib.parse.urlparse", side_effect=ValueError("Invalid URL")):
-        assert is_ollama_url_external("http://bad-url")
-
-
+    # Trigger the except block naturally by passing an invalid IPv6 URL
+    # that causes urllib.parse.urlparse to raise a ValueError
+    assert is_ollama_url_external("http://[::1")
 
 
 def test_set_secure_permissions_real_file(tmp_path):
