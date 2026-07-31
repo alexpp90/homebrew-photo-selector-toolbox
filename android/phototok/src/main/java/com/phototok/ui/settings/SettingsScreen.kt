@@ -428,7 +428,11 @@ fun SettingsScreen(
                 description = "View on GitHub",
                 onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/alexpp90/homebrew-photo-selector-toolbox"))
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: android.content.ActivityNotFoundException) {
+                        // Ignored, no app can handle this intent
+                    }
                 },
                 icon = Icons.Default.Code,
             )
@@ -442,7 +446,11 @@ fun SettingsScreen(
                 description = "How Photo-Tok handles your data",
                 onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.phototok.domain.LegalLinks.PRIVACY_POLICY))
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: android.content.ActivityNotFoundException) {
+                        // Ignored, no app can handle this intent
+                    }
                 },
                 icon = Icons.Default.PrivacyTip,
             )
@@ -454,7 +462,11 @@ fun SettingsScreen(
                 description = "Provider identification",
                 onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.phototok.domain.LegalLinks.IMPRESSUM))
-                    context.startActivity(intent)
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: android.content.ActivityNotFoundException) {
+                        // Ignored, no app can handle this intent
+                    }
                 },
                 icon = Icons.Default.Gavel,
             )
