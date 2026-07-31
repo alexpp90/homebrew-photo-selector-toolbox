@@ -247,3 +247,12 @@ def test_calculate_shadow_clipping_exception(mock_cv2, mock_get_data):
     mock_cv2.cvtColor.side_effect = Exception("Mocked shadow clipping error")
     score = shp.calculate_shadow_clipping(Path("error.jpg"))
     assert score == 0.0
+
+def test_calculate_noise_from_gray():
+    flat = np.zeros((100, 100), dtype=np.uint8)
+    score_flat = shp._calculate_noise_from_gray(flat)
+    assert score_flat == 0.0
+    np.random.seed(42)
+    noisy = np.random.randint(0, 255, (100, 100), dtype=np.uint8)
+    score_noisy = shp._calculate_noise_from_gray(noisy)
+    assert score_noisy > score_flat
