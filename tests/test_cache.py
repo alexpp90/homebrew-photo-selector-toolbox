@@ -243,3 +243,52 @@ def test_score_cache_error_handling(tmp_path):
             mock_warning.assert_called_once_with(
                 "Error pruning score cache database: Mock Prune DB Error"
             )
+
+
+def test_score_cache_init_db_corruption_handling(tmp_path):
+    """Test that _init_db properly handles sqlite3.DatabaseError by attempting recreation."""
+    import sqlite3
+    from unittest.mock import patch, MagicMock
+    from pathlib import Path
+    from photo_selector_toolbox.cache import ScoreCache
+
+    db_file = tmp_path / "test_corruption_cache.db"
+
+    # Test path 1: Successful recreation
+    with patch("sqlite3.connect") as mock_connect:
+        mock_context_manager = MagicMock()
+        # First connect fails with DatabaseError, second succeeds
+        mock_connect.side_effect = [sqlite3.DatabaseError("Corrupted file"), mock_context_manager]
+
+        with patch("photo_selector_toolbox.cache.logger.error") as mock_error:
+            with patch.object(Path, "unlink") as mock_unlink:
+                cache = ScoreCache(db_file)
+
+                # Should have called unlink to delete the corrupted DB
+                mock_unlink.assert_called_once_with(missing_ok=True)
+
+                # Should have logged the corruption warning
+                mock_error.assert_called_once()
+                assert "Score cache database is corrupted or inaccessible" in mock_error.call_args[0][0]
+                assert str(db_file) in mock_error.call_args[0][0]
+
+    # Test path 2: Failed recreation
+    with patch("sqlite3.connect") as mock_connect:
+        mock_connect.side_effect = sqlite3.DatabaseError("Corrupted file 2")
+
+        with patch("photo_selector_toolbox.cache.logger.error") as mock_error:
+            with patch.object(Path, "unlink") as mock_unlink:
+                # Make unlink fail to trigger the inner except block
+                mock_unlink.side_effect = Exception("Unlink failed")
+
+                # Pre-create the instance without invoking _init_db to avoid immediate fail
+                cache = ScoreCache.__new__(ScoreCache)
+                cache.db_path = db_file
+
+                # Call _init_db explicitly
+                cache._init_db()
+
+                # Check error logs: first for corruption, second for failed recreation
+                assert mock_error.call_count == 2
+                assert "Score cache database is corrupted or inaccessible" in mock_error.call_args_list[0][0][0]
+                assert "Failed to recreate score cache database: Unlink failed" in mock_error.call_args_list[1][0][0]
