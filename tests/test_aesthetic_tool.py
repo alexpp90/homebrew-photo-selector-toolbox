@@ -19,9 +19,9 @@ from photo_selector_toolbox.aesthetic_tool import (
 
 
 def test_map_apple_score_endpoints_and_midpoint():
-    # [-1, 1] -> [1, 10]
-    assert map_apple_score_to_10(-1.0) == 1.0
-    assert map_apple_score_to_10(1.0) == 10.0
+    # [-0.5, 0.5] -> [1, 10]
+    assert map_apple_score_to_10(-0.5) == 1.0
+    assert map_apple_score_to_10(0.5) == 10.0
     assert map_apple_score_to_10(0.0) == 5.5
 
 
