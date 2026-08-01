@@ -147,6 +147,39 @@ class TestResolvePath(unittest.TestCase):
         result = resolve_path(path_str)
         self.assertEqual(str(result), str(Path(path_str)))
 
+    def test_path_object_input(self):
+        """Tests that passing a Path object works and covers the isinstance check."""
+        p = Path("/tmp/local_file.jpg")
+        result = resolve_path(p)
+        self.assertEqual(result, Path("/tmp/local_file.jpg"))
+
+    @patch("photo_selector_toolbox.utils.urlparse")
+    @patch("sys.platform", "darwin")
+    def test_smb_no_leading_slash(self, mock_urlparse):
+        """Tests handling when urlparse returns a path without a leading slash."""
+        from urllib.parse import ParseResult
+        mock_urlparse.return_value = ParseResult(
+            scheme="smb", netloc="myserver", path="myshare/path", params="", query="", fragment=""
+        )
+        result = resolve_path("smb://myserver/myshare/path")
+        expected = Path("/Volumes/myshare/path")
+        self.assertEqual(str(result), str(expected))
+
+    def test_smb_root_only(self):
+        """Tests handling of SMB URLs with only a root slash."""
+        path_str = "smb://myserver/"
+        result = resolve_path(path_str)
+        self.assertEqual(str(result), str(Path(path_str)))
+
+    @patch("sys.platform", "linux")
+    @patch("photo_selector_toolbox.utils.os.getuid", side_effect=AttributeError, create=True)
+    def test_smb_linux_no_getuid(self, mock_getuid):
+        """Tests fallback when os.getuid is missing on Linux."""
+        path_str = "smb://myserver/myshare/file.jpg"
+        result = resolve_path(path_str)
+        self.assertEqual(str(result), str(Path(path_str)))
+
+
 
 class TestLoadImagePreview(unittest.TestCase):
     @patch('photo_selector_toolbox.utils.Image.open')
