@@ -39,13 +39,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Lens
 import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -89,8 +90,10 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import com.phototok.data.model.ExifData
 import com.phototok.data.model.ImageItem
+import com.phototok.domain.CollectionAction
 import com.phototok.domain.FirstRunHint
 import com.phototok.domain.SwipeAction
+import com.phototok.domain.SwipeLabels
 import com.phototok.ui.theme.SuccessGreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -99,6 +102,19 @@ import kotlin.math.roundToInt
 
 /** How many images ahead/behind to warm into Coil's caches for snappy paging. */
 private const val PREFETCH_RADIUS = 3
+
+/** Glyph for the configured swipe-right (collection) action. */
+private fun collectionIcon(action: CollectionAction): ImageVector = when (action) {
+    CollectionAction.COPY -> Icons.Default.ContentCopy
+    CollectionAction.MOVE -> Icons.AutoMirrored.Filled.DriveFileMove
+}
+
+/** Glyph for the configured swipe-left action. */
+private fun leftSwipeIcon(action: SwipeAction): ImageVector = when (action) {
+    SwipeAction.DELETE -> Icons.Default.Delete
+    SwipeAction.COPY -> Icons.Default.ContentCopy
+    SwipeAction.MOVE -> Icons.AutoMirrored.Filled.DriveFileMove
+}
 
 /**
  * Full-screen TikTok-style vertical-pager image viewer.
@@ -122,8 +138,12 @@ fun PhoneModeViewer(
     onRequestDelete: () -> Unit,
     leftSwipeAction: SwipeAction = SwipeAction.DELETE,
     leftSwipeFolderName: String = "",
+    collectionAction: CollectionAction = CollectionAction.DEFAULT,
+    collectionFolderName: String = "",
     showExifOverlay: Boolean = true,
     showPageCounter: Boolean = true,
+    /** True while the folder is still being enumerated (page count still grows). */
+    isDiscovering: Boolean = false,
     readOnly: Boolean = false,
     onFirstRunHint: (FirstRunHint) -> Unit = {},
 ) {
@@ -159,10 +179,17 @@ fun PhoneModeViewer(
         }
     }
 
-    // Sync ViewModel → pager (e.g. after delete shifts index)
+    // Sync ViewModel → pager. A copy advances the index from the ViewModel, so an
+    // adjacent step is animated and reads as the swipe the user just made; larger
+    // jumps (position restore, index shifts after a delete) snap.
     LaunchedEffect(currentIndex, images.size) {
-        if (pagerState.currentPage != currentIndex && currentIndex in images.indices) {
-            pagerState.scrollToPage(currentIndex)
+        val page = pagerState.currentPage
+        if (page != currentIndex && currentIndex in images.indices) {
+            if (abs(currentIndex - page) == 1) {
+                pagerState.animateScrollToPage(currentIndex)
+            } else {
+                pagerState.scrollToPage(currentIndex)
+            }
         }
     }
 
@@ -226,6 +253,7 @@ fun PhoneModeViewer(
                 isOrientationDivider = portraitSectionStart in 1 until images.size && page == portraitSectionStart,
                 showExifOverlay = showExifOverlay,
                 showPageCounter = showPageCounter,
+                isDiscovering = isDiscovering,
                 hudAlpha = hudAlpha,
                 readOnly = readOnly,
                 showFloatingPeeks = showFloatingPeeks,
@@ -246,6 +274,8 @@ fun PhoneModeViewer(
                 },
                 leftSwipeAction = leftSwipeAction,
                 leftSwipeFolderName = leftSwipeFolderName,
+                collectionAction = collectionAction,
+                collectionFolderName = collectionFolderName,
                 isActive = page == pagerState.currentPage,
                 onZoomChanged = { zoomed ->
                     if (page == pagerState.currentPage) {
@@ -255,7 +285,7 @@ fun PhoneModeViewer(
             )
         }
 
-        // ── Collection flash (centered green check with glow) ────────
+        // ── Collection flash (centered copy/move glyph with glow) ────
         AnimatedVisibility(
             visible = showCollectionFlash,
             modifier = Modifier.align(Alignment.Center),
@@ -271,10 +301,13 @@ fun PhoneModeViewer(
                         .background(SuccessGreen.copy(alpha = 0.15f))
                         .border(1.dp, SuccessGreen.copy(alpha = 0.3f), CircleShape),
                 )
-                // Icon
+                // Icon — the configured action, not a generic tick.
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Added to collection",
+                    imageVector = collectionIcon(collectionAction),
+                    contentDescription = SwipeLabels.rightDescription(
+                        collectionAction,
+                        collectionFolderName,
+                    ),
                     tint = SuccessGreen.copy(alpha = 0.9f),
                     modifier = Modifier
                         .size(72.dp)
@@ -285,7 +318,7 @@ fun PhoneModeViewer(
 
 
 
-        // ── Left Swipe flash (centered folder icon with glow) ────────
+        // ── Left Swipe flash (centered copy/move glyph with glow) ────
         AnimatedVisibility(
             visible = showLeftSwipeFlash,
             modifier = Modifier.align(Alignment.Center),
@@ -304,8 +337,11 @@ fun PhoneModeViewer(
                 )
                 // Icon
                 Icon(
-                    imageVector = Icons.Default.Folder,
-                    contentDescription = "Saved to folder",
+                    imageVector = leftSwipeIcon(leftSwipeAction),
+                    contentDescription = SwipeLabels.leftDescription(
+                        leftSwipeAction,
+                        leftSwipeFolderName,
+                    ),
                     tint = primaryColor.copy(alpha = 0.9f),
                     modifier = Modifier
                         .size(72.dp)
@@ -328,11 +364,14 @@ private fun ImagePage(
     isOrientationDivider: Boolean,
     showExifOverlay: Boolean,
     showPageCounter: Boolean,
+    isDiscovering: Boolean,
     hudAlpha: Float,
     readOnly: Boolean,
     showFloatingPeeks: Boolean,
     leftSwipeAction: SwipeAction,
     leftSwipeFolderName: String,
+    collectionAction: CollectionAction,
+    collectionFolderName: String,
     isActive: Boolean,
     onZoomChanged: (Boolean) -> Unit,
     onSingleTap: () -> Unit,
@@ -578,7 +617,10 @@ private fun ImagePage(
                 ),
         )
 
-        // ── Collection indicator (green check on right-swipe) ────────
+        // ── Collection indicator (right-swipe) ───────────────────────
+        // Labelled with the configured action (COPY / MOVE): the photo is filed
+        // away, not merely "kept", and saying "KEEP" while a file is moved out
+        // of the source folder is a lie the user only discovers afterwards.
         if (!readOnly && isSwipingRight) {
             Column(
                 modifier = Modifier
@@ -606,8 +648,11 @@ private fun ImagePage(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Add to collection",
+                            imageVector = collectionIcon(collectionAction),
+                            contentDescription = SwipeLabels.rightDescription(
+                                collectionAction,
+                                collectionFolderName,
+                            ),
                             tint = Color.White,
                             modifier = Modifier.size((28 + 8 * swipeProgress).dp),
                         )
@@ -615,7 +660,7 @@ private fun ImagePage(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "KEEP",
+                    text = SwipeLabels.rightLabel(collectionAction),
                     style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 3.sp),
                     color = SuccessGreen,
                 )
@@ -635,21 +680,13 @@ private fun ImagePage(
                 label = "left-swipe-scale",
             )
 
-            val isDelete = leftSwipeAction == SwipeAction.DELETE
-            val icon = if (isDelete) Icons.Default.Delete else Icons.Default.Folder
+            val isDelete = SwipeLabels.leftIsDestructive(leftSwipeAction)
+            val icon = leftSwipeIcon(leftSwipeAction)
             val color = if (isDelete) colors.error else colors.primary
             val containerColor = if (isDelete) colors.errorContainer else colors.primaryContainer
             val onContainerColor = if (isDelete) colors.onErrorContainer else colors.onPrimaryContainer
-            val labelText = when (leftSwipeAction) {
-                SwipeAction.COPY -> "COPY"
-                SwipeAction.MOVE -> "MOVE"
-                SwipeAction.DELETE -> "DISCARD"
-            }
-            val contentDesc = when (leftSwipeAction) {
-                SwipeAction.COPY -> "Copy to folder"
-                SwipeAction.MOVE -> "Move to folder"
-                SwipeAction.DELETE -> "Delete"
-            }
+            val labelText = SwipeLabels.leftLabel(leftSwipeAction)
+            val contentDesc = SwipeLabels.leftDescription(leftSwipeAction, leftSwipeFolderName)
 
             Column(
                 modifier = Modifier
@@ -721,7 +758,7 @@ private fun ImagePage(
                 label = "keep-peek-offset",
             )
 
-            // Left peek: Keep (CheckCircle icon + arrow pointing right)
+            // Left peek: the collection action (copy/move icon + arrow pointing right)
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -738,8 +775,10 @@ private fun ImagePage(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Swipe right to keep",
+                        imageVector = collectionIcon(collectionAction),
+                        contentDescription = "Swipe right to " +
+                            SwipeLabels.rightDescription(collectionAction, collectionFolderName)
+                                .lowercase(),
                         tint = SuccessGreen,
                         modifier = Modifier.size(20.dp),
                     )
@@ -752,15 +791,12 @@ private fun ImagePage(
                 )
             }
 
-            // Right peek: Left Swipe Action (Delete/Folder icon + arrow pointing left)
-            val isDelete = leftSwipeAction == SwipeAction.DELETE
-            val icon = if (isDelete) Icons.Default.Delete else Icons.Default.Folder
+            // Right peek: Left Swipe Action (delete/copy/move icon + arrow pointing left)
+            val isDelete = SwipeLabels.leftIsDestructive(leftSwipeAction)
+            val icon = leftSwipeIcon(leftSwipeAction)
             val color = if (isDelete) colors.error else colors.primary
-            val contentDesc = when (leftSwipeAction) {
-                SwipeAction.COPY -> "Swipe left to copy"
-                SwipeAction.MOVE -> "Swipe left to move"
-                SwipeAction.DELETE -> "Swipe left to delete"
-            }
+            val contentDesc = "Swipe left to " +
+                SwipeLabels.leftVerb(leftSwipeAction).lowercase()
 
             Row(
                 modifier = Modifier
@@ -859,7 +895,9 @@ private fun ImagePage(
                 ),
             ) {
                 Text(
-                    text = "${pageIndex + 1} / $totalCount",
+                    // "12 / 240+" while the folder is still being enumerated, so a
+                    // growing total reads as "still finding photos" and not as a bug.
+                    text = "${pageIndex + 1} / $totalCount" + if (isDiscovering) "+" else "",
                     style = MaterialTheme.typography.labelMedium,
                     color = colors.primary,
                     fontWeight = FontWeight.Bold,

@@ -22,7 +22,33 @@ This skill defines the **mandatory task lifecycle**. It applies to every task, i
 
 Run this retrospective checklist:
 
-1. **Tests**: Were tests written/updated and did they pass? If not, the task is not done.
+1. **Tests — run the CI mirror, not a subset.** Were tests written/updated, and did the **full local gate** pass?
+
+   ```bash
+   ./scripts/run_tests.sh          # add --all if an emulator/device is attached
+   ```
+
+   This is mandatory and it is not the same as `pytest` or `gradlew testDebugUnitTest`.
+   Those run a strict subset of what CI enforces, which is how a branch ends up
+   green locally and red in Actions. The script mirrors every CI gate — flake8
+   (which gates the *entire* desktop pipeline), the coverage threshold, the
+   `-m "not visual"` split, and `assembleDebugAndroidTest` (the only thing that
+   compiles `src/androidTest`).
+
+   **Read the summary table it prints.** Gates it could not run are reported as
+   `⊘ SKIPPED` with a reason. A skipped gate is an accepted risk, not a pass:
+   state explicitly in your task summary which gates were skipped and why.
+   `docs/CI_PARITY.md` explains which gates are legitimately un-runnable locally
+   (emulator instrumented tests, visual regression off Linux, credentialed
+   publish steps) and how to read a CI failure for each.
+
+   If the task is not done, the task is not done — do not push a guess and let
+   CI adjudicate it. A chain of `fix(ci)` / `fix(test)` commits on a branch is
+   the anti-pattern this step exists to prevent.
+
+   **Workflow changes carry a parity obligation:** if you added or changed a
+   gate in `.github/workflows/`, add the equivalent to `scripts/run_tests.sh`
+   and update the matrix in `docs/CI_PARITY.md` *in the same commit*.
 2. **Requirements**: Did observable behavior change? → update `REQUIREMENTS.md` in the same change.
 3. **Reflection & mentor consult**: Reflect on the task — what failed on the first attempt, what took longest, what surprised you. Draft candidate memories, then **consult `@mentor_agent`** (as a subagent where supported; otherwise adopt `.agents/mentor_agent.md` as a role in a separate reflection pass) with the task summary, diff, and candidates. The mentor decides what gets memorized, where, and in what wording — do not write directly to `.Jules/` or playbooks without this gate. If nothing at all was learned, you may skip the consult, but say so explicitly in your summary.
 4. **Lesson format** (what the mentor commits): append an entry to the matching `.Jules/` file using the format:

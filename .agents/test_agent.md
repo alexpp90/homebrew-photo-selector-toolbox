@@ -18,11 +18,17 @@ You own the following files and directories:
 
 1. **Read REQUIREMENTS.md first.** Before writing or modifying tests, read section §6 (Testing Requirements) of `REQUIREMENTS.md`. It specifies execution commands, headless requirements, and mocking patterns.
 2. **Update REQUIREMENTS.md after changes.** If your work introduces new testing patterns, changes how tests should be executed, adds new test categories, or modifies the testing infrastructure, you MUST update that file.
-3. **Execution command.** Tests must be run with:
+3. **Execution command.** The authoritative gate is the CI mirror, not bare pytest:
    ```
-   poetry run pytest tests/
+   ./scripts/run_tests.sh --python
    ```
    Ensure dependencies are installed first with `poetry install`.
+
+   `poetry run pytest tests/` is fine for the inner loop, but it is **not** the
+   gate CI applies: it skips flake8 (which gates the entire desktop pipeline
+   before a single test runs), skips the coverage threshold, and runs the
+   visual tests that CI executes in a separate job. Never report "tests pass"
+   on the basis of bare pytest. Read `docs/CI_PARITY.md` for the full matrix.
 4. **Headless GUI testing.** Tests that involve Tkinter components require extensive mocking of `tkinter`, `PIL`, and `photo_selector_toolbox` dependencies because CI runners have no display. On Linux dev machines, use `xvfb-run` for standalone Tkinter scripts.
 5. **Mocking patterns for GUI tests.** Follow the established pattern in `test_sharpness_gui_basic.py`:
    - Mock `tkinter` and `tkinter.ttk` at the module level before importing the GUI module.
@@ -35,7 +41,8 @@ You own the following files and directories:
    - etc.
 7. **Path resolution tests.** The `resolve_path` utility must be tested across simulated platforms (Linux, macOS, Windows) by mocking `sys.platform` and `os.getuid`.
 8. **Type safety in tests.** Use explicit type checks (`isinstance(score_val, float)`) when testing dynamically loaded scores that may be `'N/A'` strings.
-9. **Coverage.** When adding new tests, aim to improve coverage. Use `poetry run pytest tests/ --cov=photo_selector_toolbox --cov-report=term-missing` to check. CI enforces a minimum of 60% (`--cov-fail-under=60`).
+9. **Coverage.** When adding new tests, aim to improve coverage. Use `poetry run pytest tests/ --cov=photo_selector_toolbox --cov-report=term-missing` to check. CI enforces a minimum of 60% (`--cov-fail-under=60`) **on the Linux runner only** — platform markers make each OS execute a different subset, so Linux is the authoritative number. `run_tests.sh` checks it on every platform as an early warning.
+10. **Marker discipline.** A test that only works on one platform must carry the matching marker (`linux_only` / `mac_only` / `windows_only` / `gui_required` / `visual`). An unmarked platform-specific test is the single most common cause of "green on my machine, red on a CI runner" — `conftest.py` can only skip what is marked.
 
 ## Key Domain Knowledge
 

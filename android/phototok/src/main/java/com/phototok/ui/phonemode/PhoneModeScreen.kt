@@ -301,8 +301,11 @@ fun PhoneModeScreen(
                         onRequestDelete = performDeleteSwipe,
                         leftSwipeAction = uiState.leftSwipeAction,
                         leftSwipeFolderName = uiState.leftSwipeFolderName,
+                        collectionAction = uiState.collectionAction,
+                        collectionFolderName = uiState.collectionFolderName,
                         showExifOverlay = false,
                         showPageCounter = false,
+                        isDiscovering = uiState.isDiscovering,
                         onFirstRunHint = viewModel::maybeShowFirstRunHint,
                     )
                 }
@@ -374,7 +377,10 @@ fun PhoneModeScreen(
                     onRequestDelete = performDeleteSwipe,
                     leftSwipeAction = uiState.leftSwipeAction,
                     leftSwipeFolderName = uiState.leftSwipeFolderName,
+                    collectionAction = uiState.collectionAction,
+                    collectionFolderName = uiState.collectionFolderName,
                     showExifOverlay = uiState.showExifOverlay,
+                    isDiscovering = uiState.isDiscovering,
                     onFirstRunHint = viewModel::maybeShowFirstRunHint,
                 )
             } else if (uiState.isLoading) {
@@ -441,9 +447,12 @@ fun PhoneModeScreen(
         }
 
         // ── Overlay App Bars (Only when not in Landscape Viewer / selection) ──
-        if (!isViewingSelection && !(isLandscape && isViewing) &&
-            !uiState.showGestureTutorial && !uiState.showControlsGuide
-        ) {
+        // Deliberately still rendered while the controls guide is up: the guide is
+        // a set of coach marks that label these very buttons, so it draws its
+        // callouts *around* the bars and needs the real icons visible above the
+        // scrim. The guide reserves the bars' height (TOP/BOTTOM_BAR_HEIGHT), so
+        // nothing overlaps.
+        if (!isViewingSelection && !(isLandscape && isViewing)) {
             // ── Top app bar ──────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -466,10 +475,18 @@ fun PhoneModeScreen(
                         ) { viewModel.toggleExifOverlay() }
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Info: opens the full list of available controls.
+                    // Help: toggles the coach-mark guide. It is a toggle because the
+                    // button stays visible and labelled while the guide is open, so
+                    // tapping it again must be the way back out.
                     if (isViewing) {
                         IconButton(
-                            onClick = { viewModel.showControlsGuide() },
+                            onClick = {
+                                when {
+                                    uiState.showGestureTutorial -> viewModel.dismissGestureTutorial()
+                                    uiState.showControlsGuide -> viewModel.hideControlsGuide()
+                                    else -> viewModel.showControlsGuide()
+                                }
+                            },
                             modifier = Modifier.size(40.dp),
                         ) {
                             Icon(

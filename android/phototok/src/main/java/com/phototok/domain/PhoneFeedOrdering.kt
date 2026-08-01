@@ -10,6 +10,12 @@ import com.phototok.data.model.ImageItem
  *  - Randomize wins over everything (uses the injected [shuffler] for determinism in tests).
  *  - Base order is by date, newest first (latest → oldest).
  *  - When sortByOrientation is on: landscape group first, then portrait, each kept in date order.
+ *
+ * Large folders are discovered progressively, so the feed is built up from
+ * several batches instead of one complete list. [newItems] and [appendBatch]
+ * exist for that case: they add newly discovered photos to the *end* of the
+ * feed, never reordering what is already published, so a photo the user has
+ * already swiped past can never jump back in front of them mid-session.
  */
 object PhoneFeedOrdering {
 
@@ -39,6 +45,48 @@ object PhoneFeedOrdering {
         val result = landscape + portrait
         val split = if (portrait.isEmpty()) -1 else landscape.size
         return Result(result, split)
+    }
+
+    /**
+     * The subset of [incoming] that is not yet known, identified by URI.
+     *
+     * Progressive discovery re-emits a cumulative list on every batch, and the
+     * user may have removed items (move / delete) from the feed in between, so
+     * "not currently in the feed" is *not* the same as "new". Callers therefore
+     * pass the set of URIs ever published for this folder.
+     */
+    fun newItems(incoming: List<ImageItem>, knownUris: Set<String>): List<ImageItem> =
+        if (knownUris.isEmpty()) incoming else incoming.filter { it.uri !in knownUris }
+
+    /**
+     * Append a freshly discovered batch to an already published feed.
+     *
+     * [fresh] is ordered (or shuffled) on its own and appended after [current];
+     * the order of [current] is never touched. This keeps the feed stable while
+     * a large folder is still being enumerated in the background — the price is
+     * that a randomized feed is shuffled per batch rather than globally, which
+     * is invisible to the user and preferable to items moving under their thumb.
+     *
+     * When [current] is empty this is exactly [order].
+     */
+    fun appendBatch(
+        current: List<ImageItem>,
+        fresh: List<ImageItem>,
+        randomize: Boolean,
+        sortByOrientation: Boolean,
+        shuffler: (List<ImageItem>) -> List<ImageItem> = { it.shuffled() },
+    ): Result {
+        if (fresh.isEmpty()) {
+            return Result(current, portraitSplit(current, sortByOrientation))
+        }
+        if (current.isEmpty()) {
+            return order(fresh, randomize, sortByOrientation, shuffler)
+        }
+        // Order within the batch only; the orientation split is recomputed over
+        // the merged list (and re-grouped later, once dimensions are known).
+        val ordered = order(fresh, randomize, sortByOrientation = false, shuffler = shuffler).images
+        val merged = current + ordered
+        return Result(merged, portraitSplit(merged, sortByOrientation))
     }
 
     /**

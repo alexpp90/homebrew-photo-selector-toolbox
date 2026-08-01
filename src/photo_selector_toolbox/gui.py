@@ -236,7 +236,10 @@ def _configure_input_styles(style: ttk.Style, colors: ThemeColors) -> None:
 def apply_dark_theme(root: tk.Tk) -> None:
     style = ttk.Style(root)
     if "clam" in style.theme_names():
-        style.theme_use("clam")
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
 
     colors = ThemeColors()
 
