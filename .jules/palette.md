@@ -70,3 +70,6 @@
 **Learning:** When testing Compose modal bottom sheets or overlays over screens containing metrics or labels, `composeRule.onNode(hasText("..."))` can fail with `AssertionError: Expected exactly '1' node but found '2' nodes` if both the background screen and the sheet display identical labels (such as `ScoreMetric.NOISE`'s `shortLabel` and `displayName` both being `"Noise"`).
 **Action:** Always scope semantics assertions for content inside sheets or dialogs using `hasAnyAncestor(hasTestTag("sheet_tag"))` (e.g. `hasText("Noise") and hasAnyAncestor(hasTestTag("score_legend_sheet"))`) to ensure queries specifically match the intended container element.
 
+## 2026-08-01 - Tkinter Ttk Global Cursors
+**Learning:** In Tkinter, attempting to set a cursor globally using `ttk.Style().configure('TButton', cursor='hand2')` is silently ignored because `cursor` is a widget-level option managed by the Tk window manager, not a style option.
+**Action:** To apply cursors globally to ttk widgets without modifying every instance, use the Tk option database directly (e.g., `root.option_add('*TButton.cursor', 'hand2')`) in the root theme setup.
