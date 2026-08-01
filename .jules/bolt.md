@@ -19,3 +19,6 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+## 2025-02-18 - Path.resolve() vs os.path.abspath() Overhead
+**Learning:** In Python, `Path.resolve()` is exceptionally slow when called in bulk loops because it hits the filesystem for `stat` and `readlink` calls to canonicalize symlinks. `os.path.abspath()` is significantly faster as it relies purely on string manipulation to join the path with the current working directory.
+**Action:** When working with thousands of paths in performance-critical sections (like bulk caching or database operations) where strict symlink resolution isn't mandatory, always prefer `os.path.abspath()` over `Path.resolve()`.
