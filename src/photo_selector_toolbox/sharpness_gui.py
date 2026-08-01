@@ -751,7 +751,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     raise ValueError(f"SSRF Protection: Could not resolve hostname {clean_hostname}: {e}")
 
                 from photo_selector_toolbox.utils import SafeSSRFHTTPHandler, SafeSSRFHTTPSHandler
-                opener = urllib.request.build_opener(NoRedirectHandler, SafeSSRFHTTPHandler(safe_ips), SafeSSRFHTTPSHandler(safe_ips))
+                opener = urllib.request.build_opener(
+                    NoRedirectHandler,
+                    SafeSSRFHTTPHandler(safe_ips),
+                    SafeSSRFHTTPSHandler(safe_ips)
+                )
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))

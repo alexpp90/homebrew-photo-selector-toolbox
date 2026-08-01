@@ -725,4 +725,13 @@ class SafeSSRFHTTPSHandler(urllib.request.HTTPSHandler):
         self.safe_ips = safe_ips
 
     def https_open(self, req):
-        return self.do_open(lambda *args, **kwargs: SafeSSRFHTTPSConnection(*args, safe_ips=self.safe_ips, context=self._context, check_hostname=self._check_hostname, **kwargs), req)
+        return self.do_open(
+            lambda *args, **kwargs: SafeSSRFHTTPSConnection(
+                *args,
+                safe_ips=self.safe_ips,
+                context=self._context,
+                check_hostname=self._check_hostname,
+                **kwargs
+            ),
+            req
+        )

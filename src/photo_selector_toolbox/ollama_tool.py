@@ -115,7 +115,11 @@ class OllamaAestheticTool(AnalysisTool):
 
         try:
             from photo_selector_toolbox.utils import SafeSSRFHTTPHandler, SafeSSRFHTTPSHandler
-            opener = urllib.request.build_opener(NoRedirectHandler, SafeSSRFHTTPHandler(safe_ips), SafeSSRFHTTPSHandler(safe_ips))
+            opener = urllib.request.build_opener(
+                NoRedirectHandler,
+                SafeSSRFHTTPHandler(safe_ips),
+                SafeSSRFHTTPSHandler(safe_ips)
+            )
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
