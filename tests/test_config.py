@@ -196,12 +196,9 @@ def test_is_ollama_url_external_fallback_external(mock_load):
 
 
 def test_is_ollama_url_external_exception():
-    # Provide an invalid URL that will cause urlparse to fail or another exception
-    # e.g., something that throws a ValueError during parsing, or we can mock it
-    with patch("urllib.parse.urlparse", side_effect=ValueError("Invalid URL")):
-        assert is_ollama_url_external("http://bad-url")
-
-
+    # Trigger the except block naturally by passing an invalid IPv6 URL
+    # that causes urllib.parse.urlparse to raise a ValueError
+    assert is_ollama_url_external("http://[::1")
 
 
 def test_set_secure_permissions_real_file(tmp_path):
@@ -253,3 +250,8 @@ def test_save_config_oserror(mock_open, mock_config_paths, caplog):
     save_config(test_config)
 
     assert "Failed to save config" in caplog.text
+
+def test_set_secure_permissions_file_not_found(tmp_path):
+    test_file = tmp_path / "does_not_exist.txt"
+    # This should not raise an exception, testing the OSError catch block
+    _set_secure_permissions(test_file)

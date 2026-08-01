@@ -76,8 +76,7 @@ class ScanImagesUseCase @Inject constructor(
      *
      * @param images The images to scan.
      * @return Flow emitting scan progress with accumulated results.
-     */
-    operator fun invoke(
+     */    operator fun invoke(
         images: List<ImageItem>,
         aestheticEnabled: Boolean = false,
     ): Flow<ScanProgress> = channelFlow {
@@ -89,6 +88,52 @@ class ScanImagesUseCase @Inject constructor(
         val threadCount = settingsRepository.analysisThreadCount.first()
         val semaphore = Semaphore(threadCount)
 
+        // Bulk load cache
+        val imageUris = images.map { it.uri }
+        val cachedScores = scoreDao.getScores(imageUris).associateBy { it.filePath }
+
+        // Find which images have valid cache hits and update their access times
+        val currentTime = System.currentTimeMillis()
+        val validCacheHits = mutableMapOf<String, ScanResult>()
+        val urisToUpdate = mutableListOf<String>()
+
+        for (image in images) {
+            val cached = cachedScores[image.uri] ?: continue
+
+            // Validate cache entry matches current file
+            if (cached.fileSize != image.fileSize || cached.lastModified != image.lastModified) {
+                continue
+            }
+
+            // If the user now wants an aesthetic score but the cached row predates
+            // it (and a model is available), recompute rather than serving a stale
+            // hit with no aesthetic value.
+            if (aestheticEnabled && cached.aestheticScore == null && aestheticAnalyzer.isAvailable()) {
+                continue
+            }
+
+            validCacheHits[image.uri] = ScanResult(
+                filePath = image.uri,
+                sharpnessScore = cached.sharpnessScore,
+                noiseLevel = cached.noiseLevel,
+                highlightClipping = cached.highlightClipping,
+                shadowClipping = cached.shadowClipping,
+                aestheticScore = cached.aestheticScore
+            )
+            urisToUpdate.add(image.uri)
+        }
+
+        // Bulk update access times in background
+        if (urisToUpdate.isNotEmpty()) {
+            launch(Dispatchers.IO) {
+                // SQLite has a limit of 999 variables per query (SQLITE_MAX_VARIABLE_NUMBER)
+                // Chunk the updates to avoid SQLiteException: too many SQL variables
+                urisToUpdate.chunked(900).forEach { chunk ->
+                    scoreDao.updateAccessTimes(chunk, currentTime)
+                }
+            }
+        }
+
         // Channel for progress updates from concurrent workers
         val progressChannel = Channel<Pair<Int, Pair<String, ScanResult?>>>(Channel.BUFFERED)
 
@@ -98,8 +143,8 @@ class ScanImagesUseCase @Inject constructor(
                 semaphore.withPermit {
                     ensureActive()
 
-                    // Check cache first
-                    val cached = checkCache(image, aestheticEnabled)
+                    // Check cache first (now from pre-computed map)
+                    val cached = validCacheHits[image.uri]
                     if (cached != null) {
                         progressChannel.send(index to (image.fileName to cached))
                         return@withPermit
@@ -139,38 +184,6 @@ class ScanImagesUseCase @Inject constructor(
             progressChannel.close()
         }
     }.flowOn(Dispatchers.IO)
-
-    /**
-     * Check if a valid cached result exists for this image.
-     * Cache is valid if the file path, size, and modification time match.
-     */
-    private suspend fun checkCache(image: ImageItem, aestheticEnabled: Boolean): ScanResult? {
-        val cached = scoreDao.getScore(image.uri) ?: return null
-
-        // Validate cache entry matches current file
-        if (cached.fileSize != image.fileSize || cached.lastModified != image.lastModified) {
-            return null
-        }
-
-        // If the user now wants an aesthetic score but the cached row predates
-        // it (and a model is available), recompute rather than serving a stale
-        // hit with no aesthetic value.
-        if (aestheticEnabled && cached.aestheticScore == null && aestheticAnalyzer.isAvailable()) {
-            return null
-        }
-
-        // Update access time for LRU tracking
-        scoreDao.updateAccessTime(image.uri, System.currentTimeMillis())
-
-        return ScanResult(
-            filePath = image.uri,
-            sharpnessScore = cached.sharpnessScore,
-            noiseLevel = cached.noiseLevel,
-            highlightClipping = cached.highlightClipping,
-            shadowClipping = cached.shadowClipping,
-            aestheticScore = cached.aestheticScore
-        )
-    }
 
     /**
      * Run all analysis tools on an image.

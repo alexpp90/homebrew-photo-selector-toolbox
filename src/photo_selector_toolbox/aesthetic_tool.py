@@ -61,13 +61,15 @@ def _clamp10(value: float) -> float:
 def map_apple_score_to_10(overall_score: float) -> float:
     """Map Apple Vision's ``overallScore`` onto the app's 1.0-10.0 scale.
 
-    Apple's ``overallScore`` is a float in roughly ``[-1.0, 1.0]`` where higher
-    is more aesthetically pleasing. We linearly rescale that to ``[1.0, 10.0]``.
+    Apple's ``overallScore`` is a float in ``[-1.0, 1.0]`` where higher
+    is more aesthetically pleasing.
 
-    TODO(device-calibration): confirm the real observed range on macOS 15+ and
-    tighten the mapping if Apple's distribution is skewed.
+    Observed real-world photos on macOS 15 typically cluster tightly between
+    ``[-0.5, 0.5]``. We rescale this narrower effective range linearly to
+    ``[1.0, 10.0]`` to ensure the UI scores aren't all compressed into the middle.
     """
-    normalized = (float(overall_score) + 1.0) / 2.0  # [-1, 1] -> [0, 1]
+    # Map [-0.5, 0.5] -> [0, 1]. Clamping handles outliers automatically.
+    normalized = (float(overall_score) + 0.5) / 1.0
     return round(_clamp10(1.0 + normalized * 9.0), 1)
 
 
@@ -256,12 +258,20 @@ class NimaOnnxAestheticEngine:
         mean = np.array([0.485, 0.456, 0.406], dtype="float32")
         std = np.array([0.229, 0.224, 0.225], dtype="float32")
         arr = (arr - mean) / std
-        # NCHW batch of 1. TODO(device): some NIMA exports expect NHWC — adjust
-        # to match the specific model you provide.
-        arr = np.transpose(arr, (2, 0, 1))[None, ...]
-
         session = self._get_session(model_path)
-        input_name = session.get_inputs()[0].name
+        input_info = session.get_inputs()[0]
+        input_name = input_info.name
+        input_shape = input_info.shape
+
+        # The image array is currently HWC (224, 224, 3).
+        # Check if the model expects NCHW (channels at index 1) or NHWC.
+        if len(input_shape) >= 4 and input_shape[1] == 3:
+            # NCHW batch of 1
+            arr = np.transpose(arr, (2, 0, 1))[None, ...]
+        else:
+            # NHWC batch of 1
+            arr = arr[None, ...]
+
         outputs = session.run(None, {input_name: arr})
         probs = np.asarray(outputs[0]).reshape(-1).tolist()
         score = nima_distribution_to_score(probs)

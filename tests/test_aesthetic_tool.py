@@ -8,10 +8,14 @@ engine selection.
 
 import pytest
 
+import types
+from unittest.mock import patch
+
 from photo_selector_toolbox.aesthetic_tool import (
     ENGINE_APPLE_VISION,
     ENGINE_NIMA_ONNX,
     ENGINE_OLLAMA,
+    apple_vision_available,
     map_apple_score_to_10,
     nima_distribution_to_score,
     select_engine,
@@ -19,9 +23,9 @@ from photo_selector_toolbox.aesthetic_tool import (
 
 
 def test_map_apple_score_endpoints_and_midpoint():
-    # [-1, 1] -> [1, 10]
-    assert map_apple_score_to_10(-1.0) == 1.0
-    assert map_apple_score_to_10(1.0) == 10.0
+    # [-0.5, 0.5] -> [1, 10]
+    assert map_apple_score_to_10(-0.5) == 1.0
+    assert map_apple_score_to_10(0.5) == 10.0
     assert map_apple_score_to_10(0.0) == 5.5
 
 
@@ -95,3 +99,23 @@ def test_select_engine_unknown_value_falls_back_to_auto_resolution():
         nima_model_exists=False,
     )
     assert engine == ENGINE_OLLAMA
+
+
+def test_apple_vision_available_true():
+    with patch("photo_selector_toolbox.aesthetic_tool._macos_version_tuple", return_value=(15, 0)):
+        mock_vision = types.ModuleType("Vision")
+        with patch.dict("sys.modules", {"Vision": mock_vision}):
+            assert apple_vision_available() is True
+
+def test_apple_vision_available_false_old_os():
+    with patch("photo_selector_toolbox.aesthetic_tool._macos_version_tuple", return_value=(14, 5)):
+        assert apple_vision_available() is False
+
+def test_apple_vision_available_false_not_mac():
+    with patch("photo_selector_toolbox.aesthetic_tool._macos_version_tuple", return_value=None):
+        assert apple_vision_available() is False
+
+def test_apple_vision_available_false_import_error():
+    with patch("photo_selector_toolbox.aesthetic_tool._macos_version_tuple", return_value=(15, 0)):
+        with patch.dict("sys.modules", {"Vision": None}):
+            assert apple_vision_available() is False

@@ -23,3 +23,19 @@
 **Learning:** Doing an O(N) list containment check (using `in`) inside an O(N) loop results in an O(N^2) operation, causing major performance bottlenecks when handling large item sets (like files in a directory).
 **Action:** Always pre-convert lists to sets before using them for repeated containment checks inside loops to reduce the inner operation to O(1) and the overall complexity to O(N).
 
+
+## 2025-02-18 - Path.resolve() vs os.path.abspath() Overhead
+**Learning:** In Python, Path.resolve() is exceptionally slow when called in bulk loops because it hits the filesystem for stat and readlink calls to canonicalize symlinks. os.path.abspath() is significantly faster as it relies purely on string manipulation to join the path with the current working directory.
+**Action:** When working with thousands of paths in performance-critical sections (like bulk caching or database operations) where strict symlink resolution isn't mandatory, always prefer os.path.abspath() over Path.resolve().
+
+## 2024-05-18 - Regex vs Native String Methods in Tight Loops
+**Learning:** When stripping specific trailing characters (like digits) from strings in performance-critical Python loops, using regular expressions (e.g., re.sub(r'\d+$', '', stem)) introduces unnecessary overhead from module loading, regex compilation, and engine execution. Replacing this with native string methods like stem.rstrip('0123456789') avoids this overhead entirely and is significantly faster.
+**Action:** Always prefer native string methods (like rstrip, lstrip, split) over regular expressions for simple string manipulations inside loops where milliseconds matter.
+
+## 2024-05-24 - Pre-computing GUI Listbox Elements
+**Learning:** O(N * M) complexities easily hide in GUI render loops when item formats dynamically query grouped lists, especially during bulk insertions where listbox.insert('end', ...) uses list comprehensions.
+**Action:** When inserting many items into a Tkinter listbox that require looking up properties from external grouping objects, pre-compute a lookup dictionary (O(1)) once before the loop rather than re-evaluating the group for every item (O(M)).
+
+## 2024-05-24 - Coroutine Parallelization for I/O bounds
+**Learning:** When dealing with multiple independent file operations (such as copying/moving files), executing them sequentially inside a standard for loop leaves significant performance on the table.
+**Action:** Always prefer launching a kotlinx.coroutines.async block per item mapped to a list, followed by an .awaitAll() when performing a batch of independent file I/O or network requests.

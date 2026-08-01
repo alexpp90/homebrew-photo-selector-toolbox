@@ -63,6 +63,7 @@ def test_main_app_init(mock_gui_deps):
 def test_show_about(mock_gui_deps):
     from photo_selector_toolbox.gui import MainApp
     with (
+        patch("tkinter.Tk"),
         patch("photo_selector_toolbox.gui.SharpnessTool") as MockTool,
         patch("photo_selector_toolbox.gui.AboutDialog") as MockAbout
     ):

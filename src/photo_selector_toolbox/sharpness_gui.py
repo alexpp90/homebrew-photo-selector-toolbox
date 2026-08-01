@@ -730,6 +730,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         ip_obj = ipaddress.ip_address(ip_str)
                         if ip_obj.is_link_local:
                             return True
+                        if ip_obj.is_unspecified:
+                            return True
                         if getattr(ip_obj, "ipv4_mapped", None) and ip_obj.ipv4_mapped.is_link_local:
                             return True
                         return False
@@ -741,14 +743,21 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
                 try:
                     addr_info = socket.getaddrinfo(clean_hostname, None)
+                    safe_ips = []
                     for res in addr_info:
                         ip_str = res[4][0]
                         if is_forbidden_ip(ip_str):
                             raise ValueError("SSRF Protection: Cloud metadata IPs are not allowed.")
-                except socket.gaierror:
-                    pass
+                        safe_ips.append(ip_str)
+                except socket.gaierror as e:
+                    raise ValueError(f"SSRF Protection: Could not resolve hostname {clean_hostname}: {e}")
 
-                opener = urllib.request.build_opener(NoRedirectHandler)
+                from photo_selector_toolbox.utils import SafeSSRFHTTPHandler, SafeSSRFHTTPSHandler
+                opener = urllib.request.build_opener(
+                    NoRedirectHandler,
+                    SafeSSRFHTTPHandler(safe_ips),
+                    SafeSSRFHTTPSHandler(safe_ips),
+                )
                 req = urllib.request.Request(f"{url.rstrip('/')}/api/tags")
                 with opener.open(req, timeout=2.0) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
@@ -1235,8 +1244,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.files_map[f] = res
 
         if self.candidates:
+            group_info_map = self._get_group_info_map()
             self.candidate_listbox.insert(
-                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+                "end", *[self._get_candidate_listbox_text(f, group_info_map) for f in self.candidates]
             )
 
         if self.candidates:
@@ -1560,8 +1570,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.candidate_listbox.delete(0, "end")
         if self.candidates:
+            group_info_map = self._get_group_info_map()
             self.candidate_listbox.insert(
-                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+                "end", *[self._get_candidate_listbox_text(f, group_info_map) for f in self.candidates]
             )
 
         if selected_path and selected_path in self.candidates:
@@ -1576,11 +1587,11 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if level == "Time & Filename":
             return []
 
-        import re
         import os
         def get_name_prefix(name: str) -> str:
             stem = name.rsplit(".", 1)[0]
-            return re.sub(r"\d+$", "", stem)
+            # Using native rstrip avoids regex compilation overhead in tight loops
+            return stem.rstrip("0123456789")
 
         def get_mtime(p: Path) -> float:
             try:
@@ -1907,8 +1918,9 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         self.candidate_listbox.delete(0, "end")
         if self.candidates:
+            group_info_map = self._get_group_info_map()
             self.candidate_listbox.insert(
-                "end", *[self._get_candidate_listbox_text(f) for f in self.candidates]
+                "end", *[self._get_candidate_listbox_text(f, group_info_map) for f in self.candidates]
             )
 
         if self.candidates:
@@ -2106,6 +2118,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.pending_listbox_updates.clear()
 
        # Update each changed item
+        group_info_map = self._get_group_info_map()
         for path in updates:
             if path in self.candidates:
                 try:
@@ -2114,7 +2127,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
                    # Update listbox text
                     self.candidate_listbox.delete(idx)
-                    self.candidate_listbox.insert(idx, self._get_candidate_listbox_text(path))
+                    self.candidate_listbox.insert(idx, self._get_candidate_listbox_text(path, group_info_map))
 
                     if is_selected:
                         self.candidate_listbox.selection_set(idx)
@@ -2412,10 +2425,31 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             daemon=True,
         ).start()
 
-    def _get_candidate_listbox_text(self, path):
+    def _get_group_info_map(self):
+        """Pre-compute group info for O(1) lookup during UI updates.
+        Returns a dictionary mapping file paths to a tuple of (prefix, group_suffix).
+        """
+        group_info_map = {}
+        if self._is_grouping_enabled() and hasattr(self, "image_groups") and self.image_groups:
+            for group in self.image_groups:
+                if len(group.files) > 1:
+                    arrow = "▼ " if group.expanded else "▶ "
+                    group_info_map[group.representative] = (arrow, f" ({len(group.files)} similar)")
+                    if group.expanded:
+                        for f in group.files:
+                            if f != group.representative:
+                                group_info_map[f] = ("  ↳ ", "")
+        return group_info_map
+
+    def _get_candidate_listbox_text(self, path, group_info_map=None):
         prefix = ""
         group_suffix = ""
-        if self._is_grouping_enabled() and hasattr(self, "image_groups") and self.image_groups:
+
+        if group_info_map is not None:
+            info = group_info_map.get(path)
+            if info:
+                prefix, group_suffix = info
+        elif self._is_grouping_enabled() and hasattr(self, "image_groups") and self.image_groups:
             for group in self.image_groups:
                 if len(group.files) > 1:
                     if path == group.representative:

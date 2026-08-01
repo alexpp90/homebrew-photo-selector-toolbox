@@ -247,3 +247,85 @@ def test_calculate_shadow_clipping_exception(mock_cv2, mock_get_data):
     mock_cv2.cvtColor.side_effect = Exception("Mocked shadow clipping error")
     score = shp.calculate_shadow_clipping(Path("error.jpg"))
     assert score == 0.0
+
+def test_calculate_highlight_clipping_from_gray():
+    gray_empty = np.array([])
+    assert shp._calculate_highlight_clipping_from_gray(gray_empty) == 0.0
+    gray_no_clipping = np.zeros((10, 10), dtype=np.uint8)
+    assert shp._calculate_highlight_clipping_from_gray(gray_no_clipping) == 0.0
+    gray_all_clipping = np.ones((10, 10), dtype=np.uint8) * 255
+    assert shp._calculate_highlight_clipping_from_gray(gray_all_clipping) == 100.0
+    gray_half_clipping = np.zeros((10, 10), dtype=np.uint8)
+    gray_half_clipping[:, :5] = 255
+    assert shp._calculate_highlight_clipping_from_gray(gray_half_clipping) == 50.0
+
+def test_calculate_shadow_clipping_from_gray_empty():
+    gray = np.array([])
+    assert shp._calculate_shadow_clipping_from_gray(gray) == 0.0
+
+
+def test_calculate_shadow_clipping_from_gray_no_clipping():
+    gray = np.array([3, 4, 100, 255])
+    assert shp._calculate_shadow_clipping_from_gray(gray) == 0.0
+
+
+def test_calculate_shadow_clipping_from_gray_some_clipping():
+    gray = np.array([0, 1, 2, 3, 4])
+    assert shp._calculate_shadow_clipping_from_gray(gray) == 60.0
+
+
+def test_calculate_shadow_clipping_from_gray_all_clipping():
+    gray = np.array([0, 1, 2])
+    assert shp._calculate_shadow_clipping_from_gray(gray) == 100.0
+
+
+def test_calculate_noise_from_gray():
+    flat = np.zeros((100, 100), dtype=np.uint8)
+    score_flat = shp._calculate_noise_from_gray(flat)
+    assert score_flat == 0.0
+    np.random.seed(42)
+    noisy = np.random.randint(0, 255, (100, 100), dtype=np.uint8)
+    score_noisy = shp._calculate_noise_from_gray(noisy)
+    assert score_noisy > score_flat
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "cv2")
+def test_calculate_all_scores_cvtColor_exception(mock_cv2, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_cv2.cvtColor.side_effect = Exception("Mocked cvtColor error")
+
+    tools = {
+        "sharpness": True,
+        "noise": True,
+        "highlight_clipping": True,
+        "shadow_clipping": True,
+    }
+
+    res = shp.calculate_all_scores(Path("error.jpg"), tools=tools)
+
+    assert res == {
+        "sharpness": 0.0,
+        "noise": 0.0,
+        "highlight_clipping": 0.0,
+        "shadow_clipping": 0.0,
+    }
+
+
+def test__calculate_sharpness_from_gray_small_image():
+    gray = np.zeros((8, 8), dtype=np.uint8)
+    score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
+    assert score == 0.0
+
+
+def test__calculate_sharpness_from_gray_small_blocks():
+    gray = np.zeros((30, 30), dtype=np.uint8)
+    score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
+    assert score == 0.0
+
+
+def test__calculate_sharpness_from_gray_grid():
+    gray = np.zeros((100, 100), dtype=np.uint8)
+    gray[30:50, 30:50] = np.random.randint(0, 255, (20, 20), dtype=np.uint8)
+    score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
+    assert score > 0.0

@@ -7,6 +7,8 @@ import com.photoselectortoolbox.data.model.ImageItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -82,13 +84,12 @@ class MoveToSelectionUseCase @Inject constructor(
         val jpegDir = selectionDir.findFile(JPEG_SUBFOLDER)
             ?: selectionDir.createDirectory(JPEG_SUBFOLDER)
 
-        val results = mutableListOf<MoveResult>()
-
-        for (image in images) {
-            ensureActive()
-            val result = processImage(image, selectionDir, rawDir, jpegDir, copy)
-            results.add(result)
-        }
+        val results = images.map { image ->
+            async {
+                ensureActive()
+                processImage(image, selectionDir, rawDir, jpegDir, copy)
+            }
+        }.awaitAll()
 
         results
     }
