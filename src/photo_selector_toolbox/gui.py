@@ -250,6 +250,9 @@ def apply_dark_theme(root: tk.Tk) -> None:
     _configure_input_styles(style, colors)
 
     # Configure native menus globally
+    # Add hand cursor globally for TButton
+    root.option_add("*TButton.cursor", "hand2")
+
     root.option_add("*Menu.background", colors.bg_panel)
     root.option_add("*Menu.foreground", colors.fg_light)
     root.option_add("*Menu.activeBackground", colors.accent_blue)
