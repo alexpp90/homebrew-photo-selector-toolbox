@@ -82,3 +82,6 @@
 **Learning:** When testing Compose modal bottom sheets or overlays over screens containing metrics or labels, `composeRule.onNode(hasText("..."))` can fail with `AssertionError: Expected exactly '1' node but found '2' nodes` if both the background screen and the sheet display identical labels (such as `ScoreMetric.NOISE`'s `shortLabel` and `displayName` both being `"Noise"`).
 **Action:** Always scope semantics assertions for content inside sheets or dialogs using `hasAnyAncestor(hasTestTag("sheet_tag"))` (e.g. `hasText("Noise") and hasAnyAncestor(hasTestTag("score_legend_sheet"))`) to ensure queries specifically match the intended container element.
 
+## 2026-07-28 - Missing Interactive Cursor for Default Tkinter Buttons
+**Learning:** In Tkinter using custom `ttk.Style` themes (like the 'clam' theme), `TButton` and `TCheckbutton` lack an interactive cursor on hover, unlike web environments. Configuring `cursor='hand2'` via `ttk.Style().configure` silently fails because `cursor` is a widget-level option, not a styling option.
+**Action:** When implementing custom styling for Tkinter applications, explicitly enable pointer cursors for clickable elements by mutating the application's root option database (e.g., `root.option_add('*TButton.cursor', 'hand2')`).
