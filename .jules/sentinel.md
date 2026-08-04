@@ -25,3 +25,7 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
+## 2026-07-28 - SSRF Bypass via IPv4-Mapped Loopback Addresses
+**Vulnerability:** The previous SSRF fix for blocking cloud metadata IPs and local resources correctly handled `is_link_local` and `is_unspecified` on both standard IPs and IPv4-mapped IPv6 addresses (`::ffff:0.0.0.0`). However, it failed to check `is_loopback` on the mapped IPv4 address (`ip_obj.ipv4_mapped.is_loopback`).
+**Learning:** When using Python's `ipaddress` module, `ipaddress.ip_address('::ffff:127.0.0.1').is_loopback` evaluates to `False`. To properly validate an IPv4-mapped IPv6 address against localhost bypasses, the `is_loopback` property of the extracted mapped IPv4 object must be checked explicitly.
+**Prevention:** Whenever validating IP addresses against a set of blocked ranges (loopback, link-local, unspecified, etc.) using `ipaddress`, ensure all corresponding checks are mirrored for `ip_obj.ipv4_mapped` if it exists.
