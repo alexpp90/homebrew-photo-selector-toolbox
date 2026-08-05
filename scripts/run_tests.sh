@@ -105,14 +105,14 @@ have() { command -v "$1" &>/dev/null; }
 
 # Prefer poetry when a lockfile-managed venv exists, else fall back to bare tools.
 PY_RUNNER=()
-if have poetry && [ -f "$ROOT_DIR/poetry.lock" ]; then
+if have poetry && [ -f "$ROOT_DIR/products/desktop/poetry.lock" ]; then
     PY_RUNNER=(poetry run)
 fi
 py() { "${PY_RUNNER[@]}" "$@"; }
 
 # ── Python gates (mirror: desktop.yml `lint`, `test`, `visual`) ────
 if $run_python; then
-    cd "$ROOT_DIR" || exit 1
+    cd "$ROOT_DIR/products/desktop" || exit 1
 
     if ! have poetry && ! have pytest; then
         section "Python"
@@ -174,11 +174,11 @@ fi
 
 # ── Android gates (mirror: android.yml `unit-tests`, `lint`) ──────
 if $run_android; then
-    cd "$ROOT_DIR/android" || exit 1
+    cd "$ROOT_DIR/products/android" || exit 1
 
     if [ ! -f "./gradlew" ]; then
         section "Android"
-        skip "Android gates" "" "gradlew not found in android/"
+        skip "Android gates" "" "gradlew not found in products/android/"
     else
         chmod +x ./gradlew 2>/dev/null || true
 
@@ -188,7 +188,7 @@ if $run_android; then
 
         # ── androidTest compilation ───────────────────────────────
         # THIS IS THE GATE THAT USED TO ONLY EXIST IN CI.
-        # `testDebugUnitTest` and `lintDebug` never compile src/androidTest, so
+        # `testDebugUnitTest` and `lintDebug` never compile tests/instrumented, so
         # an unresolved reference there (e.g. `hasTag` instead of `hasTestTag`)
         # survives every cheap gate and only fails inside the emulator job —
         # where it surfaces as a bare "process '/usr/bin/sh' failed with exit
@@ -197,8 +197,8 @@ if $run_android; then
         # Ordered AFTER the unit tests so a test-source compile break never
         # masks unit-test results.
         section "Android instrumented-test compilation"
-        gate "gradlew assembleDebugAndroidTest (:app, :phototok)" "android.yml:unit-tests" \
-            ./gradlew :app:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
+        gate "gradlew assembleDebugAndroidTest (:android-desktop, :phototok)" "android.yml:unit-tests" \
+            ./gradlew :android-desktop:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
 
         # ── Android lint (advisory) ───────────────────────────────
         # Deliberately non-blocking: the CI job is `continue-on-error: true`
@@ -207,7 +207,7 @@ if $run_android; then
         section "Android lint (advisory)"
         if $quick; then
             skip "android lint" "" "--quick"
-        elif ./gradlew :app:lintDebug :phototok:lintDebug --continue --stacktrace; then
+        elif ./gradlew :android-desktop:lintDebug :phototok:lintDebug --continue --stacktrace; then
             pass "gradlew lintDebug (advisory)" "android.yml:lint"
         else
             warn "gradlew lintDebug (advisory — does not fail CI)" "android.yml:lint"
@@ -217,24 +217,38 @@ fi
 
 # ── Android instrumented tests (mirror: android.yml `instrumented-tests`) ──
 # These require a real Android runtime. They are the ONLY gate that cannot be
-# satisfied without an emulator or device — see docs/CI_PARITY.md for why the
+# satisfied without an emulator or device — see docs/build/CI_PARITY.md for why the
 # Compose semantics-tree assertions in them genuinely need one.
 if $run_android_device; then
     section "Android instrumented tests (device/emulator)"
-    cd "$ROOT_DIR/android" || exit 1
+    cd "$ROOT_DIR/products/android" || exit 1
 
     if ! have adb; then
         skip "instrumented tests" "" "adb not found — install Android SDK platform-tools"
     else
         DEVICE_COUNT=$(adb devices | awk 'NR>1 && $2=="device"' | wc -l | tr -d ' ')
         if [ "${DEVICE_COUNT:-0}" -lt 1 ]; then
-            skip "instrumented tests" "" "no device/emulator attached — see docs/CI_PARITY.md for the emulator start command"
+            skip "instrumented tests" "" "no device/emulator attached — see docs/build/CI_PARITY.md for the emulator start command"
         else
             chmod +x ./gradlew 2>/dev/null || true
             gate "gradlew connectedDebugAndroidTest" "android.yml:instrumented-tests" \
-                ./gradlew :app:connectedDebugAndroidTest :phototok:connectedDebugAndroidTest --stacktrace
+                ./gradlew :android-desktop:connectedDebugAndroidTest :phototok:connectedDebugAndroidTest --stacktrace
         fi
     fi
+fi
+
+# ── Agent framework gates (no CI equivalent yet — see docs/build/CI_PARITY.md) ──
+# The framework is treated as code: naming, registration, roster and the paths that
+# instructions point at must hold, or agents silently follow stale directions.
+section "Agent framework"
+cd "$ROOT_DIR" || exit 1
+if have python3; then
+    gate "framework validation" "ai/skills/sync-framework" \
+        python3 ai/skills/sync-framework/scripts/validate_framework.py
+    gate ".gemini/settings.json in sync" "ai/skills/sync-framework" \
+        python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py --check
+else
+    skip "framework validation" "" "python3 not found"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────

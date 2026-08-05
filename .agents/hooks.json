@@ -1,0 +1,39 @@
+{
+  "guard-paths": {
+    "PreToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ./ai/hooks/guard_paths.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "guard-commit": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ./ai/hooks/guard_commit.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "check-retrospective": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python3 ./ai/hooks/check_retrospective.py",
+        "timeout": 15
+      }
+    ]
+  }
+}

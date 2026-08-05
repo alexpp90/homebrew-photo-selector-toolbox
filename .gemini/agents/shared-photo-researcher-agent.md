@@ -1,0 +1,1 @@
+../../ai/agents/shared-photo-researcher-agent.md

@@ -1,1 +1,0 @@
-../../.agents/photo_researcher_agent.md

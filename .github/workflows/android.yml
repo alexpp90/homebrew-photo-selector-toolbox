@@ -10,12 +10,12 @@ on:
     branches: [main]
     tags: ["v*"]
     paths:
-      - 'android/**'
+      - 'products/android/**'
       - '.github/workflows/android.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'android/**'
+      - 'products/android/**'
       - '.github/workflows/android.yml'
   workflow_dispatch:
 
@@ -44,18 +44,20 @@ jobs:
         with:
           filters: |
             toolbox:
-              - 'android/app/**'
-              - 'android/build.gradle.kts'
-              - 'android/settings.gradle.kts'
-              - 'android/gradle.properties'
-              - 'android/gradle/**'
+              - 'products/android/android-desktop/**'
+              - 'products/android/core/**'
+              - 'products/android/build.gradle.kts'
+              - 'products/android/settings.gradle.kts'
+              - 'products/android/gradle.properties'
+              - 'products/android/gradle/**'
               - '.github/workflows/android.yml'
             phototok:
-              - 'android/phototok/**'
-              - 'android/build.gradle.kts'
-              - 'android/settings.gradle.kts'
-              - 'android/gradle.properties'
-              - 'android/gradle/**'
+              - 'products/android/phototok/**'
+              - 'products/android/core/**'
+              - 'products/android/build.gradle.kts'
+              - 'products/android/settings.gradle.kts'
+              - 'products/android/gradle.properties'
+              - 'products/android/gradle/**'
               - '.github/workflows/android.yml'
 
   # ── JVM unit tests (no emulator needed) ─────────────────────────
@@ -77,7 +79,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run unit tests
-        working-directory: android
+        working-directory: products/android
         run: ./gradlew testDebugUnitTest --stacktrace
 
       # `testDebugUnitTest` and `lintDebug` never compile `src/androidTest`, so
@@ -88,8 +90,8 @@ jobs:
       # with no emulator, so instrumented-test breakage is reported in plain
       # Kotlin compiler output instead.
       - name: Compile instrumented test sources
-        working-directory: android
-        run: ./gradlew :app:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
+        working-directory: products/android
+        run: ./gradlew :android-desktop:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
 
       - name: Upload unit test report
         if: always()
@@ -97,8 +99,8 @@ jobs:
         with:
           name: unit-test-report
           path: |
-            android/app/build/reports/tests/testDebugUnitTest/
-            android/phototok/build/reports/tests/testDebugUnitTest/
+            products/android/android-desktop/build/reports/tests/testDebugUnitTest/
+            products/android/phototok/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
 
   # ── Android Lint (advisory for now — tighten once baseline is clean) ──
@@ -119,8 +121,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run lint
-        working-directory: android
-        run: ./gradlew :app:lintDebug :phototok:lintDebug --continue --stacktrace
+        working-directory: products/android
+        run: ./gradlew :android-desktop:lintDebug :phototok:lintDebug --continue --stacktrace
 
       - name: Upload lint reports
         if: always()
@@ -128,8 +130,8 @@ jobs:
         with:
           name: lint-report
           path: |
-            android/app/build/reports/lint-results-debug.html
-            android/phototok/build/reports/lint-results-debug.html
+            products/android/android-desktop/build/reports/lint-results-debug.html
+            products/android/phototok/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
   # ── Instrumented tests on Android emulator ──────────────────────
@@ -184,9 +186,9 @@ jobs:
           # crash. There is no `disable-snapshot` input on this action (v2), so
           # passing it was silently ignored and only produced a CI warning.
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -no-snapshot-save -camera-back none
-          working-directory: android
+          working-directory: products/android
           script: |
-            ./gradlew :app:connectedDebugAndroidTest :phototok:connectedDebugAndroidTest --stacktrace
+            ./gradlew :android-desktop:connectedDebugAndroidTest :phototok:connectedDebugAndroidTest --stacktrace
             killall -9 crashpad_handler || true
 
       - name: Upload instrumented test report
@@ -195,8 +197,8 @@ jobs:
         with:
           name: instrumented-test-report-api${{ matrix.api-level }}
           path: |
-            android/app/build/reports/androidTests/connected/
-            android/phototok/build/reports/androidTests/connected/
+            products/android/android-desktop/build/reports/androidTests/connected/
+            products/android/phototok/build/reports/androidTests/connected/
           if-no-files-found: ignore
 
   # ── Build & sign (main / tags / manual dispatch only) ───────────
@@ -241,7 +243,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build debug APK
-        working-directory: android
+        working-directory: products/android
         run: ./gradlew assembleDebug
 
       # Each app has its own upload keystore (full isolation). Decode both.
@@ -252,25 +254,25 @@ jobs:
           PHOTOTOK_KEYSTORE_BASE64: ${{ secrets.PHOTOTOK_KEYSTORE_FILE }}
         run: |
           if [ -n "$TOOLBOX_KEYSTORE_BASE64" ]; then
-            printf "%s" "$TOOLBOX_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/android/toolbox-upload.jks
-            echo "TOOLBOX_KEYSTORE_FILE=${{ github.workspace }}/android/toolbox-upload.jks" >> "$GITHUB_ENV"
+            printf "%s" "$TOOLBOX_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/products/android/toolbox-upload.jks
+            echo "TOOLBOX_KEYSTORE_FILE=${{ github.workspace }}/products/android/toolbox-upload.jks" >> "$GITHUB_ENV"
           else
-            echo "Toolbox keystore secret is empty; :app release will be unsigned."
+            echo "Toolbox keystore secret is empty; :android-desktop release will be unsigned."
           fi
           if [ -n "$PHOTOTOK_KEYSTORE_BASE64" ]; then
-            printf "%s" "$PHOTOTOK_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/android/phototok-upload.jks
-            echo "PHOTOTOK_KEYSTORE_FILE=${{ github.workspace }}/android/phototok-upload.jks" >> "$GITHUB_ENV"
+            printf "%s" "$PHOTOTOK_KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/products/android/phototok-upload.jks
+            echo "PHOTOTOK_KEYSTORE_FILE=${{ github.workspace }}/products/android/phototok-upload.jks" >> "$GITHUB_ENV"
           else
             echo "Photo Tok keystore secret is empty; :phototok release will be unsigned."
           fi
 
       - name: Build release APK
         if: github.event_name == 'push'
-        working-directory: android
+        working-directory: products/android
         run: |
           TASKS=""
           if [ "${{ needs.detect-changes.outputs.toolbox }}" = "true" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TASKS="$TASKS :app:assembleRelease"
+            TASKS="$TASKS :android-desktop:assembleRelease"
           fi
           if [ "${{ needs.detect-changes.outputs.phototok }}" = "true" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TASKS="$TASKS :phototok:assembleRelease"
@@ -290,11 +292,11 @@ jobs:
 
       - name: Build release AAB
         if: github.event_name == 'push'
-        working-directory: android
+        working-directory: products/android
         run: |
           TASKS=""
           if [ "${{ needs.detect-changes.outputs.toolbox }}" = "true" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TASKS="$TASKS :app:bundleRelease"
+            TASKS="$TASKS :android-desktop:bundleRelease"
           fi
           if [ "${{ needs.detect-changes.outputs.phototok }}" = "true" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TASKS="$TASKS :phototok:bundleRelease"
@@ -315,18 +317,18 @@ jobs:
       - name: Prepare Release Assets
         if: github.event_name == 'push'
         run: |
-          mkdir -p android/release-assets
-          if compgen -G "android/app/build/outputs/apk/release/*.apk" > /dev/null; then
-            cp android/app/build/outputs/apk/release/*.apk android/release-assets/photo-selector-toolbox-android-release.apk
+          mkdir -p products/android/release-assets
+          if compgen -G "products/android/android-desktop/build/outputs/apk/release/*.apk" > /dev/null; then
+            cp products/android/android-desktop/build/outputs/apk/release/*.apk products/android/release-assets/photo-selector-toolbox-android-release.apk
           fi
-          if compgen -G "android/app/build/outputs/bundle/release/*.aab" > /dev/null; then
-            cp android/app/build/outputs/bundle/release/*.aab android/release-assets/photo-selector-toolbox-android-release.aab
+          if compgen -G "products/android/android-desktop/build/outputs/bundle/release/*.aab" > /dev/null; then
+            cp products/android/android-desktop/build/outputs/bundle/release/*.aab products/android/release-assets/photo-selector-toolbox-android-release.aab
           fi
-          if compgen -G "android/phototok/build/outputs/apk/release/*.apk" > /dev/null; then
-            cp android/phototok/build/outputs/apk/release/*.apk android/release-assets/phototok-android-release.apk
+          if compgen -G "products/android/phototok/build/outputs/apk/release/*.apk" > /dev/null; then
+            cp products/android/phototok/build/outputs/apk/release/*.apk products/android/release-assets/phototok-android-release.apk
           fi
-          if compgen -G "android/phototok/build/outputs/bundle/release/*.aab" > /dev/null; then
-            cp android/phototok/build/outputs/bundle/release/*.aab android/release-assets/phototok-android-release.aab
+          if compgen -G "products/android/phototok/build/outputs/bundle/release/*.aab" > /dev/null; then
+            cp products/android/phototok/build/outputs/bundle/release/*.aab products/android/release-assets/phototok-android-release.aab
           fi
 
       # `if-no-files-found` defaults to `warn`, which turns a broken build into
@@ -338,7 +340,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: products/android/android-desktop/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload release APK
@@ -346,7 +348,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-release
-          path: android/release-assets/photo-selector-toolbox-android-release.apk
+          path: products/android/release-assets/photo-selector-toolbox-android-release.apk
           if-no-files-found: error
 
       - name: Upload Phototok release APK
@@ -354,7 +356,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: phototok-android-release
-          path: android/release-assets/phototok-android-release.apk
+          path: products/android/release-assets/phototok-android-release.apk
           if-no-files-found: error
 
       # Each app lives in its own Firebase project with its own service-account credential.
@@ -372,7 +374,7 @@ jobs:
           # Must match a tester-group ALIAS created in the Firebase Console
           # (App Distribution > Testers & groups). Override via repo variable.
           groups: ${{ vars.TOOLBOX_FIREBASE_TESTER_GROUP || 'testers' }}
-          file: android/release-assets/photo-selector-toolbox-android-release.apk
+          file: products/android/release-assets/photo-selector-toolbox-android-release.apk
 
       - name: Upload Photo Tok to Firebase App Distribution
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
@@ -384,14 +386,14 @@ jobs:
           serviceCredentialsFileContent: ${{ secrets.PHOTOTOK_FIREBASE_APP_DISTRIBUTION_CREDENTIALS }}
           # Must match a tester-group ALIAS created in the Firebase Console.
           groups: ${{ vars.PHOTOTOK_FIREBASE_TESTER_GROUP || 'testers' }}
-          file: android/release-assets/phototok-android-release.apk
+          file: products/android/release-assets/phototok-android-release.apk
 
       - name: Upload release AAB
         if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
         with:
           name: photo-selector-toolbox-android-release-aab
-          path: android/release-assets/photo-selector-toolbox-android-release.aab
+          path: products/android/release-assets/photo-selector-toolbox-android-release.aab
           if-no-files-found: error
 
       - name: Upload Phototok release AAB
@@ -399,7 +401,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: phototok-android-release-aab
-          path: android/release-assets/phototok-android-release.aab
+          path: products/android/release-assets/phototok-android-release.aab
           if-no-files-found: error
 
       - name: Publish Release Assets
@@ -409,7 +411,7 @@ jobs:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
           name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          files: android/release-assets/*
+          files: products/android/release-assets/*
 
   publish-play:
     name: Publish to Google Play

@@ -1,0 +1,275 @@
+import webbrowser
+from pathlib import Path
+from typing import Optional, List
+from collections import Counter
+
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+
+from photo_selector_toolbox.core.utils import aggregate_focal_lengths
+
+
+from photo_selector_toolbox.core.models import ExifData
+
+
+def _open_file_for_user(filepath: Path):
+    """Opens a file in the default application in a cross-platform way."""
+    try:
+        # Security: Enforce strict whitelist validation to prevent arbitrary code execution
+        if filepath.suffix.lower() != ".png":
+            print(f"Refused to open file with unsupported extension: {filepath.suffix}")
+            return
+
+        uri = filepath.resolve().as_uri()
+        webbrowser.open(uri)
+    except Exception as e:
+        print(f"Could not open file '{filepath}'. Please open it manually.")
+        print(f"Error: {e}")
+
+
+def get_shutter_speed_plot(data: List[ExifData]) -> Optional[Figure]:
+    values = [d.shutter_speed for d in data if d.shutter_speed is not None]
+    if not values:
+        return None
+
+    # Increase default font size for better readability on high-res screens
+    plt.rcParams.update({"font.size": 12, "axes.titlesize": 14, "axes.labelsize": 12})
+
+    counter = Counter(values)
+    top_shutter_speeds = dict(counter.most_common(25))
+
+    # Sort by shutter speed value (the key)
+    sorted_items = sorted(top_shutter_speeds.items(), key=lambda x: x[0])
+    x_vals = [x[0] for x in sorted_items]
+    y_vals = [x[1] for x in sorted_items]
+
+    def format_shutter(val):
+        if val >= 1:
+            return f"{val:.1f}s" if val % 1 != 0 else f"{int(val)}s"
+        denominator = 1 / val
+        if abs(denominator - round(denominator)) < 0.01:
+            return f"1/{int(round(denominator))}s"
+        return f"{val:.5f}s"
+
+    plot_labels = [format_shutter(v) for v in x_vals]
+
+    fig = Figure(figsize=(12, 7), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.bar(range(len(x_vals)), y_vals)
+    ax.set_xticks(range(len(x_vals)))
+    ax.set_xticklabels(plot_labels, rotation=45)
+    ax.set_title("Top 25 Most Used Shutter Speeds")
+    ax.set_xlabel("Shutter Speed")
+    ax.set_ylabel("Count")
+    fig.tight_layout()
+    return fig
+
+
+def _get_distribution_plot(
+    data: List[ExifData], key: str, title: str, xlabel: str
+) -> Optional[Figure]:
+    attr_name = "aperture" if key == "Aperture" else "iso"
+    values = [getattr(d, attr_name) for d in data if getattr(d, attr_name) is not None]
+    if not values:
+        return None
+
+    counter = Counter(values)
+    sorted_items = sorted(counter.items())  # Sort by value
+    x_vals = [str(x[0]) for x in sorted_items]
+    y_vals = [x[1] for x in sorted_items]
+
+    fig = Figure(figsize=(12, 6), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.bar(x_vals, y_vals)
+    ax.tick_params(axis="x", rotation=45)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Count")
+    fig.tight_layout()
+    return fig
+
+
+def get_aperture_plot(data: List[ExifData]) -> Optional[Figure]:
+    return _get_distribution_plot(
+        data=data,
+        key="Aperture",
+        title="Aperture (F-Number) Distribution",
+        xlabel="Aperture (f-stop)",
+    )
+
+
+def get_iso_plot(data: List[ExifData]) -> Optional[Figure]:
+    return _get_distribution_plot(
+        data=data, key="ISO", title="ISO Distribution", xlabel="ISO"
+    )
+
+
+def get_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
+    values = (d.focal_length for d in data if d.focal_length is not None)
+    # Use aggregation logic
+    aggregated_fls = aggregate_focal_lengths(values)
+    if not aggregated_fls:
+        return None
+
+    # Sort by the representative value (sort_key) to ensure X-axis is ordered
+    aggregated_fls.sort(key=lambda x: x[2])
+
+    x_vals = [x[0] for x in aggregated_fls]
+    y_vals = [x[1] for x in aggregated_fls]
+
+    fig = Figure(figsize=(12, 7), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.bar(x_vals, y_vals)
+    ax.tick_params(axis="x", rotation=45)
+    ax.set_title("Focal Length Distribution")
+    ax.set_xlabel("Focal Length (mm)")
+    ax.set_ylabel("Count")
+    fig.tight_layout()
+    return fig
+
+
+def _create_equivalent_focal_length_plot(values: List[float], title: str) -> Figure:
+    """Helper to create equivalent focal length plots."""
+    # Round to nearest integer for cleaner plotting
+    rounded_values = [int(round(v)) for v in values]
+
+    counter = Counter(rounded_values)
+    top_items = dict(counter.most_common(25))
+    sorted_items = sorted(top_items.items())  # Sort by focal length value
+    x_vals = [str(x[0]) for x in sorted_items]
+    y_vals = [x[1] for x in sorted_items]
+
+    fig = Figure(figsize=(12, 7), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.bar(x_vals, y_vals)
+    ax.tick_params(axis="x", rotation=45)
+    ax.set_title(title)
+    ax.set_xlabel("Equivalent Focal Length (mm)")
+    ax.set_ylabel("Count")
+    fig.tight_layout()
+    return fig
+
+
+def get_equivalent_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
+    values = [d.focal_length_35mm for d in data if d.focal_length_35mm is not None]
+    if not values:
+        return None
+
+    return _create_equivalent_focal_length_plot(
+        values, "Top 25 Most Used Equivalent Focal Lengths (35mm)"
+    )
+
+
+def get_apsc_equivalent_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
+    # Calculate APS-C equivalent: 35mm_eq / 1.5
+    values = []
+    for d in data:
+        val_35 = d.focal_length_35mm
+        if val_35 is not None:
+            values.append(val_35 / 1.5)
+
+    if not values:
+        return None
+
+    return _create_equivalent_focal_length_plot(
+        values, "Top 25 Most Used Equivalent Focal Lengths (APS-C)"
+    )
+
+
+def get_lens_plot(data: List[ExifData]) -> Optional[Figure]:
+    values = [d.lens for d in data if d.lens is not None]
+    if not values:
+        return None
+
+    counter = Counter(values)
+    # Sort by count ascending for horizontal bar chart
+    sorted_items = sorted(counter.items(), key=lambda x: x[1])
+    labels = [x[0] for x in sorted_items]
+    counts = [x[1] for x in sorted_items]
+
+    fig = Figure(figsize=(12, max(6, len(sorted_items) * 0.4)), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.barh(labels, counts)
+    ax.set_title("Lens Usage")
+    ax.set_xlabel("Number of Photos")
+    ax.set_ylabel("Lens Model")
+    fig.tight_layout()
+    return fig
+
+
+def get_combination_plot(data: List[ExifData]) -> Optional[Figure]:
+    values = []
+    for d in data:
+        if d.aperture is not None and d.focal_length is not None:
+            values.append((d.aperture, d.focal_length))
+
+    if not values:
+        return None
+
+    counter = Counter(values)
+    top_items = counter.most_common(25)
+    # Sort by count ascending for horizontal bar chart
+    top_items.sort(key=lambda x: x[1])
+
+    labels = [f"f/{ap} @ {int(fl)}mm" for (ap, fl), _ in top_items]
+    counts = [c for _, c in top_items]
+
+    fig = Figure(figsize=(12, max(8, len(top_items) * 0.4)), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.barh(labels, counts)
+    ax.set_title("Top 25 Most Used Aperture & Focal Length Combinations")
+    ax.set_xlabel("Number of Photos")
+    ax.set_ylabel("Combination (Aperture @ Focal Length)")
+    fig.tight_layout()
+    return fig
+
+
+def create_plots(data: List[ExifData], output_dir: Path, show_plots: bool = False):
+    """Generates and saves plots for the analyzed data, optionally opening them."""
+    print(f"\nGenerating plots in '{output_dir}'...")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    plt.style.use("seaborn-v0_8-whitegrid")
+
+    plot_configs = [
+        (
+            "Shutter Speed",
+            get_shutter_speed_plot,
+            "shutter_speed_distribution.png",
+            False,
+        ),
+        ("Aperture", get_aperture_plot, "aperture_distribution.png", True),
+        ("ISO", get_iso_plot, "iso_distribution.png", False),
+        ("Focal Length", get_focal_length_plot, "focal_length_distribution.png", True),
+        (
+            "Equivalent Focal Length (35mm)",
+            get_equivalent_focal_length_plot,
+            "equivalent_focal_length_35mm_distribution.png",
+            True,
+        ),
+        (
+            "Equivalent Focal Length (APS-C)",
+            get_apsc_equivalent_focal_length_plot,
+            "equivalent_focal_length_apsc_distribution.png",
+            True,
+        ),
+        ("Lens", get_lens_plot, "lens_usage.png", True),
+        (
+            "Aperture & Focal Length combination",
+            get_combination_plot,
+            "aperture_focal_length_combinations.png",
+            True,
+        ),
+    ]
+
+    for name, getter, filename, should_show in plot_configs:
+        fig = getter(data)
+        if fig:
+            path = output_dir / filename
+            fig.savefig(path)
+            if show_plots and should_show:
+                _open_file_for_user(path)
+        else:
+            print(f"Skipping {name} plot: No data available.")
+
+    print("Plots saved successfully.")

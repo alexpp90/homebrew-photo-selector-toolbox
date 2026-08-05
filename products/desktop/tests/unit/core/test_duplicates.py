@@ -1,0 +1,149 @@
+import pytest
+from unittest.mock import patch, MagicMock
+from photo_selector_toolbox.core.duplicates import (
+    find_duplicates,
+    move_to_trash,
+    get_file_hash,
+)
+
+
+@pytest.fixture
+def temp_image_folder(tmp_path):
+    """Creates a temporary folder with some image files."""
+    folder = tmp_path / "images"
+    folder.mkdir()
+
+    # Image 1 (Original)
+    img1 = folder / "img1.jpg"
+    img1.write_bytes(b"image_content_A")
+
+    # Image 2 (Duplicate of 1)
+    img2 = folder / "img2.jpg"
+    img2.write_bytes(b"image_content_A")
+
+    # Image 3 (Unique content, same size as A)
+    # This is tricky with short strings, but let's just make it different content
+    img3 = folder / "img3.jpg"
+    img3.write_bytes(b"image_content_B")
+
+    # Image 4 (Unique size)
+    img4 = folder / "img4.png"
+    img4.write_bytes(b"image_content_C_longer")
+
+    # Image 5 (HEIC, same content as A)
+    img5 = folder / "img5.heic"
+    img5.write_bytes(b"image_content_A")
+
+    return folder
+
+
+def test_get_file_hash(temp_image_folder):
+    img1 = temp_image_folder / "img1.jpg"
+    h = get_file_hash(img1)
+    assert h is not None
+    assert len(h) == 64  # SHA256 hexdigest length
+
+
+def test_find_duplicates(temp_image_folder):
+    duplicates = find_duplicates(temp_image_folder)
+
+    # We expect 1 group of duplicates (img1 and img2 and img5)
+    # img1 and img2 are jpg, img5 is heic. All have content 'image_content_A' (15 bytes)
+    assert len(duplicates) == 1
+    group = duplicates[0]
+
+    assert len(group["files"]) == 3
+    filenames = {p.name for p in group["files"]}
+    assert "img1.jpg" in filenames
+    assert "img2.jpg" in filenames
+    assert "img5.heic" in filenames
+    assert "img3.jpg" not in filenames
+
+
+def test_find_duplicates_no_duplicates(tmp_path):
+    f = tmp_path / "unique"
+    f.mkdir()
+    (f / "a.jpg").write_bytes(b"1")
+    (f / "b.jpg").write_bytes(b"2")
+
+    assert len(find_duplicates(f)) == 0
+
+
+def test_find_duplicates_progress_callback(temp_image_folder):
+    # img1, img2, img3, img5 have same size. img4 different.
+    # Group 1: img1, img2, img3, img5 (size 15 bytes) -> 4 files to hash
+    # Group 2: img4 -> 1 file -> ignored by preliminary size check
+    # Logic: "Filter for groups that have more than 1 file".
+    # So img4 is skipped before hashing.
+    # Total to hash = 4.
+
+    mock_callback = MagicMock()
+    find_duplicates(temp_image_folder, callback=mock_callback)
+
+    # Should be called 4 times
+    assert mock_callback.call_count == 4
+    # Check last call args
+    mock_callback.assert_called_with(4, 4)
+
+
+@patch("photo_selector_toolbox.core.duplicates.send2trash")
+def test_move_to_trash(mock_send2trash, tmp_path):
+    f = tmp_path / "delete_me.txt"
+    f.touch()
+
+    move_to_trash(f)
+    mock_send2trash.assert_called_once_with(str(f))
+
+
+@patch("photo_selector_toolbox.core.duplicates.send2trash")
+def test_move_to_trash_failure(mock_send2trash, tmp_path):
+    mock_send2trash.side_effect = OSError("Access denied")
+    f = tmp_path / "delete_me.txt"
+
+    with pytest.raises(OSError):
+        move_to_trash(f)
+
+
+def test_find_duplicates_excludes_subfolders(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+
+    selection_dir = root / "Selection"
+    selection_dir.mkdir()
+
+    (root / "a.jpg").write_bytes(b"content_X")
+    (root / "b.jpg").write_bytes(b"content_X")
+
+    (selection_dir / "c.jpg").write_bytes(b"content_X")
+    (selection_dir / "d.jpg").write_bytes(b"content_X")
+
+    # 1. Scanning from root: should find only a.jpg and b.jpg (since Selection folder is skipped)
+    duplicates = find_duplicates(root)
+    assert len(duplicates) == 1
+    group = duplicates[0]
+    filenames = {p.name for p in group["files"]}
+    assert filenames == {"a.jpg", "b.jpg"}
+
+    # 2. Scanning from specifically selected Selection folder: should scan inside it
+    duplicates_selection = find_duplicates(selection_dir)
+    assert len(duplicates_selection) == 1
+    group_sel = duplicates_selection[0]
+    filenames_sel = {p.name for p in group_sel["files"]}
+    assert filenames_sel == {"c.jpg", "d.jpg"}
+
+
+@patch("builtins.open")
+def test_get_file_hash_oserror(mock_open):
+    mock_open.side_effect = OSError("Permission denied")
+    h = get_file_hash("dummy_path")
+    assert h is None
+
+
+def test_find_duplicates_non_existent():
+    assert find_duplicates("/nonexistent/folder/path") == []
+
+
+@patch("os.scandir", side_effect=OSError("Access denied"))
+def test_find_duplicates_scandir_oserror(mock_scandir, tmp_path):
+    assert find_duplicates(tmp_path) == []
+
