@@ -82,3 +82,7 @@
 **Learning:** When testing Compose modal bottom sheets or overlays over screens containing metrics or labels, `composeRule.onNode(hasText("..."))` can fail with `AssertionError: Expected exactly '1' node but found '2' nodes` if both the background screen and the sheet display identical labels (such as `ScoreMetric.NOISE`'s `shortLabel` and `displayName` both being `"Noise"`).
 **Action:** Always scope semantics assertions for content inside sheets or dialogs using `hasAnyAncestor(hasTestTag("sheet_tag"))` (e.g. `hasText("Noise") and hasAnyAncestor(hasTestTag("score_legend_sheet"))`) to ensure queries specifically match the intended container element.
 
+
+## 2024-05-18 - Global Interactive Cursors for Native Elements in Tkinter
+**Learning:** `ttk.Style().configure` silently ignores widget-level options like `cursor`. To provide a consistent `hand2` cursor affordance for native UI elements (buttons, comboboxes, checkbuttons) across the entire application without configuring every instance manually, it's necessary to use the Tk option database.
+**Action:** Always use `root.option_add("*TButton.cursor", "hand2")` (and similar for other interactive ttk widgets) during application theme setup to guarantee consistent interactive cursor states globally.
