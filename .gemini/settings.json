@@ -1,40 +1,174 @@
 {
+  "_generated_by": "ai/skills/sync-framework/scripts/gen_gemini_settings.py",
+  "_do_not_edit": "Edit ai/agents/*.md and regenerate. See the sync-framework skill.",
   "agents": {
-    "backend_agent": {
-      "description": "Backend logic specialist for core Python modules (reader, analyzer, sharpness, duplicates, utils, formatting, models, cli, visualizer). No GUI/Tkinter code."
+    "android-desktop-core-agent": {
+      "description": "Data and domain specialist for the Android Desktop product only (products/android/android-desktop/src/com/photoselectortoolbox/data/ and .../domain/). OpenCV analysis, Room score cache, SAF traversal, Google Drive source, use cases. Use proactively for any :app non-UI work. Never touches :phototok.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "gui_agent": {
-      "description": "GUI/Tkinter specialist for gui.py, sharpness_gui.py, controllers.py, image_panels.py, and fullscreen_viewer.py. Handles layout, threading, event handling, and ImageTk constraints."
+    "android-desktop-ui-agent": {
+      "description": "Compose UI specialist for the Android Desktop product only (products/android/android-desktop/src/com/photoselectortoolbox/ui/ and .../viewmodel/). Material 3 theming for large screens, NavigationRail, the three-column and focused selector layouts, DeX keyboard/pointer support. Use proactively for any :app UI work. Never touches :phototok.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "test_agent": {
-      "description": "Testing specialist for the tests/ directory. Writes, organizes, and runs pytest tests with proper mocking patterns."
+    "android-shared-build-agent": {
+      "description": "Android build specialist for products/android/build.gradle.kts, products/android/android-desktop/build.gradle.kts, gradle/, and .github/workflows/android.yml. Handles Gradle, dependency management, R8, signing, and Android CI/CD.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash",
+        "WebFetch"
+      ],
+      "enable_write_tools": true
     },
-    "build_agent": {
-      "description": "Build/CI specialist for scripts/, .github/workflows/, and pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing."
+    "desktop-backend-agent": {
+      "description": "Backend logic specialist for core Python modules (reader, analyzer, sharpness, duplicates, utils, formatting, models, cli, visualizer). No GUI/Tkinter code.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "android_ui_agent": {
-      "description": "Android Jetpack Compose UI specialist for all files under android/app/src/main/.../ui/. Handles Material 3 theming, adaptive layouts (phone/tablet/DeX), navigation, gesture handling, and ViewModels."
+    "desktop-build-agent": {
+      "description": "Build/CI specialist for scripts/, .github/workflows/, and pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "android_core_agent": {
-      "description": "Android data and domain layer specialist for android/app/src/main/.../data/ and .../domain/. Handles EXIF extraction (AndroidX ExifInterface), image analysis algorithms (OpenCV Android), Room database, repositories, and coroutine-based async processing."
+    "desktop-gui-agent": {
+      "description": "GUI/Tkinter specialist for gui.py, sharpness_gui.py, controllers.py, image_panels.py, and fullscreen_viewer.py. Handles layout, threading, event handling, and ImageTk constraints.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "android_build_agent": {
-      "description": "Android build specialist for android/build.gradle.kts, android/app/build.gradle.kts, gradle/, and .github/workflows/android.yml. Handles Gradle, dependency management, R8, signing, and Android CI/CD."
+    "desktop-test-agent": {
+      "description": "Testing specialist for the tests/ directory. Writes, organizes, and runs pytest tests with proper mocking patterns.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "photo_researcher_agent": {
-      "description": "Photo technical and artistic research specialist. Consulted by both desktop and Android agents when requirements are vague, requiring deep domain knowledge in photography, metadata standards, image quality metrics, or color science."
+    "phototok-core-agent": {
+      "description": "Data and domain specialist for the PhotoTok product only (products/android/phototok/src/com/phototok/data/, .../domain/, .../di/). DataStore settings, progressive SAF discovery, pure feed-ordering logic, optimistic copy/move. Use proactively for any :phototok non-UI work. Never touches :app.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "ux_agent": {
-      "description": "Professional design, UX flow, user patterns, and flow analysis specialist. Provides platform-specific design guidance for both desktop (mouse/keyboard) and Android (touch/gesture). Designs premium interface aesthetics, adaptive layouts, micro-interactions, and monitors user interaction trends."
+    "phototok-ui-agent": {
+      "description": "Compose UI specialist for the PhotoTok product only (products/android/phototok/src/com/phototok/ui/ and .../viewmodel/). Gesture-first phone feed, VerticalPager, swipe actions, coach-mark overlays, bottom sheets. Use proactively for any :phototok UI work. Never touches :app.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "publish_agent": {
-      "description": "Publish & compliance specialist for Google Play releases and legal obligations (Germany: DDG/Impressum, DSGVO, DSA non-trader). Owns docs/phototok/ (release checklist as the single source of truth for open release tasks, privacy policy, Impressum), LegalLinks.kt, and OAuth scope policy enforcement (drive.file only). Verifies current Play/Google policies via authoritative sources; prepares instructions for human-only console steps."
+    "shared-code-health-agent": {
+      "description": "Code health and continuous-improvement specialist. Use proactively after any feature or fix lands, and for refactoring, tech-debt reduction, dead-code removal, de-duplication, and complexity reduction across all three solutions. Owns the refactoring backlog in ai/memory/code_health.md and the post-task retrospective.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
     },
-    "code_health_agent": {
-      "description": "Code health and continuous-improvement specialist: refactoring backlog (.Jules/code_health.md), post-task retrospectives, pattern enforcement, and agent-framework maintenance. Use proactively after feature work."
+    "shared-mentor-agent": {
+      "description": "Reflection mentor and memory gatekeeper. Consult at the end of every task that produced candidate memories: reviews proposed ai/memory/ lessons and playbook changes with fresh eyes, judges generalizability, dedupes against existing memory, and decides what gets memorized where. Also use to review retrospectives for missed lessons.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write"
+      ],
+      "enable_write_tools": true,
+      "model": "opus"
     },
-    "mentor_agent": {
-      "description": "Reflection mentor and memory gatekeeper. Consult at end of every task: reviews candidate .Jules/ lessons and playbook changes with fresh eyes, dedupes against existing memory, decides what gets memorized where."
+    "shared-photo-researcher-agent": {
+      "description": "Photo technical and artistic research specialist. Consulted by both desktop and Android agents when requirements are vague, requiring deep domain knowledge in photography, metadata standards, image quality metrics, or color science.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "WebSearch",
+        "WebFetch"
+      ],
+      "enable_write_tools": false
+    },
+    "shared-publish-agent": {
+      "description": "Publish & compliance specialist for Google Play releases and legal obligations (Germany: DDG/Impressum, DSGVO, DSA non-trader). Owns docs/products/phototok/ release and legal artifacts (release checklist as the single source of truth for open release tasks, privacy policy, Impressum), LegalLinks.kt, and OAuth scope policy enforcement (drive.file only). Verifies current Play/Google policies via authoritative sources; prepares instructions for human-only console steps.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "WebSearch",
+        "WebFetch"
+      ],
+      "enable_write_tools": true
+    },
+    "shared-ux-agent": {
+      "description": "Professional design, UX flow, user patterns, and flow analysis specialist. Provides platform-specific design guidance for both desktop (mouse/keyboard) and Android (touch/gesture). Designs premium interface aesthetics, adaptive layouts, micro-interactions, and monitors user interaction trends.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "WebSearch",
+        "WebFetch"
+      ],
+      "enable_write_tools": false
     }
   }
 }

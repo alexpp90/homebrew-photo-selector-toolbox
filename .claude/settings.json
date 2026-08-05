@@ -5,17 +5,40 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat \"$CLAUDE_PROJECT_DIR/.claude/hooks/task-lifecycle.md\" 2>/dev/null || true"
+            "command": "cat \"$CLAUDE_PROJECT_DIR/ai/hooks/task-lifecycle.md\" 2>/dev/null || true"
           }
         ]
       }
     ],
-    "UserPromptSubmit": [
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_paths.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_commit.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Reminder: follow the mandatory task lifecycle in .skills/self_improvement/SKILL.md (pre-work reads, post-work retrospective).'"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/check_retrospective.py\"",
+            "timeout": 15
           }
         ]
       }

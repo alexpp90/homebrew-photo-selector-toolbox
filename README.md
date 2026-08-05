@@ -31,13 +31,40 @@
 
 ## 📦 Three Native Solutions, One Shared Repository
 
-The repository targets three independent solutions optimized for their respective environments and UX models, while sharing high-level photographic domain concepts (like EXIF data structures and quality algorithms):
+The repository targets three independent products, each optimized for its environment and UX model. They share photographic *concepts* — the EXIF contract, score semantics, what "Selection" means — and, between the two Android products, one small library module. They do not share implementations.
 
-| Solution | Location | Tech Stack | Target Environment | Primary UX Paradigm |
-| :--- | :--- | :--- | :--- | :--- |
-| **Desktop Suite** | `src/` | Python 3.10+, Tkinter, OpenCV, rawpy | macOS, Windows, Linux | Menu & Keyboard-driven, split view |
-| **Android Desktop** | `android/app/` | Kotlin, Compose, Room, OpenCV, Vico Charts | Samsung DeX, Large Tablets ($\ge 840$dp) | Mouse, Keyboard & Multi-Pane Touch |
-| **Android Phone** | `android/phototok/` | Kotlin, Compose, DataStore (lightweight) | Portrait Mobile Phones ($< 600$dp) | Swipe-centric, Gesture-first ("Photo Tok") |
+| Product | Code | Tech Stack | Target Environment | Primary UX Paradigm | Docs |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Desktop** | `products/desktop/src/` | Python 3.10+, Tkinter, OpenCV, rawpy | macOS, Windows, Linux | Menu & keyboard-driven, split view | [docs](docs/products/desktop/README.md) |
+| **Android Desktop** | `products/android/android-desktop/` (`:android-desktop`) | Kotlin, Compose, Room, OpenCV, Vico | Samsung DeX, large tablets ($\ge 840$dp) | Mouse, keyboard & multi-pane touch | [docs](docs/products/android-desktop/README.md) |
+| **PhotoTok** | `products/android/phototok/` (`:phototok`) | Kotlin, Compose, DataStore (lightweight) | Portrait phones ($< 600$dp) | Swipe-centric, gesture-first | [docs](docs/products/phototok/README.md) |
+| *(shared library)* | `products/android/core/` (`:core`) | Kotlin | — | EXIF model + readers used by both Android products | [docs](docs/shared/README.md) |
+
+Naming matters here — "the Android app" is ambiguous. Canonical names, slugs and their mapping to Gradle modules and package identifiers: [`docs/GLOSSARY.md`](docs/GLOSSARY.md).
+
+### Repository map
+
+All product code lives under `products/`, one directory per product, the same shape in each:
+`src/` for sources, `tests/` for tests, its own build configuration, its own `README.md`.
+Everything else at the root is genuinely shared.
+
+```
+products/                  ALL product code
+  desktop/                   Desktop  — src/ tests/ benchmarks/ scripts/ pyproject.toml
+  android/                   Gradle build root for both Android products
+    android-desktop/           Android Desktop — src/ tests/ res/ AndroidManifest.xml
+    phototok/                  PhotoTok        — src/ tests/ res/ AndroidManifest.xml
+    core/                      :core — the only code the two Android products share
+docs/                      Product documentation, per product      -> docs/README.md
+ai/                        AI agent framework: routing, agents, skills, memory -> ai/README.md
+scripts/                   Cross-product tooling — run_tests.sh (the local CI mirror)
+assets/                    Shared branding
+Formula/  Casks/           Homebrew tap definitions (must stay at the root — brew tap
+                           only looks here)
+```
+
+The layout rules, and why `android/` groups two products, are in
+[`products/README.md`](products/README.md).
 
 ---
 
@@ -65,7 +92,7 @@ A full-featured Python command-line utility and custom Tkinter graphical interfa
 
 ---
 
-## 🖥️ 2. Android Desktop & DeX Companion
+## 🖥️ 2. Android Desktop (Tablet & DeX)
 
 Built specifically for desktop mode environments like Samsung DeX, Chromebooks, and large-screen tablets, providing parity with the desktop culling workflow.
 
@@ -82,7 +109,7 @@ Built specifically for desktop mode environments like Samsung DeX, Chromebooks, 
 
 ---
 
-## 📱 3. PhotoTok Mobile Client
+## 📱 3. PhotoTok (Phone)
 
 A lightweight, gesture-first, touch-optimized portrait client designed for quick, single-handed photo curation on your phone.
 
@@ -104,16 +131,16 @@ A lightweight, gesture-first, touch-optimized portrait client designed for quick
 
 ## 📊 Platform Feature Sync Matrix
 
-| Feature | Desktop | Android Desktop | Android Phone (PhotoTok) | Notes |
+| Feature | Desktop | Android Desktop | PhotoTok | Notes |
 | :--- | :---: | :---: | :---: | :--- |
 | **Image Review Layouts** | Standard / Focus | 3-Column / Focused | Vertical Pager | Desktop uses side-by-side; Phone utilizes vertical gesture pagers. |
 | **Center Sharpness Score** | ✅ | ✅ | ✅ | Center 50% crop Laplacian variance check. |
 | **Laplacian Noise (MAD)** | ✅ | ✅ | ✅ | Estimating noise with Median Absolute Deviation. |
 | **Highlights/Shadows Clipping** | ✅ | ✅ | ✅ | Grayscale pixel thresholds $\ge 254$ and $\le 2$. |
-| **SQLite Score Caching** | ✅ | ✅ | ❌ | Phone mode avoids local DB overhead to stay lightweight. |
+| **SQLite Score Caching** | ✅ | ✅ | ❌ | PhotoTok avoids local DB overhead to stay lightweight. |
 | **Ollama Local AI VLM** | ✅ | ❌ | ❌ | Excluded from mobile to conserve battery and compute. |
-| **Matplotlib / Vico Charts** | ✅ | ✅ | ❌ | Phone mode relies on simplified scrollable details. |
-| **dHash Grouping Levels** | ✅ | ✅ | ❌ (Time-only) | Phone mode uses simple temporal burst checks. |
+| **Matplotlib / Vico Charts** | ✅ | ✅ | ❌ | PhotoTok relies on simplified scrollable details. |
+| **dHash Grouping Levels** | ✅ | ✅ | ❌ (Time-only) | PhotoTok uses simple temporal burst checks. |
 | **SMB Path Resolution** | ✅ | ❌ | ❌ | Android delegates remote directory shares via SAF. |
 | **ExifTool Integration** | ✅ | ❌ (ExifInterface) | ❌ (ExifInterface) | Android uses native AndroidX ExifInterface. |
 | **Picture Randomization** | ❌ | ❌ | ✅ | Phone settings toggle to shuffle loaded assets. |
@@ -201,8 +228,8 @@ Join our testing community to receive over-the-air previews via the **Firebase A
    ./gradlew assembleDebug
    ```
    Debug APKs are output to:
-   - `:app` (Toolbox): `android/app/build/outputs/apk/debug/`
-   - `:phototok` (Photo Tok): `android/phototok/build/outputs/apk/debug/`
+   - `:android-desktop` (Toolbox): `products/android/android-desktop/build/outputs/apk/debug/`
+   - `:phototok` (PhotoTok): `products/android/phototok/build/outputs/apk/debug/`
 
 ---
 

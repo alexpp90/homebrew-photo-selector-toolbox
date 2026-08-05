@@ -1,123 +1,96 @@
 # Agent Instructions
 
-Welcome to the Photo Selector Toolbox project. When modifying this codebase, you must adhere to the following rules:
+This is the entry point for every AI coding agent working in this repository. It is
+deliberately short: the framework itself lives in [`ai/`](ai/README.md), and the product
+documentation lives in [`docs/`](docs/README.md).
 
-1. **Keep Requirements Updated:** You must read the `REQUIREMENTS.md` file in the root directory before starting work on new features, modifying existing features, or changing project architecture/behavior.
-2. **Update After Changes:** If your task introduces new requirements, alters existing rules (e.g., UI layout, threading models, duplicate logic, dependency lists), or deprecates features, you MUST update `REQUIREMENTS.md` to reflect these changes before finalizing your work.
-3. **Consistency:** Ensure that any code changes you make perfectly align with the rules specified in `REQUIREMENTS.md` unless the user explicitly instructs you to change those rules.
-4. **Testing Context:** Review the testing and headless execution requirements in `REQUIREMENTS.md` (e.g., using `xvfb-run`) when running tests or debugging GUI components.
-5. **Write Proper Tests:** For every new feature, bug fix, or logic modification, you MUST write or update corresponding automated tests (unit tests or integration tests) to ensure that the code behaves exactly as expected. Tests must be executed and verify correctness before completing the task.
-5a. **Verify Against the CI Mirror, Not a Subset:** Before finalizing, run `./scripts/run_tests.sh` (add `--all` when an emulator or device is attached). It reproduces every gate CI enforces — flake8, the coverage threshold, the `-m "not visual"` split, and `assembleDebugAndroidTest`, which is the only task that compiles `src/androidTest`. Bare `pytest` or `gradlew testDebugUnitTest` is a strict subset and is not sufficient evidence that CI will pass. Read the printed summary: gates reported `⊘ SKIPPED` are accepted risks that must be named in your task summary. See [`docs/CI_PARITY.md`](docs/CI_PARITY.md) for what is legitimately un-runnable locally and how to read a failed Actions run. **Never push a speculative fix and let CI adjudicate it** — a chain of `fix(ci)`/`fix(test)` commits on a branch means this step was skipped. If you change a gate in `.github/workflows/`, mirror it in `scripts/run_tests.sh` and `docs/CI_PARITY.md` in the same commit.
-6. **No Scratch Files in the Repo:** Never commit temporary or working artifacts (e.g., `scratch*.py`, `pr_desc.txt`, lint/analysis report dumps, debug scripts). Keep them outside the repository or rely on `.gitignore`. Benchmarks belong in `benchmarks/`, never in the repository root.
-7. **Single Source of Truth for Agent Scopes:** The per-agent config files in `.agents/*.md` are canonical for each agent's detailed scope and instructions (`.claude/agents/` and `.agents/` are symlinks to them — never edit through the symlinks' summaries elsewhere). The tables below are a routing summary only — when an agent's scope changes, update the config file first, then this summary and `.gemini/settings.json` in the same change.
-8. **Mandatory Task Lifecycle:** Every task, in every tool, starts and ends with the lifecycle defined in `.skills/self_improvement/SKILL.md` — pre-work reads (requirements, lessons, agent config) and a post-work retrospective (tests, requirements sync, lesson capture, refactoring backlog, framework-drift fixes). This is not optional.
+**Read in this order:**
 
-Full framework documentation: [`docs/AGENT_FRAMEWORK.md`](docs/AGENT_FRAMEWORK.md).
+1. This file — the rules below are non-negotiable and apply to every task.
+2. [`ai/ROUTING.md`](ai/ROUTING.md) — identify the target product, then your agent.
+3. `ai/agents/<your-agent>.md` — your scope and role.
+4. `docs/products/<product>/REQUIREMENTS.md` — what the product you are touching must do.
 
-## Three Independent Solutions
+## The three products
 
-This project targets **three independent solutions** that share the same repository:
+The repository ships **three independent products**. Identifying which one a task targets is
+the first action of every task.
 
-| Solution | Code Directory / Module | Tech Stack | Primary Target |
-|----------|--------------------------|------------|----------------|
-| **Desktop** | `src/` (Python) | Python + Tkinter | Desktop workstations (macOS, Linux, Windows) |
-| **Android Desktop** | `android/app/` (Kotlin) | Jetpack Compose + Room + OpenCV + Vico | Samsung DeX, large tablets (≥840dp), Chromebooks |
-| **Android Phone** | `android/phototok/` (Kotlin) | Jetpack Compose + DataStore (lightweight) | Mobile phone form factor (<600dp), portrait only |
+| Product | Code | Tech | Target |
+|---|---|---|---|
+| **Desktop** | `products/desktop/src/photo_selector_toolbox/` | Python + Tkinter | macOS, Linux, Windows |
+| **Android Desktop** | `products/android/android-desktop/` (`:android-desktop`) | Kotlin, Compose, Room, OpenCV, Vico | Samsung DeX, tablets ≥ 840 dp |
+| **PhotoTok** | `products/android/phototok/` (`:phototok`) | Kotlin, Compose, DataStore | Phones < 600 dp, gesture-first |
 
-The solutions share high-level photographic domain concepts (like EXIF contracts and image score descriptions) but have **independent implementations** optimized for their respective environments and UX models. 
+They share photographic *concepts* — the EXIF contract, score semantics, what "Selection"
+means — and nothing else. The only shared implementation is `products/android/core/` (`:core`), which
+holds the EXIF model and readers used by both Android products. Everything else is
+independent by design: do not copy code between products, and do not force identical
+structures where the platform does not want them.
 
-### Feature Sync & Coordination Policy
+Canonical names and the mapping to modules and packages: [`docs/GLOSSARY.md`](docs/GLOSSARY.md).
 
-When a new feature is requested, the coordinator must evaluate which of the three solutions is the target (single target, multiple targets, or all three). 
-- **Single Target**: Delegate exclusively to the subagents responsible for that specific solution. Do not modify or inject code into the other solutions.
-- **Multiple/All Targets**: Split the task into distinct, independent subtasks, one for each targeted solution. Tailor the implementation to each solution's technology stack and UX guidelines. Do not force identical code or structures when they do not make sense for the target platform (e.g., Android Phone has a gesture-first interface while Desktop has a menu-driven interface).
-- **Feature Feasibility & Exclusions**:
-  - **Local AI (Ollama VLM)**: Desktop-only due to mobile computing constraints.
-  - **OpenCV Analysis & Room DB Cache & Vico Charts**: Supported on Desktop and Android Desktop, but excluded from Android Phone to keep the application lightweight.
-  - **Picture Shuffling/Randomization**: Android Phone only (built into the Settings of the phone client).
+## Rules
 
-## Multi-Agent System
+1. **Identify the product first, and stay inside it.** Files under `products/desktop/src/` and `products/desktop/tests/` are
+   Desktop; `products/android/android-desktop/` is Android Desktop; `products/android/phototok/` is PhotoTok;
+   `products/android/core/` affects both Android products and needs both core agents to review.
+   Leaking code between products is a defect, not reuse.
+2. **Mandatory task lifecycle.** Every task, in every tool, starts with the
+   [`task-lifecycle`](ai/skills/task-lifecycle/SKILL.md) skill and ends with the
+   [`retrospective`](ai/skills/retrospective/SKILL.md) skill. This is not optional; in Claude
+   Code and Antigravity a `Stop` hook checks it.
+3. **Requirements follow behaviour, in the same commit.** Each product owns
+   `docs/products/<product>/REQUIREMENTS.md`; rules holding for more than one product live in
+   [`docs/shared/`](docs/shared/). The [`sync-requirements`](ai/skills/sync-requirements/SKILL.md)
+   skill decides what counts and where it goes. There is no repository-root `REQUIREMENTS.md`.
+4. **Write and run tests for every feature, fix or logic change.** Tests must be executed and
+   verify correctness before the task is complete.
+5. **Verify against the CI mirror, not a subset.** `./scripts/run_tests.sh` (add `--all` with a
+   device attached) reproduces every gate CI enforces; `pytest` and `gradlew testDebugUnitTest`
+   do not. Gates reported `⊘ SKIPPED` are accepted risks that must be named in your task
+   summary. **Never push a speculative fix and let CI adjudicate it.** Changing a gate in
+   `.github/workflows/` obliges you to mirror it in `scripts/run_tests.sh` and
+   `docs/build/CI_PARITY.md` in the same commit. Details:
+   [`verify-build`](ai/skills/verify-build/SKILL.md).
+6. **No scratch files in the repo.** Never commit temporary or working artifacts
+   (`scratch*.py`, `pr_desc.txt`, lint/analysis report dumps, debug scripts). Benchmarks belong
+   in `products/desktop/benchmarks/`, never in the repository root. Enforced by the
+   `guard_paths.py` and `guard_commit.py` hooks, which block the write and the commit.
+7. **Single source of truth.** Everything under `ai/` is canonical; `.claude/`, `.gemini/` and
+   `.agents/` are symlinks into it and `.gemini/settings.json` is generated. Edit through `ai/`,
+   then run [`sync-framework`](ai/skills/sync-framework/SKILL.md) — writes through the mirrored
+   directories are blocked.
+8. **Memory is mentor-gated.** Lessons go to `ai/memory/` via
+   [`record-lesson`](ai/skills/record-lesson/SKILL.md), and only after the
+   `@shared-mentor-agent` consult. Recurring task types become playbooks via
+   [`create-playbook`](ai/skills/create-playbook/SKILL.md).
 
-This project uses a multi-agent system with **12 specialized subagents** organized into platform groups plus shared consultants. The coordinator (default agent) automatically delegates work to the appropriate subagent based on the task and target solution.
+## Where things live
 
-### Agent Roster
+Every product owns one directory under `products/`, and every product directory has the
+same shape: `src/` for sources, `tests/` for tests, its own build configuration, its own
+`README.md`. Nothing product-specific lives at the repository root.
 
-#### Desktop Agents (Python/Tkinter)
+```
+products/
+  desktop/            Desktop product (Python)      — src/ tests/ benchmarks/ scripts/ pyproject.toml
+  android/            The Android platform group    — one Gradle build for both Android products
+    android-desktop/  Android Desktop product       — src/ tests/ res/ AndroidManifest.xml
+    phototok/         PhotoTok product              — src/ tests/ res/ AndroidManifest.xml
+    core/             The only code the two Android products share — src/
+docs/                 Product documentation, organised per product  -> docs/README.md
+ai/                   Agent framework: routing, agents, skills, hooks, commands,
+                      rules, memory -> ai/README.md
+scripts/              Cross-product tooling — run_tests.sh (the local CI mirror)
+assets/               Shared branding used by the README and the desktop icons
+Formula/  Casks/      Homebrew tap definitions — MUST stay at the repository root
+```
 
-| Agent | Scope | Config File |
-|-------|-------|-------------|
-| **`@backend_agent`** | Core Python logic: `reader.py`, `readers/`, `analyzer.py`, `sharpness.py`, `duplicates.py`, `utils.py`, `formatting.py`, `models.py`, `cli.py`, `visualizer.py`, `tools.py`, `ollama_tool.py`, `cache.py`, `config.py` | `.agents/backend_agent.md` |
-| **`@gui_agent`** | Tkinter GUI: `gui.py`, `sharpness_gui.py`, `controllers.py`, `image_panels.py`, `fullscreen_viewer.py`, `gui_utils.py` | `.agents/gui_agent.md` |
-| **`@test_agent`** | Desktop testing: `tests/` (incl. `tests/visual/`), `benchmarks/` | `.agents/test_agent.md` |
-| **`@build_agent`** | Desktop build & CI: `scripts/`, desktop GitHub workflow (`desktop.yml`), `Formula/`, `Casks/`, `pyproject.toml` | `.agents/build_agent.md` |
+The Android modules override Gradle's default source-set convention so that
+they match the other products: sources in `src/`, unit tests in `tests/unit/`,
+instrumented tests in `tests/instrumented/`. The overriding `sourceSets` block is in each
+module's `build.gradle.kts` — keep the three copies in sync.
 
-#### Android Agents (Kotlin/Compose)
-
-| Agent | Scope | Config File |
-|-------|-------|-------------|
-| **`@android_ui_agent`** | Jetpack Compose UI: All files under `android/app/src/main/.../ui/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/ui/` (Android Phone) | `.agents/android_ui_agent.md` |
-| **`@android_core_agent`** | Android data & domain layers: `android/app/src/main/.../data/`, `android/app/src/main/.../domain/` (Android Desktop) and `android/phototok/src/main/java/com/phototok/data/`, `android/phototok/src/main/java/com/phototok/viewmodel/` (Android Phone) | `.agents/android_core_agent.md` |
-| **`@android_build_agent`** | Android build: `android/build.gradle.kts`, `android/app/build.gradle.kts`, `android/phototok/build.gradle.kts`, `android/settings.gradle.kts`, `android/gradle/`, GitHub Actions Android workflow (`android.yml`), ProGuard/R8 | `.agents/android_build_agent.md` |
-
-#### Shared Consultant Agents (Cross-Platform)
-
-| Agent | Scope | Config File |
-|-------|-------|-------------|
-| **`@photo_researcher_agent`** | Photographic science, image quality metrics, aesthetics, and requirement elucidation. Consulted by both desktop and Android agents. | `.agents/photo_researcher_agent.md` |
-| **`@ux_agent`** | Professional design, UX flows, ergonomics, and pattern analysis. Provides solution-specific design guidance (Desktop mouse/keyboard vs. Android Desktop tablet/DeX multi-pane vs. Android Phone portrait/touch-first). | `.agents/ux_agent.md` |
-| **`@publish_agent`** | Google Play publishing & compliance: `docs/phototok/` (release checklist = single source of truth for open release tasks, privacy policy, Impressum), `LegalLinks.kt`, OAuth scope policy (`drive.file` only), DSA non-trader status, Data Safety answers, target-API deadline watch. | `.agents/publish_agent.md` |
-| **`@code_health_agent`** | Continuous improvement: refactoring backlog (`.Jules/code_health.md`), post-task retrospectives, pattern enforcement, and keeping the agent framework itself up to date (`.agents/`, `.skills/`). | `.agents/code_health_agent.md` |
-| **`@mentor_agent`** | Reflection mentor & memory gatekeeper: reviews candidate lessons/playbooks at end of task with fresh eyes, dedupes against existing memory, decides what gets memorized where. All `.Jules/` and playbook writes go through this gate. | `.agents/mentor_agent.md` |
-
-### Coordinator Behavior
-
-The coordinator agent (default) handles:
-
-- **Target Solution Detection**: Evaluates which file paths, modules, or description clauses are affected. Files under `src/` or `tests/` belong to Desktop; files under `android/app/` belong to Android Desktop; files under `android/phototok/` belong to Android Phone.
-- **Auto-delegation**: Automatically routes work to the appropriate subagents. When a task spans multiple solutions, the coordinator breaks it down into subtasks and delegates each portion.
-- **Consultation on Vagueness**: Consults `@photo_researcher_agent` for photographic science, and `@ux_agent` for visual styling and interaction flows (always specifying which of the 3 target solutions is being worked on).
-- **Requirements Maintenance**: Reviews and updates `REQUIREMENTS.md` after any change that modifies behavior, ensuring it stays consistent.
-- **Cross-agent Alignment**: Coordinates between backend/core algorithms and GUI/UI view updates.
-
-### Delegation Rules
-
-#### Desktop
-- Changes to **core algorithms, data models, CLI, or visualizations** → `@backend_agent`
-- Changes to **GUI layout, Tkinter widgets, threading, or controllers** → `@gui_agent`
-- Changes to **desktop tests, coverage, or test infrastructure** → `@test_agent`
-- Changes to **desktop build scripts, CI/CD, dependencies, or packaging** → `@build_agent`
-
-#### Android Desktop
-- Changes to **Compose UI, navigation rail, widescreen layouts, tablet components** → `@android_ui_agent` (Scope: `android/app/.../ui`)
-- Changes to **Room DB caching, OpenCV image analysis, WorkManager, usecases, domain** → `@android_core_agent` (Scope: `android/app/.../data`, `android/app/.../domain`)
-
-#### Android Phone
-- Changes to **compact Compose UI, swipe navigation, gesture tutorial, PhoneModeScreen** → `@android_ui_agent` (Scope: `android/phototok/.../ui`)
-- Changes to **DataStore preferences, phone viewmodels, lightweight EXIF strategy** → `@android_core_agent` (Scope: `android/phototok/.../data`, `android/phototok/.../viewmodel`)
-
-#### Cross-Platform & Build
-- Changes to **Android Gradle build files, CI workflow, or ProGuard rules** → `@android_build_agent`
-- Research on **algorithms, raw files, or metadata standards** → `@photo_researcher_agent`
-- Custom **UX mockups, ergonomic analysis, or layout wireframes** → `@ux_agent` (requires target solution context)
-- Changes touching **release/compliance artifacts** (`docs/phototok/`, `LegalLinks.kt`, OAuth scopes, permissions, new network endpoints or SDKs, store metadata) → `@publish_agent` (also consulted as a reviewer whenever a change alters what data the app accesses or transmits)
-- **Refactoring, tech-debt reduction, retro follow-ups, or agent-framework maintenance** → `@code_health_agent` (implements small refactorings itself; hands larger ones to the owning specialist and reviews)
-- **End-of-task reflection and anything to memorize** (`.Jules/` lessons, playbooks) → `@mentor_agent` (mandatory gate — see `.skills/self_improvement/SKILL.md` Phase 2, step 3)
-
-### Learned Lessons (`.Jules/`)
-
-The `.Jules/` directory is the project's persistent memory of hard-won lessons. Read the relevant file before working in a related area, and append a new entry (same format: date, Learning/Vulnerability, Action/Prevention) when you learn something non-obvious that future agents should know:
-
-- `.Jules/bolt.md` — Performance (e.g., avoiding `pathlib`/`lru_cache` overhead in hot file loops, single-pass metadata extraction).
-- `.Jules/palette.md` — UI & accessibility (e.g., Tkinter 'clam' theme focus-state pitfalls, keyboard shortcut discoverability).
-- `.Jules/sentinel.md` — Security (e.g., zip/tar slip prevention on `extractall`, SMB URL path traversal, `posixpath.normpath` for URLs).
-- `.Jules/code_health.md` — Refactoring backlog and structural lessons (owned by `@code_health_agent`; any agent appends candidates found mid-task).
-
-### Shared Skills
-
-Skills live in `.skills/` (symlinked into `.claude/skills/` and `.gemini/skills/`):
-
-- `.skills/self_improvement/SKILL.md` — the **mandatory task lifecycle** (pre-work reads, post-work retrospective). Runs on every task.
-- `.skills/playbook_*/SKILL.md` — **learned playbooks**: efficient step-by-step procedures for recurring task types, created and improved by the retrospective (template: `.skills/playbook_TEMPLATE/`). Check for a matching playbook before starting a task; improve it after.
-- `.skills/refactoring_guide/SKILL.md` — the **refactoring guide**, documenting the project's established patterns: centralized constants, controller/view separation, thread pool sizing, image loading safety (RGB conversion), the EXIF data contract, and error handling conventions. Read it before any refactoring work.
-
-Android agents should also read `ANDROID_DESIGN.md` for Android-specific architectural decisions, adaptive layout strategies, and platform constraints.
+Full framework documentation: [`ai/README.md`](ai/README.md).
+Documentation map: [`docs/README.md`](docs/README.md).

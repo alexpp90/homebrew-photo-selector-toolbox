@@ -1,1 +1,0 @@
-../../.agents/gui_agent.md

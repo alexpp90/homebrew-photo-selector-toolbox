@@ -1,0 +1,1 @@
+../../ai/agents/phototok-core-agent.md

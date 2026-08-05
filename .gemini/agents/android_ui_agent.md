@@ -1,1 +1,0 @@
-../../.agents/android_ui_agent.md

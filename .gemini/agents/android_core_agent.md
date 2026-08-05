@@ -1,1 +1,0 @@
-../../.agents/android_core_agent.md

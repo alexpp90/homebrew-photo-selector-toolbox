@@ -10,23 +10,17 @@ on:
     branches: [main]
     tags: ["v*"]
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'scripts/**'
-      - 'pyproject.toml'
-      - 'poetry.lock'
-      - '.flake8'
+      - 'products/desktop/**'
+      - 'Formula/**'
+      - 'Casks/**'
       - '*.spec'
       - '.github/workflows/desktop.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'scripts/**'
-      - 'pyproject.toml'
-      - 'poetry.lock'
-      - '.flake8'
+      - 'products/desktop/**'
+      - 'Formula/**'
+      - 'Casks/**'
       - '*.spec'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
@@ -45,6 +39,9 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: products/desktop
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +64,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: products/desktop
     strategy:
       fail-fast: false
       matrix:
@@ -105,8 +103,8 @@ jobs:
       - name: Cache Poetry venv
         uses: actions/cache@v4
         with:
-          path: .venv
-          key: ${{ runner.os }}-poetry-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          path: products/desktop/.venv
+          key: ${{ runner.os }}-poetry-${{ matrix.python-version }}-${{ hashFiles('products/desktop/poetry.lock') }}
           restore-keys: |
             ${{ runner.os }}-poetry-${{ matrix.python-version }}-
 
@@ -146,7 +144,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}
-          path: test-results.xml
+          path: products/desktop/test-results.xml
           if-no-files-found: ignore
 
       - name: Upload coverage report
@@ -154,7 +152,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.os }}
-          path: coverage.xml
+          path: products/desktop/coverage.xml
           if-no-files-found: ignore
 
   # ── Visual regression tests (Linux only, real Xvfb rendering) ───
@@ -162,6 +160,9 @@ jobs:
     name: Visual regression tests
     needs: lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: products/desktop
     steps:
       - uses: actions/checkout@v4
 
@@ -184,8 +185,8 @@ jobs:
       - name: Cache Poetry venv
         uses: actions/cache@v4
         with:
-          path: .venv
-          key: ${{ runner.os }}-poetry-3.12-${{ hashFiles('poetry.lock') }}
+          path: products/desktop/.venv
+          key: ${{ runner.os }}-poetry-3.12-${{ hashFiles('products/desktop/poetry.lock') }}
           restore-keys: |
             ${{ runner.os }}-poetry-3.12-
 
@@ -211,7 +212,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: visual-test-diffs
-          path: tests/visual/diffs/
+          path: products/desktop/tests/visual/diffs/
           if-no-files-found: ignore
 
   # ── PyInstaller builds (main / tags / manual dispatch only) ─────
@@ -223,6 +224,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: products/desktop
     strategy:
       matrix:
         include:
@@ -261,8 +263,8 @@ jobs:
     - name: Cache Poetry venv
       uses: actions/cache@v4
       with:
-        path: .venv
-        key: ${{ runner.os }}-poetry-3.12-${{ hashFiles('poetry.lock') }}
+        path: products/desktop/.venv
+        key: ${{ runner.os }}-poetry-3.12-${{ hashFiles('products/desktop/poetry.lock') }}
         restore-keys: |
           ${{ runner.os }}-poetry-3.12-
 
@@ -287,7 +289,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
-        path: ${{ matrix.artifact_name }}.zip
+        path: products/desktop/${{ matrix.artifact_name }}.zip
         if-no-files-found: error
 
   release:
@@ -360,11 +362,11 @@ jobs:
             git reset --hard origin/main
 
             if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              python3 scripts/update_formula.py \
+              python3 products/desktop/scripts/update_formula.py \
                 --file Casks/photo-selector-toolbox@nightly.rb \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
 
-              python3 scripts/update_formula.py \
+              python3 products/desktop/scripts/update_formula.py \
                 --file Formula/photo-selector-toolbox@nightly.rb \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
                 --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
@@ -375,12 +377,12 @@ jobs:
               TAG_NAME="${{ github.ref_name }}"
               VERSION="${TAG_NAME#v}"
 
-              python3 scripts/update_formula.py \
+              python3 products/desktop/scripts/update_formula.py \
                 --file Casks/photo-selector-toolbox.rb \
                 --version-val "${VERSION}" \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
 
-              python3 scripts/update_formula.py \
+              python3 products/desktop/scripts/update_formula.py \
                 --file Formula/photo-selector-toolbox.rb \
                 --version-val "${VERSION}" \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
