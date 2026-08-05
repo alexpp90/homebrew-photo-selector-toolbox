@@ -25,3 +25,7 @@
 **Learning:** Even if an initial URL's hostname resolves to a safe IP (thereby passing validation logic), a malicious server can return a `3xx` redirect pointing to an internal/forbidden IP (e.g., cloud metadata at `169.254.169.254`). Because `urlopen` follows this redirect under the hood, the final request reaches the forbidden IP *without* triggering the initial validation logic again.
 **Prevention:** Implement a custom `HTTPRedirectHandler` that raises an exception in `redirect_request`, and use `urllib.request.build_opener()` to enforce this handler instead of relying on the default `urlopen`.
 
+## 2024-05-18 - SSRF bypass via IPv4-mapped IPv6 literals
+**Vulnerability:** The application was vulnerable to SSRF attacks targeting internal IP ranges due to insufficient validation of IPv4-mapped IPv6 literals (e.g., `::ffff:127.0.0.1` or `::ffff:169.254.169.254`).
+**Learning:** Python's `ipaddress` module correctly parses IPv4-mapped IPv6 literals as IPv6 addresses, but `is_link_local`, `is_unspecified`, and `is_loopback` checks on the IPv6 object do not automatically check the underlying IPv4 address.
+**Prevention:** Always check `is_loopback` on the IP object. When the IP object has an `ipv4_mapped` property, explicitly run `is_link_local`, `is_unspecified`, and `is_loopback` checks on the mapped address as well.
