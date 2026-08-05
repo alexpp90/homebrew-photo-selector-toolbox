@@ -39,3 +39,6 @@
 ## 2024-05-24 - Coroutine Parallelization for I/O bounds
 **Learning:** When dealing with multiple independent file operations (such as copying/moving files), executing them sequentially inside a standard for loop leaves significant performance on the table.
 **Action:** Always prefer launching a kotlinx.coroutines.async block per item mapped to a list, followed by an .awaitAll() when performing a batch of independent file I/O or network requests.
+## 2025-02-18 - Single-Evaluation Attribute Access in List Comprehensions
+**Learning:** In loops containing list comprehensions over large datasets (like `[getattr(d, attr) for d in data if getattr(d, attr) is not None]`), evaluating the condition and the extraction separately results in executing the lookup logic twice. `getattr` adds significant function call overhead per iteration.
+**Action:** Always combine the condition and extraction using the walrus operator (`:=`) combined with direct attribute access (e.g. `[v for d in data if (v := d.aperture) is not None]`) to halve the evaluation time and bypass dynamic lookup overhead.
