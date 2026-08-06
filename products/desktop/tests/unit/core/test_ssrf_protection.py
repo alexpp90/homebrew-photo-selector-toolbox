@@ -72,3 +72,25 @@ def test_ollama_tool_blocks_metadata_ipv6_literal(mock_open, dummy_image_file, t
     tool = OllamaAestheticTool()
     with pytest.raises(RuntimeError, match="SSRF Protection: Cloud metadata IPs are not allowed."):
         tool.analyze(dummy_image_file)
+
+@patch("urllib.request.OpenerDirector.open")
+def test_ollama_tool_allows_metadata_ipv4_mapped_loopback(mock_open, dummy_image_file, temp_config_dir):
+    import json
+    # Because we patched open, we need to mock its return value or it will fail from a URLError or parsing error
+    mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting]"}
+    from unittest.mock import MagicMock
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
+    mock_response.__enter__.return_value = mock_response
+    mock_open.return_value = mock_response
+
+    from photo_selector_toolbox.core.config import save_config
+    save_config({
+        "ollama_url": "http://[::ffff:127.0.0.1]/latest/meta-data/",
+        "ollama_model": "test",
+        "ollama_prompt": "test"
+    })
+    tool = OllamaAestheticTool()
+    # It should not raise an SSRF exception
+    score, tag = tool.analyze(dummy_image_file)
+    assert score == 8.5
