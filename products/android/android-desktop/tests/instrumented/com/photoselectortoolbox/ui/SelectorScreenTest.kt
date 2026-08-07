@@ -457,9 +457,8 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
-        // Open options menu and tap Scan Images
-        composeRule.onAllNodesWithContentDescription("More options").onFirst().performClick()
-        composeRule.onAllNodesWithText("Scan Images", useUnmergedTree = true).onFirst().performClick()
+        // Tap Scan button on sidebar/chrome
+        composeRule.onAllNodesWithTag("scan_button", useUnmergedTree = true).onFirst().performClick()
 
         // Verify Scan Configuration sheet is shown and start scan
         composeRule.waitUntil(timeoutMillis = 15000) {
@@ -640,10 +639,10 @@ class SelectorScreenTest {
 
         // The legend button appears once there are scores to explain.
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodesWithContentDescription("What the scan icons mean")
+            composeRule.onAllNodesWithTag("score_legend_button", useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onAllNodesWithContentDescription("What the scan icons mean", useUnmergedTree = true).onFirst().performClick()
+        composeRule.onAllNodesWithTag("score_legend_button", useUnmergedTree = true).onFirst().performClick()
 
         composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodes(hasText("What the scan icons mean", ignoreCase = true), useUnmergedTree = true)
