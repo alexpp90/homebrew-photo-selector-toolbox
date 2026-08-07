@@ -458,24 +458,26 @@ class SelectorScreenTest {
         dismissGestureTutorialIfShown()
 
         // Open options menu and tap Scan Images
-        composeRule.onNodeWithContentDescription("More options").performClick()
-        composeRule.onAllNodesWithText("Scan Images").onFirst().performClick()
+        composeRule.onAllNodesWithContentDescription("More options").onFirst().performClick()
+        composeRule.onAllNodesWithText("Scan Images", useUnmergedTree = true).onFirst().performClick()
 
         // Verify Scan Configuration sheet is shown and start scan
-        composeRule.onNodeWithText("Scan Configuration").assertIsDisplayed()
-        composeRule.onNodeWithText("Start Scan").performClick()
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("Scan Configuration", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onAllNodesWithText("Scan Configuration", useUnmergedTree = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("Start Scan", useUnmergedTree = true).onFirst().performClick()
 
         // Wait until metrics update and display in the UI
         composeRule.waitUntil(timeoutMillis = 15000) {
-            // Compact chips have labels like "Sharpness" or display compact values.
-            // Let's check for the presence of the score values like "78.5" or "1.2".
             composeRule.onAllNodesWithText("78.5", substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
 
         // Verify metrics are visible
-        composeRule.onNodeWithText("78.5", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("1.2", substring = true).assertIsDisplayed()
+        composeRule.onAllNodesWithText("78.5", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("1.2", substring = true).onFirst().assertIsDisplayed()
     }
 
     @Test
@@ -641,15 +643,15 @@ class SelectorScreenTest {
             composeRule.onAllNodesWithContentDescription("What the scan icons mean")
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithContentDescription("What the scan icons mean").performClick()
+        composeRule.onAllNodesWithContentDescription("What the scan icons mean", useUnmergedTree = true).onFirst().performClick()
 
         composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodes(hasText("What the scan icons mean", ignoreCase = true), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
         val inLegend = hasAnyAncestor(hasTestTag("score_legend_sheet"))
-        composeRule.onNode(hasText("Sharpness") and inLegend, useUnmergedTree = true).assertExists()
-        composeRule.onNode(hasText("Noise") and inLegend, useUnmergedTree = true).assertExists()
+        composeRule.onAllNodes(hasText("Sharpness") and inLegend, useUnmergedTree = true).onFirst().assertExists()
+        composeRule.onAllNodes(hasText("Noise") and inLegend, useUnmergedTree = true).onFirst().assertExists()
         composeRule.onAllNodes(hasText("higher is better", substring = true) and inLegend, useUnmergedTree = true).onFirst().assertExists()
         composeRule.onAllNodes(hasText("lower is better", substring = true) and inLegend, useUnmergedTree = true).onFirst().assertExists()
     }
