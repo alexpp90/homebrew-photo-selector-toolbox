@@ -19,6 +19,7 @@ import com.photoselectortoolbox.data.source.googledrive.GoogleDriveClient
 import com.photoselectortoolbox.data.source.googledrive.GoogleDriveImageSource
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
 import com.photoselectortoolbox.domain.grouping.ImageGrouper
+import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.domain.usecase.MoveToSelectionUseCase
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,6 +36,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Which of the three frames on screen a control refers to.
+ *
+ * Named rather than passed as an index because "1" and "the previous frame" are
+ * different things: the index shifts every time the user advances, and every
+ * bug in this area has come from an index that outlived the mutation it was
+ * read before.
+ */
+enum class SelectorFrame { PREVIOUS, CURRENT, NEXT }
+
 data class SelectorUiState(
     val images: List<ImageItem> = emptyList(),
     val currentIndex: Int = 0,
@@ -49,15 +60,24 @@ data class SelectorUiState(
     val groupingEnabled: Boolean = false,
     val groups: List<List<Int>> = emptyList(),
     val fullscreenButtonsEnabled: Boolean = true,
-    val fullscreenGestureAction: String = "copy",
-    /** Expanded layout: true = stacked "focused" view (default), false = three-column. */
-    val selectorLayoutFocused: Boolean = true,
+    /** Which of Copy and Move is the emphasised filing control (persisted). */
+    val filingAction: FilingAction = FilingAction.DEFAULT,
     /** Whether the one-time on-image nav arrows have already been shown. */
     val hasSeenNavHint: Boolean = false,
     /** Whether the filmstrip along the bottom edge is shown (persisted). */
     val filmstripVisible: Boolean = true,
-    /** Whether the details panel beside the current frame is shown (persisted). */
+    /** Whether the readout block beside the current frame is shown (persisted). */
     val detailsVisible: Boolean = true,
+    /** Whether Previous and Next carry their value overlay (persisted). */
+    val overlayValuesVisible: Boolean = true,
+    /**
+     * Which frame, if any, is currently filling the image region.
+     *
+     * Null is the normal three-up state. Maximise is transient view state, not
+     * a preference: it is a thing you do to look closer at one frame, and it
+     * should not survive a relaunch the way a layout choice would.
+     */
+    val maximisedFrame: SelectorFrame? = null,
     /** Whether the one-time fullscreen gesture hint has already been dismissed. */
     val hasSeenFullscreenHint: Boolean = false,
 ) {
@@ -129,14 +149,14 @@ class SelectorViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            settingsRepository.fullscreenGestureAction.collect { action ->
-                _uiState.update { it.copy(fullscreenGestureAction = action) }
+            settingsRepository.filingAction.collect { action ->
+                _uiState.update { it.copy(filingAction = action) }
             }
         }
 
         viewModelScope.launch {
-            settingsRepository.selectorLayoutFocused.collect { focused ->
-                _uiState.update { it.copy(selectorLayoutFocused = focused) }
+            settingsRepository.overlayValuesVisible.collect { visible ->
+                _uiState.update { it.copy(overlayValuesVisible = visible) }
             }
         }
 
@@ -418,11 +438,15 @@ class SelectorViewModel @Inject constructor(
     }
 
     /**
-     * Called when the user swipes left to delete on the phone layout.
-     * If the file can be moved to trash (recoverable), deletes immediately.
-     * Otherwise shows the confirmation dialog.
+     * Delete the current frame, skipping the dialog only when the file can be
+     * recovered from the system trash.
+     *
+     * Called from the labelled Delete control, the `Del` key and the context
+     * menu — never from a swipe. A swipe used to invoke this on the phone
+     * layout, which made the same horizontal gesture mean "next frame" in the
+     * viewer and "destroy this file" in the feed; that binding is gone.
      */
-    fun deleteWithSwipe() {
+    fun requestDelete() {
         val state = _uiState.value
         if (state.images.isEmpty()) return
 
@@ -430,10 +454,8 @@ class SelectorViewModel @Inject constructor(
         val uri = Uri.parse(currentImage.uri)
 
         if (imageRepository.canTrash(uri)) {
-            // Trash is available — delete immediately without confirmation
             deleteCurrentImage()
         } else {
-            // Permanent delete — require confirmation
             showDeleteConfirmation()
         }
     }
@@ -568,11 +590,22 @@ class SelectorViewModel @Inject constructor(
         }
     }
 
-    /** Toggle the expanded selector between stacked "focused" and three-column layouts. */
-    fun toggleSelectorLayout() {
-        viewModelScope.launch {
-            val current = settingsRepository.selectorLayoutFocused.first()
-            settingsRepository.setSelectorLayoutFocused(!current)
+    /**
+     * Fill the image region with one frame, or return to three-up.
+     *
+     * Passing the frame that is already maximised toggles back out, so the same
+     * control and the same key both open and close it.
+     */
+    fun toggleMaximised(frame: SelectorFrame) {
+        _uiState.update {
+            it.copy(maximisedFrame = if (it.maximisedFrame == frame) null else frame)
+        }
+    }
+
+    /** Leave the maximised state, if in it. Bound to Escape. */
+    fun clearMaximised() {
+        if (_uiState.value.maximisedFrame != null) {
+            _uiState.update { it.copy(maximisedFrame = null) }
         }
     }
 
@@ -592,10 +625,19 @@ class SelectorViewModel @Inject constructor(
         }
     }
 
-    /** Show or hide the details panel; the choice survives relaunch. */
+    /** Show or hide the readout block; the choice survives relaunch. */
     fun toggleDetails() {
         viewModelScope.launch {
             settingsRepository.setDetailsVisible(!settingsRepository.detailsVisible.first())
+        }
+    }
+
+    /** Show or hide the neighbour value overlays; the choice survives relaunch. */
+    fun toggleOverlayValues() {
+        viewModelScope.launch {
+            settingsRepository.setOverlayValuesVisible(
+                !settingsRepository.overlayValuesVisible.first()
+            )
         }
     }
 

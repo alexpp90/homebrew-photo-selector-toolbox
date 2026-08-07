@@ -25,19 +25,13 @@ import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,21 +44,43 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
+import com.photoselectortoolbox.domain.format.ActionLabel
+import com.photoselectortoolbox.domain.format.SelectionActionLabels
+import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.ui.components.MetadataPanel
 import com.photoselectortoolbox.ui.components.ScoreChipRow
+import com.photoselectortoolbox.ui.theme.ScoreBad
+import com.photoselectortoolbox.ui.theme.ScoreGood
+import com.photoselectortoolbox.ui.theme.TonalIndigo
+import com.photoselectortoolbox.ui.theme.Zinc50
+import com.photoselectortoolbox.ui.theme.Zinc700
 import com.photoselectortoolbox.ui.theme.Zinc900
 import com.photoselectortoolbox.ui.theme.Zinc950
 import com.photoselectortoolbox.viewmodel.SelectorUiState
 
 /**
- * The phone-sized selector: one frame at a time, driven by swipes.
+ * The phone-sized selector: one frame at a time, browsed by swiping.
  *
- * Unchanged by the tablet/DeX refresh on purpose. The refresh is built around
- * the letterbox space a 4:3 photo leaves in a 16:10 landscape window; a phone
- * in portrait has no such space, and the gesture-first model here is the right
- * one for the form factor.
+ * The geometry of the tablet refresh does not apply here — that layout is built
+ * around the letterbox space a 4:3 photo leaves in a 16:10 landscape window,
+ * and a phone in portrait has none. Two things from the refresh do apply, and
+ * both are corrections rather than restyling:
+ *
+ * 1. **Horizontal swipe browses, and only browses.** This layout used to bind a
+ *    leftward swipe on the info card to *delete*. The same gesture meant "next
+ *    frame" on the pager directly above it and in the fullscreen viewer, which
+ *    is how the viewer ended up shipping a hint card that called the delete
+ *    gesture "navigate". A gesture that destroys a file cannot share a
+ *    direction with the gesture that browses past it.
+ * 2. **A control that changes a file carries its word.** The three actions were
+ *    unlabelled tonal icon buttons; they are now labelled, and the filing one
+ *    says Copy or Move according to the setting rather than a euphemism.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CompactSelectorLayout(
     uiState: SelectorUiState,
@@ -73,7 +89,6 @@ fun CompactSelectorLayout(
     onMoveToSelection: () -> Unit,
     onCopyToSelection: () -> Unit,
     onDelete: () -> Unit,
-    onSwipeDelete: () -> Unit,
     showGestureHint: Boolean = !uiState.hasSeenFullscreenHint,
     onDismissGestureHint: () -> Unit = {},
 ) {
@@ -98,17 +113,6 @@ fun CompactSelectorLayout(
 
     var userDismissedTutorial by remember { mutableStateOf(false) }
     val showGestureTutorial = showGestureHint && uiState.images.isNotEmpty() && !userDismissedTutorial
-
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onSwipeDelete()
-                false // The view model owns the outcome; do not settle visually.
-            } else {
-                false
-            }
-        },
-    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -169,85 +173,66 @@ fun CompactSelectorLayout(
                 }
             }
 
-            key(uiState.currentIndex, uiState.images.size) {
-                SwipeToDismissBox(
-                    state = dismissState,
-                    enableDismissFromStartToEnd = false,
-                    enableDismissFromEndToStart = true,
-                    backgroundContent = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.error),
-                            contentAlignment = Alignment.CenterEnd,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = Color.White,
-                                modifier = Modifier.padding(end = 24.dp),
-                            )
-                        }
-                    },
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Zinc900),
-                    ) {
-                        ScoreChipRow(
-                            scores = currentImage?.scanResult,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                        )
-
-                        currentImage?.exifData?.let { exif ->
-                            MetadataPanel(
-                                exifData = exif,
-                                compact = true,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            )
-                        }
-                    }
-                }
-
-                Row(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Zinc900),
+            ) {
+                ScoreChipRow(
+                    scores = currentImage?.scanResult,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    FilledTonalIconButton(
-                        onClick = onMoveToSelection,
-                        modifier = Modifier.testTag("move_button_compact"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                            contentDescription = "Move to Selection",
-                        )
-                    }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                )
 
-                    FilledTonalIconButton(
-                        onClick = onCopyToSelection,
-                        modifier = Modifier.testTag("copy_button_compact"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy to Selection",
-                        )
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.testTag("delete_button_compact"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                        )
-                    }
+                currentImage?.exifData?.let { exif ->
+                    MetadataPanel(
+                        exifData = exif,
+                        compact = true,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
                 }
+            }
+
+            // The same three verbs, in the same order, as the tablet layout —
+            // configured filing action first, then the other, then Delete.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SelectionActionLabels.both(uiState.filingAction).forEach { label ->
+                    CompactActionButton(
+                        icon = if (label.action == FilingAction.MOVE) {
+                            Icons.AutoMirrored.Filled.DriveFileMove
+                        } else {
+                            Icons.Default.ContentCopy
+                        },
+                        label = label,
+                        onClick = if (label.action == FilingAction.MOVE) {
+                            onMoveToSelection
+                        } else {
+                            onCopyToSelection
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(
+                                if (label.action == FilingAction.MOVE) {
+                                    "move_button_compact"
+                                } else {
+                                    "copy_button_compact"
+                                }
+                            ),
+                    )
+                }
+
+                CompactDeleteButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("delete_button_compact"),
+                )
             }
         }
 
@@ -315,29 +300,6 @@ private fun GestureTutorialOverlay(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(28.dp),
-                    )
-                    Text(
-                        text = "Swipe info card left to delete",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White,
-                    )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(28.dp),
-                    )
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Icon(
                         imageVector = Icons.Default.Fullscreen,
                         contentDescription = null,
                         tint = Color.White,
@@ -359,4 +321,73 @@ private fun GestureTutorialOverlay(
                 )
             }
         }
+}
+
+/**
+ * One labelled filing control on the phone layout.
+ *
+ * Labelled rather than an icon button: this control moves or copies a file, and
+ * an unlabelled glyph gives the user no way to know which. The verb comes from
+ * [ActionLabel], so it tracks the Filing Action setting and can never be a
+ * euphemism. The configured action is tinted; the alternative is quiet.
+ */
+@Composable
+private fun CompactActionButton(
+    icon: ImageVector,
+    label: ActionLabel,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .height(52.dp)
+            .background(
+                if (label.isPrimary) TonalIndigo else Color.Transparent,
+                RoundedCornerShape(8.dp),
+            )
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label.accessibilityLabel }
+            .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = if (label.isPrimary) ScoreGood else Zinc50,
+        )
+        Text(text = label.verb, fontSize = 14.sp, color = Zinc50)
+        Text(
+            text = label.shortcut,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            color = Zinc700,
+        )
+    }
+}
+
+/** The delete control: worded, outlined, and never reachable by a swipe. */
+@Composable
+private fun CompactDeleteButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .height(52.dp)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "Delete this photo" }
+            .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Default.Delete,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = ScoreBad,
+        )
+        Text(text = "Delete", fontSize = 14.sp, color = ScoreBad)
+    }
 }

@@ -10,30 +10,43 @@ import androidx.compose.ui.graphics.vector.ImageVector
 sealed class Screen(
     val route: String,
     val icon: ImageVector,
+    /** Full name, used for accessibility and anywhere there is room for it. */
     val label: String,
+    /**
+     * The word that fits under an 80 dp sidebar glyph.
+     *
+     * Separate from [label] rather than ellipsised from it: "Duplicat…" is not
+     * a word, and the sidebar's whole purpose is that every control is readable
+     * without decoding a glyph. Where the full name fits, [label] is used.
+     */
+    val shortLabel: String,
 ) {
     data object PhotoSelector : Screen(
         route = "selector",
         icon = Icons.Default.PhotoCamera,
         label = "Selector",
+        shortLabel = "Cull",
     )
 
     data object Statistics : Screen(
         route = "statistics",
         icon = Icons.Default.BarChart,
         label = "Statistics",
+        shortLabel = "Stats",
     )
 
     data object DuplicateFinder : Screen(
         route = "duplicates",
         icon = Icons.Default.ContentCopy,
         label = "Duplicates",
+        shortLabel = "Dupes",
     )
 
     data object Settings : Screen(
         route = "settings",
         icon = Icons.Default.Settings,
         label = "Settings",
+        shortLabel = "Setup",
     )
 
     companion object {

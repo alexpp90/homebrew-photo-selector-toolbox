@@ -11,6 +11,7 @@ import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,6 +65,8 @@ import com.photoselectortoolbox.ui.components.EmptyStateCard
 import com.photoselectortoolbox.ui.components.ScoreLegendSheet
 import com.photoselectortoolbox.ui.theme.Zinc800
 import com.photoselectortoolbox.ui.theme.Zinc900
+import com.photoselectortoolbox.ui.navigation.Screen
+import com.photoselectortoolbox.viewmodel.SelectorFrame
 import com.photoselectortoolbox.viewmodel.SelectorViewModel
 
 /**
@@ -71,14 +74,22 @@ import com.photoselectortoolbox.viewmodel.SelectorViewModel
  *
  * This composable owns orchestration only — folder pickers, dialogs, sheets,
  * keyboard handling and which layout is on screen. The layouts themselves live
- * in [FocusedSelectorLayout], [ThreeColumnSelectorLayout] and
- * [CompactSelectorLayout], because the geometry of each is intricate enough
- * that mixing it with dialog plumbing is how the two drift apart.
+ * in [ThreeUpSelectorLayout] and [CompactSelectorLayout], because the geometry
+ * of each is intricate enough that mixing it with dialog plumbing is how the
+ * two drift apart.
+ *
+ * There is no app bar. Session controls live in [SelectorSidebar] to the left;
+ * everything else that used to sit in a bar — folder name, position, burst chip
+ * — now sits beside the photograph it describes. On a layout bound by height
+ * (see [FrameGeometry]) a 44dp bar is 29dp off every frame, which is a price
+ * this screen does not pay for chrome.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SelectorScreen(
     windowSizeClass: WindowSizeClass,
+    currentRoute: String? = null,
+    onNavigate: (Screen) -> Unit = {},
     viewModel: SelectorViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -90,6 +101,7 @@ fun SelectorScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showDrivePicker by remember { mutableStateOf(false) }
     var showScoreLegend by remember { mutableStateOf(false) }
+    var showShortcuts by remember { mutableStateOf(false) }
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
     var contextMenuAt by remember { mutableStateOf<Offset?>(null) }
     var lastPointerPosition by remember { mutableStateOf(Offset.Zero) }
@@ -101,7 +113,7 @@ fun SelectorScreen(
     // Any open sheet swallows the shortcuts, so a stray M while configuring a
     // scan cannot move the frame behind the sheet. Esc is the exception — it is
     // what closes the sheet.
-    val sheetOpen = showScanConfig || showScoreLegend || showDrivePicker ||
+    val sheetOpen = showScanConfig || showScoreLegend || showDrivePicker || showShortcuts ||
         uiState.showDeleteConfirmation
 
     val dragAndDropTarget = remember(context, viewModel) {
@@ -157,11 +169,12 @@ fun SelectorScreen(
             viewModel.copyToSelection()
             snackbarMessage = "Copied to Selection"
         },
-        onDelete = { viewModel.showDeleteConfirmation() },
+        onDelete = { viewModel.requestDelete() },
         onFullscreen = { showFullscreen = true },
-        onToggleLayout = viewModel::toggleSelectorLayout,
         onToggleDetails = viewModel::toggleDetails,
         onToggleFilmstrip = viewModel::toggleFilmstrip,
+        onToggleOverlayValues = viewModel::toggleOverlayValues,
+        onShowShortcuts = { showShortcuts = true },
     )
 
     LaunchedEffect(uiState.error) {
@@ -221,6 +234,13 @@ fun SelectorScreen(
         ScoreLegendSheet(onDismiss = { showScoreLegend = false })
     }
 
+    if (showShortcuts) {
+        ShortcutSheet(
+            filingAction = uiState.filingAction,
+            onDismiss = { showShortcuts = false },
+        )
+    }
+
     if (showScanConfig) {
         ScanConfigSheet(
             onStartScan = { config ->
@@ -254,7 +274,7 @@ fun SelectorScreen(
             windowSizeClass = windowSizeClass,
             onPageSelected = viewModel::navigateToImage,
             fullscreenButtonsEnabled = uiState.fullscreenButtonsEnabled,
-            fullscreenGestureAction = uiState.fullscreenGestureAction,
+            filingAction = uiState.filingAction,
             showGestureHint = !uiState.hasSeenFullscreenHint,
             onGestureHintSeen = viewModel::markFullscreenHintSeen,
         )
@@ -280,15 +300,20 @@ fun SelectorScreen(
                                 sheetOpen = sheetOpen,
                                 contextMenuOpen = contextMenuAt != null,
                                 fullscreenOpen = showFullscreen,
+                                maximised = uiState.maximisedFrame != null,
                                 actions = actions,
                                 onPrevious = viewModel::navigatePrevious,
                                 onNext = viewModel::navigateNext,
+                                onMaximise = viewModel::toggleMaximised,
+                                onShowShortcuts = { showShortcuts = true },
                                 onCloseOverlays = {
                                     when {
                                         showFullscreen -> showFullscreen = false
                                         contextMenuAt != null -> contextMenuAt = null
                                         showScanConfig -> showScanConfig = false
                                         showScoreLegend -> showScoreLegend = false
+                                        showShortcuts -> showShortcuts = false
+                                        uiState.maximisedFrame != null -> viewModel.clearMaximised()
                                     }
                                 },
                             )
@@ -298,113 +323,121 @@ fun SelectorScreen(
                 }
             ),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            SelectorTopBar(
-                folderName = if (uiState.folderUri != null) uiState.folderName else "Photo Selector",
-                folderPath = uiState.folderUri,
-                position = uiState.position,
-                total = uiState.images.size,
-                burstLabel = burstLabelFor(uiState.groups, uiState.currentIndex)
-                    .takeIf { uiState.groupingEnabled },
-                groupingEnabled = uiState.groupingEnabled,
-                hasScores = uiState.hasAnyScores,
-                isScanning = uiState.isScanRunning,
-                scanProgress = uiState.scanProgress,
-                scanStatusText = uiState.scanStatusText,
-                driveSignedIn = viewModel.driveAuth.isSignedIn,
-                onOpenFolder = { folderPickerLauncher.launch(null) },
-                onOpenDrive = openDrive,
-                onScan = { showScanConfig = true },
-                onCancelScan = viewModel::cancelScan,
-                onToggleGrouping = viewModel::toggleGrouping,
-                onShowLegend = { showScoreLegend = true },
-                onShowMenu = { showMenu = true },
-                overflowContent = {
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Scan Images") },
-                            onClick = { showMenu = false; showScanConfig = true },
-                            enabled = uiState.images.isNotEmpty() && !uiState.isScanRunning,
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Open Folder") },
-                            onClick = { showMenu = false; folderPickerLauncher.launch(null) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Open from Google Drive") },
-                            onClick = { showMenu = false; openDrive() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Clear Scores") },
-                            onClick = { showMenu = false; viewModel.clearScores() },
-                            enabled = uiState.hasAnyScores,
-                        )
-                    }
-                },
-            )
-
-            if (uiState.folderUri == null || uiState.images.isEmpty()) {
-                EmptySelectorState(
+        // One horizontal band: sidebar, then the frames. Nothing above, nothing
+        // below. The 44dp app bar that used to sit here cost 29dp of height on
+        // every one of the three frames — see FrameGeometry for why height is
+        // the axis that must not be spent.
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (useExpandedLayout) {
+                SelectorSidebar(
+                    currentRoute = currentRoute,
+                    groupingEnabled = uiState.groupingEnabled,
+                    hasScores = uiState.hasAnyScores,
+                    hasImages = uiState.images.isNotEmpty(),
+                    driveSignedIn = viewModel.driveAuth.isSignedIn,
+                    isScanning = uiState.isScanRunning,
+                    scanStatusText = uiState.scanStatusText,
                     onOpenFolder = { folderPickerLauncher.launch(null) },
                     onOpenDrive = openDrive,
+                    onScan = { showScanConfig = true },
+                    onCancelScan = viewModel::cancelScan,
+                    onToggleGrouping = viewModel::toggleGrouping,
+                    onShowLegend = { showScoreLegend = true },
+                    onShowMenu = { showMenu = true },
+                    onNavigate = onNavigate,
+                    overflowContent = {
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Scan images") },
+                                onClick = { showMenu = false; showScanConfig = true },
+                                enabled = uiState.images.isNotEmpty() && !uiState.isScanRunning,
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Open folder") },
+                                onClick = { showMenu = false; folderPickerLauncher.launch(null) },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Open from Google Drive") },
+                                onClick = { showMenu = false; openDrive() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Clear scores") },
+                                onClick = { showMenu = false; viewModel.clearScores() },
+                                enabled = uiState.hasAnyScores,
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Keyboard shortcuts") },
+                                onClick = { showMenu = false; showShortcuts = true },
+                            )
+                        }
+                    },
                 )
-            } else {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    if (useExpandedLayout) {
-                        if (uiState.selectorLayoutFocused) {
-                            FocusedSelectorLayout(
+            }
+
+            Column(modifier = Modifier.weight(1f).fillMaxSize()) {
+                if (uiState.folderUri == null || uiState.images.isEmpty()) {
+                    EmptySelectorState(
+                        onOpenFolder = { folderPickerLauncher.launch(null) },
+                        onOpenDrive = openDrive,
+                    )
+                } else {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        if (useExpandedLayout) {
+                            ThreeUpSelectorLayout(
                                 current = uiState.currentImage,
                                 previous = uiState.previousImage,
                                 next = uiState.nextImage,
                                 currentIndex = uiState.currentIndex,
                                 total = uiState.images.size,
+                                filingAction = uiState.filingAction,
+                                folderName = uiState.folderName,
+                                burstLabel = burstLabelFor(uiState.groups, uiState.currentIndex)
+                                    .takeIf { uiState.groupingEnabled },
                                 detailsVisible = uiState.detailsVisible,
                                 filmstripVisible = uiState.filmstripVisible,
+                                overlayValuesVisible = uiState.overlayValuesVisible,
+                                maximisedFrame = uiState.maximisedFrame,
                                 actions = actions,
                                 onNavigatePrevious = viewModel::navigatePrevious,
                                 onNavigateNext = viewModel::navigateNext,
+                                onMaximise = viewModel::toggleMaximised,
                                 onLongPressFrame = { contextMenuAt = lastPointerPosition },
                                 showFirstRunHint = !uiState.hasSeenNavHint,
                                 onDismissFirstRunHint = viewModel::markNavHintSeen,
                             )
                         } else {
-                            ThreeColumnSelectorLayout(
-                                current = uiState.currentImage,
-                                previous = uiState.previousImage,
-                                next = uiState.nextImage,
-                                currentIndex = uiState.currentIndex,
-                                total = uiState.images.size,
-                                detailsVisible = uiState.detailsVisible,
-                                filmstripVisible = uiState.filmstripVisible,
-                                actions = actions,
-                                onNavigatePrevious = viewModel::navigatePrevious,
-                                onNavigateNext = viewModel::navigateNext,
-                                onLongPressFrame = { contextMenuAt = lastPointerPosition },
+                            CompactSelectorLayout(
+                                uiState = uiState,
+                                onNavigateToImage = viewModel::navigateToImage,
+                                onFullscreen = { showFullscreen = true },
+                                onMoveToSelection = actions.onMove,
+                                onCopyToSelection = actions.onCopy,
+                                onDelete = actions.onDelete,
+                                showGestureHint = !uiState.hasSeenFullscreenHint,
+                                onDismissGestureHint = viewModel::markFullscreenHintSeen,
                             )
                         }
-                    } else {
-                        CompactSelectorLayout(
-                            uiState = uiState,
-                            onNavigateToImage = viewModel::navigateToImage,
-                            onFullscreen = { showFullscreen = true },
-                            onMoveToSelection = actions.onMove,
-                            onCopyToSelection = actions.onCopy,
-                            onDelete = actions.onDelete,
-                            onSwipeDelete = { viewModel.deleteWithSwipe() },
-                            showGestureHint = !uiState.hasSeenFullscreenHint,
-                            onDismissGestureHint = viewModel::markFullscreenHintSeen,
+                    }
+
+                    // The filmstrip is the one thing still allowed to take
+                    // height, because the user asked for it explicitly and it
+                    // costs nothing while hidden. It is off the critical path:
+                    // maximised, it goes.
+                    if (useExpandedLayout &&
+                        uiState.filmstripVisible &&
+                        uiState.maximisedFrame == null
+                    ) {
+                        CandidateStrip(
+                            images = uiState.images,
+                            currentIndex = uiState.currentIndex,
+                            onImageSelected = viewModel::navigateToImage,
+                            groups = if (uiState.groupingEnabled) uiState.groups else null,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                }
-
-                if (useExpandedLayout && uiState.filmstripVisible) {
-                    CandidateStrip(
-                        images = uiState.images,
-                        currentIndex = uiState.currentIndex,
-                        onImageSelected = viewModel::navigateToImage,
-                        groups = if (uiState.groupingEnabled) uiState.groups else null,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 }
             }
         }
@@ -425,6 +458,7 @@ fun SelectorScreen(
             ) {
                 SelectorContextMenu(
                     actions = actions,
+                    filingAction = uiState.filingAction,
                     onDismissRequest = { contextMenuAt = null },
                 )
             }
@@ -473,13 +507,16 @@ internal fun handleSelectorKey(
     sheetOpen: Boolean,
     contextMenuOpen: Boolean,
     fullscreenOpen: Boolean,
+    maximised: Boolean,
     actions: SelectorActions,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    onMaximise: (SelectorFrame) -> Unit,
+    onShowShortcuts: () -> Unit,
     onCloseOverlays: () -> Unit,
 ): Boolean {
     if (key == Key.Escape) {
-        if (sheetOpen || contextMenuOpen || fullscreenOpen) {
+        if (sheetOpen || contextMenuOpen || fullscreenOpen || maximised) {
             onCloseOverlays()
             return true
         }
@@ -495,7 +532,14 @@ internal fun handleSelectorKey(
         Key.C -> { actions.onCopy(); true }
         Key.Delete, Key.Backspace -> { actions.onDelete(); true }
         Key.F -> { actions.onFullscreen(); true }
-        Key.Spacebar -> { actions.onToggleLayout(); true }
+        // 1/2/3 maximise the frame in that position, left to right as they
+        // appear on screen. Space used to toggle between two comparison
+        // layouts; there is only one now, so the key is free and goes to the
+        // thing users actually want mid-burst — a closer look at one frame.
+        Key.One -> { onMaximise(SelectorFrame.PREVIOUS); true }
+        Key.Two -> { onMaximise(SelectorFrame.CURRENT); true }
+        Key.Three -> { onMaximise(SelectorFrame.NEXT); true }
+        Key.Slash -> { onShowShortcuts(); true }
         else -> false
     }
 }

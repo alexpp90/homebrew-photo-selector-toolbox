@@ -3,6 +3,7 @@ package com.photoselectortoolbox.domain.format
 import com.photoselector.core.model.ExifData
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -86,5 +87,61 @@ class ExifFormatterTest {
     @Test
     fun `detail rows are empty when there is no exif at all`() {
         assertTrue(ExifFormatter.detailRows(null).isEmpty())
+    }
+
+    // ── Neighbour overlay lines ──────────────────────────────────────────
+
+    @Test
+    fun `overlay splits exposure and optics onto two aligned lines`() {
+        // Two lines, always split at the same point, because the comparison is
+        // between Previous and Next: shutter sits above shutter and ISO above
+        // ISO, so a difference shows up in one place rather than as two strings
+        // to re-read.
+        val lines = ExifFormatter.overlayLines(
+            ExifData(
+                shutterSpeed = 1.0 / 250.0,
+                aperture = 2.8,
+                focalLength = 35.0,
+                iso = 400,
+            )
+        )
+
+        assertEquals(2, lines.size)
+        assertEquals("1/250s · f/2.8", lines[0])
+        assertEquals("35mm · ISO 400", lines[1])
+    }
+
+    @Test
+    fun `overlay omits the lens, which never fits and never varies in a burst`() {
+        val lines = ExifFormatter.overlayLines(
+            ExifData(shutterSpeed = 0.004, aperture = 4.0, lens = "XF 16-55mm F2.8 R LM WR")
+        )
+
+        lines.forEach { assertFalse(it.contains("16-55")) }
+    }
+
+    @Test
+    fun `overlay drops a line rather than printing placeholders`() {
+        // Unlike the details panel, where "Unknown" is information, an overlay
+        // sits on the photograph: a line of em-dashes is obstruction that says
+        // nothing.
+        val lines = ExifFormatter.overlayLines(ExifData(shutterSpeed = 0.004, aperture = 2.8))
+
+        assertEquals(1, lines.size)
+        assertEquals("1/250s · f/2.8", lines[0])
+    }
+
+    @Test
+    fun `overlay returns nothing when nothing is known`() {
+        assertTrue(ExifFormatter.overlayLines(null).isEmpty())
+        assertTrue(ExifFormatter.overlayLines(ExifData()).isEmpty())
+    }
+
+    @Test
+    fun `overlay keeps the US decimal separator like every other surface`() {
+        val lines = ExifFormatter.overlayLines(ExifData(aperture = 2.8, iso = 100))
+
+        assertTrue(lines.first().contains("f/2.8"))
+        assertFalse(lines.first().contains("f/2,8"))
     }
 }

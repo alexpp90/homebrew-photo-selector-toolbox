@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
+import com.photoselectortoolbox.domain.interaction.FilingAction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -46,8 +47,8 @@ class SettingsRepository @Inject constructor(
         private val KEY_FULLSCREEN_GESTURE_ACTION = stringPreferencesKey("fullscreen_gesture_action")
 
         // Expanded-layout (tablet/DeX) selector view preferences
-        private val KEY_SELECTOR_LAYOUT_FOCUSED = booleanPreferencesKey("selector_layout_focused")
         private val KEY_HAS_SEEN_NAV_HINT = booleanPreferencesKey("has_seen_nav_hint")
+        private val KEY_OVERLAY_VALUES_VISIBLE = booleanPreferencesKey("overlay_values_visible")
         private val KEY_FILMSTRIP_VISIBLE = booleanPreferencesKey("filmstrip_visible")
         private val KEY_DETAILS_VISIBLE = booleanPreferencesKey("details_visible")
         private val KEY_SEEN_FULLSCREEN_HINT = booleanPreferencesKey("seen_fullscreen_gesture_hint")
@@ -96,8 +97,18 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_FULLSCREEN_BUTTONS_ENABLED] ?: true
     }
 
-    val fullscreenGestureAction: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_FULLSCREEN_GESTURE_ACTION] ?: "copy"
+    /**
+     * Which verb the emphasised filing control performs: copy, or move.
+     *
+     * The DataStore key is still `fullscreen_gesture_action` because it is on
+     * users' devices, but the setting no longer has anything to do with a
+     * gesture — double-tap files nothing now (see [FilingAction] and the
+     * fullscreen viewer). It is surfaced as *Filing Action* in Settings, and it
+     * decides which of Copy and Move is the primary control in the selector as
+     * well as in fullscreen.
+     */
+    val filingAction: Flow<FilingAction> = context.dataStore.data.map { prefs ->
+        FilingAction.fromStored(prefs[KEY_FULLSCREEN_GESTURE_ACTION])
     }
 
     suspend fun setSelectionFolderName(name: String) {
@@ -146,23 +157,13 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    suspend fun setFullscreenGestureAction(action: String) {
+    suspend fun setFilingAction(action: FilingAction) {
         context.dataStore.edit { prefs ->
-            prefs[KEY_FULLSCREEN_GESTURE_ACTION] = action
+            prefs[KEY_FULLSCREEN_GESTURE_ACTION] = action.storedValue
         }
     }
 
     // ── Expanded (tablet/DeX) selector layout ────────────────────────────
-
-    /**
-     * Whether the expanded selector defaults to the stacked "focused" layout
-     * (current image on top, previous/next below). Defaults to true so the
-     * space-efficient stacked view is what users see first; the three-column
-     * side-by-side view is the opt-in alternative.
-     */
-    val selectorLayoutFocused: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_SELECTOR_LAYOUT_FOCUSED] ?: true
-    }
 
     /**
      * Whether the user has already seen the on-image previous/next navigation
@@ -171,12 +172,6 @@ class SettingsRepository @Inject constructor(
      */
     val hasSeenNavHint: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_HAS_SEEN_NAV_HINT] ?: false
-    }
-
-    suspend fun setSelectorLayoutFocused(focused: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_SELECTOR_LAYOUT_FOCUSED] = focused
-        }
     }
 
     suspend fun setHasSeenNavHint(seen: Boolean) {
@@ -197,9 +192,28 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_FILMSTRIP_VISIBLE] ?: true
     }
 
-    /** Whether the details panel beside the current frame is shown. */
+    /** Whether the readout block beside the current frame is shown. */
     val detailsVisible: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_DETAILS_VISIBLE] ?: true
+    }
+
+    /**
+     * Whether Previous and Next carry their value overlay.
+     *
+     * The overlay covers roughly a quarter of each neighbour's width, which is
+     * a real cost on a screen whose entire job is judging photographs. Default
+     * on, because a photographer who cannot see the numbers cannot cull; but
+     * one control turns them all off for a clean look, and that decision
+     * persists so it does not have to be made every launch.
+     */
+    val overlayValuesVisible: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_OVERLAY_VALUES_VISIBLE] ?: true
+    }
+
+    suspend fun setOverlayValuesVisible(visible: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_OVERLAY_VALUES_VISIBLE] = visible
+        }
     }
 
     suspend fun setFilmstripVisible(visible: Boolean) {
