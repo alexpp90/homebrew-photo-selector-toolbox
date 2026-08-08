@@ -18,12 +18,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,9 +31,6 @@ import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material.icons.filled.ViewCarousel
-import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -59,231 +55,36 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.photoselectortoolbox.domain.format.SelectionActionLabels
+import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.ui.theme.Indigo200
 import com.photoselectortoolbox.ui.theme.Indigo500
-import com.photoselectortoolbox.ui.theme.PanelSurface
 import com.photoselectortoolbox.ui.theme.ScoreBad
-import com.photoselectortoolbox.ui.theme.TonalIndigo
-import com.photoselectortoolbox.ui.theme.TonalIndigoHover
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
 import com.photoselectortoolbox.ui.theme.Zinc500
 import com.photoselectortoolbox.ui.theme.Zinc700
 import com.photoselectortoolbox.ui.theme.Zinc800
 
-/** The icon and description for the layout toggle in its current state. */
-fun layoutToggleIcon(focusedLayout: Boolean): ImageVector =
-    if (focusedLayout) Icons.Default.ViewColumn else Icons.Default.ViewAgenda
-
-fun layoutToggleDescription(focusedLayout: Boolean): String =
-    if (focusedLayout) "Switch to three-column comparison" else "Switch to focused layout"
-
 /**
- * The callbacks every selector layout needs, gathered so the two layouts and
- * the context menu cannot drift apart in what they offer.
+ * The callbacks the selector needs, gathered so the layout, the control block
+ * and the context menu cannot drift apart in what they offer.
+ *
+ * `onToggleLayout` is gone with the layout it toggled: there is one comparison
+ * layout now (see `docs/products/android-desktop/DESIGN.md` §8), so there is
+ * nothing to switch between and no free-floating toggle to collide with another
+ * layout's controls.
  */
 data class SelectorActions(
     val onMove: () -> Unit,
     val onCopy: () -> Unit,
     val onDelete: () -> Unit,
     val onFullscreen: () -> Unit,
-    val onToggleLayout: () -> Unit,
     val onToggleDetails: () -> Unit,
     val onToggleFilmstrip: () -> Unit,
+    val onToggleOverlayValues: () -> Unit,
+    val onShowShortcuts: () -> Unit,
 )
-
-// ── Shared action row (three-column layout) ─────────────────────────────────
-
-/**
- * The action row beneath the three columns.
- *
- * In the three-column layout the columns are equal thirds, so there is no
- * letterbox column to put a rail in — the actions go under the grid instead,
- * where they are equidistant from all three frames.
- */
-@Composable
-fun SharedActionRow(
-    actions: SelectorActions,
-    focusedLayout: Boolean,
-    detailsVisible: Boolean,
-    filmstripVisible: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(PanelSurface)
-            .border(1.dp, Zinc800, RoundedCornerShape(12.dp))
-            .padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TonalActionButton(
-            icon = Icons.AutoMirrored.Filled.DriveFileMove,
-            label = "Move to Selection",
-            keyHint = "M",
-            onClick = actions.onMove,
-            modifier = Modifier.testTag("move_button_expanded"),
-        )
-        TonalActionButton(
-            icon = Icons.Default.ContentCopy,
-            label = "Copy to Selection",
-            keyHint = "C",
-            onClick = actions.onCopy,
-            modifier = Modifier.testTag("copy_button_expanded"),
-        )
-        OutlinedActionButton(
-            icon = Icons.Default.Delete,
-            label = "Delete",
-            keyHint = "Del",
-            iconTint = ScoreBad,
-            onClick = actions.onDelete,
-            modifier = Modifier.testTag("delete_button_expanded"),
-        )
-        RailButton(
-            icon = Icons.Default.Fullscreen,
-            description = "Open fullscreen",
-            onClick = actions.onFullscreen,
-            modifier = Modifier.testTag("fullscreen_button"),
-        )
-
-        Box(
-            modifier = Modifier
-                .padding(horizontal = 2.dp)
-                .width(1.dp)
-                .height(28.dp)
-                .background(Zinc700),
-        )
-
-        RailButton(
-            icon = layoutToggleIcon(focusedLayout),
-            description = layoutToggleDescription(focusedLayout),
-            onClick = actions.onToggleLayout,
-            modifier = Modifier.testTag("layout_toggle"),
-        )
-        RailButton(
-            icon = Icons.Outlined.Info,
-            description = if (detailsVisible) "Hide photo details" else "Show photo details",
-            onClick = actions.onToggleDetails,
-            active = detailsVisible,
-            modifier = Modifier.testTag("details_toggle"),
-        )
-        RailButton(
-            icon = Icons.Default.ViewCarousel,
-            description = if (filmstripVisible) "Hide the filmstrip" else "Show the filmstrip",
-            onClick = actions.onToggleFilmstrip,
-            active = filmstripVisible,
-            modifier = Modifier.testTag("filmstrip_toggle"),
-        )
-    }
-}
-
-/**
- * A filled-tonal action (Move, Copy).
- *
- * The keyboard hint fades in on hover rather than sitting there permanently:
- * a photographer who already knows the shortcut does not need it, and one who
- * is reaching for the mouse is exactly the person who benefits from learning
- * it.
- */
-@Composable
-private fun TonalActionButton(
-    icon: ImageVector,
-    label: String,
-    keyHint: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val hovered by interactionSource.collectIsHoveredAsState()
-    val background by animateColorAsState(
-        targetValue = if (hovered) TonalIndigoHover else TonalIndigo,
-        animationSpec = tween(150),
-        label = "tonalActionBg",
-    )
-
-    Row(
-        modifier = modifier
-            .heightIn(min = ControlSize)
-            .clip(RoundedCornerShape(8.dp))
-            .background(background)
-            .hoverable(interactionSource)
-            .pointerHoverIcon(PointerIcon.Hand)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp)
-            .semantics { contentDescription = "$label, shortcut $keyHint" },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = Indigo200,
-        )
-        Text(text = label, fontSize = 13.sp, color = Indigo200, maxLines = 1)
-        KeyHint(text = keyHint, visible = hovered)
-    }
-}
-
-/** An outlined action (Delete) — only the icon carries the destructive colour. */
-@Composable
-private fun OutlinedActionButton(
-    icon: ImageVector,
-    label: String,
-    keyHint: String,
-    iconTint: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val hovered by interactionSource.collectIsHoveredAsState()
-    val borderColor by animateColorAsState(
-        targetValue = if (hovered) Zinc500 else Zinc700,
-        animationSpec = tween(150),
-        label = "outlinedActionBorder",
-    )
-
-    Row(
-        modifier = modifier
-            .heightIn(min = ControlSize)
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .hoverable(interactionSource)
-            .pointerHoverIcon(PointerIcon.Hand)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp)
-            .semantics { contentDescription = "$label, shortcut $keyHint" },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = iconTint,
-        )
-        Text(text = label, fontSize = 13.sp, color = Zinc50, maxLines = 1)
-        KeyHint(text = keyHint, visible = hovered)
-    }
-}
-
-/** The small superscript key hint that appears on hover. */
-@Composable
-private fun KeyHint(text: String, visible: Boolean) {
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(150),
-        label = "keyHint",
-    )
-    Text(
-        text = text,
-        fontSize = 9.sp,
-        fontFamily = FontFamily.Monospace,
-        color = Zinc400,
-        modifier = Modifier.alpha(alpha),
-    )
-}
 
 // ── Context menu ────────────────────────────────────────────────────────────
 
@@ -296,6 +97,7 @@ private fun KeyHint(text: String, visible: Boolean) {
 @Composable
 fun SelectorContextMenu(
     actions: SelectorActions,
+    filingAction: FilingAction,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -308,18 +110,24 @@ fun SelectorContextMenu(
             .padding(5.dp)
             .testTag("selector_context_menu"),
     ) {
-        ContextMenuRow(
-            icon = Icons.AutoMirrored.Filled.DriveFileMove,
-            label = "Move to Selection",
-            keyHint = "M",
-            onClick = { onDismissRequest(); actions.onMove() },
-        )
-        ContextMenuRow(
-            icon = Icons.Default.ContentCopy,
-            label = "Copy to Selection",
-            keyHint = "C",
-            onClick = { onDismissRequest(); actions.onCopy() },
-        )
+        // Configured verb first, same order as the control block, from the
+        // same source. Two lists of the same two actions in two orders is how
+        // a menu and a button end up disagreeing about which one is primary.
+        SelectionActionLabels.both(filingAction).forEach { label ->
+            ContextMenuRow(
+                icon = if (label.action == FilingAction.MOVE) {
+                    Icons.AutoMirrored.Filled.DriveFileMove
+                } else {
+                    Icons.Default.ContentCopy
+                },
+                label = label.phrase,
+                keyHint = label.shortcut,
+                onClick = {
+                    onDismissRequest()
+                    if (label.action == FilingAction.MOVE) actions.onMove() else actions.onCopy()
+                },
+            )
+        }
         ContextMenuRow(
             icon = Icons.Default.Delete,
             label = "Delete",
@@ -510,10 +318,4 @@ fun SelectorSnackbar(
                 .background(Indigo500),
         )
     }
-}
-
-/** Vertical spacer used between action clusters in a rail. */
-@Composable
-fun RailSpacer(height: androidx.compose.ui.unit.Dp = 6.dp) {
-    Spacer(modifier = Modifier.height(height))
 }

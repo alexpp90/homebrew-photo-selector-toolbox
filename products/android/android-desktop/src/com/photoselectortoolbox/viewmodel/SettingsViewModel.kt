@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.photoselectortoolbox.data.repository.CacheRepository
 import com.photoselectortoolbox.data.repository.SettingsRepository
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
+import com.photoselectortoolbox.domain.interaction.FilingAction
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +24,7 @@ data class SettingsUiState(
     val cachedScoreCount: Int = 0,
     val phoneCollectionUri: String? = null,
     val fullscreenButtonsEnabled: Boolean = true,
-    val fullscreenGestureAction: String = "copy",
+    val filingAction: FilingAction = FilingAction.DEFAULT,
 )
 
 @HiltViewModel
@@ -44,7 +45,7 @@ class SettingsViewModel @Inject constructor(
                 settingsRepository.groupingLevel,
                 settingsRepository.analysisThreadCount,
                 settingsRepository.fullscreenButtonsEnabled,
-                settingsRepository.fullscreenGestureAction
+                settingsRepository.filingAction
             ) { arrays ->
                 SettingsUiState(
                     selectionFolderName = arrays[0] as String,
@@ -53,7 +54,7 @@ class SettingsViewModel @Inject constructor(
                     groupingLevel = arrays[3] as GroupingLevel,
                     analysisThreadCount = arrays[4] as Int,
                     fullscreenButtonsEnabled = arrays[5] as Boolean,
-                    fullscreenGestureAction = arrays[6] as String,
+                    filingAction = arrays[6] as FilingAction,
                     cachedScoreCount = _uiState.value.cachedScoreCount,
                     phoneCollectionUri = _uiState.value.phoneCollectionUri,
                 )
@@ -123,8 +124,8 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setFullscreenButtonsEnabled(enabled) }
     }
 
-    fun updateFullscreenGestureAction(action: String) {
-        viewModelScope.launch { settingsRepository.setFullscreenGestureAction(action) }
+    fun updateFilingAction(action: FilingAction) {
+        viewModelScope.launch { settingsRepository.setFilingAction(action) }
     }
 
     private fun refreshCachedScoreCount() {

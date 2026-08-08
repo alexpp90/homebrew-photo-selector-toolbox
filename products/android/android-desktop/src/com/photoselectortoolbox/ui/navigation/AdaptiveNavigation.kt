@@ -49,7 +49,16 @@ private fun DesktopModeApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+    val isExpanded = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+
+    // The selector draws its own sidebar, which already carries these four
+    // destinations at the bottom (see SelectorSidebar). Drawing a
+    // NavigationRail beside it too would put the same four controls on screen
+    // twice and cost the photographs another 80dp of width — on a layout whose
+    // entire premise is that nothing competes with the frames for space.
+    val selectorOwnsNavigation = isExpanded &&
+        currentDestination?.hierarchy?.any { it.route == Screen.PhotoSelector.route } == true
+    val useNavigationRail = isExpanded && !selectorOwnsNavigation
 
     val navigateToScreen: (Screen) -> Unit = { screen ->
         navController.navigate(screen.route) {
@@ -99,9 +108,22 @@ private fun DesktopModeApp(
                     .fillMaxHeight()
                     .weight(1f),
             ) {
-                AppNavHost(navController = navController, windowSizeClass = windowSizeClass)
+                AppNavHost(
+                    navController = navController,
+                    windowSizeClass = windowSizeClass,
+                    currentRoute = currentDestination?.route,
+                    onNavigate = navigateToScreen,
+                )
             }
         }
+    } else if (selectorOwnsNavigation) {
+        // Expanded, on the selector: the sidebar is the navigation.
+        AppNavHost(
+            navController = navController,
+            windowSizeClass = windowSizeClass,
+            currentRoute = currentDestination?.route,
+            onNavigate = navigateToScreen,
+        )
     } else {
         Scaffold(
             containerColor = Zinc900,
@@ -143,7 +165,12 @@ private fun DesktopModeApp(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                AppNavHost(navController = navController, windowSizeClass = windowSizeClass)
+                AppNavHost(
+                    navController = navController,
+                    windowSizeClass = windowSizeClass,
+                    currentRoute = currentDestination?.route,
+                    onNavigate = navigateToScreen,
+                )
             }
         }
     }
@@ -153,6 +180,8 @@ private fun DesktopModeApp(
 private fun AppNavHost(
     navController: androidx.navigation.NavHostController,
     windowSizeClass: WindowSizeClass,
+    currentRoute: String?,
+    onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -161,7 +190,11 @@ private fun AppNavHost(
         modifier = modifier.fillMaxSize(),
     ) {
         composable(Screen.PhotoSelector.route) {
-            SelectorScreen(windowSizeClass = windowSizeClass)
+            SelectorScreen(
+                windowSizeClass = windowSizeClass,
+                currentRoute = currentRoute,
+                onNavigate = onNavigate,
+            )
         }
         composable(Screen.Statistics.route) {
             StatisticsScreen(windowSizeClass = windowSizeClass)

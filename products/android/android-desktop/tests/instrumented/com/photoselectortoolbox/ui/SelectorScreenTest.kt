@@ -160,15 +160,18 @@ class SelectorScreenTest {
     }
 
     @Test
-    fun focusedLayout_allThreeFramesAreTheSameHeight() {
+    fun threeUpLayout_allThreeFramesAreExactlyTheSameSize() {
         // The core promise of the layout: the active frame is marked only by a
-        // border, never by being bigger. A neighbour that is smaller cannot be
-        // judged for sharpness against the current frame, which is the task.
+        // border and by being centred, never by being bigger. A neighbour at a
+        // different size cannot be judged for sharpness against the current
+        // frame, which is the entire task.
+        //
+        // This is asserted rather than eyeballed because the failure mode is
+        // invisible to review: `aspectRatio` resolves the width constraint
+        // first by default, so a wide frame quietly derives a different height
+        // from a narrow one. See the 2026-07-27 entry in ai/memory/palette.md.
         fakeRepo.imagesFlow.value = mockImages
-        runBlocking {
-            settingsRepository.setLastFolderUri("gdrive://test_folder")
-            settingsRepository.setSelectorLayoutFocused(true)
-        }
+        runBlocking { settingsRepository.setLastFolderUri("gdrive://test_folder") }
 
         composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
@@ -176,24 +179,106 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
-        // Only the expanded layout has three tiles at once.
-        if (composeRule.onAllNodesWithTag("copy_button_compact").fetchSemanticsNodes().isNotEmpty()) {
-            return
-        }
+        if (isCompactLayout()) return
         if (composeRule.onAllNodesWithTag("column_next").fetchSemanticsNodes().isEmpty()) return
 
         val current = composeRule.onNodeWithTag("column_current").getUnclippedBoundsInRoot()
+        val previous = composeRule.onNodeWithTag("column_previous").getUnclippedBoundsInRoot()
         val next = composeRule.onNodeWithTag("column_next").getUnclippedBoundsInRoot()
 
-        val currentHeight = current.bottom - current.top
-        val nextHeight = next.bottom - next.top
-        val difference = kotlin.math.abs(currentHeight.value - nextHeight.value)
-
-        // 2dp of slack: the active tile's border is 2dp where a neighbour's is 1dp.
-        assert(difference <= 2f) {
-            "current frame is ${currentHeight.value}dp tall but next is ${nextHeight.value}dp"
+        listOf("previous" to previous, "next" to next).forEach { (name, neighbour) ->
+            val heightDelta = kotlin.math.abs(
+                (current.bottom - current.top).value - (neighbour.bottom - neighbour.top).value
+            )
+            val widthDelta = kotlin.math.abs(
+                (current.right - current.left).value - (neighbour.right - neighbour.left).value
+            )
+            // 2dp of slack: the active tile's border is 2dp where a resting
+            // neighbour's is 1dp.
+            assert(heightDelta <= 2f) {
+                "current frame is ${(current.bottom - current.top).value}dp tall but " +
+                    "$name is ${(neighbour.bottom - neighbour.top).value}dp"
+            }
+            assert(widthDelta <= 2f) {
+                "current frame is ${(current.right - current.left).value}dp wide but " +
+                    "$name is ${(neighbour.right - neighbour.left).value}dp"
+            }
         }
     }
+
+    @Test
+    fun threeUpLayout_framesUseTheHeightTheDisplayAllows() {
+        // A size floor, not a style preference. Both previous revisions of this
+        // screen shipped with frames far smaller than the display allowed — the
+        // first arranged them in a row (width-bound, 40% of the height unused),
+        // the second stacked an app bar, an action row and a filmstrip into the
+        // one axis that was scarce. Neither was caught by a test, because there
+        // wasn't one. Anything that reintroduces chrome in the vertical stack
+        // now fails here rather than waiting to be noticed by eye.
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking { settingsRepository.setLastFolderUri("gdrive://test_folder") }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        if (isCompactLayout()) return
+        if (composeRule.onAllNodesWithTag("column_current").fetchSemanticsNodes().isEmpty()) return
+
+        val rootBounds = composeRule.onRoot().getUnclippedBoundsInRoot()
+        val screenHeight = rootBounds.bottom - rootBounds.top
+        val frame = composeRule.onNodeWithTag("column_current").getUnclippedBoundsInRoot()
+        val frameHeight = frame.bottom - frame.top
+
+        // Two equal rows plus gaps and padding: each frame should be close to
+        // half the window height. Anything under 45% means something is eating
+        // the vertical axis.
+        val ratio = frameHeight.value / screenHeight.value
+        assert(ratio >= 0.45f) {
+            "frame is ${frameHeight.value}dp of a ${screenHeight.value}dp window " +
+                "(${(ratio * 100).toInt()}%) — something is consuming the height budget"
+        }
+    }
+
+    @Test
+    fun neighbourFrame_maximiseBadgeDoesNotOverlapItsValueOverlay() {
+        // Both sit inside the same tile bounds, so their placement is a rule
+        // (badge bottom-left on neighbours, values right edge) rather than an
+        // accident. Overlap between two controls in different composables is
+        // invisible in review — this is the same class of bug as the layout
+        // toggle that once rendered on top of the fullscreen button.
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking { settingsRepository.setLastFolderUri("gdrive://test_folder") }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        if (isCompactLayout()) return
+        val overlays = composeRule.onAllNodesWithTag("neighbour_overlay").fetchSemanticsNodes()
+        val badges = composeRule.onAllNodesWithTag("maximise_badge").fetchSemanticsNodes()
+        if (overlays.isEmpty() || badges.isEmpty()) return
+
+        overlays.forEach { overlay ->
+            badges.forEach { badge ->
+                val a = overlay.boundsInRoot
+                val b = badge.boundsInRoot
+                val intersects = a.left < b.right && b.left < a.right &&
+                    a.top < b.bottom && b.top < a.bottom
+                assert(!intersects) {
+                    "a value overlay at $a intersects a maximise badge at $b"
+                }
+            }
+        }
+    }
+
+    /** True when the window is narrow enough to be running the phone layout. */
+    private fun isCompactLayout(): Boolean =
+        composeRule.onAllNodesWithTag("copy_button_compact").fetchSemanticsNodes().isNotEmpty()
 
     @Test
     fun navigateBetweenImages_updatesActiveExif() {
@@ -213,7 +298,7 @@ class SelectorScreenTest {
             .fetchSemanticsNodes().isNotEmpty()
 
         if (isCompact) {
-            // In compact layout, swipe left to navigate to next page
+            // Horizontal swipe browses, on every layout in this product.
             composeRule.onAllNodesWithContentDescription("image1.jpg").onFirst().performTouchInput {
                 swipeLeft()
             }
@@ -372,34 +457,39 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
-        // Open options menu and tap Scan Images
-        composeRule.onNodeWithContentDescription("More options").performClick()
-        composeRule.onAllNodesWithText("Scan Images").onFirst().performClick()
+        if (isCompactLayout()) return
+
+        // Tap Scan button on sidebar/chrome
+        composeRule.onAllNodesWithTag("scan_button", useUnmergedTree = true).onFirst().performClick()
 
         // Verify Scan Configuration sheet is shown and start scan
-        composeRule.onNodeWithText("Scan Configuration").assertIsDisplayed()
-        composeRule.onNodeWithText("Start Scan").performClick()
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("Scan Configuration", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onAllNodesWithText("Scan Configuration", useUnmergedTree = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("Start Scan", useUnmergedTree = true).onFirst().performClick()
 
         // Wait until metrics update and display in the UI
         composeRule.waitUntil(timeoutMillis = 15000) {
-            // Compact chips have labels like "Sharpness" or display compact values.
-            // Let's check for the presence of the score values like "78.5" or "1.2".
             composeRule.onAllNodesWithText("78.5", substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
 
         // Verify metrics are visible
-        composeRule.onNodeWithText("78.5", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("1.2", substring = true).assertIsDisplayed()
+        composeRule.onAllNodesWithText("78.5", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("1.2", substring = true).onFirst().assertIsDisplayed()
     }
 
     @Test
-    fun focusMode_layoutToggleAndFullscreenDoNotOverlap() {
+    fun noTwoSelectorControlsShareBounds() {
+        // Generalised from the regression it replaces: the layout toggle used
+        // to be pinned to the same top-right corner as the fullscreen button,
+        // in a different composable, so the two were invisible to each other in
+        // review. The layout toggle is gone with the second layout, but the
+        // class of bug is not, so this now checks every control in the block.
         fakeRepo.imagesFlow.value = mockImages
-        runBlocking {
-            settingsRepository.setLastFolderUri("gdrive://test_folder")
-            settingsRepository.setSelectorLayoutFocused(true)
-        }
+        runBlocking { settingsRepository.setLastFolderUri("gdrive://test_folder") }
 
         composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
@@ -407,32 +497,58 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
-        // Compact (phone) layout has neither control — nothing to assert.
-        val isCompact = composeRule.onAllNodesWithTag("copy_button_compact")
-            .fetchSemanticsNodes().isNotEmpty()
-        if (isCompact) return
+        if (isCompactLayout()) return
 
-        if (composeRule.onAllNodesWithTag("layout_toggle").fetchSemanticsNodes().isEmpty()) return
-        if (composeRule.onAllNodesWithTag("fullscreen_button").fetchSemanticsNodes().isEmpty()) return
-
-        val toggle = composeRule.onAllNodesWithTag("layout_toggle").onFirst()
-            .getUnclippedBoundsInRoot()
-        val fullscreen = composeRule.onAllNodesWithTag("fullscreen_button").onFirst()
-            .getUnclippedBoundsInRoot()
-
-        // The regression: both controls used to be pinned to the same top-right
-        // corner, so the layout toggle sat on top of the fullscreen button.
-        val overlaps = toggle.left < fullscreen.right &&
-            fullscreen.left < toggle.right &&
-            toggle.top < fullscreen.bottom &&
-            fullscreen.top < toggle.bottom
-        assert(!overlaps) {
-            "layout toggle $toggle overlaps the fullscreen button $fullscreen"
+        val tags = listOf(
+            "copy_button_expanded",
+            "move_button_expanded",
+            "delete_button_expanded",
+            "fullscreen_button",
+            "rail_previous",
+            "rail_next",
+            "details_toggle",
+            "filmstrip_toggle",
+            "overlay_values_toggle",
+            "shortcuts_button",
+        )
+        val bounds = tags.mapNotNull { tag ->
+            val nodes = composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes()
+            if (nodes.isEmpty()) null else tag to nodes.first().boundsInRoot
         }
 
-        // Both remain individually reachable.
-        composeRule.onAllNodesWithTag("layout_toggle").onFirst().assertHasClickAction()
-        composeRule.onAllNodesWithTag("fullscreen_button").onFirst().assertHasClickAction()
+        bounds.forEachIndexed { i, (nameA, a) ->
+            bounds.drop(i + 1).forEach { (nameB, b) ->
+                val intersects = a.left < b.right && b.left < a.right &&
+                    a.top < b.bottom && b.top < a.bottom
+                assert(!intersects) { "$nameA at $a overlaps $nameB at $b" }
+            }
+        }
+    }
+
+    @Test
+    fun filingButtonsAreWordedAndNeverSayKeep() {
+        // The label is derived from the Filing Action setting, so it says what
+        // happens to the file. "Keep" describes a feeling, and under a move
+        // configuration it is simply false — the file leaves the folder.
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking { settingsRepository.setLastFolderUri("gdrive://test_folder") }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+
+        if (isCompactLayout()) return
+
+        composeRule.onAllNodesWithText("Keep", substring = true, ignoreCase = true)
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithText("Copy").fetchSemanticsNodes().let {
+            assert(it.isNotEmpty()) { "no worded Copy control on screen" }
+        }
+        composeRule.onAllNodesWithText("Move").fetchSemanticsNodes().let {
+            assert(it.isNotEmpty()) { "no worded Move control on screen" }
+        }
     }
 
     @Test
@@ -441,7 +557,6 @@ class SelectorScreenTest {
         runBlocking {
             settingsRepository.setHasSeenNavHint(false)
             settingsRepository.setLastFolderUri("gdrive://test_folder")
-            settingsRepository.setSelectorLayoutFocused(true)
         }
 
         composeRule.waitUntil(timeoutMillis = 15000) {
@@ -524,20 +639,22 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
+        if (isCompactLayout()) return
+
         // The legend button appears once there are scores to explain.
         composeRule.waitUntil(timeoutMillis = 15000) {
-            composeRule.onAllNodesWithContentDescription("What the scan icons mean")
+            composeRule.onAllNodesWithTag("score_legend_button", useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithContentDescription("What the scan icons mean").performClick()
+        composeRule.onAllNodesWithTag("score_legend_button", useUnmergedTree = true).onFirst().performClick()
 
         composeRule.waitUntil(timeoutMillis = 15000) {
             composeRule.onAllNodes(hasText("What the scan icons mean", ignoreCase = true), useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
         val inLegend = hasAnyAncestor(hasTestTag("score_legend_sheet"))
-        composeRule.onNode(hasText("Sharpness") and inLegend, useUnmergedTree = true).assertExists()
-        composeRule.onNode(hasText("Noise") and inLegend, useUnmergedTree = true).assertExists()
+        composeRule.onAllNodes(hasText("Sharpness") and inLegend, useUnmergedTree = true).onFirst().assertExists()
+        composeRule.onAllNodes(hasText("Noise") and inLegend, useUnmergedTree = true).onFirst().assertExists()
         composeRule.onAllNodes(hasText("higher is better", substring = true) and inLegend, useUnmergedTree = true).onFirst().assertExists()
         composeRule.onAllNodes(hasText("lower is better", substring = true) and inLegend, useUnmergedTree = true).onFirst().assertExists()
     }

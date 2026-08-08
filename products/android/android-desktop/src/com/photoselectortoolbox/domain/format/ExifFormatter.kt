@@ -50,6 +50,39 @@ object ExifFormatter {
     }
 
     /**
+     * The exposure block for a neighbour frame's value overlay: at most two
+     * short lines, e.g. `1/250s · f/2.8` then `35mm · ISO 400`.
+     *
+     * Two lines rather than one truncated line, and always split at the same
+     * point, because the comparison being made is *between* Previous and Next:
+     * shutter speed sits above shutter speed and ISO above ISO, so a difference
+     * is a difference in one place rather than a re-read of two strings. A
+     * single line ellipsised at 148 dp would drop ISO — the field most likely
+     * to differ inside a burst — which is the opposite of useful.
+     *
+     * Lens is deliberately absent: it does not fit, and inside a burst it is
+     * the one field guaranteed not to vary. [detailRows] still carries it.
+     *
+     * Returns an empty list when nothing is known, so the caller omits the
+     * block rather than drawing an empty one over a photograph.
+     */
+    fun overlayLines(exif: ExifData?): List<String> {
+        if (exif == null) return emptyList()
+        val exposure = buildList {
+            exif.shutterSpeed?.let { add(shutterSpeed(it)) }
+            exif.aperture?.let { add(aperture(it)) }
+        }
+        val optics = buildList {
+            exif.focalLength?.let { add(focalLength(it)) }
+            exif.iso?.let { add(iso(it)) }
+        }
+        return buildList {
+            exposure.takeIf { it.isNotEmpty() }?.let { add(it.joinToString(" · ")) }
+            optics.takeIf { it.isNotEmpty() }?.let { add(it.joinToString(" · ")) }
+        }
+    }
+
+    /**
      * The label/value pairs for the details panel, in display order.
      *
      * Unlike [summaryLine] this keeps every field and renders unknowns as

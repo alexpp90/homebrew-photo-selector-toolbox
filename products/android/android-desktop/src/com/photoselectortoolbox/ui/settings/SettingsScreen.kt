@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
+import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.ui.theme.ErrorRed
 import com.photoselectortoolbox.ui.theme.Indigo500
 import com.photoselectortoolbox.ui.theme.Zinc400
@@ -341,7 +342,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // --- Fullscreen Section ---
-        SettingsSection(title = "Fullscreen Viewer") {
+        SettingsSection(title = "Filing and Fullscreen") {
             SettingsToggleItem(
                 title = "Show Fullscreen Action Buttons",
                 description = "Display delete, copy, and move buttons in fullscreen mode",
@@ -357,14 +358,24 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .padding(16.dp),
             ) {
+                // Renamed from "Double-Tap Gesture Action": double-tap no longer
+                // files a photograph anywhere in the app, so a setting named
+                // after that gesture described something that does not happen.
+                // The persisted key is unchanged.
                 Text(
-                    text = "Double-Tap Gesture Action",
+                    text = "Filing Action",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+                Text(
+                    text = "Which verb the emphasised button performs. Both Copy and Move " +
+                        "stay available on their own buttons and shortcuts.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Zinc400,
+                )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                listOf("copy" to "Copy to Selection", "move" to "Move to Selection").forEach { (value, label) ->
+                FilingAction.entries.forEach { action ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -372,8 +383,8 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
-                            selected = uiState.fullscreenGestureAction == value,
-                            onClick = { viewModel.updateFullscreenGestureAction(value) },
+                            selected = uiState.filingAction == action,
+                            onClick = { viewModel.updateFilingAction(action) },
                             colors = RadioButtonDefaults.colors(
                                 selectedColor = Indigo500,
                                 unselectedColor = Zinc400,
@@ -381,7 +392,7 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = label,
+                            text = action.phrase,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )

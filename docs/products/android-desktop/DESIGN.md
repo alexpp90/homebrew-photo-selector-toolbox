@@ -22,8 +22,8 @@ to them.
 4. [Visual language](#4-visual-language)
 5. [Information architecture](#5-information-architecture)
 6. [Data the UI displays](#6-data-the-ui-displays)
-7. [Screen: Selector — three-column comparison (hero)](#7-screen-selector--three-column-comparison-hero)
-8. [Screen: Selector — focused layout (default)](#8-screen-selector--focused-layout-default)
+7. [Screen: Selector — three-up comparison, one over two (hero)](#7-screen-selector--three-up-comparison-hero)
+8. [Screen: Selector — retired layouts](#8-screen-selector--retired-layouts)
 9. [Screen: Fullscreen viewer](#9-screen-fullscreen-viewer)
 10. [Surface: Scan configuration](#10-surface-scan-configuration)
 11. [Surface: Score legend](#11-surface-score-legend)
@@ -81,17 +81,20 @@ Those columns are where chrome belongs.
 
 Non-negotiable. Every layout decision is checked against these.
 
-1. **The photograph is the interface.** Maximise the pixel area given to images. Chrome
-   lives in the letterbox dead space the aspect-ratio mismatch creates. Chrome must never
-   steal vertical space from the photograph.
+1. **The photograph is the interface, and frame size wins every argument.** Maximise the
+   pixel area given to images, then place chrome only where the binding constraint is *not*
+   — §7.2 works out which axis that is, and it is the first calculation of any layout
+   decision on this product. Chrome that competes with the photographs for the scarce axis
+   is removed, not shrunk.
 2. **No overlays on images.** No floating action buttons, no scrims, no gradients, no
-   controls on top of a photo. The single exception is the one-time first-run navigation
-   hint. Two interactive controls may never share screen bounds.
-3. **One control, one home.** Each control belongs to exactly one control group. Nothing
-   free-floats between layouts. The layout toggle in particular appears exactly once, inside
-   the control group of the layout currently shown.
-4. **Touch first, keyboard fast.** Every interactive target ≥ 48 dp. Every frequent action
-   also has a keyboard shortcut, surfaced as a subtle key hint on hover.
+   controls on top of a photo. The exceptions are the one-time first-run navigation hint and
+   the maximise badge, which sits on the tile outline. Two interactive controls may never
+   share screen bounds.
+3. **One control, one home.** Each control belongs to exactly one control group, and nothing
+   free-floats.
+4. **Touch first, keyboard fast.** Every interactive target ≥ 48 dp; every control that
+   changes a file carries a permanent visible word and a permanent key cap. Hover reveals
+   nothing that matters — a tablet has no hover.
 5. **Dark, quiet, neutral.** The UI must not colour-cast the photographs. Greys plus a
    single indigo accent. No gradients beside images, no coloured glows, no translucent blur
    panels over image areas.
@@ -175,12 +178,20 @@ Material Symbols, Rounded, weight 400.
 | Fullscreen | `fullscreen` |
 | Photo details | `info` |
 | Filmstrip | `view_carousel` |
-| Layout toggle | `view_column` / `view_agenda` |
 | Sharpness | `center_focus_strong` |
 | Noise | `grain` |
 | Highlight clipping | `brightness_high` |
 | Shadow clipping | `brightness_low` |
 | Aesthetic score | `auto_awesome` |
+| Maximise a frame | `open_in_full` |
+| Value overlays on / off | `visibility` / `visibility_off` |
+| Shortcut sheet | `keyboard` |
+
+**The five metric glyphs are load-bearing, not decorative.** On Previous and Next the glyph
+is the *only* thing identifying a metric (§7.4b), so each one is declared once on
+`ScoreMetric` next to its label, format, direction and normalisation range — never picked at
+a call site — and the named readout beside the current frame (§7.4a) is what teaches it. A
+metric added without a glyph must fail to compile, not render blank.
 
 ---
 
@@ -267,155 +278,379 @@ reading digits, and satisfies the requirement that direction not be conveyed by 
 
 ---
 
-## 7. Screen: Selector — three-column comparison (hero)
+## 7. Screen: Selector — three-up comparison (hero)
 
-**Frame:** 1480 × 924 dp landscape tablet. This is the most important screen in the product.
+**Frame:** 1480 × 924 dp landscape tablet (Galaxy Tab S11 Ultra). This is the most important
+screen in the product, and from this revision it is the **only** comparison layout: three
+equal frames arranged **one over two**, at 600 × 450 dp each.
 
-### Goal
+> **The single governing rule of this screen.** Frame size beats every other consideration.
+> Any element that competes with the photographs for space must either move into space the
+> photographs cannot use, or be removed. §7.2 proves which space that is.
 
-Show three consecutive photographs — Previous, Current, Next — simultaneously, each 4:3,
-each rendered as large as the display physically allows, so the photographer can judge which
-of three near-identical frames is the keeper.
+### 7.0 What this revision changes, and why
 
-### The layout maths — this drives everything
+The previous revision was right about the principles and wrong about three things in
+practice. Recorded here so the reasoning is not lost:
 
-```
-usable width   = 1480 − nav rail − outer padding − (2 × column gap)
-image width    = usable width / 3          ≈ 450–470 dp
-image height   = image width × 3/4         ≈ 340–350 dp
-usable height  ≈ 850 dp after system insets and app bar
-```
+| Problem observed | Root cause | Resolution |
+|---|---|---|
+| Three-up frames render far smaller than the display allows | the frames were arranged **in a row**, and three 4:3 frames abreast are width-bound — they cap at 493 × 370 dp even with zero chrome, abandoning 60 % of the display's height. Width-first `aspectRatio` and five stacked caption elements per column then took more still | the row is abandoned for a one-over-two arrangement, which is height-bound at **600 × 450 dp** — 76 % more area per frame (§7.2) |
+| Which frame does a number describe? | scores sat in a caption stack under each column, and then in a single matrix beside one frame — in both cases the eye had to map a column position back to a photograph, hundreds of times a session | values are placed *on* the frame they describe: named and iconed beside the centred current frame, icon-and-value overlaid on each neighbour's own right edge (§7.4) |
+| The current frame does not read as the one being decided on | it was top-left in a two-row grid, distinguished only by a border | it is **centred**, with its readouts left and its controls right (§7.2) |
+| Controls read as decorative — small, unlabelled icons | `BarIconButton` is 34 dp with an 18 dp glyph and no visible text; rail buttons are 48 dp but icon-only; key hints appear on hover, which a tablet has none of | every control that acts on a photograph carries a permanent text label and a permanent key cap, at ≥ 48 dp (§7.5) |
+| Session controls (Drive, Scan, bursts, legend) live in a 44 dp top bar | vertical space is the scarce axis, and a horizontal strip of unlabelled 34 dp glyphs is the least legible arrangement available | they move into a single labelled left sidebar merged with the app navigation rail (§7.1) |
+| "As large as possible" is unreachable in three-up | three 4:3 frames abreast are geometrically width-bound; no amount of chrome trimming makes them large | an explicit per-frame **maximise** affordance (§7.3) |
 
-Three 4:3 images in a row are **width-constrained, not height-constrained**. Horizontal
-pixels are the scarce resource; vertical pixels are abundant. Therefore:
+### 7.1 Shell — one left sidebar, no top bar
 
-- **Strip horizontal chrome to the bone.** The navigation rail collapses to its narrowest
-  form (72–80 dp) or hides entirely behind a single menu affordance. Outer horizontal
-  padding ≤ 8 dp. Column gaps 8 dp. **No side panel, metadata rail, or inspector column
-  beside the three images** — every dp of width taken is a dp taken off all three photos.
-- **Spend the leftover vertical space generously.** Each image's filename, EXIF line and
-  score chips go in a caption block directly **below its own image**, not in a shared side
-  panel. The action row sits below that.
-- **All three images are exactly the same size.** Previous, Current and Next must be visually
-  identical in dimensions — the entire point is a fair comparison. Never enlarge the current
-  image relative to its neighbours in this layout.
-
-### Column anatomy — identical for all three columns
-
-1. **Column header** — `Previous` / `Current` / `Next`, labelSmall, uppercase tracking,
-   Zinc-400. The Current column's header is Indigo-500.
-2. **The image** — 4:3, letterboxed inside a Zinc-800 tile with a 1 dp Zinc-700 border.
-   The Current column's tile gets a 2 dp Indigo-500 border. **That border is the only thing
-   marking which column is active.** No scrim, no glow, and no dimming of the neighbours —
-   the neighbours must render at full brightness or the comparison is worthless.
-3. **Filename** — bodyMedium, middle-ellipsis, one line.
-4. **Compact EXIF line** — labelSmall, Zinc-400, dot-separated.
-5. **Score chip row** — up to five chips, wrapping to a second line if needed. Each chip is
-   a Zinc-800 pill with a 1 dp Zinc-700 border, carrying icon + short label + value + the
-   direction bar.
-6. **Portrait-orientation images** — keep the tile footprint identical and pillarbox the
-   image inside it. The grid must never reflow when orientation changes mid-sequence.
-
-### Interaction
-
-- Tapping the Previous or Next **column** advances the whole triptych by one frame. The
-  neighbour columns *are* the navigation — there are no arrow buttons over the images.
-  Show a hand cursor on hover (mouse / DeX).
-- Long-press any image → context menu: Move, Copy, Delete, Info, Fullscreen.
-- No hover-dependent interactions — everything must be reachable by touch.
-
-### Action row — one shared row below the three columns, centred
+There is **one** vertical control surface, 88 dp wide, on the left edge, and it replaces both
+the Material `NavigationRail` and the selector's top app bar. Two zones separated by a 1 dp
+Zinc-700 rule:
 
 ```
-[Move to Selection] [Copy to Selection] [Delete]  |  [Fullscreen]
-      ─────────────── divider ───────────────
-[Layout toggle → focused] [Details] [Filmstrip]
+┌────────┐
+│ Folder │  ← zone A: session actions (was the top app bar)
+│ Drive  │
+│ Scan   │
+│ Bursts │
+│ Legend │
+├────────┤
+│ Cull   │  ← zone B: app screens (was the NavigationRail)
+│ Stats  │
+│ Dupes  │
+│ Setup  │
+└────────┘
 ```
 
-- Acts on the **Current** image.
-- Move and Copy are filled-tonal buttons; Delete is outlined with the red accent reserved
-  for its icon; the view controls are icon toggle buttons with distinct on/off states.
-- All controls ≥ 48 dp.
-- **The layout toggle lives here in this layout, and nowhere else.**
-- Keyboard hints (`M`, `C`, `Del`, `F`) render as small Zinc-400 key-caps on hover.
+- Each item is a 72 dp-tall, 80 dp-wide target: 24 dp glyph over an 11 sp label, centred.
+  **The label is not optional** — an icon plus nothing is the defect this revision exists to
+  fix.
+- Active state: `TonalIndigoNav` fill plus an Indigo-500 glyph and label. Toggle items
+  (Bursts) use the same treatment for their on state, so "selected screen" and "toggle on"
+  read identically — both mean *this is currently true*.
+- **Scan** is the one emphasised item: `TonalIndigo` fill at rest. While a scan runs it
+  becomes a counter (`412 / 842`) over a **Cancel** label in `ScoreBad`, with a 2 dp Indigo
+  determinate line along the sidebar's right edge. A scan still never takes the screen.
+- Folder name and the burst chip move into the head of the **left readout block** (§7.4a);
+  `127 / 842` closes the control block on the opposite side (§7.5). Nothing goes above the image region: a 32 dp strip would still be 21 dp off
+  the height of every frame.
+- Net budget: the sidebar costs 88 dp of width against the 80 dp rail it replaces, and
+  returns the app bar's whole 44 dp of height. Because §7 is height-bound, that is **+29 dp
+  of height on every frame at a cost of zero** — the sidebar is not a compromise, it is a
+  gain.
 
-### Top app bar — compact, ≤ 56 dp
+### 7.2 The layout maths — why one over two, and why the chrome is then free
 
-- Left: folder name, then the position counter `127 / 842`.
-- Right: `Scan Images` · `Group Similar Series` · score legend (info icon, shown once any
-  image has scores) · overflow.
-- **Scan in progress:** replace the bar's lower edge with a 2 dp Indigo progress line plus
-  an inline `Scanning 412 / 842 · Cancel`.
+Three equal 4:3 frames must be packed into a 1480 × 924 dp window. There are only two
+arrangements that keep them equal, and they are not close:
 
-### Filmstrip — collapsible, bottom edge, ~72 dp tall when shown
+| Arrangement | Binding constraint | Frame size | Area | Height used |
+|---|---|---|---|---|
+| Three in a row (previous revision) | **width**: `w ≤ 1480/3` | 493 × 370 dp | 182 k dp² | 40 % |
+| **One over two** | **height**: `2h ≤ 924` | **616 × 462 dp** | **285 k dp²** | 100 % |
 
-Horizontally scrolling row of thumbnails for the whole folder. The current item is outlined
-in Indigo. Each thumbnail may carry one tiny score dot; no text. Visibility is remembered.
+```
+one over two:   2h ≤ H  →  h ≤ 462  →  w = h × 4/3 = 616
+                2w ≤ W  →  w ≤ 740                          ← slack: 124 dp per frame
+three in a row: 3w ≤ W  →  w ≤ 493  →  h = 370
+                 h ≤ H  →  h ≤ 924                          ← slack: 554 dp of height, wasted
+```
+
+**This is the whole redesign in one line.** In a row, width is scarce, so every dp of
+horizontal chrome — sidebar, readout block, control block — is taken directly off all three
+photographs. One over two flips the binding constraint to height, which leaves **124 dp of
+horizontal slack per frame that the photographs physically cannot use.** The controls move
+into that slack and cost the images nothing.
+
+With real chrome subtracted:
+
+```
+sidebar 88 · outer padding 8 · row gap 8 · no top app bar
+image region = 1376 × 908 dp
+row height   = (908 − 8) / 2 = 450        tile = 600 × 450 dp
+
+top row      [ values 388 ][ CURRENT 600 ][ controls 388 ]   → §7.4a, §7.5
+bottom row   [ 84 ][ PREVIOUS 600 ][ 8 ][ NEXT 600 ][ 84 ]   → §7.4b
+```
+
+**The current frame is centred in the image region**, with its readouts and its controls
+balanced either side at 388 dp each. Previous and Next are centred as a pair beneath it, so
+the three frames share a vertical centre line. Centring is what marks the current frame as
+the one under judgement — together with its 2 dp Indigo border, and *not* by making it
+larger, which would destroy the comparison.
+
+600 × 450 against the previous revision's 453 × 340: **+76 % area per frame.** Against the
+current shipped focused layout's 524 × 393 (which pays a 44 dp app bar and a 76 dp filmstrip
+out of the height budget): **+31 %.**
+
+Two consequences that must not be forgotten during implementation:
+
+- **Height is the only scarce axis.** Anything that consumes height — a top app bar, a
+  horizontal filmstrip, a caption row under a frame, vertical padding — comes straight off
+  every frame at a rate of 2 dp of frame height per 3 dp taken. Nothing may be added to the
+  vertical stack. Anything that consumes *width* up to 160 dp is free.
+- **The sidebar is free, and can therefore afford to be legible.** 88 dp of labelled sidebar
+  costs zero dp of frame size here, where it would have cost 29 dp per frame in a row. This
+  is why §7.1 can spend width on words.
+
+**Implementation rule (non-negotiable).** Compute the tile size once, in a
+`BoxWithConstraints` over the image region, and hand all three tiles the same explicit
+`DpSize`. Do not use `aspectRatio` with an implicit constraint order — see the 2026-07-27
+lesson in `ai/memory/palette.md`; width-first resolution is exactly how three frames end up
+different heights. A UI test asserts all three `getUnclippedBoundsInRoot()` are equal to
+within the border delta (2 dp active, 1 dp resting), and a second test asserts the tile
+height is at least 440 dp on the reference frame — a size regression must fail the build,
+not wait to be noticed.
+
+**Portrait frames.** The tile footprint stays 4:3 and a portrait frame is pillarboxed inside
+it. A portrait frame mid-burst must never reflow the grid — this remains the one deliberate
+exception to "the tile is the image".
+
+**Reading order.** Current is centred on the top row; Previous and Next sit beneath it, left
+to right. Neighbours are never dimmed, scrimmed or shrunk.
+
+### 7.3 Maximise — how a single frame gets larger still
+
+600 × 450 dp is the maximum for *three* equal frames. When one frame needs the whole display,
+two routes land on the same 1376 × 908 dp region — a **4:3 frame at 1211 × 908 dp, 4.1 × the
+area of its three-up tile**:
+
+1. **Maximise badge.** Each tile carries a 44 dp `⛶` badge in its bottom-right corner,
+   inside the tile bounds but outside the image's safe centre. Tap it, or press `1` / `2` /
+   `3`, and that frame fills the region. The badge is the only permanently drawn on-image
+   affordance permitted, and it is drawn on the tile's outline, not over the photograph.
+2. **Fullscreen** (`F`, or tap the current frame) — unchanged, and now reachable for a
+   *neighbour* too, via that neighbour's badge.
+
+In the maximised state the maximised frame keeps the §7.4a readout block beside it, and the
+two hidden frames' values collapse into a single 148 dp column at the right
+edge — the same overlay vocabulary as §7.4b, so the numbers for the frames you can no longer
+see stay readable and stay recognisable. `Esc` or a second tap on the badge returns to three-up. Transition is a
+180 ms crossfade — no scale, no slide. The user is judging sharpness, and movement lies.
+
+### 7.4 Value readouts — every number touching the photograph it describes
+
+The previous revision put all fifteen numbers in one matrix beside the current frame. Reading
+across a row compared the metrics well, but it broke the more basic question — *whose number
+is this?* — because two of the three columns described photographs a long way from them on
+screen. Proximity beats tabulation: a value belongs to a frame, so it is drawn on or against
+that frame.
+
+The metric set, the `ScoreMetric` definitions, the 0..1 goodness normalisation, the 2 dp
+direction bar and the Indigo best-of-three dot are unchanged throughout. Only placement and
+verbosity differ, and they differ by role.
+
+#### 7.4a Current frame — named, iconed, to its left
+
+The 388 × 450 dp block left of the centred current frame. Full verbosity, because this is
+also the **legend** for the two overlays below it:
+
+```
+DSC_0127.JPG
+1/500 · f2.8 · 35mm · ISO 400
+──────────────────────────────
+◎  Sharpness                688 ●
+   ▇▇▇▇▇▇▇▇▇▇▇▁
+◍  Noise                    2.4
+   ▇▇▇▇▇▇▁▁▁▁▁▁
+☀  Highlights               1.9%
+   ▇▇▇▇▁▁▁▁▁▁▁▁
+☾  Shadows                  0.2%
+   ▇▇▇▇▇▇▇▇▁▁▁▁
+★  Aesthetic                7.1 ●
+   ▇▇▇▇▇▇▇▇▁▁▁▁
+```
+
+- **Icon + full metric name + value**, one metric per line, the goodness bar beneath, indented
+  to the name so the icon column stays clean. Right-aligned values in tabular mono so the
+  five numbers form a column.
+- The icon here is the *same glyph* the overlays use — this block is what teaches it. Each
+  metric therefore has exactly one icon, defined once on `ScoreMetric` alongside its label,
+  format and direction, never chosen at a call site.
+- Filename and the one-line EXIF summary head the block; `127 / 842` sits under the controls
+  on the opposite side, balancing the composition.
+- Unscanned: a single dashed "Not scanned" row, not five blanks.
+
+#### 7.4b Previous and Next — identity, exposure and values, on the frame's own right edge
+
+A 148 dp column carrying the same information as §7.4a in the same reading order, compressed:
+identity, then exposure, then a rule, then icon + value + bar per metric.
+
+```
+┌────────────────┐
+│ DSC_0126.JPG   │  11 sp, middle-ellipsis, Zinc-50
+│ 126 · 1/250 f2.8│ 9 sp mono, Zinc-400
+│ 35mm · ISO 400 │  9 sp mono, Zinc-400
+│ ────────────── │
+│ ◎ 412   ▇▇▇▇▁▁ │
+│ ◍ 2.9   ▇▇▇▁▁▁ │
+│ ☀ 0.4%  ▇▇▇▇▇▁ │
+│ ☾ 0.1%  ▇▇▇▇▇▇ │
+│ ★ 6.4   ▇▇▇▇▁▁ │
+└────────────────┘
+```
+
+- **Same order as the current frame's block, always.** Filename, exposure, rule, then the five
+  metrics in the `ScoreMetric` declaration order. The eye learns one vertical order and reuses
+  it across all three frames; a neighbour that ordered its metrics differently would make the
+  overlays unreadable at a glance, so the order comes from the enum and never from a
+  composable.
+- **Exposure wraps to two lines rather than truncating.** `1/250 · f2.8` then
+  `35mm · ISO 400`, tabular mono so shutter speeds and apertures align vertically between
+  Previous and Next — the comparison the photographer is actually making. Position number
+  leads the first line. Lens name is omitted here and remains in the context menu's Photo
+  details; it is the one EXIF field that will not fit and the one that is identical across a
+  burst.
+- **Fallback EXIF** shows a 10 dp amber `error_outline` after the exposure block instead of
+  the words "limited metadata" — the marker is what matters, the explanation is in the
+  details panel.
+- **Placement.** Outside the frame, against its right edge, whenever ≥ 156 dp of free width
+  exists there; otherwise **overlaid inside the frame**, inset 8 dp from the right edge. On
+  the reference device the bottom row has 84 dp free per side, so it overlays. One rule, one
+  measurement, both branches tested — never a hard-coded choice.
+- **Overlay treatment.** `Zinc950` at 72 % over a 6 dp radius, 8 dp inset top, right and
+  bottom, vertically centred, 14 dp icons, `Zinc50` values. Deliberately a flat panel and not
+  a gradient scrim: a gradient across the right of a photograph reads as part of the
+  photograph, which is the failure mode §9 already documents for the fullscreen top bar.
+- **It covers roughly 25 % of the frame's width, and that is a real cost.** Two mitigations,
+  both required: the overlay hides while a frame is maximised (§7.3), and the eye control in
+  the view cluster toggles all overlays off for a clean look at the photographs. The state is
+  persisted (`overlay_values_visible`, default on).
+- No metric names — §7.4a is the legend, and these frames are being scanned, not read. The
+  full name, value and direction still go in the `contentDescription` of every overlay row,
+  and the exposure block is read out in full.
+- The maximise badge moves to the frame's **bottom-left** on these two tiles so it cannot
+  collide with the overlay. A UI test asserts their bounds do not intersect.
+
+#### Why this placement, in one line each
+
+| Frame | Treatment | Reason |
+|---|---|---|
+| Current | Left block, named, iconed | It is the frame being decided on; it can afford words, and it doubles as the legend |
+| Previous / Next | Right-edge overlay: filename, exposure, icon + value | The data must be unambiguously *theirs*; at a glance you compare bar lengths and aligned exposure tokens, not names |
+
+### 7.5 Controls — right of the current frame
+
+The 388 × 450 dp block right of the centred current frame, mirroring the readouts on the
+left. A 2 × 3 grid of large controls rather than a narrow rail, because 388 dp of surplus
+width is available and a 190 dp button carries its word comfortably:
+
+```
+┌──────────┬──────────┐
+│ ♡ Keep C │ ➜ Move M │
+├──────────┼──────────┤
+│ 🗑 Delete│ ⛶ Full F │
+│    Del   │          │
+├──────────┼──────────┤
+│ ‹ Prev ← │ Next → › │
+└──────────┴──────────┘
+      ▤  ▭  👁  ⌨
+        127 / 842
+```
+
+- Each cell is ~190 × 80 dp: glyph above, word below, key cap after the word. All three of
+  Keep, Move and Delete are permanently worded — a control that changes a file is never
+  icon-only (§17).
+- Keep is `ScoreGood`-tinted tonal, Move is `TonalIndigo`, Delete is outlined with a
+  `ScoreBad` glyph and word. Delete sits diagonally opposite Keep, not adjacent to it.
+- Previous / Next occupy the bottom row, furthest from Delete, and are duplicated by tapping
+  a neighbour frame, swiping the image region, and the arrow keys.
+- Beneath the grid, a 48 dp icon row of view controls — readout panel, filmstrip, overlay
+  visibility, shortcut sheet. Icon-only is acceptable *only here*, because none of them
+  changes a file; each carries a tooltip and a full `contentDescription`.
+- The position counter `127 / 842` closes the block, in tabular mono.
+- Key caps are **permanent**, not hover-revealed. A tablet has no hover, and the desktop
+  lesson already recorded (2024-05-18, `ai/memory/palette.md`) is that unhinted shortcuts go
+  unused.
+- Nothing here may spill into a horizontal row across the bottom of the screen. That costs
+  72 dp of height, which is 48 dp off the height of all three frames.
+
+### 7.6 Interaction — one gesture vocabulary, defined once
+
+Every gesture below is defined in a single pure object (`SelectorGestures`) shared by the
+three-up layout, the compact layout, the fullscreen viewer and every hint string, so the
+copy and the behaviour cannot drift. This is the 2026-07-31 lesson in
+`ai/memory/palette.md` applied to the whole product rather than one label.
+
+| Input | Effect | Notes |
+|---|---|---|
+| Tap a neighbour tile | Navigate to that frame | the neighbours *are* the navigation |
+| Tap the current tile | Fullscreen | |
+| Tap a tile's `⛶` badge | Maximise that frame in place | |
+| Horizontal swipe on the image region | Previous / next | same direction as fullscreen, same as `←` / `→` |
+| Long-press / right-click a tile | Context menu at the pointer | Move `M`, Copy `C`, Delete `Del`, Details, Fullscreen `F` |
+| Double-tap a tile | *nothing* | reserved; never bind a destructive or filing action to it |
+
+**No destructive action is ever a bare swipe, in any layout.** Horizontal swipe means
+navigate everywhere in this product — the compact layout's swipe-left-to-delete is removed
+by this revision, because a gesture that means "next" on one screen and "delete" on another
+is a trap, and it is the direct cause of the wrong fullscreen hint text.
+
+### 7.7 First-run navigation hint
+
+Unchanged in behaviour: one centred pill ("Tap either side to browse" · "Got it"), 16 dp
+above the bottom of the image region, shown once, `hasSeenNavHint` persisted. It remains the
+only image-adjacent overlay besides the maximise badge.
+
+### 7.8 Filmstrip
+
+Same content as before — 56 dp thumbnails, burst underlines, mono range caption,
+`filmstrip_visible` persisted — but **relocated into the foot of the left readout block**
+(§7.4a), where it scrolls horizontally within 388 dp, rather than spanning the bottom of the
+screen. A full-width filmstrip costs 76 dp of height, which is 50 dp off the height of every
+frame; here it costs nothing and the frames never resize when it is toggled.
 
 ### Do not
 
-Add a side inspector panel · shrink or dim the neighbour images · overlay arrows, buttons or
-gradients on the photographs · use drop shadows · round image corners beyond 4 dp.
+Shrink or dim the neighbour images · put **anything** in the vertical stack above or below
+the image region — no top app bar, no bottom action row, no full-width filmstrip, no caption
+row under a frame · overlay arrows, buttons or gradients on the photographs (the maximise
+badge sits on the tile outline, not the image) · ship an unlabelled control that moves or
+deletes a file · use drop shadows · round image corners beyond 4 dp · bind any file action to
+a swipe.
+
+**The test for any future addition to this screen:** does it consume height? If yes, it
+takes 2 dp off every frame for every 3 dp it occupies, and it needs a better justification
+than "it fits". If it consumes only width, up to the 124 dp of per-frame slack, it is free.
 
 ---
 
-## 8. Screen: Selector — focused layout (default)
+## 8. Screen: Selector — retired layouts
 
-**Frame:** 1480 × 924 dp landscape tablet. This is the **default** comparison layout; the
-three-column layout is the alternative, reached via the layout toggle.
+**There is now one comparison layout: §7.** The two that existed before are retired, and the
+layout toggle, the `Space` shortcut that drove it and the `selector_layout_focused` key go
+with them.
 
-### Goal
-
-One large current image with its two neighbours as smaller reference tiles beneath it — for
-when the user wants detail on one frame rather than an even three-way comparison.
-
-### The layout maths
-
-A 4:3 image fitted into a full-width 16:10 region is **height-limited** and leaves a wide
-empty column on each side. Put the controls in those dead columns:
-
-- **Left vertical rail, 56 dp wide:** Previous, Next, and the `127 / 842` position counter,
-  stacked vertically.
-- **Right vertical rail, 56 dp wide:** Move, Copy, Delete, Fullscreen, then a divider, then
-  Layout toggle, Details toggle, Filmstrip toggle.
-
-Both rails are flush with the image region's vertical extent. They consume **zero vertical
-space** and never cover the photo. Outer padding ≤ 6 dp.
-
-### Vertical budget
-
-| Region | Share |
+| Retired | Why |
 |---|---|
-| Current image | ~72% of free height (~80% on a Compact-height window) |
-| Previous / Next tiles | remaining height, side by side, each half-width, each 4:3 |
-| Filmstrip | below that, if shown |
+| **Three in a row** | Width-bound at 493 × 370 dp; wastes 554 dp of height by construction (§7.2). It cannot be fixed by tuning — only by rearranging, which is what §7 is. |
+| **Stacked "focused"** | Correct arrangement, wrong budget: it paid a 44 dp app bar, a 76 dp filmstrip and two 56 dp rails out of the *height*, landing at 524 × 393 dp. §7 keeps its geometry, moves the chrome into the horizontal slack, and reaches 600 × 450 dp. |
 
-### Current image block
+§7 is the focused layout with its budget corrected. Everything below in this file that refers
+to "the two comparison layouts", "the layout toggle" or "the focused layout" means §7.
 
-4:3 image in a Zinc-800 tile, 1 dp Zinc-700 border, 4 dp radius. Directly beneath it — or
-in a collapsible details panel that docks **below** the image, never on top of it —
-filename, full EXIF line, and the score chip row with direction bars.
+### Preserved from the retired focused layout
 
-### First-run navigation hint (the only permitted image overlay)
+The reasoning worth keeping, all of it now folded into §7:
 
-On the very first launch only, show translucent left/right chevron affordances on the image
-edges with a one-line caption: *"Tap either side to browse."* Persist a seen-flag and never
-show them again. Navigation thereafter relies on tapping the Previous/Next tiles, the rails,
-hardware keys, and drag gestures.
+- Controls belong in the letterbox columns, not above or below the photographs
+  (2026-07-24, `ai/memory/palette.md`). §7.2 generalises this: controls belong wherever the
+  binding constraint is *not*.
+- Equal frame sizing is non-negotiable, marked only by a 2 dp Indigo border — never by
+  dimming, scrimming, shrinking or blurring a neighbour (§7.2).
+- A control shared between layouts must be owned by the layout that renders it
+  (2026-07-24). With one layout this class of overlap bug ceases to exist; the UI test
+  asserting no two controls' bounds intersect is kept anyway.
 
 ### Empty and intermediate states
 
 | State | Design |
 |---|---|
-| No folder | Centred card: camera icon, **"Select a Folder"**, *"Select a folder to start reviewing and culling your photos."*, primary `[Open Folder]`, secondary `[Open from Google Drive]`. |
-| Folder open, unscanned | Images visible; score chip rows replaced by a single ghost chip reading **"Not scanned"**; `Scan Images` in the app bar visually emphasised. |
-| Scanning | Inline progress in the app bar; scores populate progressively per image, no full-screen blocker. |
-| Folder empty | Centred card: **"No Photos Loaded"** with `[Open Folder]`. |
-
-### Placement rule
-
-**The layout toggle lives in the right rail here, and nowhere else.** It must never render
-as a free-floating overlay on top of the other layout's control cluster.
+| No folder | Centred card: camera icon, **"Select a folder"**, *"Select a folder to start reviewing and culling your photos."*, primary `[Open folder]`, secondary `[Open from Google Drive]`. |
+| Folder open, unscanned | Frames visible; the readout block shows one dashed **"Not scanned"** row and the neighbour overlays are suppressed entirely; the sidebar's Scan item emphasised. |
+| Scanning | Sidebar counter plus the 2 dp determinate line; scores populate progressively, no blocker. |
+| Folder empty | Centred card: **"No photos here"** with `[Open folder]`. |
 
 ---
 
@@ -445,9 +680,36 @@ of inactivity and returns on tap or pointer movement.
 | Swipe down | Dismiss |
 | `Esc` | Exit fullscreen |
 | `← / →` | Previous / next image |
+| `M` / `C` / `Del` | Move / copy / delete the current frame |
 
 When zoomed beyond fit, show a small navigator thumbnail in the bottom-right corner
 indicating which part of the frame is visible.
+
+### 9.1 The hint card must be generated, not written
+
+The shipped hint card claimed *swipe ← → navigate* while a leftward swipe past −200 px
+**deleted the photograph**, a rightward swipe dismissed the viewer, and navigation was a
+`VerticalPager`. Three of the five lines on that card were false, and the one destructive
+action in the viewer was bound to the gesture the card described as harmless.
+
+The card is therefore not allowed to contain literal strings. Its rows are rendered from the
+same `SelectorGestures` object (§7.6) that binds the gestures, and a unit test asserts that
+every row the card can render corresponds to a binding that exists. A hint card is the one
+place in a UI where a plausible-sounding lie survives review indefinitely — see the
+2026-07-31 lesson in `ai/memory/palette.md`.
+
+Concretely, the viewer's gesture layer is rebuilt to match this table:
+
+- Navigation is a **`HorizontalPager`**, not a `VerticalPager`.
+- **Vertical drag down past the threshold dismisses**; there is no vertical paging.
+- **There is no swipe-to-delete.** Delete is the labelled bottom-bar button, the `Del` key,
+  or the context menu — all three of which confirm first.
+- Double-tap toggles fit ↔ 100 % and **only** that. The dead outer `onDoubleTap` handler
+  that filed the frame to the Selection (shadowed by the zoom handler beneath it, so it
+  never fired) is removed rather than revived: a filing action must not share a gesture with
+  a view action.
+- `fullscreenGestureAction` (the move-vs-copy setting) now configures the bottom-bar button
+  and the context menu, and the hint card's wording is derived from it — never hard-coded.
 
 ---
 
@@ -589,8 +851,12 @@ Grouping Level options:
 
 | Item | Control | Supporting text |
 |---|---|---|
-| Double-Tap Gesture Action | choice: `Move to Selection` / `Copy to Selection` | — |
+| Filing Action | choice: `Move to Selection` / `Copy to Selection` | Which action the fullscreen filing button performs |
 | Show Fullscreen Action Buttons | switch | Display delete, copy, and move buttons in fullscreen mode |
+
+Renamed from *Double-Tap Gesture Action*: double-tap no longer files a photograph (§9.1), so
+a setting named after that gesture describes something the app does not do. The persisted
+key is unchanged.
 
 ### Cache
 
@@ -618,15 +884,21 @@ never a red-filled button.
 
 Reference frame: 720 × 1100 dp portrait.
 
-- NavigationRail persists, icon-only, 72 dp.
-- Defaults to the **focused** layout. The three-column layout remains available via the
-  toggle; at this width each image is ~200 dp wide — render it honestly with the same
-  equal-thirds rule rather than blocking it.
-- The 56 dp side rails still apply. Below ~700 dp width, collapse the left rail's controls
-  into the right rail and rely on tapping the Previous/Next tiles for navigation.
-- Metadata and score chips collapse below the current image; the details panel becomes a
-  collapsible expander rather than an always-visible block.
-- Filmstrip remains a horizontal scrolling row.
+Portrait flips which axis is scarce, so the §7.2 solver — not a hand-tuned variant — decides
+the arrangement. At 720 × 1100 dp, one over two gives `h ≤ (1100 − chrome)/2 ≈ 520`, but
+`2w ≤ 720 → w ≤ 356 → h = 267`; **width is binding again**. So:
+
+- The frames stack **one over two** still, but the readout and control blocks can no longer
+  sit beside the current frame. They move **below** the frames, which is affordable here
+  precisely because height is now the surplus axis. The rule is unchanged: chrome goes where
+  the binding constraint is not. The neighbour overlays (§7.4b) stay on their frames — they
+  cost no layout space in either orientation, which is the point of them.
+- The §7.1 sidebar collapses to a 56 dp icon rail with tooltips, because width is scarce at
+  this breakpoint. The labels return the moment the window is ≥ 840 dp.
+- The readout block drops the EXIF line and keeps icon + name + value + bar.
+- The control block becomes a 72 dp row: the three verbs centred, Previous/Next at the edges,
+  view controls right-aligned. Labels are never dropped; the buttons narrow instead.
+- Filmstrip returns to a horizontal scrolling row at the bottom edge.
 
 ### 15.2 Compact — < 600 dp, phone
 
@@ -635,10 +907,14 @@ Reference frame: 400 × 880 dp portrait.
 - **BottomNavigation** replaces the NavigationRail: Selector, Statistics, Duplicates, Settings.
 - Single full-width swipeable image viewer (horizontal pager). **The comparison layouts are
   omitted at this width.**
+- **Horizontal swipe navigates, and nothing else.** The `SwipeToDismissBox` that deleted the
+  photograph on a leftward swipe is removed: the same gesture cannot mean "next frame" in
+  fullscreen and "destroy this file" here (§7.6).
 - Below the image: single-line filename, then a horizontally scrollable score chip row
   (compact chips — icon + value, labels dropped).
 - Detailed EXIF sits behind a tap-to-expand row, not always visible.
-- Two always-visible quick actions: `[Select]` and `[Delete]`, full-width, ≥ 48 dp.
+- Three always-visible quick actions: `[Keep]` `[Move]` `[Delete]`, each ≥ 56 dp tall with
+  its word visible — the same three verbs, in the same order, as §7.5.
 - Statistics: single-column scrollable charts.
 - Duplicates: compact grid with checkboxes instead of the detailed group rows.
 
@@ -655,23 +931,31 @@ Produce these as a design-system page, dark theme, Zinc/Indigo.
 3. **ImageTile** — 4:3 tile with letterbox and pillarbox behaviour. States: resting,
    current/active (2 dp Indigo border), hovered (Zinc-600 border), loading (Zinc-800 with a
    subtle shimmer — no spinner).
-4. **Vertical control rail** — 56 dp wide, 48 dp icon buttons with 4 dp gaps, divider
-   treatment, and a disabled state (`No Previous` / `No Next`).
-5. **Action row buttons** — filled-tonal (Move, Copy), outlined destructive (Delete), icon
-   toggle (layout, details, filmstrip) in on and off states, each with its keyboard-hint
-   key-cap.
-6. **Top app bar** — resting, scan-in-progress (inline progress + Cancel), and
-   selection-count variants.
-7. **Filmstrip thumbnail** — resting, current, and marked states, 64 dp tall.
-8. **Snackbar with Undo** — `Moved to Selection` / `Copied to Selection` / `1 image deleted`,
-   each with a 30 s Undo action and a thin countdown line.
-9. **Empty-state card** — icon, title, one-line body, primary + secondary button.
-10. **Confirmation dialog** — standard and destructive variants.
-11. **Metadata panel** — labelled key/value rows for Shutter Speed, Aperture, Focal Length,
+4. **Sidebar item** — 88 × 72 dp, 24 dp glyph over an 11 sp label; resting, hovered, active
+   (`TonalIndigoNav` + Indigo glyph and label), disabled, and the Scan item's emphasised and
+   scanning variants.
+5. **Control block** — 388 × 450 dp, 2 × 3 grid of ~190 × 80 dp controls with permanent glyph
+   + word + key cap: Keep (`ScoreGood` tonal), Move (`TonalIndigo`), Delete (outlined,
+   `ScoreBad` glyph and word), Fullscreen, Previous, Next; disabled states (`No previous` /
+   `No next`); the 48 dp view-toggle row and the position counter beneath.
+6. **Readout block** — 388 × 450 dp: filename, EXIF line, five icon + name + value rows with
+   goodness bars and the best-of-three dot, the "Not scanned" row, the embedded filmstrip.
+7. **Value overlay** — 148 dp neighbour column: filename, two-line exposure, rule, five icon
+   + value + bar rows. Both the outside-the-frame and overlaid-on-the-frame placements, the
+   fallback-EXIF amber marker, the unscanned variant, and the suppressed state.
+8. **Maximise badge** — 44 dp `⛶` on a tile's outline: bottom-right on the current frame,
+   bottom-left on Previous and Next so it clears the value overlay. Resting and active.
+9. **Filmstrip thumbnail** — resting, current, and marked states, 64 dp tall.
+10. **Snackbar with Undo** — `Moved to Selection` / `Copied to Selection` / `1 image deleted`,
+    each with a 30 s Undo action and a thin countdown line.
+11. **Empty-state card** — icon, title, one-line body, primary + secondary button.
+12. **Confirmation dialog** — standard and destructive variants.
+13. **Metadata panel** — labelled key/value rows for Shutter Speed, Aperture, Focal Length,
     35mm Equiv., ISO, Lens; the `Unknown` treatment for missing fields; a "limited metadata"
     marker for fallback reads.
-12. **Keyboard shortcut hint** — the small key-cap style used on hover.
-13. **Context menu** — long-press menu with Move, Copy, Delete, Info, Fullscreen.
+14. **Key cap** — the permanent mono key-hint style carried by every action control.
+15. **Context menu** — long-press menu with Move, Copy, Delete, Details, Fullscreen.
+16. **Fullscreen gesture card** — rendered from `SelectorGestures`, never from literals.
 
 ---
 
@@ -683,6 +967,9 @@ Produce these as a design-system page, dark theme, Zinc/Indigo.
   written direction hint, not by the emerald/amber/red tint alone.
 - **Icon-only controls** need a visible tooltip on hover and a full accessibility label
   carrying name, value and direction — e.g. *"Sharpness 512.3, higher is better."*
+- **A control that changes a file is never icon-only.** Move, Copy/Keep and Delete carry a
+  permanent visible word at every breakpoint, in every layout, including the compact one.
+  Icon-only is permitted only for view controls, which cannot lose a photograph.
 - **Focus rings.** 2 dp Indigo-500 with a 2 dp offset, visible on every interactive element,
   for keyboard and DeX navigation.
 - **Touch targets.** Minimum 48 dp for every interactive element, everywhere, at every
@@ -704,8 +991,14 @@ Shortcuts work in both the standard and fullscreen views.
 | `M` | Move to Selection |
 | `C` | Copy to Selection |
 | `F` | Enter fullscreen |
-| `Esc` | Exit fullscreen / comparison mode |
-| `Space` | Toggle comparison layout |
+| `Esc` | Exit fullscreen / leave maximised / close sheet or menu |
+| `1` / `2` / `3` | Maximise Previous / Current / Next in place (§7.3) |
+| `?` | Open the shortcut and gesture sheet |
+
+Shortcuts are suppressed while any sheet or dialog is open, **except `Esc`**. Every one of
+these bindings is rendered as a permanent key cap on the control it drives, and the `?` sheet
+is generated from the same binding table — a shortcut list that can disagree with the
+bindings will eventually disagree with the bindings.
 
 **Pointer.** Interactive components show the hand cursor (`PointerIcon.Hand`) on hover —
 buttons, clickable images, filmstrip thumbnails. Dragging a folder from an external file
@@ -743,15 +1036,18 @@ Short corrections to steer a generated design back on track.
 
 | Problem in output | Correction |
 |---|---|
-| Controls floating on the photo | "Remove every control that sits on top of an image. Move them into the 56 dp side rails or the action row below." |
-| Current image enlarged in three-column view | "All three images must be identical in size. The active image is marked only by a 2 dp Indigo border." |
+| Controls floating on the photo | "No *control* may sit on a photograph. Move every button into the control block right of the current frame. The only thing drawn on a frame is its own read-only value overlay." |
+| Values that could belong to any frame | "Each frame's data must touch that frame: filename, exposure and named metrics beside the current frame; filename, exposure and icon-and-value metrics overlaid on the right edge of Previous and Next." |
+| Neighbours missing their EXIF | "Previous and Next carry filename and a two-line exposure block above their metric rows, in the same order as the current frame's readout." |
+| Current frame not centred | "Centre the current frame in the image region, readouts left, controls right, Previous and Next centred as a pair beneath it." |
+| Current image enlarged | "All three images must be identical in size. The active image is marked only by a 2 dp Indigo border." |
 | Neighbours dimmed or scrimmed | "Render Previous and Next at full brightness. Dimming defeats the comparison." |
-| Images too small in three-column view | "Reduce horizontal chrome: collapse the nav rail, drop outer padding to 8 dp, remove any side panel. Each image should be roughly one third of the full window width." |
+| Three images in a row | "Never arrange the three frames in a row — that is width-bound and wastes 60 % of the display's height. One frame on top, two below, all three 600 × 450 dp." |
+| Images too small | "Height is the scarce axis. Delete everything above and below the image region — app bar, action row, filmstrip, captions — and move it into the free width beside the frames." |
+| An app bar, bottom bar or full-width filmstrip | "Nothing may occupy the vertical stack. Every 3 dp of height costs 2 dp of height on all three frames." |
 | Consumer-app styling | "This is a professional tool, closer to Lightroom's Library module than Google Photos. Remove gradients, large radii, drop shadows, and decorative colour." |
 | Bare numeric scores | "Every score is icon + short label + value, with a direction bar. Never a bare number." |
 | Light theme or coloured background | "Dark theme only. Canvas #18181B, panels #27272A. Nothing may colour-cast the photographs." |
-| Layout toggle in two places | "The layout toggle appears exactly once, inside the current layout's own control group — the right rail in focused view, the action row in three-column view." |
-| Vertical space wasted in three-column view | "Vertical space is abundant here. Put each image's filename, EXIF line and score chips directly below its own image." |
 
 ---
 

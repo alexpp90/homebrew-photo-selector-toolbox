@@ -11,6 +11,16 @@ Refactoring candidates and structural lessons. Owned by `@shared-code-health-age
 
 Lessons use the standard `ai/memory/` format (Learning/Action).
 
+## [OPEN] 2026-08-07 - Compose UI in `:android-desktop` has no JVM-testable layout layer beyond `FrameGeometry`
+**Where:** `products/android/android-desktop/src/com/photoselectortoolbox/ui/selector/`
+**Debt:** The selector rewrite extracted its sizing arithmetic into `FrameGeometry`, which is a pure object with a real unit-test suite — and that is the only part of the layout that can be verified without a device. Everything else (overlay placement branches, control-block arrangement, the maximised state) is verified only by instrumented tests, which need an emulator and so are the gate most likely to be skipped. The same asymmetry already exists in the desktop product's Tkinter GUI tests.
+**Proposal:** Continue pulling layout *decisions* out of composables into pure functions the way `FrameGeometry.overlayFitsOutside` was — placement predicates, visibility rules, ordering — so the instrumented suite is left asserting only what genuinely needs a rendered tree (bounds equality, overlap). Do not add more `if` branches inside composables that decide geometry.
+
+## [OPEN] 2026-08-07 - `SelectorScreen` is approaching the size where orchestration and policy blur
+**Where:** `products/android/android-desktop/src/com/photoselectortoolbox/ui/selector/SelectorScreen.kt` (~560 lines)
+**Debt:** It owns folder pickers, four dialogs/sheets, drag-and-drop, the keyboard map, snackbar state and the context menu. `handleSelectorKey` was already extracted as a pure function for testability; the sheet-visibility state (six `remember { mutableStateOf }` flags plus the derived `sheetOpen`) is the next thing that wants to be one modelled type rather than six booleans that must be kept in sync by hand in two places.
+**Proposal:** Introduce a `SelectorOverlay` sealed type (none / scanConfig / legend / drivePicker / shortcuts / contextMenu) so "which overlay is open" and "are shortcuts suppressed" derive from one value. Behaviour-preserving, covered by the existing instrumented suite. Per `ai/skills/refactoring-guide/SKILL.md`; do not combine with behaviour changes.
+
 ## [OPEN] 2026-08-05 - Split the two oversized Tkinter modules
 **Where:** `products/desktop/src/photo_selector_toolbox/gui/sharpness_tool.py` (~3 300 lines), `products/desktop/src/photo_selector_toolbox/gui/app.py` (~1 700 lines)
 **Debt:** Both are far past the size where a reviewer can hold them in their head, and both mix window construction, event wiring, scan orchestration and per-image action handling in one class. This is also why `products/desktop/tests/unit/gui/` needs so much module-level mocking to run at all.

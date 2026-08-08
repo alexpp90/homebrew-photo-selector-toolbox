@@ -22,6 +22,18 @@ enum class ScoreMetric(
     val displayName: String,
     /** What the number measures, in plain language. */
     val description: String,
+    /**
+     * The glyph that stands for this metric.
+     *
+     * Load-bearing, not decorative. On the Previous and Next frames the value
+     * overlay has no room for names, so the glyph is the *only* thing
+     * identifying which metric a number belongs to. Declaring it here — beside
+     * the label, the format and the direction — is what makes "one metric, one
+     * glyph, everywhere" true by construction: adding an entry without one does
+     * not compile, and the exhaustive mapping in the UI layer does not compile
+     * either until the new glyph is chosen.
+     */
+    val icon: ScoreMetricIcon,
     /** How to read the value. */
     val direction: ScoreDirection,
     private val format: String,
@@ -35,6 +47,7 @@ enum class ScoreMetric(
         displayName = "Sharpness",
         description = "Edge contrast in the sharpest part of the frame. Low values usually mean " +
             "motion blur or a missed focus.",
+        icon = ScoreMetricIcon.FOCUS,
         direction = ScoreDirection.HIGHER_IS_BETTER,
         format = "%.1f",
         worstValue = 5.0,
@@ -44,6 +57,7 @@ enum class ScoreMetric(
         shortLabel = "Noise",
         displayName = "Noise",
         description = "Estimated sensor noise in flat areas of the image. Rises with high ISO.",
+        icon = ScoreMetricIcon.GRAIN,
         direction = ScoreDirection.LOWER_IS_BETTER,
         format = "%.1f",
         worstValue = 7.0,
@@ -53,6 +67,7 @@ enum class ScoreMetric(
         shortLabel = "Highl",
         displayName = "Highlight clipping",
         description = "Share of pixels blown out to pure white — detail that cannot be recovered.",
+        icon = ScoreMetricIcon.HIGHLIGHT,
         direction = ScoreDirection.LOWER_IS_BETTER,
         format = "%.1f%%",
         worstValue = 10.0,
@@ -62,6 +77,7 @@ enum class ScoreMetric(
         shortLabel = "Shad",
         displayName = "Shadow clipping",
         description = "Share of pixels crushed to pure black — detail that cannot be recovered.",
+        icon = ScoreMetricIcon.SHADOW,
         direction = ScoreDirection.LOWER_IS_BETTER,
         format = "%.1f%%",
         worstValue = 14.0,
@@ -71,6 +87,7 @@ enum class ScoreMetric(
         shortLabel = "Aesth",
         displayName = "Aesthetic score",
         description = "On-device AI rating of overall appeal, on a 1–10 scale.",
+        icon = ScoreMetricIcon.AESTHETIC,
         direction = ScoreDirection.HIGHER_IS_BETTER,
         format = "%.1f",
         worstValue = 1.0,
@@ -145,4 +162,31 @@ enum class ScoreMetric(
 enum class ScoreDirection(val hint: String) {
     HIGHER_IS_BETTER("higher is better"),
     LOWER_IS_BETTER("lower is better"),
+}
+
+/**
+ * The glyph vocabulary, as a closed set rather than as Compose `ImageVector`s.
+ *
+ * `ScoreMetric` stays free of Android types — that is what lets the wording,
+ * the formatting and the normalisation be unit-tested on the JVM — so the
+ * choice of glyph is named here and resolved to an actual vector in the UI
+ * layer by an exhaustive `when`. The indirection buys the compile-time
+ * guarantee: a metric added without a glyph fails at the enum, and a glyph
+ * added without a vector fails at the mapping.
+ */
+enum class ScoreMetricIcon {
+    /** Focus reticle — sharpness. */
+    FOCUS,
+
+    /** Film grain — noise. */
+    GRAIN,
+
+    /** Sun — highlight clipping. */
+    HIGHLIGHT,
+
+    /** Moon — shadow clipping. */
+    SHADOW,
+
+    /** Star — the aesthetic score. */
+    AESTHETIC,
 }

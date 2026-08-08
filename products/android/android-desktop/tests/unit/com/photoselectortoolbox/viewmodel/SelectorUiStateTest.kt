@@ -2,6 +2,7 @@ package com.photoselectortoolbox.viewmodel
 
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.model.ScanResult
+import com.photoselectortoolbox.domain.interaction.FilingAction
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -27,11 +28,26 @@ class SelectorUiStateTest {
     }
 
     @Test
-    fun `expanded selector defaults to focused stacked layout`() {
+    fun `selector opens in three-up, not maximised`() {
         val state = SelectorUiState()
-        // The space-efficient stacked view (current on top, prev/next below)
-        // is the default; three-column is the opt-in alternative.
-        assertTrue(state.selectorLayoutFocused)
+        // There is one comparison layout now, so there is no layout preference
+        // to restore. Maximise is transient view state rather than a setting:
+        // it is something you do to look closer at one frame, and it should not
+        // survive a relaunch.
+        assertNull(state.maximisedFrame)
+    }
+
+    @Test
+    fun `neighbour value overlays are on by default`() {
+        // A photographer who cannot see the numbers cannot cull. The overlay
+        // costs about a quarter of each neighbour's width, which is why it can
+        // be turned off — but off is not where it starts.
+        assertTrue(SelectorUiState().overlayValuesVisible)
+    }
+
+    @Test
+    fun `filing action defaults to copy, the non-destructive verb`() {
+        assertEquals(FilingAction.COPY, SelectorUiState().filingAction)
     }
 
     @Test

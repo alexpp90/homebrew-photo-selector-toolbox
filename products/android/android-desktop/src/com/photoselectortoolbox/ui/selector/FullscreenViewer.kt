@@ -13,12 +13,13 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
@@ -32,7 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -89,6 +90,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import com.photoselectortoolbox.data.model.ImageItem
+import com.photoselectortoolbox.domain.format.SelectionActionLabels
+import com.photoselectortoolbox.domain.interaction.FilingAction
+import com.photoselectortoolbox.domain.interaction.SelectorGestures
 import com.photoselectortoolbox.domain.format.ExifFormatter
 import com.photoselectortoolbox.ui.components.ScoreChipRow
 import com.photoselectortoolbox.ui.theme.Indigo200
@@ -117,7 +121,7 @@ fun FullscreenViewer(
     windowSizeClass: WindowSizeClass,
     onPageSelected: (Int) -> Unit = {},
     fullscreenButtonsEnabled: Boolean = true,
-    fullscreenGestureAction: String = "copy",
+    filingAction: FilingAction = FilingAction.DEFAULT,
     showGestureHint: Boolean = false,
     onGestureHintSeen: () -> Unit = {},
 ) {
@@ -159,7 +163,7 @@ fun FullscreenViewer(
             onCopyToSelection = onCopyToSelection,
             onPageSelected = onPageSelected,
             fullscreenButtonsEnabled = fullscreenButtonsEnabled,
-            fullscreenGestureAction = fullscreenGestureAction,
+            filingAction = filingAction,
             showGestureHint = showGestureHint,
             onGestureHintSeen = onGestureHintSeen,
         )
@@ -178,7 +182,7 @@ private fun FullscreenContent(
     onCopyToSelection: (Int) -> Unit,
     onPageSelected: (Int) -> Unit,
     fullscreenButtonsEnabled: Boolean,
-    fullscreenGestureAction: String,
+    filingAction: FilingAction,
     showGestureHint: Boolean = false,
     onGestureHintSeen: () -> Unit = {},
 ) {
@@ -245,7 +249,12 @@ private fun FullscreenContent(
                         Key.Delete, Key.Backspace -> { onDelete(currentPageIndex); true }
                         Key.M -> { onMoveToSelection(currentPageIndex); true }
                         Key.C -> { onCopyToSelection(currentPageIndex); true }
-                        Key.DirectionUp -> {
+                        // Left/right, matching the horizontal swipe and the
+                        // rest of the app. The viewer used to page vertically
+                        // while its hint card advertised horizontal swipes, so
+                        // both the arrows the user pressed and the words they
+                        // read were wrong about the same axis.
+                        Key.DirectionLeft -> {
                             if (currentPageIndex > 0) {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(currentPageIndex - 1)
@@ -253,7 +262,7 @@ private fun FullscreenContent(
                             }
                             true
                         }
-                        Key.DirectionDown -> {
+                        Key.DirectionRight -> {
                             if (currentPageIndex < images.size - 1) {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(currentPageIndex + 1)
@@ -266,8 +275,9 @@ private fun FullscreenContent(
                 } else false
             },
     ) {
-        // Vertical Image pager with zoom & swipe support
-        VerticalPager(
+        // Horizontal paging: swipe ← → is "previous / next" everywhere in this
+        // product, and this viewer is where that promise was previously broken.
+        HorizontalPager(
             state = pagerState,
             userScrollEnabled = pagerScrollEnabled,
             modifier = Modifier.fillMaxSize(),
@@ -276,7 +286,6 @@ private fun FullscreenContent(
         ) { page ->
             FullscreenImagePage(
                 image = images[page],
-                showOverlay = showOverlay,
                 onTap = {
                     showOverlay = !showOverlay
                     lastInteractionAt = System.currentTimeMillis()
@@ -285,16 +294,7 @@ private fun FullscreenContent(
                     pagerScrollEnabled = !isZoomed
                     zoomedIn = isZoomed
                 },
-                onDelete = { onDelete(page) },
                 onDismiss = onDismiss,
-                onDoubleTap = {
-                    if (fullscreenGestureAction == "copy") {
-                        onCopyToSelection(page)
-                    } else {
-                        onMoveToSelection(page)
-                    }
-                    showCollectionFlash = true
-                },
                 isGestureEnabled = pagerScrollEnabled, // only enable swipes when not zoomed
             )
         }
@@ -336,19 +336,30 @@ private fun FullscreenContent(
                             .padding(bottom = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        FullscreenActionButton(
-                            icon = Icons.AutoMirrored.Filled.DriveFileMove,
-                            description = "Move to Selection",
-                            onClick = { onMoveToSelection(currentPageIndex) },
-                        )
-                        FullscreenActionButton(
-                            icon = Icons.Default.ContentCopy,
-                            description = "Copy to Selection",
-                            onClick = { onCopyToSelection(currentPageIndex) },
-                        )
+                        // Configured verb first, then the other. Filing is a
+                        // button here and nowhere else: no gesture in this
+                        // viewer touches a file.
+                        SelectionActionLabels.both(filingAction).forEach { label ->
+                            FullscreenActionButton(
+                                icon = if (label.action == FilingAction.MOVE) {
+                                    Icons.AutoMirrored.Filled.DriveFileMove
+                                } else {
+                                    Icons.Default.ContentCopy
+                                },
+                                description = label.accessibilityLabel,
+                                onClick = {
+                                    if (label.action == FilingAction.MOVE) {
+                                        onMoveToSelection(currentPageIndex)
+                                    } else {
+                                        onCopyToSelection(currentPageIndex)
+                                    }
+                                    showCollectionFlash = true
+                                },
+                            )
+                        }
                         FullscreenActionButton(
                             icon = Icons.Default.Delete,
-                            description = "Delete",
+                            description = "Delete, shortcut Delete",
                             tint = ScoreBad,
                             onClick = { onDelete(currentPageIndex) },
                         )
@@ -569,24 +580,21 @@ private fun FullscreenGestureHint(
             .testTag("fullscreen_gesture_hint"),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        listOf(
-            "pinch" to "zoom",
-            "double-tap" to "fit ↔ 100%",
-            "swipe ← →" to "navigate",
-            "swipe down" to "dismiss",
-            "Esc" to "exit",
-        ).forEach { (gesture, effect) ->
+        // Generated from the bindings, never written out here. The previous
+        // hand-written version of this list claimed "swipe ← → navigate" while
+        // a leftward swipe deleted the photograph.
+        SelectorGestures.fullscreenHintRows().forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = gesture,
+                    text = row.input,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     color = Zinc400,
                 )
-                Text(text = effect, fontSize = 12.sp, color = Zinc50)
+                Text(text = row.effect, fontSize = 12.sp, color = Zinc50)
             }
         }
 
@@ -602,103 +610,100 @@ private fun FullscreenGestureHint(
     }
 }
 
+/**
+ * One page of the viewer: the photograph, and the two gestures that act on the
+ * page rather than on the pager.
+ *
+ * What this used to do is worth stating, because the shape of the bug is easy
+ * to reintroduce. A horizontal drag past −200 px **deleted the photograph** and
+ * past +200 px dismissed the viewer, while the pager beneath paged vertically —
+ * so the horizontal axis meant "destroy or leave" here and "next frame"
+ * everywhere else in the app, and the hint card described it as navigation.
+ * There was also an `onDoubleTap` that filed the frame into the Selection,
+ * permanently shadowed by the zoom handler in [ZoomableImage] beneath it, so it
+ * never fired and could not have been noticed.
+ *
+ * Now: the pager owns the horizontal axis, a downward drag dismisses, and
+ * nothing here touches a file. Delete is a labelled button, the `Del` key, or
+ * the context menu — all three of which confirm first.
+ */
 @Composable
 private fun FullscreenImagePage(
     image: ImageItem,
-    showOverlay: Boolean,
     onTap: () -> Unit,
     onZoomChanged: (Boolean) -> Unit,
-    onDelete: () -> Unit,
     onDismiss: () -> Unit,
-    onDoubleTap: () -> Unit,
     isGestureEnabled: Boolean,
 ) {
-    var horizontalDragOffset by remember { mutableFloatStateOf(0f) }
+    var verticalDragOffset by remember { mutableFloatStateOf(0f) }
     var isZoomed by remember { mutableStateOf(false) }
-    val deleteThreshold = -200f
-    val dismissThreshold = 200f
+    val dismissThreshold = 220f
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(isGestureEnabled, isZoomed) {
+            .offset { IntOffset(0, verticalDragOffset.roundToInt().coerceAtLeast(0)) }
+            .graphicsLayer {
+                // Fades as it falls away, so a half-committed drag reads as
+                // "this will close" rather than as the image drifting.
                 if (isGestureEnabled && !isZoomed) {
-                    detectTapGestures(
-                        onTap = { onTap() },
-                        onDoubleTap = { onDoubleTap() }
+                    alpha = (1f - (abs(verticalDragOffset) / 700f)).coerceIn(0.35f, 1f)
+                }
+            }
+            .pointerInput(isGestureEnabled, isZoomed) {
+                // Only while un-zoomed: once the user is zoomed in, a vertical
+                // drag is a pan across the frame they are inspecting, and
+                // stealing it to close the viewer would be maddening.
+                if (isGestureEnabled && !isZoomed) {
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            if (verticalDragOffset > dismissThreshold) onDismiss()
+                            verticalDragOffset = 0f
+                        },
+                        onDragCancel = { verticalDragOffset = 0f },
+                        onVerticalDrag = { _, dragAmount ->
+                            // Downward only. An upward drag does nothing rather
+                            // than doing something undiscoverable.
+                            verticalDragOffset = (verticalDragOffset + dragAmount)
+                                .coerceAtLeast(0f)
+                        },
                     )
                 }
-            }
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        // Horizontal offset and alpha applied to image container
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .offset { IntOffset(horizontalDragOffset.roundToInt(), 0) }
-                .graphicsLayer {
-                    if (isGestureEnabled && !isZoomed) {
-                        alpha = (1f - (abs(horizontalDragOffset) / 400f)).coerceIn(0.2f, 1f)
-                    }
-                }
-                .pointerInput(isGestureEnabled, isZoomed) {
-                    if (isGestureEnabled && !isZoomed) {
-                        detectHorizontalDragGestures(
-                            onDragEnd = {
-                                if (horizontalDragOffset < deleteThreshold) {
-                                    onDelete()
-                                } else if (horizontalDragOffset > dismissThreshold) {
-                                    onDismiss()
-                                }
-                                horizontalDragOffset = 0f
-                            },
-                            onDragCancel = { horizontalDragOffset = 0f },
-                            onHorizontalDrag = { _, dragAmount ->
-                                horizontalDragOffset += dragAmount
-                            }
-                        )
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            val parsedUri = remember(image.uri) { Uri.parse(image.uri) }
-            ZoomableImage(
-                imageUri = parsedUri.toString(),
-                contentDescription = image.fileName,
-                onTap = { onTap() },
-                onZoomChanged = { zoomed ->
-                    isZoomed = zoomed
-                    onZoomChanged(zoomed)
-                }
-            )
-        }
-
-        // Delete indicator (right edge, appears when swiping left)
-        if (isGestureEnabled && !isZoomed && horizontalDragOffset < -40f) {
-            val progress = (abs(horizontalDragOffset) / abs(deleteThreshold)).coerceIn(0f, 1f)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 24.dp)
-                    .size((48 + 16 * progress).dp)
-                    .clip(CircleShape)
-                    .background(com.photoselectortoolbox.ui.theme.ErrorRed.copy(alpha = 0.6f + 0.4f * progress)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = Color.White,
-                    modifier = Modifier.size((24 + 8 * progress).dp),
-                )
-            }
-        }
+        val parsedUri = remember(image.uri) { Uri.parse(image.uri) }
+        ZoomableImage(
+            imageUri = parsedUri.toString(),
+            contentDescription = image.fileName,
+            pixelWidth = image.imageWidth,
+            pixelHeight = image.imageHeight,
+            onTap = { onTap() },
+            onZoomChanged = { zoomed ->
+                isZoomed = zoomed
+                onZoomChanged(zoomed)
+            },
+        )
     }
 }
 
+/**
+ * The photograph, pinch-zoomable and pannable.
+ *
+ * Double-tap toggles **fit ↔ 100 %**, and 100 % here means what it says: one
+ * image pixel per device pixel, computed from the frame's own dimensions rather
+ * than a fixed magnification. The previous implementation jumped to a hard-coded
+ * 2.5× and the hint card called it "100%", which is the same class of untruth as
+ * the swipe labels — a number the user can check, that does not hold. When the
+ * dimensions are unknown (a frame discovered without them) it falls back to a
+ * plain 2.5×, because a defensible approximation beats refusing to zoom.
+ */
 @Composable
 private fun ZoomableImage(
     imageUri: String,
     contentDescription: String,
+    pixelWidth: Int,
+    pixelHeight: Int,
     onTap: () -> Unit,
     onZoomChanged: (Boolean) -> Unit,
 ) {
@@ -711,63 +716,92 @@ private fun ZoomableImage(
     }
 
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-        val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+        val newScale = (scale * zoomChange).coerceIn(1f, MAX_ZOOM)
         val newOffset = if (newScale > 1f) {
-            Offset(
-                x = offset.x + panChange.x,
-                y = offset.y + panChange.y,
-            )
+            Offset(x = offset.x + panChange.x, y = offset.y + panChange.y)
         } else {
             Offset.Zero
         }
 
         scale = newScale
         offset = newOffset
-        isZoomed = newScale > 1.05f
+        isZoomed = newScale > ZOOMED_THRESHOLD
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        if (!isZoomed) {
-                            onTap()
-                        }
-                    },
-                    onDoubleTap = {
-                        if (isZoomed) {
-                            // Reset to fit
-                            scale = 1f
-                            offset = Offset.Zero
-                            isZoomed = false
-                        } else {
-                            // Zoom to 2.5x for usability
-                            scale = 2.5f
-                            offset = Offset.Zero
-                            isZoomed = true
-                        }
-                    },
-                )
-            }
-            .transformable(state = transformState, enabled = scale > 1f),
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        val parsedUri = remember(imageUri) { Uri.parse(imageUri) }
-        AsyncImage(
-            model = parsedUri,
-            contentDescription = contentDescription,
+        // ContentScale.Fit letterboxes, so the displayed size is whichever of
+        // the two constraints binds — the same "which axis binds" question the
+        // selector layout answers, one frame at a time.
+        val oneToOneScale = remember(pixelWidth, pixelHeight, constraints) {
+            if (pixelWidth <= 0 || pixelHeight <= 0) {
+                FALLBACK_ZOOM
+            } else {
+                val boxWidth = constraints.maxWidth.toFloat()
+                val boxHeight = constraints.maxHeight.toFloat()
+                val aspect = pixelWidth.toFloat() / pixelHeight.toFloat()
+                val displayedWidth = minOf(boxWidth, boxHeight * aspect)
+                if (displayedWidth <= 0f) {
+                    FALLBACK_ZOOM
+                } else {
+                    (pixelWidth / displayedWidth).coerceIn(MIN_MEANINGFUL_ZOOM, MAX_ZOOM)
+                }
+            }
+        }
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offset.x
-                    translationY = offset.y
-                },
-            contentScale = ContentScale.Fit,
-        )
+                .pointerInput(oneToOneScale) {
+                    detectTapGestures(
+                        onTap = { if (!isZoomed) onTap() },
+                        onDoubleTap = {
+                            if (isZoomed) {
+                                scale = 1f
+                                offset = Offset.Zero
+                                isZoomed = false
+                            } else {
+                                scale = oneToOneScale
+                                offset = Offset.Zero
+                                isZoomed = true
+                            }
+                        },
+                    )
+                }
+                .transformable(state = transformState, enabled = scale > 1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            val parsedUri = remember(imageUri) { Uri.parse(imageUri) }
+            AsyncImage(
+                model = parsedUri,
+                contentDescription = contentDescription,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offset.x
+                        translationY = offset.y
+                    },
+                contentScale = ContentScale.Fit,
+            )
+        }
     }
 }
 
+/** Beyond this the pager stops scrolling and the navigator thumbnail appears. */
+private const val ZOOMED_THRESHOLD = 1.05f
+
+/** Hard ceiling on magnification, pinch or double-tap. */
+private const val MAX_ZOOM = 8f
+
+/**
+ * A frame already displayed at or above 1:1 would double-tap to no visible
+ * change, which reads as a broken control. Give it something to do.
+ */
+private const val MIN_MEANINGFUL_ZOOM = 1.6f
+
+/** Used when the frame's pixel dimensions were never read. */
+private const val FALLBACK_ZOOM = 2.5f
