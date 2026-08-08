@@ -35,5 +35,14 @@
         "timeout": 15
       }
     ]
+  },
+  "session-report": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python3 ./ai/hooks/session_report.py",
+        "timeout": 20
+      }
+    ]
   }
 }

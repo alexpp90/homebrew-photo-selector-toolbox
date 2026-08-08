@@ -1,8 +1,15 @@
 ---
 name: desktop-gui-agent
-description: "GUI/Tkinter specialist for gui.py, sharpness_gui.py, controllers.py, image_panels.py, and fullscreen_viewer.py. Handles layout, threading, event handling, and ImageTk constraints."
+description: "GUI/Tkinter specialist for products/desktop/src/photo_selector_toolbox/gui/ (app.py, controllers.py, image_panels.py, fullscreen_viewer.py, sharpness_tool.py, widgets.py). Handles layout, threading, event handling, and ImageTk constraints."
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: inherit
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" desktop"
+          timeout: 10
 ---
 
 # GUI Agent

@@ -40,7 +40,7 @@
       "enable_write_tools": true
     },
     "desktop-backend-agent": {
-      "description": "Backend logic specialist for core Python modules (reader, analyzer, sharpness, duplicates, utils, formatting, models, cli, visualizer). No GUI/Tkinter code.",
+      "description": "Backend logic specialist for the Desktop product's Python core (products/desktop/src/photo_selector_toolbox/core/, exif/, tools/, and cli.py): reader, analyzer, sharpness, duplicates, models, formatting, visualizer. No GUI/Tkinter code. Never touches products/android/.",
       "tools": [
         "Read",
         "Grep",
@@ -52,7 +52,7 @@
       "enable_write_tools": true
     },
     "desktop-build-agent": {
-      "description": "Build/CI specialist for scripts/, .github/workflows/, and pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing.",
+      "description": "Build/CI specialist for scripts/, .github/workflows/desktop.yml, Formula/, Casks/, and products/desktop/pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing.",
       "tools": [
         "Read",
         "Grep",
@@ -64,7 +64,7 @@
       "enable_write_tools": true
     },
     "desktop-gui-agent": {
-      "description": "GUI/Tkinter specialist for gui.py, sharpness_gui.py, controllers.py, image_panels.py, and fullscreen_viewer.py. Handles layout, threading, event handling, and ImageTk constraints.",
+      "description": "GUI/Tkinter specialist for products/desktop/src/photo_selector_toolbox/gui/ (app.py, controllers.py, image_panels.py, fullscreen_viewer.py, sharpness_tool.py, widgets.py). Handles layout, threading, event handling, and ImageTk constraints.",
       "tools": [
         "Read",
         "Grep",
@@ -76,7 +76,7 @@
       "enable_write_tools": true
     },
     "desktop-test-agent": {
-      "description": "Testing specialist for the tests/ directory. Writes, organizes, and runs pytest tests with proper mocking patterns.",
+      "description": "Testing specialist for products/desktop/tests/ and products/desktop/benchmarks/. Writes, organizes, and runs pytest tests with proper mocking patterns.",
       "tools": [
         "Read",
         "Grep",

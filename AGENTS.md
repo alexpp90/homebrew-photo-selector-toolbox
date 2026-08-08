@@ -35,7 +35,9 @@ Canonical names and the mapping to modules and packages: [`docs/GLOSSARY.md`](do
 1. **Identify the product first, and stay inside it.** Files under `products/desktop/src/` and `products/desktop/tests/` are
    Desktop; `products/android/android-desktop/` is Android Desktop; `products/android/phototok/` is PhotoTok;
    `products/android/core/` affects both Android products and needs both core agents to review.
-   Leaking code between products is a defect, not reuse.
+   Leaking code between products is a defect, not reuse. In Claude Code this is enforced
+   mechanically: every product agent carries an `ai/hooks/guard_scope.py` frontmatter hook
+   that blocks writes into the other products' source trees.
 2. **Mandatory task lifecycle.** Every task, in every tool, starts with the
    [`task-lifecycle`](ai/skills/task-lifecycle/SKILL.md) skill and ends with the
    [`retrospective`](ai/skills/retrospective/SKILL.md) skill. This is not optional; in Claude

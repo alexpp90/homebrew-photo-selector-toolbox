@@ -3,6 +3,13 @@ name: shared-mentor-agent
 description: "Reflection mentor and memory gatekeeper. Consult at the end of every task that produced candidate memories: reviews proposed ai/memory/ lessons and playbook changes with fresh eyes, judges generalizability, dedupes against existing memory, and decides what gets memorized where. Also use to review retrospectives for missed lessons."
 tools: Read, Grep, Glob, Edit, Write
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" no-products"
+          timeout: 10
 ---
 
 # Mentor Agent

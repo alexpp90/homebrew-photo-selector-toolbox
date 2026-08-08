@@ -3,6 +3,13 @@ name: android-desktop-core-agent
 description: "Data and domain specialist for the Android Desktop product only (products/android/android-desktop/src/com/photoselectortoolbox/data/ and .../domain/). OpenCV analysis, Room score cache, SAF traversal, Google Drive source, use cases. Use proactively for any :app non-UI work. Never touches :phototok."
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: inherit
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" android-desktop"
+          timeout: 10
 ---
 
 # Android Desktop — Core Agent

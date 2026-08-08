@@ -33,6 +33,10 @@ SCRATCH = [
 # The canonical-source rule: these trees are symlinks into ai/.
 MIRROR = re.compile(r"^\.(claude|gemini|agents)/")
 
+# Real files that legitimately live inside the mirror directories: per-host hook
+# registration is canonical *at* these paths (see ai/README.md), not mirrored from ai/.
+MIRROR_REAL = {".claude/settings.json", ".agents/hooks.json"}
+
 MIRROR_TARGET = {
     "agents": "ai/agents/", "skills": "ai/skills/", "hooks": "ai/hooks/",
     "commands": "ai/commands/", "workflows": "ai/commands/", "rules": "ai/rules/",
@@ -66,7 +70,7 @@ def main() -> int:
 
     # The mirror check must run on the path as written: .claude/, .gemini/ and .agents/ are
     # symlinks into ai/, so a resolved path never shows the violation.
-    if MIRROR.match(literal):
+    if MIRROR.match(literal) and literal not in MIRROR_REAL:
         top = literal.split("/")[1] if "/" in literal else ""
         target = MIRROR_TARGET.get(top)
         tail = literal.split("/", 2)[-1] if literal.count("/") >= 2 else ""

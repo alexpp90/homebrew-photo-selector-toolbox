@@ -32,6 +32,18 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/post_lint.py\"",
+            "timeout": 35
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -39,6 +51,11 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/check_retrospective.py\"",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/session_report.py\"",
+            "timeout": 20
           }
         ]
       }

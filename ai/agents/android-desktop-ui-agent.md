@@ -3,6 +3,13 @@ name: android-desktop-ui-agent
 description: "Compose UI specialist for the Android Desktop product only (products/android/android-desktop/src/com/photoselectortoolbox/ui/ and .../viewmodel/). Material 3 theming for large screens, NavigationRail, the three-column and focused selector layouts, DeX keyboard/pointer support. Use proactively for any :app UI work. Never touches :phototok."
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: inherit
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" android-desktop"
+          timeout: 10
 ---
 
 # Android Desktop — UI Agent

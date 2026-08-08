@@ -59,6 +59,30 @@ Canonical in `ai/hooks/`, registered in `.claude/settings.json`. They block rath
   `--no-verify`, and `git push` on a chain of speculative `fix(ci)` commits.
 - `check_retrospective.py` (`Stop`) — ends the turn back in the loop if product source
   changed but the retrospective left no trace. Fires at most once per session.
+- `guard_scope.py` (per-agent frontmatter `hooks:`) — blocks a product agent writing into
+  another product's source tree. Slugs are validated by `validate_framework.py`.
+- `post_lint.py` (`PostToolUse` on writes, advisory) — feeds `flake8` findings on the
+  just-edited Desktop Python file back to the model immediately.
+- `session_report.py` (`Stop`, advisory, both hosts) — after major work (implementation or
+  plan), reports which agents, skills and hooks were actually used this session.
 
-Every denial explains what to do instead. `PST_SKIP_HOOKS=1` bypasses all three for genuine
+Every denial explains what to do instead. `PST_SKIP_HOOKS=1` bypasses all of them for genuine
 emergencies.
+
+## No-hooks fallback (Cowork and other limited hosts)
+
+Detection: if no task-lifecycle summary was injected at session start and the repo skills
+(`task-lifecycle`, `retrospective`, …) are absent from your available skills, you are in a
+host that loads only this file — Cowork mounts the repository as a data folder and ignores
+`.claude/` entirely. The lifecycle then runs on discipline instead of hooks. You MUST:
+
+1. Read `ai/hooks/task-lifecycle.md` before any work, then follow it: read the relevant
+   `ai/skills/*/SKILL.md` files directly as markdown when their moment arrives.
+2. Adopt the owning agent's role yourself: `ai/ROUTING.md` maps the path you are touching to
+   an agent; read that `ai/agents/*.md` file and stay inside its scope. Never write into
+   another product's source tree.
+3. Self-enforce the guards: no scratch files or report dumps, edit canonical files under
+   `ai/` (never through `.claude/`, `.gemini/`, `.agents/`), never hand-edit
+   `.gemini/settings.json`, no `--no-verify`.
+4. Before finishing any task that changed files, walk `ai/skills/retrospective/SKILL.md`
+   explicitly — no Stop hook will catch you here.

@@ -1,8 +1,15 @@
 ---
 name: desktop-build-agent
-description: "Build/CI specialist for scripts/, .github/workflows/, and pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing."
+description: "Build/CI specialist for scripts/, .github/workflows/desktop.yml, Formula/, Casks/, and products/desktop/pyproject.toml. Handles PyInstaller, GitHub Actions, Poetry, and code signing."
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: inherit
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" desktop"
+          timeout: 10
 ---
 
 # Build & CI Agent

@@ -300,6 +300,55 @@ def check_mentions(agent_names: set[str]) -> None:
     ok("every @agent mention resolves")
 
 
+SCOPE_RE = re.compile(r'guard_scope\.py\\?" ([a-z-]+)"')
+# Product agents must register the product-separation hook (ai/hooks/guard_scope.py)
+# in their frontmatter with the right slug. Prefix-ordered: android-desktop- before
+# desktop-. Agents in neither map (shared consultants) carry no scope hook.
+SCOPE_PREFIXES = (
+    ("android-desktop-", "android-desktop"),
+    ("phototok-", "phototok"),
+    ("desktop-", "desktop"),
+)
+SCOPE_EXPLICIT = {
+    "android-shared-build-agent": "android-build",
+    "shared-mentor-agent": "no-products",
+}
+SCOPE_SLUGS = {"desktop", "android-desktop", "phototok", "android-build", "no-products"}
+
+
+def check_scope_hooks(agent_names: set[str]) -> None:
+    """Every product agent carries its guard_scope frontmatter hook with the right slug.
+
+    Keeps AGENTS.md rule 1 mechanically enforced in Claude Code: an agent added or
+    renamed without its scope hook fails the gate instead of silently losing the fence.
+    """
+    for name in sorted(agent_names):
+        expected = SCOPE_EXPLICIT.get(name)
+        if expected is None:
+            for prefix, slug in SCOPE_PREFIXES:
+                if name.startswith(prefix):
+                    expected = slug
+                    break
+        text = (AGENTS / f"{name}.md").read_text(encoding="utf-8")
+        found = SCOPE_RE.search(text)
+        if expected is None:
+            if found:
+                fail(f"ai/agents/{name}.md: has a guard_scope hook but no product scope "
+                     f"is defined for it — add it to SCOPE_EXPLICIT or remove the hook")
+            continue
+        if not found:
+            fail(f"ai/agents/{name}.md: missing guard_scope frontmatter hook "
+                 f"(expected slug '{expected}') — see ai/hooks/guard_scope.py")
+        elif found.group(1) != expected:
+            fail(f"ai/agents/{name}.md: guard_scope slug '{found.group(1)}' != expected "
+                 f"'{expected}'")
+        elif found.group(1) not in SCOPE_SLUGS:
+            fail(f"ai/agents/{name}.md: unknown guard_scope slug '{found.group(1)}'")
+        else:
+            ok(f"ai/agents/{name}.md: scope hook '{expected}'")
+
+
+
 def main() -> int:
     agent_names = check_agents()
     skill_names = check_skills()
@@ -309,6 +358,7 @@ def main() -> int:
     check_gemini_settings(agent_names)
     check_referenced_paths()
     check_mentions(agent_names)
+    check_scope_hooks(agent_names)
 
     print(
         f"framework validation: {len(agent_names)} agents, {len(skill_names)} skills, "

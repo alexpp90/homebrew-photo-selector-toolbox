@@ -34,9 +34,24 @@ directories.
    source must not be granted `Edit`/`Write` — the frontmatter is the enforcement, the prose
    is only the explanation.
 4. Set `model:` (`inherit` unless the role justifies otherwise).
-5. Add a per-file symlink in `.gemini/agents/`.
-6. Add roster and delegation rows to `ai/ROUTING.md`.
-7. Regenerate and validate (below).
+5. Product agents (and any agent that must not touch product source) register the
+   product-separation hook in frontmatter — `validate_framework.py` enforces the slug:
+
+   ```yaml
+   hooks:
+     PreToolUse:
+       - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+         hooks:
+           - type: command
+             command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" <slug>"
+             timeout: 10
+   ```
+
+   Slugs: `desktop`, `android-desktop`, `phototok`, `android-build`, `no-products` — see
+   `ai/hooks/guard_scope.py`. New slugs are added there and in the validator together.
+6. Add a per-file symlink in `.gemini/agents/`.
+7. Add roster and delegation rows to `ai/ROUTING.md`.
+8. Regenerate and validate (below).
 
 ## Add a skill
 
