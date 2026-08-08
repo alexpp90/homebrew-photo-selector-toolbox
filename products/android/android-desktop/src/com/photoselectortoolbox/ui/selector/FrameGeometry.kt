@@ -50,6 +50,9 @@ object FrameGeometry {
     /** Width of the readout block and of the control block flanking the current frame. */
     val FlankWidth: Dp = 388.dp
 
+    /** Minimum width required for flank blocks (readout and control block). */
+    val MinimumFlankWidth: Dp = 260.dp
+
     /** Width of a neighbour's value overlay. */
     val OverlayWidth: Dp = 148.dp
 
@@ -63,7 +66,8 @@ object FrameGeometry {
      */
     val OverlayOutsideThreshold: Dp = OverlayWidth + 8.dp
 
-    /** Landscape frames are 4:3; portrait frames are the reciprocal. */
+    /** Standard camera aspect ratio is 3:2; legacy default 4:3; portrait frames are the reciprocal. */
+    const val DefaultLandscapeAspect: Float = 1.5f
     const val LandscapeAspect: Float = 4f / 3f
     const val PortraitAspect: Float = 3f / 4f
 

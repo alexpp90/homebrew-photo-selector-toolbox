@@ -98,25 +98,33 @@ fun ThreeUpSelectorLayout(
         }
 
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxSize()) {
-            // One solver, one size, handed to all three tiles. Never an
-            // aspectRatio modifier per tile — that resolves width first by
-            // default and lets a wide frame decide its own height, which is
-            // how "all three the same size" silently stops being true.
-            val frameSize = FrameGeometry.frameSize(
-                regionWidth = maxWidth - FrameGeometry.FlankWidth * 2 - FrameGeometry.Gap * 2,
+            val activeImage = current ?: previous ?: next
+            val aspect = activeImage?.aspectRatio?.let { raw ->
+                if (raw < 1f) 1f / raw else raw
+            } ?: FrameGeometry.DefaultLandscapeAspect
+
+            val minFlank = if (detailsVisible) FrameGeometry.MinimumFlankWidth else 0.dp
+            val topRowFit = FrameGeometry.frameSize(
+                regionWidth = maxWidth - minFlank * 2 - FrameGeometry.Gap * 2,
                 regionHeight = maxHeight,
+                aspect = aspect,
                 columns = 1,
                 rows = 2,
-            ).let { topRowFit ->
-                // The bottom row has to fit two of them side by side as well;
-                // whichever row binds harder decides the shared size.
-                val bottomRowFit = FrameGeometry.frameSize(
-                    regionWidth = maxWidth,
-                    regionHeight = maxHeight,
-                    columns = 2,
-                    rows = 2,
-                )
-                if (bottomRowFit.width < topRowFit.width) bottomRowFit else topRowFit
+            )
+            val bottomRowFit = FrameGeometry.frameSize(
+                regionWidth = maxWidth,
+                regionHeight = maxHeight,
+                aspect = aspect,
+                columns = 2,
+                rows = 2,
+            )
+            val frameSize = if (bottomRowFit.width < topRowFit.width) bottomRowFit else topRowFit
+
+            val flankWidth = if (detailsVisible) {
+                ((maxWidth - frameSize.width - FrameGeometry.Gap * 2) / 2)
+                    .coerceAtLeast(FrameGeometry.MinimumFlankWidth)
+            } else {
+                0.dp
             }
 
             val overlayOutside = FrameGeometry.overlayFitsOutside(
@@ -134,7 +142,7 @@ fun ThreeUpSelectorLayout(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
-                        modifier = Modifier.width(FrameGeometry.FlankWidth),
+                        modifier = Modifier.width(flankWidth),
                         contentAlignment = Alignment.CenterEnd,
                     ) {
                         if (detailsVisible) {
@@ -164,7 +172,7 @@ fun ThreeUpSelectorLayout(
                     Spacer(modifier = Modifier.width(FrameGeometry.Gap))
 
                     Box(
-                        modifier = Modifier.width(FrameGeometry.FlankWidth),
+                        modifier = Modifier.width(flankWidth),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         SelectorControlBlock(
@@ -367,10 +375,15 @@ private fun MaximisedFrame(
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val aspect = image?.aspectRatio?.let { raw ->
+            if (raw < 1f) 1f / raw else raw
+        } ?: FrameGeometry.DefaultLandscapeAspect
+
         val readoutWidth = if (detailsVisible) FrameGeometry.FlankWidth else 0.dp
         val size = FrameGeometry.maximisedFrameSize(
             regionWidth = maxWidth - readoutWidth - FrameGeometry.Gap,
             regionHeight = maxHeight,
+            aspect = aspect,
         )
 
         Row(
