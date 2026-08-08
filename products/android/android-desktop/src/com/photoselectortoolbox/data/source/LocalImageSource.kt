@@ -96,14 +96,15 @@ class LocalImageSourceImpl @Inject constructor(
 
             if (extension !in SUPPORTED_EXTENSIONS) continue
 
+            val (width, height) = readImageDimensions(file.uri)
             val imageItem = ImageItem(
                 uri = file.uri.toString(),
                 fileName = fileName,
                 fileSize = file.length(),
                 lastModified = file.lastModified(),
                 mimeType = file.type,
-                imageWidth = 0,
-                imageHeight = 0,
+                imageWidth = width,
+                imageHeight = height,
             )
             results.add(imageItem)
         }

@@ -17,4 +17,10 @@ data class ImageItem(
     /** True when the image is wider than it is tall (or dimensions unknown). */
     val isLandscape: Boolean
         get() = imageWidth == 0 && imageHeight == 0 || imageWidth > imageHeight
+
+    /** Aspect ratio (width / height), or null if dimensions are unknown. */
+    val aspectRatio: Float?
+        get() = if (imageWidth > 0 && imageHeight > 0) {
+            imageWidth.toFloat() / imageHeight.toFloat()
+        } else null
 }

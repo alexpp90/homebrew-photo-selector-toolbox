@@ -116,6 +116,21 @@ class FrameGeometryTest {
     }
 
     @Test
+    fun `3 to 2 photos use 3 to 2 aspect ratio without breaking the fit`() {
+        val size = FrameGeometry.frameSize(
+            regionWidth = referenceWidth,
+            regionHeight = referenceHeight,
+            aspect = 1.5f,
+        )
+
+        assertEquals(1.5f, size.width.value / size.height.value, 0.01f)
+        assertTrue(size.height.value * 2 + FrameGeometry.Gap.value <= referenceHeight.value + 1f)
+        // Two rows of 450dp use the full 908dp height (with gap of 8dp)
+        val heightUsed = size.height.value * 2 + FrameGeometry.Gap.value
+        assertEquals(referenceHeight.value, heightUsed, 1f)
+    }
+
+    @Test
     fun `neighbour values overlay the frame on the reference device`() {
         val size = FrameGeometry.frameSize(referenceWidth, referenceHeight)
 
