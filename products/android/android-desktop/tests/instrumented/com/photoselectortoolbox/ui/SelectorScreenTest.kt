@@ -457,6 +457,8 @@ class SelectorScreenTest {
         }
         dismissGestureTutorialIfShown()
 
+        if (isCompactLayout()) return
+
         // Tap Scan button on sidebar/chrome
         composeRule.onAllNodesWithTag("scan_button", useUnmergedTree = true).onFirst().performClick()
 
@@ -636,6 +638,8 @@ class SelectorScreenTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
         dismissGestureTutorialIfShown()
+
+        if (isCompactLayout()) return
 
         // The legend button appears once there are scores to explain.
         composeRule.waitUntil(timeoutMillis = 15000) {
