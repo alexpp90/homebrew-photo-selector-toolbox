@@ -28,6 +28,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 CLAUDE = "claude"
@@ -166,9 +167,46 @@ def bypassed() -> bool:
     return os.environ.get("PST_SKIP_HOOKS", "").strip() not in ("", "0", "false", "False")
 
 
+# --------------------------------------------------------------------------- usage ledger
+def session_key(payload: Payload) -> str:
+    """Stable per-session key: Antigravity conversationId, Claude Code session_id."""
+    cid = (payload.raw.get("conversationId") or payload.raw.get("session_id")
+           or os.environ.get("CLAUDE_SESSION_ID", ""))
+    return str(cid) or "nosession"
+
+
+def ledger_path(payload: Payload) -> Path:
+    return Path(tempfile.gettempdir()) / f"pst-hook-ledger-{session_key(payload)}.jsonl"
+
+
+def _hook_stem() -> str:
+    try:
+        return Path(sys.argv[0]).stem
+    except Exception:
+        return "unknown"
+
+
+def record_use(payload: Payload, decision: str, hook: str | None = None) -> None:
+    """Append one line to the session's hook-usage ledger (best effort, never fails).
+
+    Read by session_report.py at Stop time so the end-of-session report can say which
+    guards were active and what they decided. session_report excludes itself.
+    """
+    name = hook or _hook_stem()
+    if name == "session_report":
+        return
+    try:
+        with ledger_path(payload).open("a", encoding="utf-8") as fh:
+            json.dump({"hook": name, "decision": decision, "tool": payload.tool_name}, fh)
+            fh.write("\n")
+    except OSError:
+        pass
+
+
 # --------------------------------------------------------------------------- responses
 def allow(payload: Payload) -> None:
     """Permit the call, deferring to the host's normal permission flow."""
+    record_use(payload, "allow")
     if payload.dialect == ANTIGRAVITY:
         _emit({"decision": "allow"})
     else:
@@ -178,6 +216,7 @@ def allow(payload: Payload) -> None:
 
 def deny(payload: Payload, reason: str) -> None:
     """Block the call and hand the model a reason it can act on."""
+    record_use(payload, "deny")
     if payload.dialect == ANTIGRAVITY:
         _emit({"decision": "deny", "reason": reason})
     else:
@@ -193,12 +232,14 @@ def deny(payload: Payload, reason: str) -> None:
 
 def stop_allow(payload: Payload) -> None:
     """Let the agent finish."""
+    record_use(payload, "allow")
     _emit({} if payload.dialect == CLAUDE else {"decision": "allow"})
     sys.exit(0)
 
 
 def stop_block(payload: Payload, reason: str) -> None:
     """Send the agent back into the loop with an instruction."""
+    record_use(payload, "block")
     if payload.dialect == ANTIGRAVITY:
         _emit({"decision": "continue", "reason": reason})
     else:

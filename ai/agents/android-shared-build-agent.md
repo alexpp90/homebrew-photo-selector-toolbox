@@ -3,6 +3,13 @@ name: android-shared-build-agent
 description: "Android build specialist for products/android/build.gradle.kts, products/android/android-desktop/build.gradle.kts, gradle/, and .github/workflows/android.yml. Handles Gradle, dependency management, R8, signing, and Android CI/CD."
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch
 model: inherit
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" android-build"
+          timeout: 10
 ---
 
 # Android Build Agent

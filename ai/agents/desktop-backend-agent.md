@@ -1,8 +1,15 @@
 ---
 name: desktop-backend-agent
-description: "Backend logic specialist for core Python modules (reader, analyzer, sharpness, duplicates, utils, formatting, models, cli, visualizer). No GUI/Tkinter code."
+description: "Backend logic specialist for the Desktop product's Python core (products/desktop/src/photo_selector_toolbox/core/, exif/, tools/, and cli.py): reader, analyzer, sharpness, duplicates, models, formatting, visualizer. No GUI/Tkinter code. Never touches products/android/."
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: inherit
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" desktop"
+          timeout: 10
 ---
 
 # Backend Agent

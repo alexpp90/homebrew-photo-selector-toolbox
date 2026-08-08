@@ -68,14 +68,19 @@ finishing a task, not as an afterthought.
 
 ## Tool compatibility matrix
 
-| Capability | Claude Code / Cowork | Jules | Gemini CLI | Antigravity |
-|---|---|---|---|---|
-| Instructions auto-loaded | `CLAUDE.md` → `AGENTS.md` | `AGENTS.md` | `GEMINI.md` → `AGENTS.md` | `AGENTS.md` + `.agents/rules/` |
-| Subagent registration | native, via `.claude/agents/` frontmatter | prose routing via the `ROUTING.md` roster | `.gemini/agents/` + `settings.json` | prose routing via the `ROUTING.md` roster |
-| Skills | native, via `.claude/skills/` | read as markdown per `AGENTS.md` | `.gemini/skills/` | native, via `.agents/skills/` |
-| Commands | `/name` via `.claude/commands/` | — | — | `/name` via `.agents/workflows/` |
-| Hooks | `.claude/settings.json` | — | — | `.agents/hooks.json` |
-| Lifecycle enforcement | **blocking hooks** + rules | rules in `AGENTS.md` | rules in `GEMINI.md`/`AGENTS.md` | **blocking hooks** + rules |
+| Capability | Claude Code | Cowork | Jules | Gemini CLI | Antigravity |
+|---|---|---|---|---|---|
+| Instructions auto-loaded | `CLAUDE.md` → `AGENTS.md` | `CLAUDE.md` only | `AGENTS.md` | `GEMINI.md` → `AGENTS.md` | `AGENTS.md` + `.agents/rules/` |
+| Subagent registration | native, via `.claude/agents/` frontmatter | — (adopt roles per `ROUTING.md`) | prose routing via the `ROUTING.md` roster | `.gemini/agents/` + `settings.json` | prose routing via the `ROUTING.md` roster |
+| Skills | native, via `.claude/skills/` | — (read as markdown per `CLAUDE.md`) | read as markdown per `AGENTS.md` | `.gemini/skills/` | native, via `.agents/skills/` |
+| Commands | `/name` via `.claude/commands/` | — | — | — | `/name` via `.agents/workflows/` |
+| Hooks | `.claude/settings.json` + agent frontmatter | — | — | — | `.agents/hooks.json` |
+| Lifecycle enforcement | **blocking hooks** + rules | rules in `CLAUDE.md` (self-enforced) | rules in `AGENTS.md` | rules in `GEMINI.md`/`AGENTS.md` | **blocking hooks** + rules |
+
+Cowork mounts the repository as a data folder, not a project: it loads `CLAUDE.md` but does
+not scan `.claude/` for agents, skills, commands or hook registration, and its file tools
+never invoke the guards. `CLAUDE.md` therefore carries an explicit no-hooks fallback
+protocol — the same rules-stay-authoritative degradation Jules relies on.
 
 Claude Code and Antigravity both run hooks with a JSON-on-stdin / JSON-on-stdout contract, but
 they differ on tool names, argument keys and decision vocabulary. The scripts in `ai/hooks/`
@@ -199,15 +204,19 @@ way a broken test does.
 
 ## Enforcement
 
-What the framework can check mechanically, it does. The scripts in `ai/hooks/` are registered
-with both Claude Code (`.claude/settings.json`) and Antigravity (`.agents/hooks.json`), and
-they **block** rather than warn:
+What the framework can check mechanically, it does. The three original guards and `session_report.py` are registered
+with both Claude Code (`.claude/settings.json`) and Antigravity (`.agents/hooks.json`) and
+**block** rather than warn; `guard_scope.py` and `post_lint.py` are Claude Code-only (agent
+frontmatter and `PostToolUse` respectively):
 
 | Hook | Event | Blocks |
 |---|---|---|
 | `guard_paths.py` | `PreToolUse` on writes | scratch files and report dumps; writes through `.claude/` `.gemini/` `.agents/`; hand-edits of generated artifacts; code at the repository root |
 | `guard_commit.py` | `PreToolUse` on shell | committing staged scratch artifacts; `--no-verify`; `git push` on a chain of speculative `fix(ci)` commits |
 | `check_retrospective.py` | `Stop` | ending a session that changed product source with no sign the retrospective ran |
+| `guard_scope.py` | `PreToolUse` on writes, per-agent (Claude Code frontmatter hooks only) | a product agent writing into another product's source tree — AGENTS.md rule 1, mechanically |
+| `post_lint.py` | `PostToolUse` on writes (Claude Code only; advisory) | nothing — it feeds `flake8` findings on the just-edited Desktop Python file back to the model so they are fixed before `/verify` |
+| `session_report.py` | `Stop` (both hosts; advisory) | nothing — when the session did major work (an implementation or a plan), it reports which AI definitions were actually used: agents, skills, and hooks (from the usage ledger every guard writes via `hooklib.record_use`) |
 
 Every denial states what to do instead, so the model can correct itself rather than merely
 being refused. `PST_SKIP_HOOKS=1` bypasses all three for genuine emergencies.
@@ -225,9 +234,11 @@ after a file move.
 - Symlinks require `core.symlinks=true` (default on macOS/Linux). Windows checkouts need
   Developer Mode or `git config core.symlinks true`. This now covers `.claude/commands`,
   `.claude/hooks`, `.agents/workflows` and `.agents/rules` as well as the agent and skill trees.
-- `guard_paths.py` cannot yet enforce product separation per agent (blocking a PhotoTok agent
-  from writing Desktop files) because the invoking subagent's identity is not reliably present
-  in the hook payload. Product separation stays a rule, checked in review.
+- Product separation is mechanically enforced in Claude Code only: each product agent
+  registers `ai/hooks/guard_scope.py` in its frontmatter `hooks:` block (the agent names its
+  own product on the command line, so the payload's missing subagent identity no longer
+  matters; `validate_framework.py` checks the registration). Antigravity and Gemini have no
+  per-subagent hooks, so there product separation stays a rule, checked in review.
 - Antigravity does not infer a rule's activation mode from the file: set
   `.agents/rules/task-lifecycle.md` to **Always On** in the Customizations panel once per
   workspace.

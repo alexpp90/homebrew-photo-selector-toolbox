@@ -3,6 +3,13 @@ name: phototok-core-agent
 description: "Data and domain specialist for the PhotoTok product only (products/android/phototok/src/com/phototok/data/, .../domain/, .../di/). DataStore settings, progressive SAF discovery, pure feed-ordering logic, optimistic copy/move. Use proactively for any :phototok non-UI work. Never touches :app."
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: inherit
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" phototok"
+          timeout: 10
 ---
 
 # PhotoTok — Core Agent
