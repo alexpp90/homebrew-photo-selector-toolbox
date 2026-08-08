@@ -72,3 +72,34 @@ def test_ollama_tool_blocks_metadata_ipv6_literal(mock_open, dummy_image_file, t
     tool = OllamaAestheticTool()
     with pytest.raises(RuntimeError, match="SSRF Protection: Cloud metadata IPs are not allowed."):
         tool.analyze(dummy_image_file)
+
+
+@patch("urllib.request.OpenerDirector.open")
+def test_ollama_tool_allows_local(mock_open, dummy_image_file, temp_config_dir):
+    from photo_selector_toolbox.core.config import save_config
+    save_config({
+        "ollama_url": "http://127.0.0.1:11434/",
+        "ollama_model": "test",
+        "ollama_prompt": "test"
+    })
+    import json
+    import io
+    mock_response = io.BytesIO(json.dumps({"response": "[SCORE: 9.5] [ANALYSIS: good]"}).encode("utf-8"))
+    mock_open.return_value.__enter__.return_value = mock_response
+    tool = OllamaAestheticTool()
+    tool.analyze(dummy_image_file)
+
+@patch("urllib.request.OpenerDirector.open")
+def test_ollama_tool_allows_ipv4_mapped_local(mock_open, dummy_image_file, temp_config_dir):
+    from photo_selector_toolbox.core.config import save_config
+    save_config({
+        "ollama_url": "http://[::ffff:127.0.0.1]:11434/",
+        "ollama_model": "test",
+        "ollama_prompt": "test"
+    })
+    import json
+    import io
+    mock_response = io.BytesIO(json.dumps({"response": "[SCORE: 9.5] [ANALYSIS: good]"}).encode("utf-8"))
+    mock_open.return_value.__enter__.return_value = mock_response
+    tool = OllamaAestheticTool()
+    tool.analyze(dummy_image_file)
