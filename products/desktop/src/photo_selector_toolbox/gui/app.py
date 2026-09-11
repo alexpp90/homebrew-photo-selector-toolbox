@@ -273,6 +273,12 @@ def apply_dark_theme(root: tk.Tk) -> None:
     root.option_add("*Menu.activeBackground", colors.accent_blue)
     root.option_add("*Menu.activeForeground", "#FFFFFF")
 
+    # Configure cursor for interactive elements
+    import platform
+    cursor_name = "pointinghand" if platform.system() == "Darwin" else "hand2"
+    root.option_add("*TButton.cursor", cursor_name)
+    root.option_add("*TCheckbutton.cursor", cursor_name)
+
     # Set root window color
     root.configure(bg=colors.bg_dark)
 

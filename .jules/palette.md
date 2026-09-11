@@ -1,0 +1,3 @@
+## 2024-05-24 - Tkinter Cursor Configuration
+**Learning:** Setting the cursor property via `ttk.Style().configure('TButton', cursor='hand2')` is ignored because it's a widget-level option. Also, using container-level global cursors like `*TNotebook.cursor` causes entire application pages to incorrectly display the hand cursor. Furthermore, unconditionally using the `pointinghand` cursor on Linux causes a `_tkinter.TclError` upon widget creation.
+**Action:** Always apply cursor configurations to specific interactive leaf widgets using the Tk option database (e.g., `root.option_add('*TButton.cursor', cursor_name)`). Conditionally use `pointinghand` for macOS (`Darwin`) and `hand2` for other operating systems.
