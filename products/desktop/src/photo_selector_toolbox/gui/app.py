@@ -5,6 +5,7 @@ from photo_selector_toolbox.gui.widgets import ask_directory
 import queue
 import sys
 import logging
+import platform
 from dataclasses import dataclass
 from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -272,6 +273,12 @@ def apply_dark_theme(root: tk.Tk) -> None:
     root.option_add("*Menu.foreground", colors.fg_light)
     root.option_add("*Menu.activeBackground", colors.accent_blue)
     root.option_add("*Menu.activeForeground", "#FFFFFF")
+
+    # Set global cursor for interactive elements
+    cursor_type = "pointinghand" if platform.system() == "Darwin" else "hand2"
+    root.option_add("*TButton.cursor", cursor_type)
+    root.option_add("*TCheckbutton.cursor", cursor_type)
+    root.option_add("*TRadiobutton.cursor", cursor_type)
 
     # Set root window color
     root.configure(bg=colors.bg_dark)
