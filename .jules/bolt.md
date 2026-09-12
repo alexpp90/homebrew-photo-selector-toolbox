@@ -1,0 +1,3 @@
+## 2025-02-26 - Laplacian Calculation Optimization
+**Learning:** Using `cv2.CV_32F` instead of `cv2.CV_64F` for OpenCV Laplacian calculations yields a >2x performance improvement without meaningful precision loss for noise/sharpness metrics. However, operations on 32-bit floats like `.var()` or `np.median()` return `np.float32` scalars, which must be explicitly cast to Python `float()` to avoid downstream serialization or type-related failures.
+**Action:** When lowering precision for performance in OpenCV/NumPy, always explicitly cast the scalar results back to standard Python floats if they are exposed to the rest of the application.
