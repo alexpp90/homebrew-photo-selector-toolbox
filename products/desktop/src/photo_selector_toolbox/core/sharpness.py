@@ -20,7 +20,6 @@ try:
 except ImportError:
     rawpy = None
 from pathlib import Path
-import glob
 from typing import List, Optional, Any
 import logging
 from PIL import Image
@@ -334,32 +333,25 @@ def find_related_files(filepath: Path) -> List[Path]:
     seen = set(related)
 
     try:
-        # Use glob for efficient filtering instead of O(N) directory iteration.
-        # Escape the stem to handle filenames with glob-special characters (e.g. '[', ']', '*').
-        escaped_stem = glob.escape(stem)
+        import os
+        stem_lower = stem.lower()
+        stem_len = len(stem_lower)
 
-        # glob with f"{escaped_stem}.*" matches files with the same stem.
-        # We also check that they are files, not directories.
-        for f in parent.glob(f"{escaped_stem}.*"):
-            if f.is_file() and f.stem == stem:
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
-
-        # Also look for Lightroom editing files starting with stem + "-edit" (case-insensitive)
-        for f in parent.glob(f"{escaped_stem}-*"):
-            if f.is_file() and f.name.lower().startswith(f"{stem.lower()}-edit"):
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
-
-        # If the file has no extension (e.g. "DSC001"), glob f"{escaped_stem}.*" won't find it.
-        # But we must ensure we include the exact match. We don't need glob for it,
-        # since we know the exact filename.
-        exact_match = parent / stem
-        if exact_match.is_file() and exact_match not in seen:
-            related.append(exact_match)
-            seen.add(exact_match)
+        # PERFORMANCE OPTIMIZATION:
+        # Using a single os.listdir() combined with string prefix matching (`startswith`)
+        # is significantly faster than executing multiple `Path.glob` operations per file.
+        # This avoids redundant directory scans and system calls, especially when querying
+        # file variants in a tight loop across large directories.
+        for name in os.listdir(parent):
+            name_lower = name.lower()
+            if name_lower.startswith(stem_lower):
+                rest = name_lower[stem_len:]
+                if rest == "" or rest.startswith(".") or rest.startswith("-edit"):
+                    path = parent / name
+                    if path.is_file():
+                        if path not in seen:
+                            related.append(path)
+                            seen.add(path)
 
     except Exception as e:
         logger.warning(f"Error scanning for related files in {parent}: {e}")
