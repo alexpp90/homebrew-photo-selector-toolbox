@@ -1,0 +1,3 @@
+## 2024-09-14 - Interactive Cursor in Tkinter
+**Learning:** In Tkinter, setting a global cursor on container widgets (like `*TNotebook.cursor`) causes child widgets (like application pages/frames) to inherit the cursor incorrectly, leading to the entire page displaying a hand cursor. Also, macOS requires the `pointinghand` cursor, while Linux/Windows require `hand2` (using `pointinghand` on Linux causes a crash).
+**Action:** Only apply cursors globally to specific interactive leaf widgets (e.g., `*TButton.cursor`, `*TCheckbutton.cursor`, `*TRadiobutton.cursor`) using `root.option_add()` and dynamically select the cursor name based on the OS.

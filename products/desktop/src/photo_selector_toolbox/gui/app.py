@@ -12,6 +12,7 @@ from PIL import Image, ImageTk
 import os
 import concurrent.futures
 import multiprocessing
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +276,12 @@ def apply_dark_theme(root: tk.Tk) -> None:
 
     # Set root window color
     root.configure(bg=colors.bg_dark)
+
+    # Set pointing hand cursor on interactive widgets
+    hand_cursor = "pointinghand" if platform.system() == "Darwin" else "hand2"
+    root.option_add("*TButton.cursor", hand_cursor)
+    root.option_add("*TCheckbutton.cursor", hand_cursor)
+    root.option_add("*TRadiobutton.cursor", hand_cursor)
 
 
 def apply_dark_theme_to_fig(fig):
