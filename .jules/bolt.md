@@ -1,0 +1,3 @@
+## 2024-05-24 - Faster single-pass file discovery with os.listdir
+**Learning:** `Path.glob()` incurs massive overhead when called repetitively in directories with thousands of files, particularly because it rebuilds internal generators and performs redundant system calls. For discovering related files based on string prefixes (e.g., `stem.*` and `stem-*`), a single `os.listdir()` loop combined with simple string operations (`startswith`) is more than 2x faster than using `Path.glob()`.
+**Action:** When searching for files in a directory that may contain thousands of entries, use a single `os.listdir()` or `os.scandir()` loop with fast string matching instead of multiple `Path.glob()` calls, especially in loops traversing lists of files.

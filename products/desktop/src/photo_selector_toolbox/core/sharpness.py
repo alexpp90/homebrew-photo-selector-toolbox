@@ -20,7 +20,6 @@ try:
 except ImportError:
     rawpy = None
 from pathlib import Path
-import glob
 from typing import List, Optional, Any
 import logging
 from PIL import Image
@@ -334,24 +333,16 @@ def find_related_files(filepath: Path) -> List[Path]:
     seen = set(related)
 
     try:
-        # Use glob for efficient filtering instead of O(N) directory iteration.
-        # Escape the stem to handle filenames with glob-special characters (e.g. '[', ']', '*').
-        escaped_stem = glob.escape(stem)
+        # OPTIMIZATION: Replaced Path.glob with os.listdir for faster single-pass traversal.
+        stem_dot = stem + "."
+        lower_stem_edit = f"{stem.lower()}-edit"
 
-        # glob with f"{escaped_stem}.*" matches files with the same stem.
-        # We also check that they are files, not directories.
-        for f in parent.glob(f"{escaped_stem}.*"):
-            if f.is_file() and f.stem == stem:
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
-
-        # Also look for Lightroom editing files starting with stem + "-edit" (case-insensitive)
-        for f in parent.glob(f"{escaped_stem}-*"):
-            if f.is_file() and f.name.lower().startswith(f"{stem.lower()}-edit"):
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
+        for name in os.listdir(parent):
+            if name.startswith(stem_dot) or name.lower().startswith(lower_stem_edit):
+                p = parent / name
+                if p.is_file() and p not in seen:
+                    related.append(p)
+                    seen.add(p)
 
         # If the file has no extension (e.g. "DSC001"), glob f"{escaped_stem}.*" won't find it.
         # But we must ensure we include the exact match. We don't need glob for it,
