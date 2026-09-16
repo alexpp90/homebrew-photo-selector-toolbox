@@ -1,0 +1,3 @@
+## 2025-05-15 - Adding pointing hand cursors to Tkinter widgets
+**Learning:** In Tkinter, setting the `cursor` property via `ttk.Style().configure` fails silently because it is a widget-level option. To apply a cursor globally to `ttk` widgets, the Tk option database (`root.option_add`) must be used instead. Additionally, macOS requires the `pointinghand` cursor, while Linux/Windows use `hand2`. Applying `pointinghand` on Linux causes a crash, so the assignment must be conditional. Applying it to container widgets causes child widgets to incorrectly inherit it.
+**Action:** Always use `root.option_add` with conditional platform logic to apply cursors specifically to interactive leaf widgets like `*TButton.cursor`, avoiding container widgets.
