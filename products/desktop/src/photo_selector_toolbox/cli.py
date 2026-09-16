@@ -81,16 +81,21 @@ def main():
     # Pre-compute tuple of extensions for fast string matching
     supported_exts_tuple = tuple(SUPPORTED_EXTENSIONS)
 
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        # Prune excluded directories in place
-        dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+    # OPTIMIZATION: Replaced os.walk with os.scandir for faster directory traversal.
+    def _scan(path):
+        try:
+            with os.scandir(path) as it:
+                for entry in it:
+                    if entry.is_file():
+                        if entry.name.lower().endswith(supported_exts_tuple) and not entry.name.startswith("._"):
+                            image_files.append(Path(entry.path))
+                    elif entry.is_dir(follow_symlinks=False):
+                        if entry.name.lower() not in excluded_names:
+                            _scan(entry.path)
+        except OSError:
+            pass
 
-        dp = Path(dirpath)
-        for f in filenames:
-            if f.startswith("._"):
-                continue
-            if f.lower().endswith(supported_exts_tuple):
-                image_files.append(dp / f)
+    _scan(root_path)
 
     if not image_files:
         print("No supported image files found.")
