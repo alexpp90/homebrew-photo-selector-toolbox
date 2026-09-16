@@ -1,0 +1,4 @@
+## 2025-02-27 - Untrusted Search Path (PATH Hijacking) via subprocess.run
+**Vulnerability:** A script or application executed a system command (e.g., `zenity`, `curl`, `codesign`, `poetry`) using `subprocess.run` without an absolute path or restricting the search path. This is an Untrusted Search Path vulnerability (PATH Hijacking).
+**Learning:** If the environment's `PATH` variable is manipulated by an attacker, `subprocess.run(["zenity", ...])` might execute a malicious `zenity` binary planted earlier in the path. Using `shutil.which` without restricting the path is "security theater" as it still searches the compromised PATH.
+**Prevention:** Use `shutil.which("binary_name", path="/usr/bin:/bin")` to strictly resolve the absolute path from trusted system directories on Linux. Then pass the resolved absolute path to `subprocess.run([resolved_path, ...])`.
