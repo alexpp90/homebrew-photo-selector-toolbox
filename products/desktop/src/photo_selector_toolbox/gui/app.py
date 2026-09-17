@@ -12,6 +12,7 @@ from PIL import Image, ImageTk
 import os
 import concurrent.futures
 import multiprocessing
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,11 @@ def apply_dark_theme(root: tk.Tk) -> None:
             style.theme_use("clam")
         except Exception:
             pass
+
+    cursor_type = "pointinghand" if platform.system() == "Darwin" else "hand2"
+    root.option_add("*TButton.cursor", cursor_type)
+    root.option_add("*TCheckbutton.cursor", cursor_type)
+    root.option_add("*TRadiobutton.cursor", cursor_type)
 
     colors = ThemeColors()
 
