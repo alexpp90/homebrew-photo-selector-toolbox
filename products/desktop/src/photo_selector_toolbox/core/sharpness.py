@@ -20,7 +20,6 @@ try:
 except ImportError:
     rawpy = None
 from pathlib import Path
-import glob
 from typing import List, Optional, Any
 import logging
 from PIL import Image
@@ -334,28 +333,29 @@ def find_related_files(filepath: Path) -> List[Path]:
     seen = set(related)
 
     try:
-        # Use glob for efficient filtering instead of O(N) directory iteration.
-        # Escape the stem to handle filenames with glob-special characters (e.g. '[', ']', '*').
-        escaped_stem = glob.escape(stem)
+        # OPTIMIZATION: Replaced Path.glob with os.listdir for faster single-pass traversal.
+        # This significantly reduces file system overhead when scanning directories with many files.
+        stem_lower = stem.lower()
+        prefix1 = stem + "."
+        prefix2 = stem_lower + "-edit"
 
-        # glob with f"{escaped_stem}.*" matches files with the same stem.
-        # We also check that they are files, not directories.
-        for f in parent.glob(f"{escaped_stem}.*"):
-            if f.is_file() and f.stem == stem:
-                if f not in seen:
+        for name in os.listdir(parent):
+            # Check for same stem + different extension (e.g., DSC001.JPG)
+            # name.rfind('.') == len(stem) ensures the first dot is exactly after the stem,
+            # avoiding false positives like 'photo.backup.jpg' for stem 'photo'.
+            is_related_ext = name.startswith(prefix1) and name.rfind('.') == len(stem)
+
+            # Check for Lightroom editing files (e.g., DSC001-Edit.tif)
+            is_lr_edit = name.lower().startswith(prefix2)
+
+            if is_related_ext or is_lr_edit:
+                f = parent / name
+                if f.is_file() and f not in seen:
                     related.append(f)
                     seen.add(f)
 
-        # Also look for Lightroom editing files starting with stem + "-edit" (case-insensitive)
-        for f in parent.glob(f"{escaped_stem}-*"):
-            if f.is_file() and f.name.lower().startswith(f"{stem.lower()}-edit"):
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
-
-        # If the file has no extension (e.g. "DSC001"), glob f"{escaped_stem}.*" won't find it.
-        # But we must ensure we include the exact match. We don't need glob for it,
-        # since we know the exact filename.
+        # If the file has no extension (e.g. "DSC001"), prefix1 won't match it.
+        # But we must ensure we include the exact match.
         exact_match = parent / stem
         if exact_match.is_file() and exact_match not in seen:
             related.append(exact_match)
