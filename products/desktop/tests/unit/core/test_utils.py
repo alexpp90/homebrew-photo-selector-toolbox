@@ -41,7 +41,7 @@ class TestGetExiftoolPath(unittest.TestCase):
     def test_found_in_path(self, mock_which):
         """Tests that 'exiftool' is returned if found in system PATH."""
         mock_which.return_value = "/usr/bin/exiftool"
-        self.assertEqual(get_exiftool_path(), "exiftool")
+        self.assertEqual(get_exiftool_path(), "/usr/bin/exiftool")
 
     @patch('pathlib.Path.exists')
     @patch('sys.platform', 'linux')
