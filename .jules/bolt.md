@@ -1,0 +1,3 @@
+## 2024-03-24 - Faster File Discovery via os.listdir
+**Learning:** In tight loops or repeated calls like `find_related_files`, using `Path.glob` incurs significant overhead due to redundant directory traversals and system calls. For discovering files related by stem or prefix, a single `os.listdir` pass with fast string operations (`startswith` and `rfind`) is ~2x faster than multiple `Path.glob` operations in directories with many files.
+**Action:** Prefer a single `os.listdir` or `os.scandir` combined with python string-matching operations over repetitive `Path.glob` when scanning for multiple patterns in the same directory.
