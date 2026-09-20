@@ -64,7 +64,6 @@ class ScanImagesUseCase @Inject constructor(
          * Minimum sharpness (Laplacian variance) below which an image is
          * considered too blurry to be worth AI aesthetic scoring — the cheap
          * OpenCV gate that keeps the expensive model off obvious rejects.
-         * TODO(device): tune against real folders on the target tablet.
          */
         private const val MIN_SHARPNESS_FOR_AESTHETIC = 40.0
     }
