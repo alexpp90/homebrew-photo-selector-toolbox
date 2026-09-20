@@ -35,6 +35,7 @@ def test_ask_directory_linux_with_zenity_success():
         assert res == "/selected/dir"
         mock_run.assert_called_once()
         called_args = mock_run.call_args[0][0]
+        assert called_args[0] == "/usr/bin/zenity"
         # Check if the filename option is constructed correctly
         assert "--filename" in called_args
         filename_idx = called_args.index("--filename")
