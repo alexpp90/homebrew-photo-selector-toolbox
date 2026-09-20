@@ -600,12 +600,14 @@ class ImageLibraryStatistics(ttk.Frame):
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=max_workers
             ) as executor:
-                for i, data in enumerate(executor.map(get_exif_data, image_files)):
+                # OPTIMIZATION: Replaced executor.map with as_completed for faster progress updates.
+                futures = [executor.submit(get_exif_data, img) for img in image_files]
+                for i, future in enumerate(concurrent.futures.as_completed(futures)):
                     if self.stop_event.is_set():
                         logger.info("Analysis cancelled by user.")
-                        # Need to cancel running futures if possible, but map will just let them finish
                         break
 
+                    data = future.result()
                     if data:
                         all_metadata.append(data)
 
