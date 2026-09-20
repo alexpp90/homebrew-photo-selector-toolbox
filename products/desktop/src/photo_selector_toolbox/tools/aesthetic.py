@@ -396,15 +396,6 @@ class NimaOnnxAestheticEngine:
 # Dispatcher tool (the single registered "aesthetic" tool)
 # --------------------------------------------------------------------------- #
 
-def describe_active_engine() -> Tuple[str, str]:
-    """Resolve the engine for the *current* settings and explain the choice.
-
-    Convenience entry point for the GUI (settings dialog) so it does not have
-    to load the config itself. Returns ``(engine, reason)``.
-    """
-    return select_engine_with_reason(load_config())
-
-
 _LAST_DECISION_LOCK = threading.Lock()
 _last_logged_decision: Optional[Tuple[str, str]] = None
 
