@@ -1701,26 +1701,29 @@ class MainApp(tk.Tk):
             import csv
             with open(filepath, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                # Header
+                # OPTIMIZATION: Single-pass traversal over scan_results to build rows and dynamic score keys.
+                rows_data = []
                 score_keys = set()
                 for r in sharpness_frame.scan_results:
                     score_keys.update(r.scores.keys())
-                score_keys = sorted(score_keys)
-                header = ["filename", "path"] + score_keys
+                    rows_data.append((r.path.name, str(r.path), r.scores, r.exif))
+
+                sorted_keys = sorted(score_keys)
+                header = ["filename", "path"] + sorted_keys
                 if sharpness_frame.scan_results[0].exif:
                     header += ["shutter_speed", "aperture", "iso", "focal_length", "lens"]
                 writer.writerow(header)
 
-                for r in sharpness_frame.scan_results:
-                    row = [r.path.name, str(r.path)]
-                    row += [r.scores.get(k, "N/A") for k in score_keys]
-                    if r.exif:
+                for filename, path_str, scores, exif in rows_data:
+                    row = [filename, path_str]
+                    row += [scores.get(k, "N/A") for k in sorted_keys]
+                    if exif:
                         row += [
-                            r.exif.shutter_speed or "",
-                            r.exif.aperture or "",
-                            r.exif.iso or "",
-                            r.exif.focal_length or "",
-                            r.exif.lens or "",
+                            exif.shutter_speed or "",
+                            exif.aperture or "",
+                            exif.iso or "",
+                            exif.focal_length or "",
+                            exif.lens or "",
                         ]
                     writer.writerow(row)
             messagebox.showinfo(
