@@ -20,14 +20,16 @@ def ask_directory(parent=None, title=None, initialdir=None):
         str: Selected folder path, or empty string if cancelled.
     """
     is_linux = sys.platform.startswith("linux")
-    zenity_available = shutil.which("zenity") is not None
+    zenity_path = shutil.which("zenity")
+    zenity_available = zenity_path is not None
 
     if is_linux and zenity_available:
         toplevel = None
         if parent is not None and hasattr(parent, "winfo_toplevel"):
             toplevel = parent.winfo_toplevel()
 
-        cmd = ["zenity", "--file-selection", "--directory"]
+        # Security: Use absolute path to prevent PATH hijacking
+        cmd = [zenity_path, "--file-selection", "--directory"]
         if title:
             cmd.extend(["--title", title])
 
