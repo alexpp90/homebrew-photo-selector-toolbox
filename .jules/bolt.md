@@ -1,0 +1,3 @@
+## 2024-05-17 - Fast File Discovery with os.scandir
+**Learning:** `Path.glob` operations in large directories (common for photo management apps) can be a significant bottleneck due to multiple traversals and `Path` object creation overhead. `os.scandir` is much faster.
+**Action:** When finding related files (like sidecars or edits), use `os.scandir` with fast string operations instead of multiple `glob` calls. For exact stem matches with any extension, use `name.startswith(stem + ".") and name.rfind('.') == len(stem)` to avoid false positives (e.g., matching "photo.backup.jpg" for stem "photo").
