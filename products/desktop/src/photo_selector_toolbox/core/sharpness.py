@@ -300,23 +300,6 @@ def calculate_sharpness(filepath: Path, grid_size: int = 1) -> float:
         return 0.0
 
 
-def categorize_sharpness(
-    score: float, threshold_blur: float, threshold_sharp: float
-) -> int:
-    """
-    Categorizes the sharpness score.
-    < threshold_blur -> Blurry (3)
-    >= threshold_blur and < threshold_sharp -> Acceptable (2)
-    >= threshold_sharp -> Sharp (1)
-    """
-    if score < threshold_blur:
-        return SharpnessCategories.BLURRY
-    elif score < threshold_sharp:
-        return SharpnessCategories.ACCEPTABLE
-    else:
-        return SharpnessCategories.CRISP
-
-
 def find_related_files(filepath: Path) -> List[Path]:
     """
     Finds files related to the given filepath (same name, different extension)
