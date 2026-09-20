@@ -597,20 +597,26 @@ class ImageLibraryStatistics(ttk.Frame):
 
             # Determine thread count: use at most 8 threads to balance performance and overhead
             max_workers = min(8, (os.cpu_count() or 1) + 4)
+            # OPTIMIZATION: Replaced executor.map with concurrent.futures.as_completed for out-of-order completion.
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=max_workers
             ) as executor:
-                for i, data in enumerate(executor.map(get_exif_data, image_files)):
+                futures = [
+                    executor.submit(get_exif_data, img) for img in image_files
+                ]
+                completed_count = 0
+                for future in concurrent.futures.as_completed(futures):
                     if self.stop_event.is_set():
                         logger.info("Analysis cancelled by user.")
-                        # Need to cancel running futures if possible, but map will just let them finish
                         break
 
+                    data = future.result()
                     if data:
                         all_metadata.append(data)
 
+                    completed_count += 1
                     # Update progress
-                    progress = ((i + 1) / total_files) * 100
+                    progress = (completed_count / total_files) * 100
                     self.parent.after(0, self.update_progress, progress)
 
             if not all_metadata:
