@@ -170,8 +170,29 @@ def test_sharpness_tool_filtering():
         tool.update = MagicMock()
         tool.folder_var.get.return_value = "/mock/folder"
 
-        walk_return = [("/mock/folder", [], ["img1.jpg", "img2.arw", "img3.jpg", "img4.png"])]
-        with patch("os.walk", return_value=walk_return):
+        class MockDirEntry:
+            def __init__(self, name, path, is_d=False, is_f=True):
+                self.name = name
+                self.path = path
+                self._is_d = is_d
+                self._is_f = is_f
+
+            def is_dir(self, follow_symlinks=False):
+                return self._is_d
+
+            def is_file(self, follow_symlinks=False):
+                return self._is_f
+
+        mock_entries = [
+            MockDirEntry("img1.jpg", "/mock/folder/img1.jpg"),
+            MockDirEntry("img2.arw", "/mock/folder/img2.arw"),
+            MockDirEntry("img3.jpg", "/mock/folder/img3.jpg"),
+            MockDirEntry("img4.png", "/mock/folder/img4.png"),
+        ]
+        with patch("os.scandir") as mock_scandir:
+            mock_cm = MagicMock()
+            mock_cm.__enter__.return_value = mock_entries
+            mock_scandir.return_value = mock_cm
             with patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}):
                 tool._load_folder_contents("/mock/folder")
 
@@ -391,8 +412,29 @@ def test_mac_metadata_ignored():
         tool.update = MagicMock()
         tool.folder_var.get.return_value = "/mock/folder"
 
-        walk_return = [("/mock/folder", [], ["img1.jpg", "._img1.jpg", "img2.arw", "._img2.arw"])]
-        with patch("os.walk", return_value=walk_return):
+        class MockDirEntry:
+            def __init__(self, name, path, is_d=False, is_f=True):
+                self.name = name
+                self.path = path
+                self._is_d = is_d
+                self._is_f = is_f
+
+            def is_dir(self, follow_symlinks=False):
+                return self._is_d
+
+            def is_file(self, follow_symlinks=False):
+                return self._is_f
+
+        mock_entries = [
+            MockDirEntry("img1.jpg", "/mock/folder/img1.jpg"),
+            MockDirEntry("._img1.jpg", "/mock/folder/._img1.jpg"),
+            MockDirEntry("img2.arw", "/mock/folder/img2.arw"),
+            MockDirEntry("._img2.arw", "/mock/folder/._img2.arw"),
+        ]
+        with patch("os.scandir") as mock_scandir:
+            mock_cm = MagicMock()
+            mock_cm.__enter__.return_value = mock_entries
+            mock_scandir.return_value = mock_cm
             with patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw"}):
                 tool._load_folder_contents("/mock/folder")
 
