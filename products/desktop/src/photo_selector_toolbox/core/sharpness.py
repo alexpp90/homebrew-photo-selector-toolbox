@@ -20,7 +20,6 @@ try:
 except ImportError:
     rawpy = None
 from pathlib import Path
-import glob
 from typing import List, Optional, Any
 import logging
 from PIL import Image
@@ -334,32 +333,25 @@ def find_related_files(filepath: Path) -> List[Path]:
     seen = set(related)
 
     try:
-        # Use glob for efficient filtering instead of O(N) directory iteration.
-        # Escape the stem to handle filenames with glob-special characters (e.g. '[', ']', '*').
-        escaped_stem = glob.escape(stem)
+        # OPTIMIZATION: Replaced Path.glob with os.scandir for faster single-pass traversal.
+        stem_len = len(stem)
+        stem_lower_edit = f"{stem.lower()}-edit"
 
-        # glob with f"{escaped_stem}.*" matches files with the same stem.
-        # We also check that they are files, not directories.
-        for f in parent.glob(f"{escaped_stem}.*"):
-            if f.is_file() and f.stem == stem:
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
+        with os.scandir(parent) as entries:
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                name = entry.name
+                if (
+                    name == stem or
+                    (name.startswith(stem + ".") and name.rfind('.') == stem_len) or
+                    name.lower().startswith(stem_lower_edit)
+                ):
 
-        # Also look for Lightroom editing files starting with stem + "-edit" (case-insensitive)
-        for f in parent.glob(f"{escaped_stem}-*"):
-            if f.is_file() and f.name.lower().startswith(f"{stem.lower()}-edit"):
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
-
-        # If the file has no extension (e.g. "DSC001"), glob f"{escaped_stem}.*" won't find it.
-        # But we must ensure we include the exact match. We don't need glob for it,
-        # since we know the exact filename.
-        exact_match = parent / stem
-        if exact_match.is_file() and exact_match not in seen:
-            related.append(exact_match)
-            seen.add(exact_match)
+                    f = parent / name
+                    if f not in seen:
+                        related.append(f)
+                        seen.add(f)
 
     except Exception as e:
         logger.warning(f"Error scanning for related files in {parent}: {e}")
