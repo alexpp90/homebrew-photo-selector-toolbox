@@ -1,0 +1,3 @@
+## 2024-05-24 - Tkinter global cursors for ttk widgets
+**Learning:** Setting the `cursor` property via `ttk.Style().configure('TButton', cursor='hand2')` is silently ignored in Tkinter because it is a widget-level option, not a style option. Furthermore, using `pointinghand` works on macOS but causes a `_tkinter.TclError: bad cursor spec` crash upon widget creation on Linux/Windows.
+**Action:** Always apply cursors globally to `ttk` widgets using the Tk option database (e.g., `root.option_add('*TButton.cursor', cursor_type)`), and ensure platform-specific cursors (e.g., `pointinghand` vs `hand2`) are dynamically determined using `platform.system()`.
