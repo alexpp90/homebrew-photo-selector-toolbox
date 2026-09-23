@@ -1,0 +1,3 @@
+## 2024-06-19 - Path.glob vs os.listdir for Single Directory Traversal
+**Learning:** In directories with thousands of files, repetitive `Path.glob` calls for pattern matching (e.g., finding related files by stem) cause severe performance bottlenecks due to redundant directory traversals. A single pass with `os.listdir` combined with fast string operations (like `startswith`) is significantly faster, as it iterates the directory contents only once.
+**Action:** When filtering files in large directories by multiple patterns, avoid using multiple `Path.glob` calls. Instead, use a single `os.listdir` (or `os.scandir` if stat info is needed) pass with string matching logic.
