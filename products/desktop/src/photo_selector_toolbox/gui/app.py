@@ -273,6 +273,12 @@ def apply_dark_theme(root: tk.Tk) -> None:
     root.option_add("*Menu.activeBackground", colors.accent_blue)
     root.option_add("*Menu.activeForeground", "#FFFFFF")
 
+    # Configure buttons globally
+    if sys.platform == "darwin":
+        root.option_add("*TButton.cursor", "pointinghand")
+    else:
+        root.option_add("*TButton.cursor", "hand2")
+
     # Set root window color
     root.configure(bg=colors.bg_dark)
 
