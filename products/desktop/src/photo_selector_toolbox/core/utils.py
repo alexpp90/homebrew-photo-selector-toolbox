@@ -134,8 +134,10 @@ def get_exiftool_path() -> str | None:
     3. The PyInstaller temp directory (sys._MEIPASS).
     """
     # Check system PATH first
-    if shutil.which("exiftool"):
-        return "exiftool"
+    exiftool_sys_path = shutil.which("exiftool")
+    if exiftool_sys_path:
+        # SECURITY: Resolve absolute path for exiftool to prevent Untrusted Search Path vulnerabilities.
+        return exiftool_sys_path
 
     # Check for bundled executable
     # If running as a PyInstaller bundle
