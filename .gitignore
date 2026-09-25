@@ -49,3 +49,5 @@ Photo_Selector_Toolbox_Audit_Report.docx
 # Kotlin compiler sessions/temp files
 products/android/.kotlin/
 
+
+tmp_perf/
