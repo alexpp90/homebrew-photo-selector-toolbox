@@ -12,6 +12,7 @@ from PIL import Image, ImageTk
 import os
 import concurrent.futures
 import multiprocessing
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +273,10 @@ def apply_dark_theme(root: tk.Tk) -> None:
     root.option_add("*Menu.foreground", colors.fg_light)
     root.option_add("*Menu.activeBackground", colors.accent_blue)
     root.option_add("*Menu.activeForeground", "#FFFFFF")
+
+    # Configure cursors globally for ttk elements
+    cursor_type = "pointinghand" if platform.system() == "Darwin" else "hand2"
+    root.option_add("*TButton.cursor", cursor_type)
 
     # Set root window color
     root.configure(bg=colors.bg_dark)
