@@ -130,5 +130,17 @@ def test_ollama_tool_fallback_analysis(mock_open, dummy_image_file, temp_config_
     assert tag == "N/A"
 
 
+import socket
+
+
+@patch("socket.getaddrinfo")
+def test_ollama_tool_dns_resolution_error(mock_getaddrinfo, dummy_image_file, temp_config_dir):
+    mock_getaddrinfo.side_effect = socket.gaierror("Name or service not known")
+
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError) as exc_info:
+        tool.analyze(dummy_image_file)
+
+    assert "SSRF Protection: Could not resolve hostname" in str(exc_info.value)
 
 
