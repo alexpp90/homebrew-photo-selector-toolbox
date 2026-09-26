@@ -57,7 +57,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         # is queued here and applied automatically once the scan completes.
         self._pending_grouping = False
         self.stop_event = threading.Event()
-        self.bg_stop_event = threading.Event()
         self.grouping_stop_event = threading.Event()
 
        # State
@@ -1022,8 +1021,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if self.is_grouping:
             self.cancel_grouping()
 
-        self.bg_stop_event.set()
-
         self.sorted_files = files
         self.candidates = files.copy()
         self.scan_results = []
@@ -1169,105 +1166,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 cache.set_multiple_scores(updates)
             except Exception as e:
                 logger.warning(f"Failed to bulk update cache in background: {e}")
-
-    def _start_background_update_scan(self):
-       # Stop previous background updates
-        self.bg_stop_event.clear()
-
-       # Tools configuration in the GUI variables
-        tools = {
-            "sharpness": self.tool_sharpness_var.get(),
-            "noise": self.tool_noise_var.get(),
-            "highlight_clipping": self.tool_highlight_var.get(),
-            "shadow_clipping": self.tool_shadow_var.get(),
-            "aesthetic": self.tool_aesthetic_var.get(),
-        }
-
-       # Parse grid size
-        grid_str = self.grid_size_var.get()
-        try:
-            grid_size = int(grid_str.split("x")[0])
-        except (ValueError, IndexError):
-            grid_size = 1
-
-       # Check which candidates have missing values for the enabled tools
-        files_to_update = []
-        for f in self.candidates:
-            res = self.files_map.get(f)
-            if res:
-                needs_update = False
-                for tool_name, enabled in tools.items():
-                    if enabled and res.scores.get(tool_name, "N/A") == "N/A":
-                        needs_update = True
-                        break
-                if needs_update:
-                    files_to_update.append(f)
-
-        if not files_to_update:
-            return
-
-        threading.Thread(
-            target=self._background_update_worker,
-            args=(files_to_update, grid_size, tools),
-            daemon=True,
-        ).start()
-
-    def _background_update_worker(self, files, grid_size, tools):
-        from photo_selector_toolbox.gui.controllers import _process_single_file
-        from photo_selector_toolbox.core.cache import ScoreCache
-        import os
-        from concurrent.futures import ProcessPoolExecutor, as_completed
-
-        max_workers = max(1, os.cpu_count() or 4)
-
-        # Pre-fetch all cached scores in a single batch
-        cache = ScoreCache()
-        all_cached_scores = cache.get_multiple_scores(files)
-
-        accumulated_updates = {}
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(
-                    _process_single_file, f, grid_size, tools, all_cached_scores.get(f, {})
-                ): f
-                for f in files
-            }
-
-            for future in as_completed(futures):
-                if self.bg_stop_event.is_set():
-                    if accumulated_updates:
-                        cache.set_multiple_scores(accumulated_updates)
-                    for pending_future in futures:
-                        pending_future.cancel()
-                    break
-
-                f = futures[future]
-                try:
-                    res = future.result()
-                    if res.new_calculations:
-                        accumulated_updates[f] = res.new_calculations
-                        if len(accumulated_updates) >= cache._PRUNE_INTERVAL:
-                            cache.set_multiple_scores(accumulated_updates)
-                            accumulated_updates.clear()
-                    # Schedule UI update on main thread
-                    try:
-                        self.parent.after(0, lambda r=res: self._handle_bg_update_result(r))
-                    except RuntimeError:
-                        pass  # Tk main loop already destroyed (teardown race)
-                except Exception as e:
-                    logger.debug(f"Background update error for {f.name}: {e}")
-
-            if accumulated_updates:
-                cache.set_multiple_scores(accumulated_updates)
-
-    def _handle_bg_update_result(self, result):
-       # If we have stopped or active candidates changed, discard
-        if self.bg_stop_event.is_set() or result.path not in self.candidates:
-            return
-
-        self._update_scan_state(result)
-        self._update_candidate_listbox_ui(result)
-        self._refresh_metadata_if_current(result.path)
 
     def on_file_type_change(self, event=None):
        # Get currently selected path
@@ -1798,7 +1696,6 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if self._is_grouping_enabled():
             self.group_level_combo.state(["!disabled"])
 
-        self.bg_stop_event.set()
         self.is_scanning = True
         self.stop_event.clear()
 
