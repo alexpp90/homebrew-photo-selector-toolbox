@@ -5,7 +5,6 @@ from unittest.mock import patch, MagicMock
 from photo_selector_toolbox.core.sharpness import (
     calculate_sharpness,
     calculate_noise,
-    categorize_sharpness,
     find_related_files,
     SharpnessCategories,
     get_image_data,
@@ -34,16 +33,6 @@ def mock_flat_image():
 def test_sharpness_categories():
     assert SharpnessCategories.get_name(1) == "Sharp"
     assert SharpnessCategories.get_name(3) == "Blurry"
-
-
-def test_categorize_sharpness():
-    # Thresholds: Blur < 100, Sharp > 500
-    blur_t = 100
-    sharp_t = 500
-
-    assert categorize_sharpness(50, blur_t, sharp_t) == SharpnessCategories.BLURRY
-    assert categorize_sharpness(200, blur_t, sharp_t) == SharpnessCategories.ACCEPTABLE
-    assert categorize_sharpness(600, blur_t, sharp_t) == SharpnessCategories.CRISP
 
 
 @patch.object(shp, "Image")
