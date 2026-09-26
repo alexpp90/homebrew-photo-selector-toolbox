@@ -20,7 +20,6 @@ try:
 except ImportError:
     rawpy = None
 from pathlib import Path
-import glob
 from typing import List, Optional, Any
 import logging
 from PIL import Image
@@ -93,9 +92,9 @@ def get_image_data(filepath: Path) -> Optional[np.ndarray]:
 
 def _calculate_noise_from_gray(gray: np.ndarray) -> float:
     """Estimates noise from a pre-loaded grayscale array using MAD of the Laplacian."""
-    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    laplacian = cv2.Laplacian(gray, cv2.CV_32F)
     mad = np.median(np.abs(laplacian - np.median(laplacian)))
-    return mad / 0.6745
+    return float(mad / 0.6745)
 
 
 def _calculate_sharpness_from_gray(gray: np.ndarray, grid_size: int = 1) -> float:
@@ -112,14 +111,14 @@ def _calculate_sharpness_from_gray(gray: np.ndarray, grid_size: int = 1) -> floa
         cropped = gray[h_start:h_end, w_start:w_end]
 
     if grid_size <= 1:
-        return cv2.Laplacian(cropped, cv2.CV_64F).var()
+        return float(cv2.Laplacian(cropped, cv2.CV_32F).var())
 
     ch, cw = cropped.shape
     block_h = ch // grid_size
     block_w = cw // grid_size
 
     if block_h < 10 or block_w < 10:
-        return cv2.Laplacian(cropped, cv2.CV_64F).var()
+        return float(cv2.Laplacian(cropped, cv2.CV_32F).var())
 
     max_score = 0.0
     for r in range(grid_size):
@@ -129,10 +128,10 @@ def _calculate_sharpness_from_gray(gray: np.ndarray, grid_size: int = 1) -> floa
             x0 = c * block_w
             x1 = x0 + block_w
             block = cropped[y0:y1, x0:x1]
-            score = cv2.Laplacian(block, cv2.CV_64F).var()
+            score = cv2.Laplacian(block, cv2.CV_32F).var()
             if score > max_score:
-                max_score = score
-    return max_score
+                max_score = float(score)
+    return float(max_score)
 
 
 def _calculate_highlight_clipping_from_gray(gray: np.ndarray) -> float:
@@ -334,32 +333,33 @@ def find_related_files(filepath: Path) -> List[Path]:
     seen = set(related)
 
     try:
-        # Use glob for efficient filtering instead of O(N) directory iteration.
-        # Escape the stem to handle filenames with glob-special characters (e.g. '[', ']', '*').
-        escaped_stem = glob.escape(stem)
+        # OPTIMIZATION: Replaced Path.glob with single-pass os.scandir traversal.
+        stem_lower = stem.lower()
+        stem_dot = stem + "."
+        stem_edit = stem_lower + "-edit"
+        stem_len = len(stem)
 
-        # glob with f"{escaped_stem}.*" matches files with the same stem.
-        # We also check that they are files, not directories.
-        for f in parent.glob(f"{escaped_stem}.*"):
-            if f.is_file() and f.stem == stem:
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
+        for entry in os.scandir(parent):
+            if not entry.is_file():
+                continue
+            name = entry.name
+            name_lower = name.lower()
 
-        # Also look for Lightroom editing files starting with stem + "-edit" (case-insensitive)
-        for f in parent.glob(f"{escaped_stem}-*"):
-            if f.is_file() and f.name.lower().startswith(f"{stem.lower()}-edit"):
-                if f not in seen:
-                    related.append(f)
-                    seen.add(f)
-
-        # If the file has no extension (e.g. "DSC001"), glob f"{escaped_stem}.*" won't find it.
-        # But we must ensure we include the exact match. We don't need glob for it,
-        # since we know the exact filename.
-        exact_match = parent / stem
-        if exact_match.is_file() and exact_match not in seen:
-            related.append(exact_match)
-            seen.add(exact_match)
+            if name == stem:
+                p = parent / name
+                if p not in seen:
+                    related.append(p)
+                    seen.add(p)
+            elif name.startswith(stem_dot) and name.rfind('.') == stem_len:
+                p = parent / name
+                if p not in seen:
+                    related.append(p)
+                    seen.add(p)
+            elif name_lower.startswith(stem_edit):
+                p = parent / name
+                if p not in seen:
+                    related.append(p)
+                    seen.add(p)
 
     except Exception as e:
         logger.warning(f"Error scanning for related files in {parent}: {e}")

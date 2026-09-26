@@ -31,7 +31,7 @@ def _is_hash_similar(prev_res, next_res, hash_keys: List[str], threshold: int) -
         try:
             h1 = int(h1_val, 16) if isinstance(h1_val, str) else int(h1_val)
             h2 = int(h2_val, 16) if isinstance(h2_val, str) else int(h2_val)
-            dist = bin(h1 ^ h2).count("1")
+            dist = (h1 ^ h2).bit_count()
             return dist <= threshold
         except (ValueError, TypeError):
             pass
@@ -134,8 +134,9 @@ def get_exiftool_path() -> str | None:
     3. The PyInstaller temp directory (sys._MEIPASS).
     """
     # Check system PATH first
-    if shutil.which("exiftool"):
-        return "exiftool"
+    exiftool_path = shutil.which("exiftool")
+    if exiftool_path:
+        return exiftool_path
 
     # Check for bundled executable
     # If running as a PyInstaller bundle

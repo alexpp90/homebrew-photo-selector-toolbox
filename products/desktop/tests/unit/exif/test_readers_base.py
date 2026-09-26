@@ -93,3 +93,27 @@ def test_read_exif_returns_none_if_all_fail(caplog, monkeypatch):
     # Assert error was logged
     assert any("Simulated reader failure" in record.message for record in caplog.records)
     assert any("Reader MockFailingReader raised exception" in record.message for record in caplog.records)
+
+
+def test_read_exif_debug_mode_with_exception(caplog, monkeypatch):
+    from photo_selector_toolbox.exif.readers import base
+
+    # Temporarily clear readers list to isolate test
+    monkeypatch.setattr(base, "_readers", [])
+
+    # Register failing reader
+    failing_reader = MockFailingReader()
+    base.register_reader(failing_reader)
+
+    caplog.set_level(logging.DEBUG)
+
+    # Test with debug=True
+    dummy_path = Path("dummy.jpg")
+    result = read_exif(dummy_path, debug=True)
+
+    # Assert result is None
+    assert result is None
+
+    # Assert error was logged
+    assert any("Simulated reader failure" in record.message for record in caplog.records)
+    assert any("Reader MockFailingReader raised exception" in record.message for record in caplog.records)
