@@ -34,6 +34,20 @@ def _display_available():
     return bool(os.environ.get("DISPLAY"))
 
 
+@pytest.fixture(autouse=True)
+def guard_tkinter_messagebox(monkeypatch):
+    """Prevent unmocked native modal message boxes from hanging automated test runs."""
+    try:
+        import tkinter.messagebox
+        monkeypatch.setattr(tkinter.messagebox, "showerror", lambda *a, **k: None)
+        monkeypatch.setattr(tkinter.messagebox, "showinfo", lambda *a, **k: None)
+        monkeypatch.setattr(tkinter.messagebox, "showwarning", lambda *a, **k: None)
+        monkeypatch.setattr(tkinter.messagebox, "askyesno", lambda *a, **k: False)
+        monkeypatch.setattr(tkinter.messagebox, "askokcancel", lambda *a, **k: False)
+    except ImportError:
+        pass
+
+
 # ── Fixtures ─────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)

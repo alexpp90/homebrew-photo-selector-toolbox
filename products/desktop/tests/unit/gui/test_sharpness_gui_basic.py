@@ -796,6 +796,7 @@ def test_scan_finished_applies_queued_grouping():
 
 
 def test_start_scan_leaves_grouping_controls_enabled():
+    from pathlib import Path
     tool = _make_tool()
     _prepare_grouping_widgets(tool)
     tool.folder_var.set("/mock/folder")
@@ -808,6 +809,8 @@ def test_start_scan_leaves_grouping_controls_enabled():
     tool.switch_to_review_mode = MagicMock()
     tool.after = MagicMock()
     tool.grid_size_var.set("4x4")
+    tool._load_folder_contents = MagicMock()
+    tool.sorted_files = [Path("/mock/folder/img1.jpg")]
 
     with patch("photo_selector_toolbox.gui.sharpness_tool.Path.exists", return_value=True):
         tool.start_scan()

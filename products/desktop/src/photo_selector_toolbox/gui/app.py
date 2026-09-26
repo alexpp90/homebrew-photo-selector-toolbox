@@ -320,6 +320,13 @@ def apply_dark_theme(root: tk.Tk) -> None:
     root.option_add("*Listbox.highlightColor", colors.border_color)
     root.option_add("*Listbox.highlightBackground", colors.bg_dark)
 
+    # Configure interactive cursors
+    import platform
+    cursor_name = "pointinghand" if platform.system() == "Darwin" else "hand2"
+    root.option_add("*TButton.cursor", cursor_name)
+    root.option_add("*TCheckbutton.cursor", cursor_name)
+    root.option_add("*TRadiobutton.cursor", cursor_name)
+
     # Set root window color
     root.configure(bg=colors.bg_dark)
 
@@ -647,12 +654,15 @@ class ImageLibraryStatistics(ttk.Frame):
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=max_workers
             ) as executor:
-                for i, data in enumerate(executor.map(get_exif_data, image_files)):
+                futures = [executor.submit(get_exif_data, img) for img in image_files]
+                for i, future in enumerate(concurrent.futures.as_completed(futures)):
                     if self.stop_event.is_set():
                         logger.info("Analysis cancelled by user.")
-                        # Need to cancel running futures if possible, but map will just let them finish
+                        for pending in futures:
+                            pending.cancel()
                         break
 
+                    data = future.result()
                     if data:
                         all_metadata.append(data)
 
@@ -1754,26 +1764,28 @@ class MainApp(tk.Tk):
             import csv
             with open(filepath, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                # Header
                 score_keys = set()
+                rows_data = []
                 for r in sharpness_frame.scan_results:
                     score_keys.update(r.scores.keys())
-                score_keys = sorted(score_keys)
-                header = ["filename", "path"] + score_keys
-                if sharpness_frame.scan_results[0].exif:
+                    rows_data.append((r.path.name, str(r.path), r.scores, r.exif))
+
+                sorted_keys = sorted(score_keys)
+                header = ["filename", "path"] + sorted_keys
+                if rows_data and rows_data[0][3]:
                     header += ["shutter_speed", "aperture", "iso", "focal_length", "lens"]
                 writer.writerow(header)
 
-                for r in sharpness_frame.scan_results:
-                    row = [r.path.name, str(r.path)]
-                    row += [r.scores.get(k, "N/A") for k in score_keys]
-                    if r.exif:
+                for name, path_str, scores, exif in rows_data:
+                    row = [name, path_str]
+                    row += [scores.get(k, "N/A") for k in sorted_keys]
+                    if exif:
                         row += [
-                            r.exif.shutter_speed or "",
-                            r.exif.aperture or "",
-                            r.exif.iso or "",
-                            r.exif.focal_length or "",
-                            r.exif.lens or "",
+                            exif.shutter_speed or "",
+                            exif.aperture or "",
+                            exif.iso or "",
+                            exif.focal_length or "",
+                            exif.lens or "",
                         ]
                     writer.writerow(row)
             messagebox.showinfo(
