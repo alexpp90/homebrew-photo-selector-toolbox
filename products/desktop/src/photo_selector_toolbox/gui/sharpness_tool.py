@@ -5,7 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from typing import List, Dict
 from tkinter import messagebox, ttk
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, add_tooltip
 import os
 
 import send2trash
@@ -507,11 +507,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="◀ Prev (Left)", command=self.prev_candidate
         )
         self.prev_btn.pack(side="top", fill="x", pady=2)
+        add_tooltip(self.prev_btn, "Go to the previous image")
 
         self.next_btn = ttk.Button(
             btn_frame, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.next_btn.pack(side="top", fill="x", pady=2)
+        add_tooltip(self.next_btn, "Go to the next image")
 
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
 
@@ -521,6 +523,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.delete_current_candidate,
         )
         self.del_btn.pack(side="top", fill="x", pady=2)
+        add_tooltip(self.del_btn, "Move current image to trash")
 
         self.move_btn = ttk.Button(
             btn_frame,
@@ -528,6 +531,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.move_current_to_selection,
         )
         self.move_btn.pack(side="top", fill="x", pady=2)
+        add_tooltip(self.move_btn, "Move current image to 'selected' folder")
 
         self.copy_btn = ttk.Button(
             btn_frame,
@@ -535,6 +539,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.copy_current_to_selection,
         )
         self.copy_btn.pack(side="top", fill="x", pady=2)
+        add_tooltip(self.copy_btn, "Copy current image to 'selected' folder")
 
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
 
@@ -542,6 +547,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
+        add_tooltip(self.focus_toggle_btn, "Toggle distraction-free focus view")
 
         # --- Bottom Container: Neighbors ---
         self.bottom_container = ttk.Frame(self.preview_area)
@@ -843,11 +849,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_right_panel, text="◀ Previous (Left)", command=self.prev_candidate
         )
         self.focus_prev_btn.pack(side="top", pady=5, fill="x")
+        add_tooltip(self.focus_prev_btn, "Go to the previous image")
 
         self.focus_next_btn = ttk.Button(
             self.focus_right_panel, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.focus_next_btn.pack(side="top", pady=5, fill="x")
+        add_tooltip(self.focus_next_btn, "Go to the next image")
 
         self.focus_del_btn = ttk.Button(
             self.focus_right_panel,
@@ -855,6 +863,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.delete_current_candidate,
         )
         self.focus_del_btn.pack(side="top", pady=20, fill="x")
+        add_tooltip(self.focus_del_btn, "Move current image to trash")
 
         self.focus_move_btn = ttk.Button(
             self.focus_right_panel,
@@ -862,6 +871,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.move_current_to_selection,
         )
         self.focus_move_btn.pack(side="top", pady=5, fill="x")
+        add_tooltip(self.focus_move_btn, "Move current image to 'selected' folder")
 
         self.focus_copy_btn = ttk.Button(
             self.focus_right_panel,
@@ -869,6 +879,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.copy_current_to_selection,
         )
         self.focus_copy_btn.pack(side="top", pady=5, fill="x")
+        add_tooltip(self.focus_copy_btn, "Copy current image to 'selected' folder")
 
     def _setup_focus_bottom_panel(self):
        # --- Row 1: Bottom Strip ---
