@@ -5,7 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from typing import List, Dict
 from tkinter import messagebox, ttk
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, ToolTip
 import os
 
 import send2trash
@@ -324,6 +324,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.on_group_similar_change,
         )
         self.group_similar_chk.pack(side="left", padx=(15, 5))
+        ToolTip(self.group_similar_chk, "Automatically group visually similar images\nor burst shots into a single expandable item.")
 
         self.group_level_combo = ttk.Combobox(
             folder_frame,
@@ -542,6 +543,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.focus_toggle_btn, "Enter fullscreen layout to focus\non image details and comparisons.")
 
         # --- Bottom Container: Neighbors ---
         self.bottom_container = ttk.Frame(self.preview_area)
