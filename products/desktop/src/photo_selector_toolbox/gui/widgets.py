@@ -42,9 +42,11 @@ class ToolTip:
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
 
-        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
-                      background="#27272A", foreground="#FAFAFA", relief=tk.SOLID, borderwidth=1,
-                      font=("Helvetica", 9))
+        label = tk.Label(
+            tw, text=self.text, justify=tk.LEFT,
+            background="#27272A", foreground="#FAFAFA", relief=tk.SOLID, borderwidth=1,
+            font=("Helvetica", 9)
+        )
         label.pack(ipadx=4, ipady=2)
 
     def hidetip(self):

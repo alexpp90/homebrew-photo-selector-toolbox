@@ -324,7 +324,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.on_group_similar_change,
         )
         self.group_similar_chk.pack(side="left", padx=(15, 5))
-        ToolTip(self.group_similar_chk, "Automatically group visually similar images\nor burst shots into a single expandable item.")
+        ToolTip(
+            self.group_similar_chk,
+            "Automatically group visually similar images\nor burst shots into a single expandable item."
+        )
 
         self.group_level_combo = ttk.Combobox(
             folder_frame,
