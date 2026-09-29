@@ -629,7 +629,7 @@ class ImageLibraryStatistics(ttk.Frame):
             # Pre-compute tuple of extensions for fast string matching
             supported_exts_tuple = tuple(SUPPORTED_EXTENSIONS)
 
-            # OPTIMIZATION: Replaced os.walk with custom recursive os.scandir for faster single-pass directory traversal.
+            # OPTIMIZATION: Replaced os.walk with custom recursive os.scandir for speed.
             def _scan(path):
                 try:
                     with os.scandir(path) as it:
@@ -638,7 +638,10 @@ class ImageLibraryStatistics(ttk.Frame):
                                 if entry.name.lower() not in excluded_names:
                                     _scan(entry.path)
                             elif entry.is_file():
-                                if not entry.name.startswith("._") and entry.name.lower().endswith(supported_exts_tuple):
+                                if (
+                                    not entry.name.startswith("._") and
+                                    entry.name.lower().endswith(supported_exts_tuple)
+                                ):
                                     image_files.append(Path(entry.path))
                 except OSError:
                     pass

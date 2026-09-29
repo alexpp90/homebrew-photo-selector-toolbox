@@ -1754,7 +1754,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             exts_tuple = tuple(SUPPORTED_EXTENSIONS)
             excluded_names = get_excluded_folder_names()
             new_found = False
-            # OPTIMIZATION: Replaced os.walk with custom recursive os.scandir for faster single-pass directory traversal.
+            # OPTIMIZATION: Replaced os.walk with custom recursive os.scandir for speed.
             def _scan_for_new(path) -> bool:
                 try:
                     with os.scandir(path) as it:
