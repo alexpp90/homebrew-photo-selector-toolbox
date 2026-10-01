@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, ToolTip
+import tkinter as tk
 
 
 def test_ask_directory_non_linux():
@@ -97,3 +98,15 @@ def test_ask_directory_modality():
 
         mock_toplevel.attributes.assert_any_call("-disabled", True)
         mock_toplevel.attributes.assert_any_call("-disabled", False)
+
+
+def test_tooltip_initialization():
+    root = tk.Tk()
+    btn = tk.Button(root, text="Test")
+    tooltip = ToolTip(btn, "This is a test")
+
+    assert tooltip.widget == btn
+    assert tooltip.text == "This is a test"
+    assert tooltip.tooltip_window is None
+
+    root.destroy()
