@@ -80,6 +80,10 @@ class FullscreenViewer(tk.Toplevel):
 
         # Bindings
         self.bind("<Escape>", lambda e: self.destroy())
+        try:
+            self.protocol("WM_DELETE_WINDOW", self.destroy)
+        except Exception:
+            pass
         self.canvas.bind("<ButtonPress-1>", self.on_drag_start)
         self.canvas.bind("<B1-Motion>", self.on_drag_move)
         self.canvas.bind("<ButtonRelease-1>", self.on_drag_end)
@@ -267,12 +271,19 @@ class FullscreenViewer(tk.Toplevel):
         self.update_nav_buttons()
 
         # Update parent's selection and trigger updates
-        if hasattr(self.parent, "candidates") and self.path in self.parent.candidates:
+        if hasattr(self.parent, "select_candidate_by_path"):
+            self.parent.select_candidate_by_path(self.path, debounce_images=True)
+        elif hasattr(self.parent, "candidates") and self.path in self.parent.candidates:
             idx = self.parent.candidates.index(self.path)
-            self.parent.candidate_listbox.selection_clear(0, "end")
-            self.parent.candidate_listbox.selection_set(idx)
-            self.parent.candidate_listbox.see(idx)
-            self.parent.on_candidate_select(None)
+            if hasattr(self.parent, "candidate_listbox"):
+                try:
+                    self.parent.candidate_listbox.selection_clear(0, "end")
+                    self.parent.candidate_listbox.selection_set(idx)
+                    self.parent.candidate_listbox.see(idx)
+                except Exception:
+                    pass
+            if hasattr(self.parent, "on_candidate_select"):
+                self.parent.on_candidate_select(None)
 
         # Show loading indicator again
         self.canvas.delete("all")
@@ -419,8 +430,12 @@ class FullscreenViewer(tk.Toplevel):
                 self.pil_image = img
                 self.parent.after(0, self.on_image_loaded)
                 # Add to parent cache if possible
-                with self.parent.cache_manager.full_res_lock:
-                    self.parent.cache_manager.full_res_cache[self.path] = img
+                if hasattr(self.parent, "cache_manager"):
+                    if hasattr(self.parent.cache_manager, "put_full_res"):
+                        self.parent.cache_manager.put_full_res(self.path, img)
+                    else:
+                        with self.parent.cache_manager.full_res_lock:
+                            self.parent.cache_manager.full_res_cache[self.path] = img
             else:
                 def on_failed():
                     if self.winfo_exists():
@@ -519,6 +534,10 @@ class FullscreenViewer(tk.Toplevel):
             region = region.resize((target_w, target_h), Image.Resampling.BILINEAR)
 
             self.tk_image = ImageTk.PhotoImage(region)
+            try:
+                region.close()
+            except Exception:
+                pass
 
             # Place on canvas
             dest_x = self.offset_x + x1 * self.scale
@@ -758,3 +777,58 @@ class FullscreenViewer(tk.Toplevel):
             self.meta_panel.lift()
         except Exception as e:
             logger.debug(f"Error updating metadata overlay in fullscreen: {e}")
+
+    def destroy(self):
+        self._sync_to_parent()
+        try:
+            self.canvas.delete("all")
+        except Exception:
+            pass
+        self.tk_image = None
+        self.pil_image = None
+        if hasattr(self.parent, "cache_manager"):
+            if hasattr(self.parent.cache_manager, "clear_full_res"):
+                self.parent.cache_manager.clear_full_res()
+            elif hasattr(self.parent.cache_manager, "full_res_cache"):
+                with getattr(self.parent.cache_manager, "full_res_lock", threading.Lock()):
+                    self.parent.cache_manager.full_res_cache.clear()
+        super().destroy()
+
+    def _sync_to_parent(self):
+        if getattr(self, "_has_synced_to_parent", False):
+            return
+        self._has_synced_to_parent = True
+
+        if not self.path or not hasattr(self, "parent") or self.parent is None:
+            return
+
+        candidates = getattr(self.parent, "candidates", None)
+        if not isinstance(candidates, (list, tuple)) or self.path not in candidates:
+            return
+
+        try:
+            if hasattr(self.parent, "select_candidate_by_path"):
+                self.parent.select_candidate_by_path(self.path, debounce_images=False)
+            else:
+                idx = candidates.index(self.path)
+                if hasattr(self.parent, "candidate_listbox"):
+                    try:
+                        self.parent.candidate_listbox.selection_clear(0, "end")
+                        self.parent.candidate_listbox.selection_set(idx)
+                        self.parent.candidate_listbox.see(idx)
+                    except Exception:
+                        pass
+                if hasattr(self.parent, "load_triplet_view"):
+                    self.parent.load_triplet_view(self.path, debounce_images=False)
+                elif hasattr(self.parent, "on_candidate_select"):
+                    self.parent.on_candidate_select(None)
+
+                if hasattr(self.parent, "update_button_states"):
+                    self.parent.update_button_states()
+                if hasattr(self.parent, "preload_next_candidates"):
+                    self.parent.preload_next_candidates(idx)
+
+            if hasattr(self.parent, "focus_set"):
+                self.parent.focus_set()
+        except Exception as e:
+            logger.debug(f"Error syncing fullscreen exit to parent: {e}")

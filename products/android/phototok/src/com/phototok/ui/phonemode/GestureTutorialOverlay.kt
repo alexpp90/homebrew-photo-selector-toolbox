@@ -232,14 +232,14 @@ private fun TopBarCoachMarks() {
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CoachMark(
-                icon = Icons.AutoMirrored.Filled.HelpOutline,
+                icon = null,
                 label = "Help",
                 description = "This guide",
                 pointsUp = true,
                 modifier = Modifier.width(70.dp),
             )
             CoachMark(
-                icon = Icons.Default.Settings,
+                icon = null,
                 label = "Settings",
                 description = "Swipe actions, sorting, filters",
                 pointsUp = true,

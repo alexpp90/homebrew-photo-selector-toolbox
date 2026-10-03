@@ -367,6 +367,7 @@ def load_image_preview(
                             use_camera_wb=True, bright=1.0, half_size=not full_res
                         )
                         img = Image.fromarray(rgb).copy()
+                        del rgb
             except (rawpy.LibRawError, OSError, ValueError) as e:
                 # Catch common rawpy failures and fall through to Pillow
                 logger.debug("rawpy failed to load %s: %s", path, e)
@@ -407,7 +408,7 @@ def get_excluded_folder_names() -> frozenset:
     Loads the custom selection folder from the configuration.
     Cached to ensure it is strictly pre-calculated once for optimized O(1) lookups.
     """
-    excluded_names = {"selection", "selected"}
+    excluded_names = {"selection", "selected", "phototok_selection", "phototok_leftswipe"}
     try:
         from photo_selector_toolbox.core.config import load_config
 
@@ -612,8 +613,8 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
     """
     from PIL import ImageDraw
 
-    # Create base image with Zinc-900 base color
-    img = Image.new("RGB", (width, height), color="#18181B")
+    # Create base image with Zinc-900 base color (24, 24, 27)
+    img = Image.new("RGB", (width, height), color=(24, 24, 27))
     draw = ImageDraw.Draw(img)
 
     # Draw simple gradient by interpolation

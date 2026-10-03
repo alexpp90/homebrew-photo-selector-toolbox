@@ -56,7 +56,7 @@ class LocalImageSourceImpl @Inject constructor(
             "rw2", "pef", "srw", "raf", "nrw"
         )
 
-        private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected")
+        private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "phototok_selection", "phototok_leftswipe")
 
         /**
          * How many images to gather before the very first emission.

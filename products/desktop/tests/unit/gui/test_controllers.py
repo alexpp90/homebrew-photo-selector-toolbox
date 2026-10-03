@@ -139,3 +139,82 @@ def test_scan_controller_lifecycle_and_nice():
     assert controller.stop_event.is_set()
 
 
+def test_image_cache_manager_lru_eviction_closes_images():
+    manager = ImageCacheManager(preview_cache_limit=2, full_res_cache_limit=2)
+    p1 = Path("/tmp/1.jpg")
+    p2 = Path("/tmp/2.jpg")
+    p3 = Path("/tmp/3.jpg")
+
+    img1 = MagicMock()
+    img2 = MagicMock()
+    img3 = MagicMock()
+
+    manager.put_preview(p1, img1)
+    manager.put_preview(p2, img2)
+    assert len(manager.preview_cache) == 2
+
+    # Access p1 to make it most recently used (MRU)
+    assert manager.get_preview(p1) is img1
+
+    # Adding p3 should evict p2 (the least recently used), not p1
+    manager.put_preview(p3, img3)
+    assert len(manager.preview_cache) == 2
+    assert p1 in manager.preview_cache
+    assert p3 in manager.preview_cache
+    assert p2 not in manager.preview_cache
+    img2.close.assert_called_once()
+    img1.close.assert_not_called()
+
+
+def test_image_cache_manager_full_res_eviction_closes_images():
+    manager = ImageCacheManager(preview_cache_limit=2, full_res_cache_limit=2)
+    p1 = Path("/tmp/1.jpg")
+    p2 = Path("/tmp/2.jpg")
+    p3 = Path("/tmp/3.jpg")
+
+    img1 = MagicMock()
+    img2 = MagicMock()
+    img3 = MagicMock()
+
+    manager.put_full_res(p1, img1)
+    manager.put_full_res(p2, img2)
+    assert len(manager.full_res_cache) == 2
+
+    # Access p1 to make it MRU
+    assert manager.get_full_res(p1) is img1
+
+    # Adding p3 should evict p2 and call close()
+    manager.put_full_res(p3, img3)
+    assert len(manager.full_res_cache) == 2
+    assert p1 in manager.full_res_cache
+    assert p3 in manager.full_res_cache
+    assert p2 not in manager.full_res_cache
+    img2.close.assert_called_once()
+    img1.close.assert_not_called()
+
+
+def test_image_cache_manager_clear_full_res_and_previews():
+    manager = ImageCacheManager(preview_cache_limit=2, full_res_cache_limit=2)
+    p1 = Path("/tmp/1.jpg")
+    p2 = Path("/tmp/2.jpg")
+
+    img_prev = MagicMock()
+    img_full = MagicMock()
+
+    manager.put_preview(p1, img_prev)
+    manager.put_full_res(p2, img_full)
+
+    # Test clear_full_res
+    manager.clear_full_res()
+    assert len(manager.full_res_cache) == 0
+    img_full.close.assert_called_once()
+    assert len(manager.preview_cache) == 1
+    img_prev.close.assert_not_called()
+
+    # Test clear_previews
+    manager.clear_previews()
+    assert len(manager.preview_cache) == 0
+    img_prev.close.assert_called_once()
+
+
+

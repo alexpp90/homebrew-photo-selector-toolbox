@@ -924,7 +924,7 @@ def test_refresh_folder(tmp_path):
     tool._load_folder_contents = MagicMock()
 
     tool.refresh_folder()
-    tool._load_folder_contents.assert_called_once_with(str(tmp_path))
+    tool._load_folder_contents.assert_called_once_with(str(tmp_path), select_path=None)
 
 
 def test_modern_metadata_card_badges():
@@ -962,4 +962,174 @@ def test_modern_metadata_card_badges():
         assert any("AI" in t for t in badge_texts)
         # Highlight is N/A, so no Highlight badge should be constructed
         assert not any("High" in t for t in badge_texts)
+
+
+def test_load_triplet_view_first_candidate_has_no_previous():
+    from pathlib import Path
+    tool = _make_tool()
+    p1 = Path("/mock/img1.jpg")
+    p2 = Path("/mock/img2.jpg")
+    tool.candidates = [p1, p2]
+    tool._rebuild_candidate_indices()
+    tool.files_map = {p1: MagicMock(), p2: MagicMock()}
+    tool.panel_prev = MagicMock()
+    tool.panel_curr = MagicMock()
+    tool.panel_next = MagicMock()
+    tool.focus_prev_overlay = MagicMock()
+    tool.focus_next_overlay = MagicMock()
+    tool.set_placeholder = MagicMock()
+    tool.update_metadata_label = MagicMock()
+    tool.refresh_active_view = MagicMock()
+
+    with patch("threading.Thread"):
+        tool.load_triplet_view(p1)
+
+    assert tool.panel_prev.path is None
+    assert tool.panel_curr.path == p1
+    assert tool.panel_next.path == p2
+    assert tool.focus_prev_overlay.place_forget.called
+
+
+def test_move_to_selection_rebuilds_candidate_indices():
+    from pathlib import Path
+    tool = _make_tool()
+    p1 = Path("/mock/img1.jpg")
+    p2 = Path("/mock/img2.jpg")
+    tool.candidates = [p1, p2]
+    tool._candidate_indices = {p1: 0, p2: 1}
+    tool.candidate_listbox = MagicMock()
+    tool.on_candidate_select = MagicMock()
+
+    # Move p1 out
+    tool.candidates.pop(0)
+    tool._rebuild_candidate_indices()
+
+    assert tool._candidate_indices == {p2: 0}
+
+
+def test_auto_check_folder_detects_disk_changes(tmp_path):
+    tool = _make_tool()
+    tool.folder_var = MagicMock()
+    tool.folder_var.get.return_value = str(tmp_path)
+    tool.is_scanning = False
+    tool.is_grouping = False
+    tool.sorted_files = []
+    tool._load_folder_contents = MagicMock()
+
+    # Create an image in tmp_path
+    img_file = tmp_path / "new_photo.jpg"
+    img_file.write_bytes(b"mock")
+
+    tool._check_and_reload_folder_if_changed()
+    assert tool._load_folder_contents.called
+
+
+def test_on_candidate_select_updates_neighbors_immediately():
+    from pathlib import Path
+    tool = _make_tool()
+    p1 = Path("/mock/img1.jpg")
+    p2 = Path("/mock/img2.jpg")
+    p3 = Path("/mock/img3.jpg")
+    p4 = Path("/mock/img4.jpg")
+    tool.candidates = [p1, p2, p3, p4]
+    tool._rebuild_candidate_indices()
+    tool.files_map = {p: MagicMock() for p in tool.candidates}
+    tool.panel_prev = MagicMock()
+    tool.panel_curr = MagicMock()
+    tool.panel_next = MagicMock()
+    tool.focus_prev_overlay = MagicMock()
+    tool.focus_next_overlay = MagicMock()
+    tool.candidate_listbox = MagicMock()
+    tool.update_button_states = MagicMock()
+    tool.preload_next_candidates = MagicMock()
+    tool.set_placeholder = MagicMock()
+    tool.refresh_active_view = MagicMock()
+
+    # Select p3 (index 2)
+    tool.candidate_listbox.curselection.return_value = (2,)
+    with patch("threading.Thread"):
+        tool.on_candidate_select(None)
+
+    # Immediately, prev should be p2, curr p3, next p4
+    assert tool.panel_prev.path == p2
+    assert tool.panel_curr.path == p3
+    assert tool.panel_next.path == p4
+
+    # Now select p2 (index 1)
+    tool.candidate_listbox.curselection.return_value = (1,)
+    with patch("threading.Thread"):
+        tool.on_candidate_select(None)
+
+    # Immediately, prev should be p1, curr p2, next p3
+    assert tool.panel_prev.path == p1
+    assert tool.panel_curr.path == p2
+    assert tool.panel_next.path == p3
+
+    # Select p1 (index 0) - first image
+    tool.candidate_listbox.curselection.return_value = (0,)
+    with patch("threading.Thread"):
+        tool.on_candidate_select(None)
+
+    assert tool.panel_prev.path is None
+    assert tool.panel_curr.path == p1
+    assert tool.panel_next.path == p2
+
+    # Select p4 (index 3) - last image
+    tool.candidate_listbox.curselection.return_value = (3,)
+    with patch("threading.Thread"):
+        tool.on_candidate_select(None)
+
+    assert tool.panel_prev.path == p3
+    assert tool.panel_curr.path == p4
+    assert tool.panel_next.path is None
+
+
+def test_sharpness_tool_select_candidate_by_path():
+    """select_candidate_by_path must update listbox and 3-image view for specified path."""
+    from pathlib import Path
+    tool = _make_tool()
+    p1 = Path("/mock/img1.jpg")
+    p2 = Path("/mock/img2.jpg")
+    p3 = Path("/mock/img3.jpg")
+    tool.candidates = [p1, p2, p3]
+    tool._rebuild_candidate_indices()
+    tool.files_map = {p: MagicMock() for p in tool.candidates}
+    tool.panel_prev = MagicMock()
+    tool.panel_curr = MagicMock()
+    tool.panel_next = MagicMock()
+    tool.candidate_listbox = MagicMock()
+    tool.update_button_states = MagicMock()
+    tool.preload_next_candidates = MagicMock()
+    tool.set_placeholder = MagicMock()
+    tool.refresh_active_view = MagicMock()
+
+    with patch("threading.Thread"):
+        tool.select_candidate_by_path(p2, debounce_images=False)
+
+    assert tool.candidate_listbox.selection_clear.called
+    tool.candidate_listbox.selection_set.assert_called_with(1)
+    tool.candidate_listbox.see.assert_called_with(1)
+    assert tool.panel_prev.path == p1
+    assert tool.panel_curr.path == p2
+    assert tool.panel_next.path == p3
+
+
+def test_load_folder_contents_clears_cache_and_cancels_prior_preload(tmp_path):
+    tool = _make_tool()
+    tool.cache_manager = MagicMock()
+    prior_stop_event = MagicMock()
+    tool._preload_stop_event = prior_stop_event
+
+    with (
+        patch("photo_selector_toolbox.gui.sharpness_tool.ScoreCache"),
+        patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg"}),
+    ):
+        tool._load_folder_contents(str(tmp_path))
+
+    prior_stop_event.set.assert_called_once()
+    tool.cache_manager.clear.assert_called_once()
+
+
+
+
 

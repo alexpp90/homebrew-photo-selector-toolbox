@@ -149,7 +149,8 @@ class LocalImageSourceDiscoveryTest {
         tree = mapOf(
             ROOT to listOf(
                 Row("d1", "Sub", DIR),
-                Row("d2", "PhotoTok_Selection", DIR), // excluded by name
+                Row("d2", "PhotoTok_Selection", DIR), // excluded by name (legacy)
+                Row("d4", "Selection", DIR), // excluded by name (standard)
                 Row("a", "a.jpg", "image/jpeg"),
                 Row("h", ".hidden.jpg", "image/jpeg"), // hidden
                 Row("v", "clip.mp4", "video/mp4"), // unsupported extension
@@ -157,6 +158,7 @@ class LocalImageSourceDiscoveryTest {
             ),
             "d1" to listOf(Row("b", "b.ARW", "image/x-sony-arw"), Row("d3", "Deep", DIR)),
             "d2" to listOf(Row("x", "x.jpg", "image/jpeg")),
+            "d4" to listOf(Row("s", "s.jpg", "image/jpeg")),
             "d3" to listOf(Row("c", "c.dng", "image/dng")),
         )
 
@@ -165,7 +167,7 @@ class LocalImageSourceDiscoveryTest {
         assertEquals(listOf("a.jpg", "b.ARW", "c.dng"), images.map { it.fileName }.sorted())
         assertFalse(
             "the app's own selection folder must not be re-ingested",
-            images.any { it.fileName == "x.jpg" },
+            images.any { it.fileName == "x.jpg" || it.fileName == "s.jpg" },
         )
     }
 
