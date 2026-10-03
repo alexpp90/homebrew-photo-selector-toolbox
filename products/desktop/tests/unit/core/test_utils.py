@@ -411,7 +411,7 @@ class TestGetExcludedFolderNames(unittest.TestCase):
         from photo_selector_toolbox.core.utils import get_excluded_folder_names
         get_excluded_folder_names.cache_clear()
         names = get_excluded_folder_names()
-        self.assertEqual(names, {"selection", "selected"})
+        self.assertEqual(names, {"selection", "selected", "phototok_selection", "phototok_leftswipe"})
 
 
 if __name__ == "__main__":

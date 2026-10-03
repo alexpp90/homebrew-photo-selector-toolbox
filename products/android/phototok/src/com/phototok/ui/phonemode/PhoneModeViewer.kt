@@ -63,11 +63,13 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -427,21 +429,25 @@ private fun ImagePage(
         }
     }
 
+    val currentOnSingleTap by rememberUpdatedState(onSingleTap)
+    val currentOnFirstRunHint by rememberUpdatedState(onFirstRunHint)
+
     val colors = MaterialTheme.colorScheme
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .clipToBounds()
             .onSizeChanged { size = it }
-            .pointerInput(isZoomed) {
+            .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { onSingleTap() },
+                    onTap = { currentOnSingleTap() },
                     onDoubleTap = { centroid ->
                         val width = size.width
                         val height = size.height
                         if (width > 0 && height > 0) {
-                            onFirstRunHint(FirstRunHint.DOUBLE_TAP_ZOOM)
-                            if (isZoomed) {
+                            currentOnFirstRunHint(FirstRunHint.DOUBLE_TAP_ZOOM)
+                            if (scale > 1.05f) {
                                 coroutineScope.launch { animateReset() }
                             } else {
                                 val centroidFromCenter = centroid - Offset(width / 2f, height / 2f)
@@ -459,7 +465,7 @@ private fun ImagePage(
                     }
                 )
             }
-            .pointerInput(isZoomed) {
+            .pointerInput(Unit) {
                 awaitEachGesture {
                     val firstDown = awaitFirstDown(requireUnconsumed = false)
                     val width = size.width
@@ -468,10 +474,32 @@ private fun ImagePage(
                     if (width > 0 && height > 0) {
                         do {
                             val event = awaitPointerEvent()
-                            val canceled = event.changes.any { it.isConsumed }
-                            if (!canceled) {
-                                val pointerCount = event.changes.size
-                                if (pointerCount == 1 && isZoomed) {
+                            val pointerCount = event.changes.size
+                            if (pointerCount > 1) {
+                                val zoom = event.calculateZoom()
+                                val pan = event.calculatePan()
+                                val centroid = event.calculateCentroid()
+
+                                if (zoom != 1f || pan != Offset.Zero) {
+                                    val oldScale = scale
+                                    val newScale = (scale * zoom).coerceIn(0.7f, 6f)
+                                    val centroidFromCenter = centroid - Offset(width / 2f, height / 2f)
+
+                                    val targetOffset = centroidFromCenter - (centroidFromCenter - offset) * (newScale / oldScale) + pan
+                                    val maxOffsetX = (maxOf(0f, newScale - 1f) * width) / 2f
+                                    val maxOffsetY = (maxOf(0f, newScale - 1f) * height) / 2f
+
+                                    scale = newScale
+                                    offset = Offset(
+                                        x = targetOffset.x.coerceIn(-maxOffsetX, maxOffsetX),
+                                        y = targetOffset.y.coerceIn(-maxOffsetY, maxOffsetY)
+                                    )
+
+                                    event.changes.forEach { it.consume() }
+                                }
+                            } else if (pointerCount == 1 && scale > 1.05f) {
+                                val canceled = event.changes.any { it.isConsumed }
+                                if (!canceled) {
                                     val change = event.changes.first()
                                     val dragAmount = change.position - change.previousPosition
                                     if (dragAmount != Offset.Zero) {
@@ -482,28 +510,6 @@ private fun ImagePage(
                                             y = (offset.y + dragAmount.y).coerceIn(-maxOffsetY, maxOffsetY)
                                         )
                                         change.consume()
-                                    }
-                                } else if (pointerCount > 1) {
-                                    val zoom = event.calculateZoom()
-                                    val pan = event.calculatePan()
-                                    val centroid = event.calculateCentroid()
-
-                                    if (zoom != 1f || pan != Offset.Zero) {
-                                        val oldScale = scale
-                                        val newScale = (scale * zoom).coerceIn(0.7f, 6f)
-                                        val centroidFromCenter = centroid - Offset(width / 2f, height / 2f)
-
-                                        val targetOffset = centroidFromCenter - (centroidFromCenter - offset) * (newScale / oldScale) + pan
-                                        val maxOffsetX = (maxOf(0f, newScale - 1f) * width) / 2f
-                                        val maxOffsetY = (maxOf(0f, newScale - 1f) * height) / 2f
-
-                                        scale = newScale
-                                        offset = Offset(
-                                            x = targetOffset.x.coerceIn(-maxOffsetX, maxOffsetX),
-                                            y = targetOffset.y.coerceIn(-maxOffsetY, maxOffsetY)
-                                        )
-
-                                        event.changes.forEach { it.consume() }
                                     }
                                 }
                             }
@@ -531,6 +537,7 @@ private fun ImagePage(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .clipToBounds()
                 .graphicsLayer {
                     translationX = horizontalDragOffset
                     rotationZ = 2f * swipeProgress * (if (horizontalDragOffset < 0f) -1f else 1f)

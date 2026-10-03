@@ -1227,3 +1227,46 @@ def test_resync_index_ignores_errors():
     mock_file_list.index.side_effect = TypeError("Test TypeError")
     viewer._resync_index()
     assert viewer.current_idx == 42
+
+
+def test_fullscreen_destroy_syncs_last_viewed_image_to_parent():
+    """Exiting fullscreen must sync the last viewed image back to the parent."""
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(4)]
+    viewer, parent = _viewer_with_parent(paths, start_index=0)
+
+    # Navigate to img2
+    with patch.object(type(viewer), "load_new_path", autospec=True) as mock_load:
+        mock_load.side_effect = lambda self, p: setattr(self, "path", p)
+        viewer.next_image()
+        viewer.next_image()
+
+    assert viewer.path is paths[2]
+
+    # Destroy viewer (e.g. user pressed Escape or clicked Close)
+    viewer.destroy()
+
+    parent.select_candidate_by_path.assert_called_with(paths[2], debounce_images=False)
+
+
+def test_fullscreen_destroy_syncs_when_closed_without_navigating():
+    """Opening fullscreen on a neighbor and exiting without navigating must select that neighbor."""
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(4)]
+    # Opened fullscreen directly on paths[1] (e.g. clicking Next thumbnail)
+    viewer, parent = _viewer_with_parent(paths, start_index=1)
+    assert viewer.path is paths[1]
+
+    viewer.destroy()
+
+    parent.select_candidate_by_path.assert_called_with(paths[1], debounce_images=False)
+
+
+def test_fullscreen_destroy_clears_full_res_cache():
+    """Exiting fullscreen must clear the parent's full-res cache to free RAM."""
+    paths = [_fake_candidate(f"img{i}.jpg") for i in range(2)]
+    viewer, parent = _viewer_with_parent(paths, start_index=0)
+    parent.cache_manager = MagicMock()
+
+    viewer.destroy()
+
+    parent.cache_manager.clear_full_res.assert_called_once()
+

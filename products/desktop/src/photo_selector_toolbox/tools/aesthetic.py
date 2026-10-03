@@ -366,8 +366,16 @@ class NimaOnnxAestheticEngine:
         if img is None:
             raise RuntimeError("failed to load image for NIMA scoring")
 
-        img = img.convert("RGB").resize((224, 224))
-        arr = np.asarray(img).astype("float32") / 255.0
+        resized_img = img.convert("RGB").resize((224, 224))
+        try:
+            img.close()
+        except Exception:
+            pass
+        arr = np.asarray(resized_img).astype("float32") / 255.0
+        try:
+            resized_img.close()
+        except Exception:
+            pass
         # ImageNet normalisation (typical for MobileNet-based NIMA exports).
         mean = np.array([0.485, 0.456, 0.406], dtype="float32")
         std = np.array([0.229, 0.224, 0.225], dtype="float32")

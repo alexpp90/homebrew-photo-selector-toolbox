@@ -3,6 +3,8 @@ import queue
 import threading
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import gc
+from collections import OrderedDict
 from typing import Dict, Optional, Callable, List, Union
 from pathlib import Path
 from PIL import Image
@@ -22,13 +24,13 @@ logger = logging.getLogger(__name__)
 class ImageCacheManager:
     """
     Manages background loading and caching of image previews and full-resolution images.
-    Decouples threading and cache state from the GUI.
+    Decouples threading and cache state from the GUI with LRU eviction and memory bounds.
     """
 
     def __init__(
         self,
         preview_cache_limit: int = 30,
-        full_res_cache_limit: int = 10,
+        full_res_cache_limit: int = 3,
         preview_size: tuple[int, int] = (800, 800),
     ):
         self.preview_cache_limit = preview_cache_limit
@@ -39,9 +41,9 @@ class ImageCacheManager:
         self.preview_queue: queue.Queue = queue.Queue()
         self.full_res_queue: queue.Queue = queue.Queue()
 
-        # Caches
-        self.preview_cache: Dict[Path, Image.Image] = {}
-        self.full_res_cache: Dict[Path, Image.Image] = {}
+        # Caches with LRU ordering
+        self.preview_cache: OrderedDict[Path, Image.Image] = OrderedDict()
+        self.full_res_cache: OrderedDict[Path, Image.Image] = OrderedDict()
 
         # Locks
         self.preview_lock = threading.Lock()
@@ -74,27 +76,60 @@ class ImageCacheManager:
 
     def get_preview(self, path: Path) -> Optional[Image.Image]:
         with self.preview_lock:
-            return self.preview_cache.get(path)
+            img = self.preview_cache.get(path)
+            if img is not None and isinstance(self.preview_cache, OrderedDict):
+                self.preview_cache.move_to_end(path)
+            return img
+
+    def put_preview(self, path: Path, img: Image.Image) -> None:
+        """Stores a preview image and evicts LRU items exceeding limit, closing image resources."""
+        with self.preview_lock:
+            self.preview_cache[path] = img
+            if isinstance(self.preview_cache, OrderedDict):
+                self.preview_cache.move_to_end(path)
+            while len(self.preview_cache) > self.preview_cache_limit:
+                if isinstance(self.preview_cache, OrderedDict):
+                    _, oldest_img = self.preview_cache.popitem(last=False)
+                else:
+                    first = next(iter(self.preview_cache))
+                    oldest_img = self.preview_cache.pop(first, None)
+                if oldest_img is not None:
+                    try:
+                        oldest_img.close()
+                    except Exception:
+                        pass
 
     def get_full_res(self, path: Path) -> Optional[Image.Image]:
         with self.full_res_lock:
-            return self.full_res_cache.get(path)
+            img = self.full_res_cache.get(path)
+            if img is not None and isinstance(self.full_res_cache, OrderedDict):
+                self.full_res_cache.move_to_end(path)
+            return img
 
-    def clear(self):
-        with self.preview_lock:
-            self.preview_cache.clear()
+    def put_full_res(self, path: Path, img: Image.Image) -> None:
+        """Stores a full-resolution image and evicts LRU items exceeding limit, closing image resources."""
         with self.full_res_lock:
-            self.full_res_cache.clear()
-        self.clear_queues()
+            self.full_res_cache[path] = img
+            if isinstance(self.full_res_cache, OrderedDict):
+                self.full_res_cache.move_to_end(path)
+            while len(self.full_res_cache) > self.full_res_cache_limit:
+                if isinstance(self.full_res_cache, OrderedDict):
+                    _, oldest_img = self.full_res_cache.popitem(last=False)
+                else:
+                    first = next(iter(self.full_res_cache))
+                    oldest_img = self.full_res_cache.pop(first, None)
+                if oldest_img is not None:
+                    try:
+                        oldest_img.close()
+                    except Exception:
+                        pass
 
-    def clear_queues(self):
-        # Empty queues if possible
+    def clear_preview_queue(self):
         while not self.preview_queue.empty():
             try:
                 self.preview_queue.get_nowait()
             except queue.Empty:
                 break
-        self.clear_full_res_queue()
 
     def clear_full_res_queue(self):
         while not self.full_res_queue.empty():
@@ -102,6 +137,39 @@ class ImageCacheManager:
                 self.full_res_queue.get_nowait()
             except queue.Empty:
                 break
+
+    def clear_queues(self):
+        self.clear_preview_queue()
+        self.clear_full_res_queue()
+
+    def clear_previews(self):
+        """Releases all cached preview images and drains preview queue."""
+        with self.preview_lock:
+            for img in self.preview_cache.values():
+                try:
+                    img.close()
+                except Exception:
+                    pass
+            self.preview_cache.clear()
+        self.clear_preview_queue()
+        gc.collect()
+
+    def clear_full_res(self):
+        """Releases all cached full-resolution images and drains full-res queue."""
+        with self.full_res_lock:
+            for img in self.full_res_cache.values():
+                try:
+                    img.close()
+                except Exception:
+                    pass
+            self.full_res_cache.clear()
+        self.clear_full_res_queue()
+        gc.collect()
+
+    def clear(self):
+        """Completely flushes all preview and full-res caches, closing image handles and triggering GC."""
+        self.clear_previews()
+        self.clear_full_res()
 
     def _run_preview_worker(self):
         while True:
@@ -117,12 +185,7 @@ class ImageCacheManager:
                 # Use load_image_preview from utils
                 img = load_image_preview(path, max_size=self.preview_size)
                 if img:
-                    with self.preview_lock:
-                        self.preview_cache[path] = img
-                        # FIFO pruning
-                        if len(self.preview_cache) > self.preview_cache_limit:
-                            first = next(iter(self.preview_cache))
-                            self.preview_cache.pop(first, None)
+                    self.put_preview(path, img)
             except Exception as e:
                 # 'path' might not be defined if get() fails
                 path_str = str(path) if "path" in locals() else "unknown"
@@ -142,12 +205,7 @@ class ImageCacheManager:
                 # Load full resolution
                 img = load_image_preview(path, full_res=True)
                 if img:
-                    with self.full_res_lock:
-                        self.full_res_cache[path] = img
-                        # FIFO pruning
-                        if len(self.full_res_cache) > self.full_res_cache_limit:
-                            first = next(iter(self.full_res_cache))
-                            self.full_res_cache.pop(first, None)
+                    self.put_full_res(path, img)
             except Exception as e:
                 path_str = str(path) if "path" in locals() else "unknown"
                 logger.debug(f"Full res load error for {path_str}: {e}")

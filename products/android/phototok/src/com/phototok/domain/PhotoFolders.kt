@@ -5,6 +5,6 @@ package com.phototok.domain
  * user-selected folders (previously duplicated as constants on the repository).
  */
 object PhotoFolders {
-    const val SELECTION = "PhotoTok_Selection"
+    const val SELECTION = "Selection"
     const val LEFT_SWIPE = "PhotoTok_LeftSwipe"
 }

@@ -64,6 +64,11 @@ class OllamaAestheticTool(AnalysisTool):
             rgb_img.save(buffer, format="JPEG", quality=85)
             img_bytes = buffer.getvalue()
             img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+            buffer.close()
+            try:
+                rgb_img.close()
+            except Exception:
+                pass
         except Exception as e:
             raise RuntimeError(f"Failed to process image bytes: {e}")
 

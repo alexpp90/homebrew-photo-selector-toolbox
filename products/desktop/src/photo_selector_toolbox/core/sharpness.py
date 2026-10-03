@@ -61,7 +61,9 @@ def get_image_data(filepath: Path) -> Optional[np.ndarray]:
                     rgb = raw.postprocess(
                         use_camera_wb=True, no_auto_bright=True, bright=1.0
                     )
-                    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                    del rgb
+                    return bgr
             except Exception as e:
                 logger.warning(f"Failed to read RAW file {path_str} with rawpy: {e}")
                 # Fallthrough to Pillow for fallback
@@ -72,8 +74,14 @@ def get_image_data(filepath: Path) -> Optional[np.ndarray]:
                 # Ensure it is in RGB mode for consistent conversion
                 rgb_img = img.convert("RGB")
                 numpy_img = np.array(rgb_img)
+                try:
+                    rgb_img.close()
+                except Exception:
+                    pass
                 # Convert RGB (Pillow) to BGR (OpenCV)
-                return cv2.cvtColor(numpy_img, cv2.COLOR_RGB2BGR)
+                bgr = cv2.cvtColor(numpy_img, cv2.COLOR_RGB2BGR)
+                del numpy_img
+                return bgr
         except Exception:
             # If Pillow fails, we do NOT fall back to cv2.imread anymore because
             # it is noisy on corrupted TIFFs and unlikely to succeed if Pillow failed.
@@ -210,6 +218,7 @@ def calculate_all_scores(
 
     try:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        del img
     except Exception as e:
         logger.error(f"Error converting {filepath} to grayscale: {e}")
         if need_sharpness:
@@ -250,6 +259,7 @@ def calculate_all_scores(
             logger.error(f"Error calculating shadow clipping for {filepath}: {e}")
             results["shadow_clipping"] = 0.0
 
+    del gray
     return results
 
 
@@ -269,7 +279,10 @@ def calculate_noise(filepath: Path) -> float:
 
     try:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return _calculate_noise_from_gray(gray)
+        del img
+        noise = _calculate_noise_from_gray(gray)
+        del gray
+        return noise
     except Exception as e:
         logger.error(f"Error calculating noise for {filepath}: {e}")
         return 0.0
@@ -293,7 +306,10 @@ def calculate_sharpness(filepath: Path, grid_size: int = 1) -> float:
 
     try:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return _calculate_sharpness_from_gray(gray, grid_size)
+        del img
+        sharpness = _calculate_sharpness_from_gray(gray, grid_size)
+        del gray
+        return sharpness
     except Exception as e:
         logger.error(f"Error calculating sharpness for {filepath}: {e}")
         return 0.0

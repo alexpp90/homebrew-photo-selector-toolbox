@@ -60,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -291,6 +292,7 @@ fun PhoneModeScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .clipToBounds()
                 ) {
                     PhoneModeViewer(
                         images = uiState.images,

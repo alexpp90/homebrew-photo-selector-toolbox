@@ -102,6 +102,10 @@ class ImagePanelsMixin:
 
             lbl.config(image=tk_img, text="")
             lbl.image = tk_img  # Keep reference to prevent garbage collection
+            try:
+                img_copy.close()
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"Error scaling panel image: {e}")
 
@@ -155,6 +159,10 @@ class ImagePanelsMixin:
 
             lbl.config(image=tk_img, text="")
             lbl.image = tk_img
+            try:
+                img_copy.close()
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"Error scaling focus label image: {e}")
 
@@ -212,16 +220,29 @@ class ImagePanelsMixin:
         panel.img_container.update_idletasks()
         w = panel.img_container.winfo_width()
         h = panel.img_container.winfo_height()
-        if w < 10 or h < 10:
+        try:
+            if int(w) < 10 or int(h) < 10:
+                w, h = 400, 300
+            else:
+                w, h = int(w), int(h)
+        except (TypeError, ValueError):
             w, h = 400, 300
 
         if path is None:
-            placeholder_img = create_placeholder_image(w, h, "No Image Selected")
-            tk_img = ImageTk.PhotoImage(placeholder_img)
-            lbl.config(image=tk_img, text="")
-            lbl.image = tk_img
+            try:
+                placeholder_img = create_placeholder_image(w, h, "No Image Selected")
+            except Exception:
+                placeholder_img = None
+
+            if placeholder_img is not None:
+                try:
+                    tk_img = ImageTk.PhotoImage(placeholder_img, master=lbl)
+                    lbl.config(image=tk_img, text="")
+                    lbl.image = tk_img
+                except Exception:
+                    pass
+                panel.pil_image = placeholder_img
             details.config(text="")
-            panel.pil_image = placeholder_img
             panel.path = None
             return
 
@@ -239,11 +260,19 @@ class ImagePanelsMixin:
         details.config(
             text="\n".join(lines),
         )
-        placeholder_img = create_placeholder_image(w, h, f"Loading: {path.name}")
-        tk_img = ImageTk.PhotoImage(placeholder_img)
-        lbl.config(image=tk_img, text="")
-        lbl.image = tk_img
-        panel.pil_image = placeholder_img
+        try:
+            placeholder_img = create_placeholder_image(w, h, f"Loading: {path.name}")
+        except Exception:
+            placeholder_img = None
+
+        if placeholder_img is not None:
+            try:
+                tk_img = ImageTk.PhotoImage(placeholder_img, master=lbl)
+                lbl.config(image=tk_img, text="")
+                lbl.image = tk_img
+            except Exception:
+                pass
+            panel.pil_image = placeholder_img
 
     def load_images_background(
         self, prev_path, curr_path, next_path, size_curr, size_prev, size_next
@@ -264,8 +293,11 @@ class ImagePanelsMixin:
                 try:
                     img = load_image_preview(path, max_size=CACHE_SIZE)
                     if img:
-                        with self.cache_manager.preview_lock:
-                            self.cache_manager.preview_cache[path] = img
+                        if hasattr(self.cache_manager, "put_preview"):
+                            self.cache_manager.put_preview(path, img)
+                        else:
+                            with self.cache_manager.preview_lock:
+                                self.cache_manager.preview_cache[path] = img
                 except Exception as e:
                     logger.error(f"Error loading {path}: {e}")
 
@@ -300,9 +332,9 @@ class ImagePanelsMixin:
         ):
             return  # Stale load, ignore
         self.current_triplet_images = (p_img, c_img, n_img)
-        self.refresh_active_view()
+        self.refresh_active_view(is_loaded=True)
 
-    def refresh_active_view(self):
+    def refresh_active_view(self, is_loaded=False):
         p_img, c_img, n_img = self.current_triplet_images
 
         if self.focus_mode:
@@ -316,17 +348,39 @@ class ImagePanelsMixin:
                     lbl.container.update_idletasks()
                     w = lbl.container.winfo_width()
                     h = lbl.container.winfo_height()
-                    if w < 10 or h < 10:
+                    try:
+                        if int(w) < 10 or int(h) < 10:
+                            w, h = 400, 300
+                        else:
+                            w, h = int(w), int(h)
+                    except (TypeError, ValueError):
                         w, h = 400, 300
-                    placeholder_img = create_placeholder_image(w, h, default_text)
-                    tk_img = ImageTk.PhotoImage(placeholder_img)
-                    lbl.config(image=tk_img, text="")
-                    lbl.image = tk_img
-                    lbl.pil_image = placeholder_img
+                    try:
+                        placeholder_img = create_placeholder_image(w, h, default_text)
+                    except Exception:
+                        placeholder_img = None
 
-            set_lbl(self.focus_prev_lbl, p_img, "Previous Image")
-            set_lbl(self.focus_curr_lbl, c_img, "No Image Selected")
-            set_lbl(self.focus_next_lbl, n_img, "Next Image")
+                    if placeholder_img is not None:
+                        try:
+                            tk_img = ImageTk.PhotoImage(placeholder_img, master=lbl)
+                            lbl.config(image=tk_img, text="")
+                            lbl.image = tk_img
+                        except Exception:
+                            pass
+                        lbl.pil_image = placeholder_img
+
+            prev_path = getattr(self.panel_prev, "path", None)
+            curr_path = getattr(self.panel_curr, "path", None)
+            next_path = getattr(self.panel_next, "path", None)
+
+            def _get_focus_text(path):
+                if not path:
+                    return "No Image Selected"
+                return f"Preview Unavailable: {path.name}" if is_loaded else f"Loading: {path.name}"
+
+            set_lbl(self.focus_prev_lbl, p_img, _get_focus_text(prev_path))
+            set_lbl(self.focus_curr_lbl, c_img, _get_focus_text(curr_path))
+            set_lbl(self.focus_next_lbl, n_img, _get_focus_text(next_path))
         else:
             # Helper to set image on a label
             def set_panel_img(panel, img):
@@ -340,15 +394,31 @@ class ImagePanelsMixin:
                     panel.img_container.update_idletasks()
                     w = panel.img_container.winfo_width()
                     h = panel.img_container.winfo_height()
-                    if w < 10 or h < 10:
+                    try:
+                        if int(w) < 10 or int(h) < 10:
+                            w, h = 400, 300
+                        else:
+                            w, h = int(w), int(h)
+                    except (TypeError, ValueError):
                         w, h = 400, 300
                     p_name = panel.path.name if panel.path else "No Image Selected"
-                    p_text = f"Preview Unavailable: {p_name}" if panel.path else "No Image Selected"
-                    placeholder_img = create_placeholder_image(w, h, p_text)
-                    tk_img = ImageTk.PhotoImage(placeholder_img)
-                    lbl.config(image=tk_img, text="")
-                    lbl.image = tk_img
-                    panel.pil_image = placeholder_img
+                    if panel.path:
+                        p_text = f"Preview Unavailable: {p_name}" if is_loaded else f"Loading: {p_name}"
+                    else:
+                        p_text = "No Image Selected"
+                    try:
+                        placeholder_img = create_placeholder_image(w, h, p_text)
+                    except Exception:
+                        placeholder_img = None
+
+                    if placeholder_img is not None:
+                        try:
+                            tk_img = ImageTk.PhotoImage(placeholder_img, master=lbl)
+                            lbl.config(image=tk_img, text="")
+                            lbl.image = tk_img
+                        except Exception:
+                            pass
+                        panel.pil_image = placeholder_img
 
             set_panel_img(self.panel_prev, p_img)
             set_panel_img(self.panel_curr, c_img)
