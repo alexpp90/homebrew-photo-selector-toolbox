@@ -5,7 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from typing import List, Dict
 from tkinter import messagebox, ttk
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, ToolTip
 import os
 
 import send2trash
@@ -521,6 +521,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.delete_current_candidate,
         )
         self.del_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.del_btn, "Move selected item to trash (Shortcut: Del)")
 
         self.move_btn = ttk.Button(
             btn_frame,
@@ -528,6 +529,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.move_current_to_selection,
         )
         self.move_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.move_btn, "Move selected item to output folder (Shortcut: M)")
 
         self.copy_btn = ttk.Button(
             btn_frame,
@@ -535,6 +537,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.copy_current_to_selection,
         )
         self.copy_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.copy_btn, "Copy selected item to output folder (Shortcut: C)")
 
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
 
@@ -542,6 +545,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.focus_toggle_btn, "Toggle focus mode for detailed view (Shortcut: F or Esc)")
 
         # --- Bottom Container: Neighbors ---
         self.bottom_container = ttk.Frame(self.preview_area)
@@ -833,6 +837,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.toggle_focus_mode,
         )
         self.focus_exit_btn.pack(side="top", pady=10, fill="x")
+        ToolTip(self.focus_exit_btn, "Toggle focus mode for detailed view (Shortcut: F or Esc)")
 
         ttk.Separator(self.focus_right_panel, orient="horizontal").pack(
             fill="x", pady=10
@@ -843,11 +848,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_right_panel, text="◀ Previous (Left)", command=self.prev_candidate
         )
         self.focus_prev_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_prev_btn, "Navigate images (Shortcut: Left Arrow)")
 
         self.focus_next_btn = ttk.Button(
             self.focus_right_panel, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.focus_next_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_next_btn, "Navigate images (Shortcut: Right Arrow)")
 
         self.focus_del_btn = ttk.Button(
             self.focus_right_panel,
@@ -855,6 +862,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.delete_current_candidate,
         )
         self.focus_del_btn.pack(side="top", pady=20, fill="x")
+        ToolTip(self.focus_del_btn, "Move selected item to trash (Shortcut: Del)")
 
         self.focus_move_btn = ttk.Button(
             self.focus_right_panel,
@@ -862,6 +870,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.move_current_to_selection,
         )
         self.focus_move_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_move_btn, "Move selected item to output folder (Shortcut: M)")
 
         self.focus_copy_btn = ttk.Button(
             self.focus_right_panel,
@@ -869,6 +878,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.copy_current_to_selection,
         )
         self.focus_copy_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_copy_btn, "Copy selected item to output folder (Shortcut: C)")
 
     def _setup_focus_bottom_panel(self):
        # --- Row 1: Bottom Strip ---

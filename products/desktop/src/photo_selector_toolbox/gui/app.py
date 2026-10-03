@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, ToolTip
 import queue
 import sys
 import logging
@@ -421,12 +421,14 @@ class ImageLibraryStatistics(ttk.Frame):
             style="Primary.TButton",
         )
         self.analyze_btn.pack(side="left", padx=5)
+        ToolTip(self.analyze_btn, "Start analyzing photos")
 
         # Cancel Button
         self.cancel_btn = ttk.Button(
             btn_frame, text="🛑 Cancel", command=self.cancel_analysis, state="disabled"
         )
         self.cancel_btn.pack(side="left", padx=5)
+        ToolTip(self.cancel_btn, "Cancel ongoing analysis")
 
         # Progress Bar
         self.progress_var = tk.DoubleVar()
