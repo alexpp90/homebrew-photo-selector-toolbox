@@ -329,3 +329,15 @@ def test__calculate_sharpness_from_gray_grid():
     gray[30:50, 30:50] = np.random.randint(0, 255, (20, 20), dtype=np.uint8)
     score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
     assert score > 0.0
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "_calculate_shadow_clipping_from_gray")
+def test_calculate_all_scores_shadow_clipping_exception(mock_calc_shadow, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_calc_shadow.side_effect = Exception("Mocked shadow clipping error")
+
+    tools = {"shadow_clipping": True}
+    res = shp.calculate_all_scores(Path("error.jpg"), tools=tools)
+
+    assert res == {"shadow_clipping": 0.0}
