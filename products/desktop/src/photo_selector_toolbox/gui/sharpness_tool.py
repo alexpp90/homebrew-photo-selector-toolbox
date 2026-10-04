@@ -5,7 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from typing import List, Dict
 from tkinter import messagebox, ttk
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, ToolTip
 import os
 
 import send2trash
@@ -388,6 +388,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         # Scan button
         self.scan_options_btn = ttk.Button(self.sidebar, text="⚡ Scan for Sharpness/Noise...")
         self.scan_options_btn.pack(fill="x", pady=5)
+        ToolTip(self.scan_options_btn, "Scan current folder for image sharpness and noise")
 
         # Progress Container (holds scan and grouping progress bars)
         self.progress_container = ttk.Frame(self.sidebar)
@@ -550,6 +551,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.focus_toggle_btn, "Toggle distraction-free fullscreen view")
 
         # --- Bottom Container: Neighbors ---
         self.bottom_container = ttk.Frame(self.preview_area)

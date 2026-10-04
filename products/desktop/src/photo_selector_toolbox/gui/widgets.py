@@ -6,6 +6,72 @@ from pathlib import Path
 from tkinter import filedialog
 
 
+import tkinter as tk
+
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        self.id = None
+
+        self.widget.bind("<Enter>", self.enter)
+        self.widget.bind("<Leave>", self.leave)
+        self.widget.bind("<ButtonPress>", self.leave)
+
+    def enter(self, event=None):
+        self.schedule()
+
+    def leave(self, event=None):
+        self.unschedule()
+        self.hide()
+
+    def schedule(self):
+        self.unschedule()
+        self.id = self.widget.after(500, self.show)
+
+    def unschedule(self):
+        idx = self.id
+        self.id = None
+        if idx:
+            self.widget.after_cancel(idx)
+
+    def show(self):
+        self.unschedule()
+        if not self.text:
+            return
+
+        try:
+            x = self.widget.winfo_rootx() + (self.widget.winfo_width() // 2)
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        except tk.TclError:
+            return
+
+        self.tooltip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        try:
+            tw.attributes("-topmost", True)
+        except Exception:
+            pass
+        tw.wm_geometry(f"+{x}+{y}")
+
+        label = tk.Label(
+            tw, text=self.text, justify='left',
+            background="#27272A", foreground="#FAFAFA",
+            relief='solid', borderwidth=1,
+            font=("Helvetica", 9)
+        )
+        label.pack(ipadx=6, ipady=4)
+
+    def hide(self):
+        tw = self.tooltip_window
+        self.tooltip_window = None
+        if tw:
+            try:
+                tw.destroy()
+            except Exception:
+                pass
+
 def ask_directory(parent=None, title=None, initialdir=None):
     """
     Open a directory selector dialog. On Linux, if zenity is available, use zenity.
