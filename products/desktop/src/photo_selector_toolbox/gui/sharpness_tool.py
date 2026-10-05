@@ -5,7 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from typing import List, Dict
 from tkinter import messagebox, ttk
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, ToolTip
 import os
 
 import send2trash
@@ -515,11 +515,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="◀ Prev (Left)", command=self.prev_candidate
         )
         self.prev_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.prev_btn, "Go to the previous image (Hotkey: Left Arrow)")
 
         self.next_btn = ttk.Button(
             btn_frame, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.next_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.next_btn, "Go to the next image (Hotkey: Right Arrow)")
 
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
 
@@ -529,6 +531,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.delete_current_candidate,
         )
         self.del_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.del_btn, "Move current image to trash (Hotkey: Delete)")
 
         self.move_btn = ttk.Button(
             btn_frame,
@@ -536,6 +539,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.move_current_to_selection,
         )
         self.move_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.move_btn, "Move current image to Selection folder (Hotkey: M)")
 
         self.copy_btn = ttk.Button(
             btn_frame,
@@ -543,6 +547,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.copy_current_to_selection,
         )
         self.copy_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.copy_btn, "Copy current image to Selection folder (Hotkey: C)")
 
         ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=10)
 
@@ -550,6 +555,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.pack(side="top", fill="x", pady=2)
+        ToolTip(self.focus_toggle_btn, "Toggle distraction-free focus mode (Hotkey: F)")
 
         # --- Bottom Container: Neighbors ---
         self.bottom_container = ttk.Frame(self.preview_area)

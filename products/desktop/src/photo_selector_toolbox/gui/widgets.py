@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
 
@@ -72,3 +73,56 @@ def ask_directory(parent=None, title=None, initialdir=None):
         kwargs["initialdir"] = initialdir
 
     return filedialog.askdirectory(**kwargs)
+
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tipwindow = None
+        self.id = None
+        self.x = self.y = 0
+        self.widget.bind("<Enter>", self.enter)
+        self.widget.bind("<Leave>", self.leave)
+        self.widget.bind("<ButtonPress>", self.leave)
+
+    def enter(self, event=None):
+        self.schedule()
+
+    def leave(self, event=None):
+        self.unschedule()
+        self.hidetip()
+
+    def schedule(self):
+        self.unschedule()
+        self.id = self.widget.after(500, self.showtip)
+
+    def unschedule(self):
+        id_ = self.id
+        self.id = None
+        if id_:
+            self.widget.after_cancel(id_)
+
+    def showtip(self, event=None):
+        if self.tipwindow or not self.text:
+            return
+
+        # Position slightly below and to the right of the widget
+        x = self.widget.winfo_rootx() + (self.widget.winfo_width() // 2)
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+
+        # Use dark theme colors to match app
+        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
+                         background="#27272A", foreground="#FAFAFA",
+                         relief=tk.SOLID, borderwidth=1,
+                         font=("Helvetica", 9, "normal"), padx=4, pady=2)
+        label.pack(ipadx=1)
+
+    def hidetip(self):
+        tw = self.tipwindow
+        self.tipwindow = None
+        if tw:
+            tw.destroy()
