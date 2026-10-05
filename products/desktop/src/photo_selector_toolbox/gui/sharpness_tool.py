@@ -79,8 +79,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self._scan_results_idx: Dict[Path, int] = {}
 
        # Defaults
-        self.default_blur_threshold = 100.0
-        self.default_sharp_threshold = 500.0
+        self.default_blur_threshold = 35.0
+        self.default_sharp_threshold = 70.0
         self.default_grid_size = "8x8"
         self.focus_mode = False
         self._pending_triplet_load_id = None

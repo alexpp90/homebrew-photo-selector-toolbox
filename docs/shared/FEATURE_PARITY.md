@@ -69,6 +69,7 @@ products is a defect (`ai/ROUTING.md`, the separation rule).
 | Bounded LRU image cache with teardown on modal exit | Desktop 2026-10-03 | ✅ origin — LRU OrderedDict (30 previews, 3 full-res); clear full-res on fullscreen exit | ✅ independent — Coil LRU (30% heap cap) + downsampled 2048px decode & explicit bitmap.recycle() | ✅ independent — Coil LRU (30% heap cap) + SubcomposeAsyncImage windowing | 2026-10-03 |
 | Proportional image container allocation over control panels | Desktop 2026-10-04 | ✅ origin — 50/50 uniform grid rows & unweighted controls column | ✅ independent — `FrameGeometry.threeUpLayout` solver computes exact frame bounds | ❌ N/A — single-image vertical feed | 2026-10-04 |
 | Persistent file type filter and sort preferences across re-entries | Desktop 2026-10-05 | ✅ origin — persisted in settings.json, preserved across folder reloads/focus switches with fallback | ✅ independent — persisted in DataStore | ✅ independent — persisted in DataStore (`phoneFileTypeFilter`) | 2026-10-05 |
+| Noise-robust normalized sharpness scoring (LoG + MAD noise subtraction) | Desktop 2026-10-05 | ✅ origin — LoG pre-filter, MAD noise floor subtraction, 0-100 compressive map | ⬜ evaluate — port to SharpnessAnalyzer.kt | ❌ N/A — PhotoTok has no scoring | 2026-10-05 |
 
 Rationale for the negatives, so a future agent does not re-open a settled question:
 

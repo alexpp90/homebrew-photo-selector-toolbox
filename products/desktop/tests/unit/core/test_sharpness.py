@@ -329,3 +329,55 @@ def test__calculate_sharpness_from_gray_grid():
     gray[30:50, 30:50] = np.random.randint(0, 255, (20, 20), dtype=np.uint8)
     score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
     assert score > 0.0
+
+
+def test_high_iso_sharpness_normalization():
+    import cv2
+
+    h, w = 400, 400
+    sharp_base = np.full((h, w), 100, dtype=np.float32)
+    cv2.putText(sharp_base, "SHARP", (120, 220), cv2.FONT_HERSHEY_SIMPLEX, 1.2, 255.0, 3)
+    blurry_base = cv2.GaussianBlur(sharp_base, (31, 31), 8.0)
+
+    np.random.seed(42)
+    noise_iso100 = np.random.normal(0, 1.0, (h, w)).astype(np.float32)
+    noise_iso6400 = np.random.normal(0, 15.0, (h, w)).astype(np.float32)
+
+    sharp_iso100 = np.clip(sharp_base + noise_iso100, 0, 255).astype(np.uint8)
+    sharp_iso6400 = np.clip(sharp_base + noise_iso6400, 0, 255).astype(np.uint8)
+    blurry_iso6400 = np.clip(blurry_base + noise_iso6400, 0, 255).astype(np.uint8)
+
+    score_sharp_100 = shp._calculate_sharpness_from_gray(sharp_iso100, grid_size=8)
+    score_sharp_6400 = shp._calculate_sharpness_from_gray(sharp_iso6400, grid_size=8)
+    score_blurry_6400 = shp._calculate_sharpness_from_gray(blurry_iso6400, grid_size=8)
+
+    # All scores must be bounded in [0.0, 100.0]
+    for s in (score_sharp_100, score_sharp_6400, score_blurry_6400):
+        assert 0.0 <= s <= 100.0
+
+    # High-ISO sharp image must score as Sharp (>= 70.0)
+    assert score_sharp_6400 >= 70.0
+
+    # High-ISO blurry image must NOT score as sharp (< 35.0) despite heavy sensor noise
+    assert score_blurry_6400 < 35.0
+
+    # The high-ISO sharp score should be close to the low-ISO sharp score (within 10 points)
+    assert abs(score_sharp_6400 - score_sharp_100) < 10.0
+
+
+def test_categorize_sharpness_defaults():
+    assert categorize_sharpness(10.0) == SharpnessCategories.BLURRY
+    assert categorize_sharpness(34.9) == SharpnessCategories.BLURRY
+    assert categorize_sharpness(35.0) == SharpnessCategories.ACCEPTABLE
+    assert categorize_sharpness(69.9) == SharpnessCategories.ACCEPTABLE
+    assert categorize_sharpness(70.0) == SharpnessCategories.CRISP
+    assert categorize_sharpness(95.0) == SharpnessCategories.CRISP
+
+
+def test_calculate_sharpness_with_precomputed_noise():
+    gray = np.zeros((100, 100), dtype=np.uint8)
+    gray[30:70, 30:70] = 200
+    score_auto = shp._calculate_sharpness_from_gray(gray, grid_size=2)
+    score_precomputed = shp._calculate_sharpness_from_gray(gray, grid_size=2, noise_level=0.0)
+    assert score_auto == score_precomputed
+
