@@ -15,8 +15,8 @@ from photo_selector_toolbox.core.visualizer import create_plots
 from photo_selector_toolbox.core.utils import get_excluded_folder_names
 
 
-def main():
-    """Main function to orchestrate the script execution."""
+def _parse_args():
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Analyze image metadata from a folder."
     )
@@ -57,7 +57,64 @@ def main():
         default="text",
         help="Output format for analysis results (default: text).",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def _scan_image_files(root_path: Path) -> list[Path]:
+    """Scan root_path recursively for supported image files."""
+    excluded_names = get_excluded_folder_names()
+    image_files = []
+    # Pre-compute tuple of extensions for fast string matching
+    supported_exts_tuple = tuple(SUPPORTED_EXTENSIONS)
+
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        # Prune excluded directories in place
+        dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+
+        dp = Path(dirpath)
+        for f in filenames:
+            if f.startswith("._"):
+                continue
+            if f.lower().endswith(supported_exts_tuple):
+                image_files.append(dp / f)
+
+    return image_files
+
+
+def _extract_metadata(image_files: list[Path], debug: bool = False) -> list:
+    """Extract EXIF metadata from image files using parallel execution."""
+    all_metadata = []
+    max_workers = min(32, (os.cpu_count() or 1) + 4)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(get_exif_data, f, debug=debug): f for f in image_files
+        }
+
+        with tqdm(total=len(image_files), desc="Processing images", file=sys.stderr) as pbar:
+            for future in as_completed(futures):
+                data = future.result()
+                if data:
+                    all_metadata.append(data)
+                pbar.update(1)
+
+    return all_metadata
+
+
+def _handle_output(args, all_metadata: list, output_path: Path):
+    """Output analysis results in specified format."""
+    if args.format == "json":
+        result = analyze_data_json(all_metadata)
+        print(json.dumps(result, indent=2))
+    elif args.format == "csv":
+        _output_csv(all_metadata)
+    else:
+        analyze_data(all_metadata)
+        create_plots(all_metadata, output_path, show_plots=args.show_plots)
+
+
+def main():
+    """Main function to orchestrate the script execution."""
+    args = _parse_args()
 
     # Configure logging
     log_level = logging.DEBUG if args.verbose else logging.WARNING
@@ -75,57 +132,20 @@ def main():
         return
 
     print(f"Scanning for images in '{root_path}'...")
-
-    excluded_names = get_excluded_folder_names()
-    image_files = []
-    # Pre-compute tuple of extensions for fast string matching
-    supported_exts_tuple = tuple(SUPPORTED_EXTENSIONS)
-
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        # Prune excluded directories in place
-        dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-
-        dp = Path(dirpath)
-        for f in filenames:
-            if f.startswith("._"):
-                continue
-            if f.lower().endswith(supported_exts_tuple):
-                image_files.append(dp / f)
+    image_files = _scan_image_files(root_path)
 
     if not image_files:
         print("No supported image files found.")
         return
 
     print(f"Found {len(image_files)} image files. Extracting metadata...")
-
-    # Parallelize EXIF extraction
-    all_metadata = []
-    max_workers = min(32, (os.cpu_count() or 1) + 4)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(get_exif_data, f, debug=args.debug): f for f in image_files
-        }
-
-        with tqdm(total=len(image_files), desc="Processing images", file=sys.stderr) as pbar:
-            for future in as_completed(futures):
-                data = future.result()
-                if data:
-                    all_metadata.append(data)
-                pbar.update(1)
+    all_metadata = _extract_metadata(image_files, debug=args.debug)
 
     if not all_metadata:
         print("Could not extract any valid EXIF metadata from the found images.")
         return
 
-    # Output based on format
-    if args.format == "json":
-        result = analyze_data_json(all_metadata)
-        print(json.dumps(result, indent=2))
-    elif args.format == "csv":
-        _output_csv(all_metadata)
-    else:
-        analyze_data(all_metadata)
-        create_plots(all_metadata, output_path, show_plots=args.show_plots)
+    _handle_output(args, all_metadata, output_path)
 
 
 def _output_csv(data):

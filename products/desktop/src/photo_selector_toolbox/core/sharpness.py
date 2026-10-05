@@ -19,6 +19,7 @@ try:
     import rawpy
 except ImportError:
     rawpy = None
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Any
 import logging
@@ -386,6 +387,17 @@ def categorize_sharpness(
         return SharpnessCategories.CRISP
 
 
+@lru_cache(maxsize=128)
+def _get_directory_files(parent_str: str, mtime_ns: int) -> List[str]:
+    """
+    Cached directory listing with st_mtime_ns check to eliminate redundant disk scans.
+    """
+    try:
+        return [entry.name for entry in os.scandir(parent_str) if entry.is_file()]
+    except Exception:
+        return []
+
+
 def find_related_files(filepath: Path) -> List[Path]:
     """
     Finds files related to the given filepath (same name, different extension)
@@ -403,16 +415,19 @@ def find_related_files(filepath: Path) -> List[Path]:
     seen = set(related)
 
     try:
-        # OPTIMIZATION: Replaced Path.glob with single-pass os.scandir traversal.
+        try:
+            mtime_ns = parent.stat().st_mtime_ns
+        except Exception:
+            mtime_ns = 0
+
+        entries = _get_directory_files(str(parent), mtime_ns)
+
         stem_lower = stem.lower()
         stem_dot = stem + "."
         stem_edit = stem_lower + "-edit"
         stem_len = len(stem)
 
-        for entry in os.scandir(parent):
-            if not entry.is_file():
-                continue
-            name = entry.name
+        for name in entries:
             name_lower = name.lower()
 
             if name == stem:

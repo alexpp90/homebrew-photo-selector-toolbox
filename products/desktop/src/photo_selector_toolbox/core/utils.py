@@ -519,19 +519,16 @@ def group_files_by_similarity(
             return 0.0
 
     groups = []
-    current_group = [files[0]]
+    prev_file = files[0]
+    current_group = [prev_file]
 
-    # Cache mtimes and prefixes for performance
-    mtimes = {p: get_mtime(p) for p in files}
-    prefixes = {p: get_name_prefix(p.name) for p in files}
+    # OPTIMIZATION: Track file metadata iteratively to avoid O(N) dict comprehension overhead.
+    t1 = get_mtime(prev_file)
+    pref1 = get_name_prefix(prev_file.name)
 
     for next_file in files[1:]:
-        prev_file = current_group[-1]
-
-        t1 = mtimes[prev_file]
-        t2 = mtimes[next_file]
-        pref1 = prefixes[prev_file]
-        pref2 = prefixes[next_file]
+        t2 = get_mtime(next_file)
+        pref2 = get_name_prefix(next_file.name)
 
         similar = False
 
@@ -567,6 +564,10 @@ def group_files_by_similarity(
         else:
             groups.append(current_group)
             current_group = [next_file]
+
+        prev_file = next_file
+        t1 = t2
+        pref1 = pref2
 
     groups.append(current_group)
     return groups

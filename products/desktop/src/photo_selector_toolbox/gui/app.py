@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, ToolTip
 import queue
 import sys
 import logging
@@ -381,6 +381,19 @@ class ImageLibraryStatistics(ttk.Frame):
         self.stop_event = threading.Event()
 
     def setup_ui(self):
+        self._setup_controls()
+
+        # Output / Results Area
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self._setup_overview_tab()
+        self._setup_logs_tab()
+
+        # Plots Tabs (Placeholders for now)
+        self.plot_tabs = {}
+
+    def _setup_controls(self):
         # Top controls
         controls_frame = ttk.LabelFrame(self, text="Configuration", padding=10)
         controls_frame.pack(fill="x", padx=10, pady=5)
@@ -421,12 +434,14 @@ class ImageLibraryStatistics(ttk.Frame):
             style="Primary.TButton",
         )
         self.analyze_btn.pack(side="left", padx=5)
+        ToolTip(self.analyze_btn, "Start analyzing photo metadata")
 
         # Cancel Button
         self.cancel_btn = ttk.Button(
             btn_frame, text="🛑 Cancel", command=self.cancel_analysis, state="disabled"
         )
         self.cancel_btn.pack(side="left", padx=5)
+        ToolTip(self.cancel_btn, "Cancel ongoing analysis")
 
         # Progress Bar
         self.progress_var = tk.DoubleVar()
@@ -435,10 +450,7 @@ class ImageLibraryStatistics(ttk.Frame):
         )
         self.progress_bar.grid(row=3, column=0, columnspan=3, sticky="ew", pady=5)
 
-        # Output / Results Area
-        self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
-
+    def _setup_overview_tab(self):
         # Overview Tab (getting started screen)
         self.overview_frame = ttk.Frame(self.notebook, padding=20)
         self.notebook.add(self.overview_frame, text="ℹ️ Overview")
@@ -495,6 +507,7 @@ class ImageLibraryStatistics(ttk.Frame):
             lbl = ttk.Label(features_card, text=feat, padding=2)
             lbl.pack(anchor="w")
 
+    def _setup_logs_tab(self):
         # Logs Tab
         self.logs_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.logs_frame, text="📝 Logs")
@@ -520,9 +533,6 @@ class ImageLibraryStatistics(ttk.Frame):
         scrollbar.pack(side="right", fill="y")
         self.log_text["yscrollcommand"] = scrollbar.set
         self.log_text.pack(side="left", fill="both", expand=True)
-
-        # Plots Tabs (Placeholders for now)
-        self.plot_tabs = {}
 
     def browse_root_folder(self):
         initial = self.root_folder_var.get()

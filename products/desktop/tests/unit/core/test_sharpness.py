@@ -312,6 +312,94 @@ def test_calculate_all_scores_cvtColor_exception(mock_cv2, mock_get_data):
     }
 
 
+@patch.object(shp, "get_image_data")
+def test_calculate_all_scores_empty_tools(mock_get_data):
+    dummy_path = Path("test.jpg")
+    assert shp.calculate_all_scores(dummy_path, tools={}) == {}
+    assert shp.calculate_all_scores(dummy_path, tools=None) == {}
+    assert shp.calculate_all_scores(dummy_path, tools={"sharpness": False, "noise": False}) == {}
+    mock_get_data.assert_not_called()
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_all_scores_image_none(mock_get_data):
+    mock_get_data.return_value = None
+    dummy_path = Path("none.jpg")
+    tools = {
+        "sharpness": True,
+        "noise": True,
+        "highlight_clipping": True,
+        "shadow_clipping": True,
+    }
+    res = shp.calculate_all_scores(dummy_path, tools=tools)
+    assert res == {
+        "sharpness": 0.0,
+        "noise": 0.0,
+        "highlight_clipping": 0.0,
+        "shadow_clipping": 0.0,
+    }
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "_calculate_noise_from_gray")
+def test_calculate_all_scores_noise_exception(mock_calc_noise, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_calc_noise.side_effect = Exception("Mocked noise error")
+    tools = {"noise": True}
+    res = shp.calculate_all_scores(Path("error.jpg"), tools=tools)
+    assert res == {"noise": 0.0}
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "_calculate_sharpness_from_gray")
+def test_calculate_all_scores_sharpness_exception(mock_calc_sharpness, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_calc_sharpness.side_effect = Exception("Mocked sharpness error")
+    tools = {"sharpness": True}
+    res = shp.calculate_all_scores(Path("error.jpg"), tools=tools)
+    assert res == {"sharpness": 0.0}
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "_calculate_highlight_clipping_from_gray")
+def test_calculate_all_scores_highlight_exception(mock_calc_highlight, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_calc_highlight.side_effect = Exception("Mocked highlight error")
+    tools = {"highlight_clipping": True}
+    res = shp.calculate_all_scores(Path("error.jpg"), tools=tools)
+    assert res == {"highlight_clipping": 0.0}
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "_calculate_shadow_clipping_from_gray")
+def test_calculate_all_scores_shadow_exception(mock_calc_shadow, mock_get_data):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_calc_shadow.side_effect = Exception("Mocked shadow error")
+    tools = {"shadow_clipping": True}
+    res = shp.calculate_all_scores(Path("error.jpg"), tools=tools)
+    assert res == {"shadow_clipping": 0.0}
+
+
+@patch.object(shp, "get_image_data")
+def test_calculate_all_scores_success(mock_get_data):
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    img[25:75, 25:75] = 255
+    mock_get_data.return_value = img
+    dummy_path = Path("valid.jpg")
+    tools = {
+        "sharpness": True,
+        "noise": True,
+        "highlight_clipping": True,
+        "shadow_clipping": True,
+    }
+    res = shp.calculate_all_scores(dummy_path, tools=tools)
+    assert "sharpness" in res
+    assert "noise" in res
+    assert "highlight_clipping" in res
+    assert "shadow_clipping" in res
+    assert res["highlight_clipping"] == pytest.approx(25.0)
+
+
 def test__calculate_sharpness_from_gray_small_image():
     gray = np.zeros((8, 8), dtype=np.uint8)
     score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
