@@ -140,3 +140,11 @@ class MoveToSelectionUseCaseTest {
         assertEquals(50.0, progress.results["uri1"]!!.sharpnessScore!!, 1e-9)
     }
 }
+
+class ScanImagesUseCaseTest {
+
+    @Test
+    fun `min sharpness threshold constant is 40`() {
+        assertEquals(40.0, ScanImagesUseCase.MIN_SHARPNESS_FOR_AESTHETIC, 1e-9)
+    }
+}
