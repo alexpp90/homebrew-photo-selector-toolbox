@@ -329,3 +329,39 @@ def test__calculate_sharpness_from_gray_grid():
     gray[30:50, 30:50] = np.random.randint(0, 255, (20, 20), dtype=np.uint8)
     score = shp._calculate_sharpness_from_gray(gray, grid_size=2)
     assert score > 0.0
+
+
+@patch.object(shp, "get_image_data")
+@patch.object(shp, "cv2")
+@patch.object(shp, "_calculate_sharpness_from_gray")
+@patch.object(shp, "_calculate_noise_from_gray")
+@patch.object(shp, "_calculate_highlight_clipping_from_gray")
+@patch.object(shp, "_calculate_shadow_clipping_from_gray")
+@patch.object(shp, "logger")
+def test_calculate_all_scores_calculation_exceptions(
+    mock_logger, mock_shadow, mock_highlight, mock_noise, mock_sharpness, mock_cv2, mock_get_data
+):
+    mock_get_data.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
+    mock_cv2.cvtColor.return_value = np.zeros((100, 100), dtype=np.uint8)
+
+    mock_sharpness.side_effect = Exception("Sharpness calc error")
+    mock_noise.side_effect = Exception("Noise calc error")
+    mock_highlight.side_effect = Exception("Highlight calc error")
+    mock_shadow.side_effect = Exception("Shadow calc error")
+
+    tools = {
+        "sharpness": True,
+        "noise": True,
+        "highlight_clipping": True,
+        "shadow_clipping": True,
+    }
+
+    res = shp.calculate_all_scores(Path("test.jpg"), tools=tools)
+
+    assert res == {
+        "sharpness": 0.0,
+        "noise": 0.0,
+        "highlight_clipping": 0.0,
+        "shadow_clipping": 0.0,
+    }
+    assert mock_logger.error.call_count == 4
