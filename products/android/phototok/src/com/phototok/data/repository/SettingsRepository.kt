@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+internal val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     name = "phototok_settings"
 )
 
@@ -33,6 +33,7 @@ class SettingsRepository @Inject constructor(
 ) {
 
     companion object {
+        private const val TAG = "SettingsRepository"
         private val KEY_SELECTION_FOLDER_NAME = stringPreferencesKey("selection_folder_name")
         private val KEY_SORTING_ENABLED = booleanPreferencesKey("sorting_enabled")
         private val KEY_LAST_FOLDER_URI = stringPreferencesKey("last_folder_uri")
@@ -309,5 +310,27 @@ class SettingsRepository @Inject constructor(
         return prefs[folderPositionKey(folderUri)]
             ?: prefs[legacyFolderPositionKey(folderUri)]
             ?: 0
+    }
+
+    /** Clear all stored per-folder positions. */
+    suspend fun clearFolderPositions() {
+        context.dataStore.edit { prefs ->
+            val keysToRemove = prefs.asMap().keys.filter {
+                it.name.startsWith("folder_pos_")
+            }
+            keysToRemove.forEach { prefs.remove(it) }
+        }
+    }
+
+    /** Clear image caches (Coil memory and disk) and all stored folder positions. */
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
+    suspend fun clearCache() {
+        try {
+            coil.Coil.imageLoader(context).memoryCache?.clear()
+            coil.Coil.imageLoader(context).diskCache?.clear()
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Failed to clear Coil cache", e)
+        }
+        clearFolderPositions()
     }
 }

@@ -15,6 +15,19 @@ object RelatedFiles {
         return all.filter { it.uri != target.uri && stemOf(it.fileName) == stem }
     }
 
+    /**
+     * Checks if [images] contains both RAW and JPEG formats of the same photo
+     * (matching stem with at least one RAW and at least one JPEG extension).
+     */
+    fun hasRawJpegPairs(images: List<ImageItem>): Boolean {
+        val byStem = images.groupBy { stemOf(it.fileName) }
+        return byStem.values.any { group ->
+            val hasRaw = group.any { PhotoExtensions.isRaw(it.fileName) }
+            val hasJpeg = group.any { PhotoExtensions.isJpeg(it.fileName) }
+            hasRaw && hasJpeg
+        }
+    }
+
     private fun stemOf(fileName: String): String =
         fileName.substringBeforeLast('.').lowercase()
 }

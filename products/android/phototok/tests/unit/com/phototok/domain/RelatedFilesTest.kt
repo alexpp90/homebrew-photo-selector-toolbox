@@ -52,4 +52,19 @@ class RelatedFilesTest {
 
         assertEquals(setOf("shot.arw", "shot.dng"), siblings)
     }
+
+    @Test
+    fun `hasRawJpegPairs detects matching RAW and JPEG files`() {
+        val mixed = listOf(img("shot_01.jpg"), img("shot_01.arw"), img("shot_02.jpg"))
+        assertTrue(RelatedFiles.hasRawJpegPairs(mixed))
+
+        val jpegsOnly = listOf(img("shot_01.jpg"), img("shot_02.jpg"))
+        org.junit.Assert.assertFalse(RelatedFiles.hasRawJpegPairs(jpegsOnly))
+
+        val rawsOnly = listOf(img("shot_01.arw"), img("shot_02.cr2"))
+        org.junit.Assert.assertFalse(RelatedFiles.hasRawJpegPairs(rawsOnly))
+
+        val differentStems = listOf(img("shot_01.jpg"), img("shot_02.arw"))
+        org.junit.Assert.assertFalse(RelatedFiles.hasRawJpegPairs(differentStems))
+    }
 }

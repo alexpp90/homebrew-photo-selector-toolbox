@@ -35,7 +35,10 @@ object PhoneFeedOrdering {
             return Result(shuffler(images), -1)
         }
 
-        val byDate = images.sortedByDescending { it.lastModified }
+        val byDate = images.sortedWith(
+            compareBy<ImageItem> { it.lastModified }
+                .thenBy { it.fileName.lowercase() }
+        )
         if (!sortByOrientation) {
             return Result(byDate, -1)
         }
@@ -59,13 +62,10 @@ object PhoneFeedOrdering {
         if (knownUris.isEmpty()) incoming else incoming.filter { it.uri !in knownUris }
 
     /**
-     * Append a freshly discovered batch to an already published feed.
+     * Append or merge a freshly discovered batch to an already published feed.
      *
-     * [fresh] is ordered (or shuffled) on its own and appended after [current];
-     * the order of [current] is never touched. This keeps the feed stable while
-     * a large folder is still being enumerated in the background — the price is
-     * that a randomized feed is shuffled per batch rather than globally, which
-     * is invisible to the user and preferable to items moving under their thumb.
+     * When [randomize] is true, [fresh] is shuffled and appended after [current].
+     * When [randomize] is false, items are merged in chronological time order.
      *
      * When [current] is empty this is exactly [order].
      */
@@ -82,8 +82,6 @@ object PhoneFeedOrdering {
         if (current.isEmpty()) {
             return order(fresh, randomize, sortByOrientation, shuffler)
         }
-        // Order within the batch only; the orientation split is recomputed over
-        // the merged list (and re-grouped later, once dimensions are known).
         val ordered = order(fresh, randomize, sortByOrientation = false, shuffler = shuffler).images
         val merged = current + ordered
         return Result(merged, portraitSplit(merged, sortByOrientation))

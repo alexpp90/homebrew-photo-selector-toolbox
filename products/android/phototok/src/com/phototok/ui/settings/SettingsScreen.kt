@@ -23,8 +23,10 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.BrowseGallery
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PrivacyTip
@@ -60,6 +62,7 @@ import com.phototok.viewmodel.SettingsViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onChangeSourceFolder: (() -> Unit)? = null,
+    onReloadFolder: (() -> Unit)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -107,6 +110,16 @@ fun SettingsScreen(
                 onClick = { onChangeSourceFolder?.invoke() },
                 icon = Icons.Default.FolderOpen,
             )
+
+            if (onReloadFolder != null && uiState.sourceFolderName.isNotEmpty()) {
+                HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+                SettingsClickItem(
+                    title = "Reload Folder",
+                    description = "Rescan photos in source folder",
+                    onClick = onReloadFolder,
+                    icon = Icons.Default.Refresh,
+                )
+            }
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
@@ -184,6 +197,29 @@ fun SettingsScreen(
                                 tint = colors.primaryContainer,
                             )
                         }
+                    }
+                },
+            )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            var cacheCleared by remember { mutableStateOf(false) }
+            SettingsClickItem(
+                title = "Delete Cache",
+                description = if (cacheCleared) "Cache deleted" else "Clear image cache & stored folder positions",
+                onClick = {
+                    viewModel.clearCache {
+                        cacheCleared = true
+                    }
+                },
+                icon = Icons.Default.Delete,
+                trailing = {
+                    TextButton(onClick = {
+                        viewModel.clearCache {
+                            cacheCleared = true
+                        }
+                    }) {
+                        Text(if (cacheCleared) "Deleted" else "Delete", color = colors.primary)
                     }
                 },
             )

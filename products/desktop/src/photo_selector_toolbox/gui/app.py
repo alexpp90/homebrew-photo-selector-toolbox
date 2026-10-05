@@ -1659,6 +1659,10 @@ class MainApp(tk.Tk):
     def show_frame(self, page_name):
         frame = self.frames[page_name]
         frame.tkraise()
+        try:
+            frame.focus_set()
+        except Exception:
+            pass
 
     def toggle_sidebar(self, visible):
         pass

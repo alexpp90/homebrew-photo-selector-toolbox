@@ -164,4 +164,15 @@ class SettingsViewModel @Inject constructor(
             onDone()
         }
     }
+
+    /**
+     * Clear Coil thumbnail cache and stored folder positions.
+     * [onDone] fires after cache is cleared.
+     */
+    fun clearCache(onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            settingsRepository.clearCache()
+            onDone()
+        }
+    }
 }

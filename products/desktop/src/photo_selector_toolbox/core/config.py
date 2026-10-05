@@ -59,6 +59,9 @@ DEFAULT_CONFIG: Dict[str, Union[str, bool, List[str]]] = {
     "selection_folder": "Selection",
     "separate_raw_jpeg": True,
     "recent_folders": [],
+    "file_type_filter": "All Supported",
+    "sort_by": "File Name",
+    "sort_order": "Ascending",
 }
 
 # Maximum number of recent folders to remember

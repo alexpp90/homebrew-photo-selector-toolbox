@@ -80,6 +80,8 @@ data class PhoneModeUiState(
     val recentPaths: List<RecentPath> = emptyList(),
     val recentPathsEnabled: Boolean = true,
     val recentPathsCount: Int = 3,
+    /** Whether to show suggestion for folders containing both RAW and JPEG pairs. */
+    val showRawJpegSuggestion: Boolean = false,
 )
 
 /** True when there is a pending deletion that can still be reverted. */
@@ -255,6 +257,7 @@ class PhoneModeViewModel @Inject constructor(
                     allImages = emptyList(),
                     currentIndex = 0,
                     portraitSectionStart = -1,
+                    showRawJpegSuggestion = false,
                 )
             }
 
@@ -289,6 +292,7 @@ class PhoneModeViewModel @Inject constructor(
         folderUri: Uri,
         restorePosition: Boolean,
         errorLabel: String,
+        targetUriToKeep: String? = null,
     ) {
         publishedUris.clear()
         dimensionsResolved.clear()
@@ -304,10 +308,40 @@ class PhoneModeViewModel @Inject constructor(
 
         try {
             imageRepository.discoverImages(folderUri).collect { discovered ->
-                publishBatch(discovered, settings)
+                publishBatch(discovered, settings, targetUriToKeep)
             }
-            // Enumeration finished: pick up the tail of missing dimensions.
-            _uiState.update { it.copy(isLoading = false, isDiscovering = false) }
+            // Enumeration finished:
+            // If not randomized, sort cumulative list chronologically to guarantee whole folder order,
+            // while preserving current item or targetUriToKeep.
+            val current = _uiState.value
+            if (!settings.randomizeOrder && current.allImages.isNotEmpty()) {
+                val uriToPreserve = targetUriToKeep
+                    ?: current.images.getOrNull(current.currentIndex)?.uri
+                val filtered = PhoneFeedOrdering.filterByType(current.allImages, settings.fileTypeFilter)
+                val sorted = PhoneFeedOrdering.order(
+                    filtered,
+                    randomize = false,
+                    sortByOrientation = settings.sortByOrientation,
+                )
+                val newIndex = if (uriToPreserve != null) {
+                    val idx = sorted.images.indexOfFirst { it.uri == uriToPreserve }
+                    if (idx >= 0) idx else resolveFeedIndex(current.currentIndex, sorted.images.size, targetUriToKeep, sorted.images)
+                } else {
+                    resolveFeedIndex(current.currentIndex, sorted.images.size, targetUriToKeep, sorted.images)
+                }
+                _uiState.update {
+                    it.copy(
+                        images = sorted.images,
+                        portraitSectionStart = sorted.portraitSectionStart,
+                        currentIndex = newIndex,
+                        isLoading = false,
+                        isDiscovering = false,
+                    )
+                }
+            } else {
+                _uiState.update { it.copy(isLoading = false, isDiscovering = false) }
+            }
+            maybeShowRawJpegSuggestion()
             loadDimensionsAsynchronously(force = true)
         } catch (e: CancellationException) {
             // A newer discovery job owns the state now — do not touch it.
@@ -330,7 +364,11 @@ class PhoneModeViewModel @Inject constructor(
      * photo the user has already swiped past cannot jump back in front of them
      * while the folder is still loading.
      */
-    private fun publishBatch(discovered: List<ImageItem>, settings: PhoneSettings) {
+    private fun publishBatch(
+        discovered: List<ImageItem>,
+        settings: PhoneSettings,
+        targetUriToKeep: String? = null,
+    ) {
         val state = _uiState.value
         val isFirstBatch = state.images.isEmpty() && state.allImages.isEmpty()
         val fresh = PhoneFeedOrdering.newItems(discovered, publishedUris)
@@ -350,7 +388,7 @@ class PhoneModeViewModel @Inject constructor(
 
         // Resolved outside the update lambda: it consumes pendingRestoreIndex and
         // must run exactly once per batch.
-        val nextIndex = resolveFeedIndex(state.currentIndex, merged.images.size)
+        val nextIndex = resolveFeedIndex(state.currentIndex, merged.images.size, targetUriToKeep, merged.images)
 
         _uiState.update {
             it.copy(
@@ -363,6 +401,7 @@ class PhoneModeViewModel @Inject constructor(
         }
 
         if (isFirstBatch) checkGestureTutorial()
+        maybeShowRawJpegSuggestion()
         loadExifForCurrent()
         loadDimensionsAsynchronously()
     }
@@ -372,10 +411,20 @@ class PhoneModeViewModel @Inject constructor(
      * is still out of reach of the partially loaded feed, otherwise leave the
      * user exactly where they are.
      */
-    private fun resolveFeedIndex(currentIndex: Int, size: Int): Int {
+    private fun resolveFeedIndex(
+        currentIndex: Int,
+        size: Int,
+        targetUri: String? = null,
+        currentImages: List<ImageItem> = emptyList(),
+    ): Int {
         if (size == 0) return 0
+        if (userHasNavigated) return currentIndex.coerceIn(0, size - 1)
+        if (targetUri != null) {
+            val idx = currentImages.indexOfFirst { it.uri == targetUri }
+            if (idx >= 0) return idx
+        }
         val target = pendingRestoreIndex
-        if (target == null || userHasNavigated) return currentIndex.coerceIn(0, size - 1)
+        if (target == null) return currentIndex.coerceIn(0, size - 1)
         val restored = target.coerceAtMost(size - 1)
         if (restored == target) pendingRestoreIndex = null
         return restored
@@ -472,6 +521,7 @@ class PhoneModeViewModel @Inject constructor(
                 finalizePendingDelete()
             }
             _uiState.update { it.copy(currentIndex = index) }
+            maybeShowRawJpegSuggestion()
             loadExifForCurrent()
             // Persist position for this folder
             _uiState.value.sourceFolderUri?.let { uri ->
@@ -810,6 +860,93 @@ class PhoneModeViewModel @Inject constructor(
             FirstRunHint.SWIPE_LEFT_FOLDER
         }
 
+    // ── RAW + JPEG pair suggestions ──────────────────────────────────────
+
+    fun maybeShowRawJpegSuggestion() {
+        val state = _uiState.value
+        if (state.showRawJpegSuggestion) return
+        if (FirstRunHint.RAW_JPEG_PAIRS.key in state.seenFirstRunHints) return
+        if (state.moveRelatedFiles && state.fileTypeFilter != FileTypeFilter.ALL) return
+        if (RelatedFiles.hasRawJpegPairs(state.allImages)) {
+            _uiState.update { it.copy(showRawJpegSuggestion = true) }
+        }
+    }
+
+    fun dismissRawJpegSuggestion() {
+        _uiState.update { it.copy(showRawJpegSuggestion = false) }
+        viewModelScope.launch {
+            settingsRepository.markFirstRunHintSeen(FirstRunHint.RAW_JPEG_PAIRS)
+        }
+    }
+
+    fun applyRawJpegFilter(filter: FileTypeFilter) {
+        _uiState.update { it.copy(showRawJpegSuggestion = false) }
+        viewModelScope.launch {
+            settingsRepository.markFirstRunHintSeen(FirstRunHint.RAW_JPEG_PAIRS)
+            settingsRepository.setPhoneFileTypeFilter(filter)
+        }
+        val label = when (filter) {
+            FileTypeFilter.RAW -> "RAW files"
+            FileTypeFilter.JPG -> "JPEG files"
+            FileTypeFilter.ALL -> "all files"
+        }
+        showFeedback("Filtered to $label")
+    }
+
+    fun enableMoveRelatedFiles() {
+        _uiState.update { it.copy(showRawJpegSuggestion = false) }
+        viewModelScope.launch {
+            settingsRepository.markFirstRunHintSeen(FirstRunHint.RAW_JPEG_PAIRS)
+            settingsRepository.setPhoneMoveRelatedFiles(true)
+        }
+        showFeedback("Actions now apply to both RAW and JPEG")
+    }
+
+    /**
+     * Rescan the current source folder from disk.
+     *
+     * Discards memory caches of published URIs, dimensions, and EXIF, but preserves
+     * the currently viewed photo so the user does not lose their place.
+     */
+    fun reloadSourceFolder() {
+        val folderUriStr = _uiState.value.sourceFolderUri ?: return
+        val folderUri = Uri.parse(folderUriStr)
+        val currentUri = _uiState.value.images.getOrNull(_uiState.value.currentIndex)?.uri
+        finalizePendingDelete()
+        discoveryJob?.cancel()
+        dimensionsJob?.cancel()
+        publishedUris.clear()
+        dimensionsResolved.clear()
+        loadedExifCache.clear()
+
+        discoveryJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    isDiscovering = true,
+                    error = null,
+                    images = emptyList(),
+                    allImages = emptyList(),
+                    currentIndex = 0,
+                    portraitSectionStart = -1,
+                    showRawJpegSuggestion = false,
+                )
+            }
+            collectDiscoveredImages(
+                folderUri = folderUri,
+                restorePosition = false,
+                errorLabel = "images",
+                targetUriToKeep = currentUri,
+            )
+        }
+    }
+
+    private fun showFeedback(message: String, isError: Boolean = false) {
+        _uiState.update {
+            it.copy(lastActionFeedback = ActionFeedback(message = message, isError = isError))
+        }
+    }
+
     // ── Navigation helpers ───────────────────────────────────────────────
 
     /** Go back to the landing screen (clears images). */
@@ -973,7 +1110,7 @@ class PhoneModeViewModel @Inject constructor(
         }
     }
 
-    override fun onCleared() {
+    public override fun onCleared() {
         // Finalizes primary AND sibling files on the application scope, so the
         // deletion completes even though the ViewModel is going away.
         finalizePendingDelete()

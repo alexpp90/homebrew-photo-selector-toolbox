@@ -11,7 +11,9 @@ import com.phototok.domain.SwipeAction
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.Runs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -473,7 +475,7 @@ class PhoneModeViewModelTest {
         val names = viewModel.uiState.value.images.map { it.fileName }
         assertEquals(4, names.size)
         assertEquals(orderAfterFirstBatch, names.take(2))
-        assertEquals(listOf("new_a.jpg", "new_b.jpg"), names.drop(2))
+        assertEquals(listOf("new_b.jpg", "new_a.jpg"), names.drop(2))
     }
 
     @Test
@@ -558,5 +560,166 @@ class PhoneModeViewModelTest {
 
         assertFalse(viewModel.uiState.value.isDiscovering)
         assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
+    fun `folder with raw and jpeg pairs triggers raw jpeg suggestion`() = runTest {
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo1.raw", 10),
+        )
+
+        assertTrue(viewModel.uiState.value.showRawJpegSuggestion)
+    }
+
+    @Test
+    fun `dismissing raw jpeg suggestion hides it and marks hint seen`() = runTest {
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo1.raw", 10),
+        )
+
+        assertTrue(viewModel.uiState.value.showRawJpegSuggestion)
+        viewModel.dismissRawJpegSuggestion()
+
+        assertFalse(viewModel.uiState.value.showRawJpegSuggestion)
+        coVerify { settingsRepository.markFirstRunHintSeen(FirstRunHint.RAW_JPEG_PAIRS) }
+    }
+
+    @Test
+    fun `applying raw jpeg filter updates settings and hides suggestion`() = runTest {
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo1.raw", 10),
+        )
+
+        viewModel.applyRawJpegFilter(com.phototok.domain.FileTypeFilter.RAW)
+
+        assertFalse(viewModel.uiState.value.showRawJpegSuggestion)
+        coVerify { settingsRepository.setPhoneFileTypeFilter(com.phototok.domain.FileTypeFilter.RAW) }
+        coVerify { settingsRepository.markFirstRunHintSeen(FirstRunHint.RAW_JPEG_PAIRS) }
+    }
+
+    @Test
+    fun `enabling move related files updates settings and hides suggestion`() = runTest {
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo1.raw", 10),
+        )
+
+        viewModel.enableMoveRelatedFiles()
+
+        assertFalse(viewModel.uiState.value.showRawJpegSuggestion)
+        coVerify { settingsRepository.setPhoneMoveRelatedFiles(true) }
+        coVerify { settingsRepository.markFirstRunHintSeen(FirstRunHint.RAW_JPEG_PAIRS) }
+    }
+
+    @Test
+    fun `reloadSourceFolder re-scans images and preserves current image position`() = runTest {
+        val img1 = image("photo1.jpg", 10)
+        val img2 = image("photo2.jpg", 20)
+        val img3 = image("photo3.jpg", 30)
+        val viewModel = loadFolder(img1, img2, img3)
+        viewModel.navigateToImage(1) // viewing img2
+
+        // Simulate reload returning updated list including a new photo
+        val imgNew = image("photo0.jpg", 5)
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(imgNew, img1, img2, img3))
+
+        viewModel.reloadSourceFolder()
+        advanceUntilIdle()
+
+        // Images should be re-sorted chronologically: photo0 (5), photo1 (10), photo2 (20), photo3 (30)
+        val names = viewModel.uiState.value.images.map { it.fileName }
+        assertEquals(listOf("photo0.jpg", "photo1.jpg", "photo2.jpg", "photo3.jpg"), names)
+        // Current index should track img2 ("photo2.jpg", which is now at index 2)
+        assertEquals(2, viewModel.uiState.value.currentIndex)
+        assertEquals(img2.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
+    }
+
+    @Test
+    fun `onCleared finalizes pending delete on appScope`() = runTest {
+        coEvery { imageRepository.deleteImage(any()) } returns true
+        val viewModel = loadFolder(image("a.jpg", 1), image("b.jpg", 2))
+
+        viewModel.requestDelete()
+        assertNotNull(viewModel.uiState.value.pendingDelete)
+
+        viewModel.onCleared()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.pendingDelete)
+        coVerify(exactly = 1) { imageRepository.deleteImage(Uri.parse("content://photos/a.jpg")) }
+    }
+
+    @Test
+    fun `performLeftSwipeCopyOrMove routes to default LEFT_SWIPE subfolder when left folder uri is not set`() = runTest {
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(
+            leftSwipeAction = SwipeAction.COPY,
+        )
+        leftSwipeUriFlow.value = null
+        coEvery { imageRepository.copyImage(any(), any(), any(), any()) } returns true
+
+        val viewModel = loadFolder(image("a.jpg", 1))
+        viewModel.performLeftSwipeCopyOrMove()
+        advanceUntilIdle()
+
+        coVerify {
+            imageRepository.copyImage(
+                sourceUri = Uri.parse("content://photos/a.jpg"),
+                destFolderUri = Uri.parse("content://tree/photos"),
+                sorting = true,
+                subfolderName = com.phototok.domain.PhotoFolders.LEFT_SWIPE,
+            )
+        }
+    }
+
+    @Test
+    fun `toggleExifOverlay updates settings repository`() = runTest {
+        coEvery { settingsRepository.setPhoneShowExifOverlay(any()) } just Runs
+        val viewModel = buildViewModel()
+
+        viewModel.toggleExifOverlay()
+        advanceUntilIdle()
+
+        coVerify { settingsRepository.setPhoneShowExifOverlay(true) }
+    }
+
+    @Test
+    fun `goBackToLanding finalizes delete and clears state`() = runTest {
+        coEvery { imageRepository.deleteImage(any()) } returns true
+        val viewModel = loadFolder(image("a.jpg", 1), image("b.jpg", 2))
+
+        viewModel.requestDelete()
+        viewModel.goBackToLanding()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.images.isEmpty())
+        assertNull(viewModel.uiState.value.pendingDelete)
+        coVerify(exactly = 1) { imageRepository.deleteImage(Uri.parse("content://photos/a.jpg")) }
+    }
+
+    @Test
+    fun `dimension loading updates dimensions and regroups by orientation`() = runTest {
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(
+            sortByOrientation = true,
+            randomizeOrder = false,
+        )
+        val img1 = ImageItem("content://photos/p.jpg", "p.jpg", 1, 100, "image/jpeg", 0, 0)
+        val img2 = ImageItem("content://photos/l.jpg", "l.jpg", 1, 200, "image/jpeg", 0, 0)
+        coEvery { imageRepository.getImageDimensions(Uri.parse(img1.uri)) } returns Pair(3000, 4000) // Portrait
+        coEvery { imageRepository.getImageDimensions(Uri.parse(img2.uri)) } returns Pair(4000, 3000) // Landscape
+
+        val viewModel = loadFolder(img1, img2)
+        advanceUntilIdle()
+
+        val images = viewModel.uiState.value.images
+        assertEquals(2, images.size)
+        // Landscape comes first when sortByOrientation is active
+        assertEquals("l.jpg", images[0].fileName)
+        assertEquals("p.jpg", images[1].fileName)
+        assertEquals(4000, images[0].imageWidth)
+        assertEquals(3000, images[0].imageHeight)
+        assertEquals(1, viewModel.uiState.value.portraitSectionStart)
     }
 }

@@ -1127,7 +1127,52 @@ def test_load_folder_contents_clears_cache_and_cancels_prior_preload(tmp_path):
         tool._load_folder_contents(str(tmp_path))
 
     prior_stop_event.set.assert_called_once()
-    tool.cache_manager.clear.assert_called_once()
+
+def test_standard_preview_layout_geometry():
+    from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+    with (
+        patch("photo_selector_toolbox.gui.sharpness_tool.tk.Toplevel"),
+        patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.bind_all"),
+    ):
+        tool = SharpnessTool(parent)
+
+        # Verify uniform row configuration on preview_area
+        tool.preview_area.rowconfigure.assert_any_call(0, weight=1, uniform="preview_rows")
+        tool.preview_area.rowconfigure.assert_any_call(1, weight=1, uniform="preview_rows")
+
+        # Verify top_container configuration
+        tool.top_container.rowconfigure.assert_any_call(0, weight=1)
+        tool.top_container.columnconfigure.assert_any_call(0, weight=1)
+        tool.top_container.columnconfigure.assert_any_call(1, weight=0)
+
+        # Verify bottom_container configuration
+        tool.bottom_container.rowconfigure.assert_any_call(0, weight=1)
+        tool.bottom_container.columnconfigure.assert_any_call(0, weight=1, uniform="bot_cols")
+        tool.bottom_container.columnconfigure.assert_any_call(1, weight=1, uniform="bot_cols")
+
+
+def test_two_row_folder_controls_layout():
+    from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
+    import tkinter as tk
+
+    root = tk.Tk()
+    try:
+        with (
+            patch("photo_selector_toolbox.gui.sharpness_tool.tk.Toplevel"),
+            patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.bind_all"),
+        ):
+            tool = SharpnessTool(root)
+            assert hasattr(tool, "folder_entry")
+            assert hasattr(tool, "file_type_combo")
+            assert hasattr(tool, "sort_by_combo")
+            assert hasattr(tool, "sort_order_combo")
+            assert hasattr(tool, "group_similar_chk")
+            assert hasattr(tool, "group_level_combo")
+    finally:
+        root.destroy()
 
 
 

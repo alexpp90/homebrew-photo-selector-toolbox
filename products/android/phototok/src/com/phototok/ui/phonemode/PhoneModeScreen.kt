@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Lens
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
@@ -42,6 +43,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarDuration
@@ -71,6 +73,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photoselector.core.model.ExifData
 import com.phototok.data.model.ImageItem
+import com.phototok.domain.FileTypeFilter
 import com.phototok.domain.SwipeAction
 import com.phototok.ui.components.ViewerBottomBar
 import com.phototok.ui.settings.SettingsScreen
@@ -193,6 +196,10 @@ fun PhoneModeScreen(
                 onChangeSourceFolder = {
                     showSettingsSheet = false
                     folderPickerLauncher.launch(null)
+                },
+                onReloadFolder = {
+                    showSettingsSheet = false
+                    viewModel.reloadSourceFolder()
                 },
             )
         }
@@ -327,15 +334,35 @@ fun PhoneModeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(
-                        onClick = { showSettingsSheet = true },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = colors.onSurfaceVariant
-                        )
+                    val isHelpOrTutorialActive = uiState.showGestureTutorial || uiState.showControlsGuide
+                    val sideIconTint = if (isHelpOrTutorialActive) {
+                        colors.onSurfaceVariant.copy(alpha = 0.4f)
+                    } else {
+                        colors.onSurfaceVariant
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = { viewModel.reloadSourceFolder() },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("landscape_reload_folder_button"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Reload folder",
+                                tint = sideIconTint,
+                            )
+                        }
+                        IconButton(
+                            onClick = { showSettingsSheet = true },
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = sideIconTint,
+                            )
+                        }
                     }
 
                     val currentImage = uiState.images.getOrNull(uiState.currentIndex)
@@ -433,15 +460,28 @@ fun PhoneModeScreen(
             dismissLabel = "CLOSE",
         )
 
-        // ── One-time explanation of a first-time action ───────────────────────
+        // ── One-time explanation of a first-time action / RAW+JPEG suggestions ─
         if (!uiState.showGestureTutorial && !uiState.showControlsGuide) {
-            FirstRunHintCard(
-                hint = uiState.firstRunHint,
-                onDismiss = viewModel::dismissFirstRunHint,
+            RawJpegSuggestionCard(
+                visible = uiState.showRawJpegSuggestion,
+                onFilterRaw = { viewModel.applyRawJpegFilter(FileTypeFilter.RAW) },
+                onFilterJpg = { viewModel.applyRawJpegFilter(FileTypeFilter.JPG) },
+                onEnableMoveRelatedFiles = { viewModel.enableMoveRelatedFiles() },
+                onDismiss = { viewModel.dismissRawJpegSuggestion() },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = if (isLandscape && isViewing) 24.dp else 96.dp),
             )
+
+            if (!uiState.showRawJpegSuggestion) {
+                FirstRunHintCard(
+                    hint = uiState.firstRunHint,
+                    onDismiss = viewModel::dismissFirstRunHint,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = if (isLandscape && isViewing) 24.dp else 96.dp),
+                )
+            }
         }
 
         // ── Overlay App Bars (Only when not in Landscape Viewer / selection) ──
@@ -451,6 +491,13 @@ fun PhoneModeScreen(
         // scrim. The guide reserves the bars' height (TOP/BOTTOM_BAR_HEIGHT), so
         // nothing overlaps.
         if (!isViewingSelection && !(isLandscape && isViewing)) {
+            val isHelpOrTutorialActive = uiState.showGestureTutorial || uiState.showControlsGuide
+            val topIconTint = if (isHelpOrTutorialActive) {
+                colors.onSurfaceVariant.copy(alpha = 0.4f)
+            } else {
+                colors.onSurfaceVariant
+            }
+
             // ── Top app bar ──────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -465,6 +512,7 @@ fun PhoneModeScreen(
                 Image(
                     painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
                     contentDescription = "Toggle EXIF stats",
+                    alpha = if (isHelpOrTutorialActive) 0.4f else 1.0f,
                     modifier = Modifier
                         .size(36.dp)
                         .clickable(
@@ -473,10 +521,22 @@ fun PhoneModeScreen(
                         ) { viewModel.toggleExifOverlay() }
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Help: toggles the coach-mark guide. It is a toggle because the
-                    // button stays visible and labelled while the guide is open, so
-                    // tapping it again must be the way back out.
                     if (isViewing) {
+                        IconButton(
+                            onClick = { viewModel.reloadSourceFolder() },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("reload_folder_button"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Reload folder",
+                                tint = topIconTint,
+                            )
+                        }
+                        // Help: toggles the coach-mark guide. It is a toggle because the
+                        // button stays visible and labelled while the guide is open, so
+                        // tapping it again must be the way back out.
                         IconButton(
                             onClick = {
                                 when {
@@ -490,7 +550,7 @@ fun PhoneModeScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.HelpOutline,
                                 contentDescription = "Show controls",
-                                tint = colors.onSurfaceVariant,
+                                tint = topIconTint,
                             )
                         }
                     }
@@ -501,7 +561,7 @@ fun PhoneModeScreen(
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Settings",
-                            tint = colors.onSurfaceVariant,
+                            tint = topIconTint,
                         )
                     }
                 }

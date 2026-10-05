@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.ZoomIn
@@ -160,4 +161,5 @@ private fun iconFor(hint: FirstRunHint): ImageVector = when (hint) {
     FirstRunHint.TAP_HUD -> Icons.Default.TouchApp
     FirstRunHint.DOUBLE_TAP_ZOOM -> Icons.Default.ZoomIn
     FirstRunHint.REVERT -> Icons.AutoMirrored.Filled.Undo
+    FirstRunHint.RAW_JPEG_PAIRS -> Icons.Default.Style
 }
