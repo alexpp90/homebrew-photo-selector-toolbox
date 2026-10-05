@@ -67,6 +67,8 @@ products is a defect (`ai/ROUTING.md`, the separation rule).
 | An automatic engine/backend choice must be able to state its own reason | Desktop 2026-08-09 | ✅ origin — `select_engine_with_reason` returns `(engine, reason)`; logged once and shown in settings | ⬜ evaluate — `AestheticAnalyzer` goes inert when no `.tflite` asset is bundled and says nothing | ⬜ evaluate — same analyzer path | 2026-08-09 |
 | Shared "Selection" folder standard & sibling folder exclusions | Cross-product 2026-10-03 | ✅ default "Selection", excludes `selection`, `selected`, `phototok_selection`, `phototok_leftswipe` | ✅ default "Selection", excludes same set | ✅ default "Selection", excludes same set | 2026-10-03 |
 | Bounded LRU image cache with teardown on modal exit | Desktop 2026-10-03 | ✅ origin — LRU OrderedDict (30 previews, 3 full-res); clear full-res on fullscreen exit | ✅ independent — Coil LRU (30% heap cap) + downsampled 2048px decode & explicit bitmap.recycle() | ✅ independent — Coil LRU (30% heap cap) + SubcomposeAsyncImage windowing | 2026-10-03 |
+| Proportional image container allocation over control panels | Desktop 2026-10-04 | ✅ origin — 50/50 uniform grid rows & unweighted controls column | ✅ independent — `FrameGeometry.threeUpLayout` solver computes exact frame bounds | ❌ N/A — single-image vertical feed | 2026-10-04 |
+| Persistent file type filter and sort preferences across re-entries | Desktop 2026-10-05 | ✅ origin — persisted in settings.json, preserved across folder reloads/focus switches with fallback | ✅ independent — persisted in DataStore | ✅ independent — persisted in DataStore (`phoneFileTypeFilter`) | 2026-10-05 |
 
 Rationale for the negatives, so a future agent does not re-open a settled question:
 

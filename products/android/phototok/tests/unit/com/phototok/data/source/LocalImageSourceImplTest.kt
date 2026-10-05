@@ -5,11 +5,16 @@ import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertSame
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Tests for the RAW/JPEG sorting rules in [LocalImageSourceImpl.determineTargetFolder]
  * (moved here from the repository together with the copy/move implementation).
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class LocalImageSourceImplTest {
 
     private val source = LocalImageSourceImpl(
@@ -65,5 +70,28 @@ class LocalImageSourceImplTest {
             every { createDirectory("RAW") } returns null
         }
         assertSame(brokenDir, source.determineTargetFolder("IMG_001.ARW", brokenDir))
+    }
+
+    @Test
+    fun `cleanUpFailedCopy calls delete on destination file`() {
+        val destFile = mockk<DocumentFile>(relaxed = true) {
+            every { delete() } returns true
+        }
+
+        source.cleanUpFailedCopy(destFile)
+
+        io.mockk.verify(exactly = 1) { destFile.delete() }
+    }
+
+    @Test
+    fun `cleanUpFailedCopy swallows exception on delete without crashing`() {
+        val destFile = mockk<DocumentFile>(relaxed = true) {
+            every { delete() } throws RuntimeException("Disk I/O error")
+        }
+
+        // Should not throw
+        source.cleanUpFailedCopy(destFile)
+
+        io.mockk.verify(exactly = 1) { destFile.delete() }
     }
 }

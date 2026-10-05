@@ -28,7 +28,10 @@ enum class FirstRunHint(val key: String) {
     DOUBLE_TAP_ZOOM("double_tap_zoom"),
 
     /** First use of Revert. */
-    REVERT("revert");
+    REVERT("revert"),
+
+    /** Folder contains RAW+JPEG pairs of the same pictures. */
+    RAW_JPEG_PAIRS("raw_jpeg_pairs");
 
     companion object {
         fun fromKey(key: String?): FirstRunHint? = entries.firstOrNull { it.key == key }
@@ -58,6 +61,7 @@ object FirstRunHintText {
         FirstRunHint.TAP_HUD -> "Distraction-free view"
         FirstRunHint.DOUBLE_TAP_ZOOM -> "Zoom"
         FirstRunHint.REVERT -> "Undo"
+        FirstRunHint.RAW_JPEG_PAIRS -> "RAW + JPEG Pairs Detected"
     }
 
     fun message(
@@ -94,5 +98,8 @@ object FirstRunHintText {
 
         FirstRunHint.REVERT ->
             "The photo is back in your feed. Revert only undoes the most recent deletion."
+
+        FirstRunHint.RAW_JPEG_PAIRS ->
+            "This folder contains matching RAW and JPEG photos. You can filter to view only one type or link actions across both."
     }
 }

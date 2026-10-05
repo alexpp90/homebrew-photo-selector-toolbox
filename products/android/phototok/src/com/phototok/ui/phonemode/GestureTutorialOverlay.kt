@@ -127,7 +127,7 @@ fun GestureTutorialOverlay(
                 .fillMaxSize()
                 // A scrim rather than an opaque sheet: the controls being explained
                 // stay faintly visible underneath, which is the whole point.
-                .background(Color(0xFF09090B).copy(alpha = 0.88f))
+                .background(Color(0xFF09090B).copy(alpha = 0.70f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },

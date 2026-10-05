@@ -40,10 +40,8 @@ class LocalImageSourceImpl @Inject constructor(
         private const val JPEG_SUBFOLDER = "JPEG"
         private const val EDIT_SUFFIX = "-Edit"
 
-        val SUPPORTED_EXTENSIONS = setOf(
-            "jpg", "jpeg", "png", "tiff", "tif", "bmp", "gif", "webp",
-            "heif", "heic", "dng", "cr2", "cr3", "nef", "arw", "orf",
-            "rw2", "pef", "srw", "raf", "nrw"
+        val SUPPORTED_EXTENSIONS = PhotoExtensions.RAW + PhotoExtensions.JPEG + setOf(
+            "png", "tiff", "tif", "bmp", "gif", "webp", "heif", "heic", "avif"
         )
 
         private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "phototok_selection", "phototok_leftswipe")
@@ -331,7 +329,8 @@ class LocalImageSourceImpl @Inject constructor(
             return null
         }
         return try {
-            context.contentResolver.query(childrenUri, CHILD_PROJECTION, null, null, null)
+            val sortOrder = "${DocumentsContract.Document.COLUMN_LAST_MODIFIED} ASC"
+            context.contentResolver.query(childrenUri, CHILD_PROJECTION, null, null, sortOrder)
         } catch (e: Exception) {
             // A single unreadable directory must not abort the whole walk.
             Log.w(TAG, "Cannot list children of $parentDocumentId", e)
@@ -386,7 +385,7 @@ class LocalImageSourceImpl @Inject constructor(
         return false
     }
 
-    private fun cleanUpFailedCopy(destFile: DocumentFile) {
+    internal fun cleanUpFailedCopy(destFile: DocumentFile) {
         try {
             destFile.delete()
         } catch (e: Exception) {

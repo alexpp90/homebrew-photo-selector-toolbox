@@ -62,3 +62,16 @@ def test_db_env(tmp_path):
     except ImportError:
         # If the cache module isn't loaded/created yet during initial test setups
         yield
+
+
+@pytest.fixture(autouse=True)
+def test_config_env(tmp_path, monkeypatch):
+    """Ensure tests run with an isolated config file and don't mutate ~/.photo_selector_toolbox/settings.json."""
+    try:
+        from photo_selector_toolbox.core import config
+        test_cfg_dir = tmp_path / ".photo_selector_toolbox"
+        test_cfg_file = test_cfg_dir / "settings.json"
+        monkeypatch.setattr(config, "CONFIG_DIR", test_cfg_dir)
+        monkeypatch.setattr(config, "CONFIG_FILE", test_cfg_file)
+    except ImportError:
+        pass

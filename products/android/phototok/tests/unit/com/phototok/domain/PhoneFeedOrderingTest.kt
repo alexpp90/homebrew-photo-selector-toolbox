@@ -22,7 +22,7 @@ class PhoneFeedOrderingTest {
     )
 
     @Test
-    fun `default order is by date newest first`() {
+    fun `default order is by date chronological oldest first`() {
         val input = listOf(
             img("old.jpg", date = 100),
             img("new.jpg", date = 300),
@@ -31,12 +31,12 @@ class PhoneFeedOrderingTest {
 
         val result = PhoneFeedOrdering.order(input, randomize = false, sortByOrientation = false)
 
-        assertEquals(listOf("new.jpg", "mid.jpg", "old.jpg"), result.images.map { it.fileName })
+        assertEquals(listOf("old.jpg", "mid.jpg", "new.jpg"), result.images.map { it.fileName })
         assertEquals(-1, result.portraitSectionStart)
     }
 
     @Test
-    fun `orientation on groups landscape first then portrait each by date desc`() {
+    fun `orientation on groups landscape first then portrait each by date ascending`() {
         val input = listOf(
             img("p_old.jpg", date = 100, width = 3000, height = 4000), // portrait
             img("l_new.jpg", date = 400, width = 4000, height = 3000), // landscape
@@ -46,9 +46,9 @@ class PhoneFeedOrderingTest {
 
         val result = PhoneFeedOrdering.order(input, randomize = false, sortByOrientation = true)
 
-        // Landscape group (date desc), then portrait group (date desc)
+        // Landscape group (date asc), then portrait group (date asc)
         assertEquals(
-            listOf("l_new.jpg", "l_old.jpg", "p_new.jpg", "p_old.jpg"),
+            listOf("l_old.jpg", "l_new.jpg", "p_old.jpg", "p_new.jpg"),
             result.images.map { it.fileName },
         )
         // Portrait section starts after the 2 landscape images
@@ -64,7 +64,7 @@ class PhoneFeedOrderingTest {
 
         val result = PhoneFeedOrdering.order(input, randomize = false, sortByOrientation = true)
 
-        assertEquals(listOf("l2.jpg", "l1.jpg"), result.images.map { it.fileName })
+        assertEquals(listOf("l1.jpg", "l2.jpg"), result.images.map { it.fileName })
         assertEquals(-1, result.portraitSectionStart)
     }
 
@@ -145,9 +145,7 @@ class PhoneFeedOrderingTest {
     }
 
     @Test
-    fun `appendBatch never reorders photos the user has already seen`() {
-        // First batch is old photos; the second batch contains newer ones. A plain
-        // re-sort would jump them in front of the user mid-swipe — append must not.
+    fun `appendBatch merges batches in chronological order when not randomized`() {
         val current = PhoneFeedOrdering.order(
             listOf(img("b1_old.jpg", 100), img("b1_mid.jpg", 200)),
             randomize = false,
@@ -163,7 +161,7 @@ class PhoneFeedOrderingTest {
         )
 
         assertEquals(
-            listOf("b1_mid.jpg", "b1_old.jpg", "b2_newest.jpg", "b2_newer.jpg"),
+            listOf("b1_old.jpg", "b1_mid.jpg", "b2_newer.jpg", "b2_newest.jpg"),
             result.images.map { it.fileName },
         )
     }

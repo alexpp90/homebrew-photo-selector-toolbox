@@ -17,8 +17,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class SettingsViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -112,6 +117,91 @@ class SettingsViewModelTest {
 
         viewModel.updateLeftSwipeUri("content://left")
         coVerify { settingsRepository.setPhoneLeftSwipeUri("content://left") }
+
+        viewModel.updateSortingEnabled(false)
+        coVerify { settingsRepository.setSortingEnabled(false) }
+
+        viewModel.updateCollectionAction(CollectionAction.MOVE)
+        coVerify { settingsRepository.setPhoneCollectionAction(CollectionAction.MOVE) }
+
+        viewModel.updateSortByOrientation(true)
+        coVerify { settingsRepository.setPhoneSortByOrientation(true) }
+
+        viewModel.updateRandomizeOrder(true)
+        coVerify { settingsRepository.setPhoneRandomizeOrder(true) }
+
+        viewModel.updateCollectionUri("content://coll")
+        coVerify { settingsRepository.setPhoneCollectionUri("content://coll") }
+
+        viewModel.updateFileTypeFilter(FileTypeFilter.RAW)
+        coVerify { settingsRepository.setPhoneFileTypeFilter(FileTypeFilter.RAW) }
+
+        viewModel.updateShowExifOverlay(true)
+        coVerify { settingsRepository.setPhoneShowExifOverlay(true) }
+    }
+
+    @Test
+    fun `updateSelectionFolder trims whitespace and ignores empty input`() = runTest {
+        coEvery { settingsRepository.setSelectionFolderName(any()) } just Runs
+
+        viewModel.updateSelectionFolder("  CustomFolder  ")
+        coVerify(exactly = 1) { settingsRepository.setSelectionFolderName("CustomFolder") }
+
+        viewModel.updateSelectionFolder("   ")
+        coVerify(exactly = 1) { settingsRepository.setSelectionFolderName(any()) }
+
+        viewModel.updateSelectionFolder("")
+        coVerify(exactly = 1) { settingsRepository.setSelectionFolderName(any()) }
+    }
+
+    @Test
+    fun `resetTutorials calls repository and invokes onDone callback`() = runTest {
+        coEvery { settingsRepository.resetFirstRunHints() } just Runs
+        var callbackInvoked = false
+
+        viewModel.resetTutorials {
+            callbackInvoked = true
+        }
+
+        coVerify(exactly = 1) { settingsRepository.resetFirstRunHints() }
+        assertTrue(callbackInvoked)
+    }
+
+    @Test
+    fun `clearCache calls repository and invokes onDone callback`() = runTest {
+        coEvery { settingsRepository.clearCache() } just Runs
+        var callbackInvoked = false
+
+        viewModel.clearCache {
+            callbackInvoked = true
+        }
+
+        coVerify(exactly = 1) { settingsRepository.clearCache() }
+        assertTrue(callbackInvoked)
+    }
+
+    @Test
+    fun `state updates when selectionFolderName and sortingEnabled flows emit`() = runTest {
+        assertEquals("Selection", viewModel.uiState.value.selectionFolderName)
+        assertTrue(viewModel.uiState.value.sortingEnabled)
+
+        selectionFolderNameFlow.value = "NewFolder"
+        sortingEnabledFlow.value = false
+
+        assertEquals("NewFolder", viewModel.uiState.value.selectionFolderName)
+        assertFalse(viewModel.uiState.value.sortingEnabled)
+    }
+
+    @Test
+    fun `state updates when collectionUri and lastFolderUri emit`() = runTest {
+        coEvery { imageRepository.resolveFolderName(any()) } returns "Vacation2026"
+
+        phoneCollectionUriFlow.value = "content://collection"
+        lastFolderUriFlow.value = "content://photos"
+
+        assertEquals("content://collection", viewModel.uiState.value.collectionUri)
+        assertEquals("content://photos", viewModel.uiState.value.sourceFolderUri)
+        assertEquals("Vacation2026", viewModel.uiState.value.sourceFolderName)
     }
 
     @Test
@@ -144,5 +234,19 @@ class SettingsViewModelTest {
 
         assertEquals(SwipeAction.MOVE, viewModel.uiState.value.leftSwipeAction)
         assertEquals("content://left", viewModel.uiState.value.leftSwipeUri)
+    }
+
+    @Test
+    fun `clearCache delegates to settingsRepository and invokes callback`() = runTest {
+        coEvery { settingsRepository.clearCache() } just Runs
+        var called = false
+
+        viewModel.clearCache {
+            called = true
+        }
+        advanceUntilIdle()
+
+        coVerify { settingsRepository.clearCache() }
+        assertTrue(called)
     }
 }

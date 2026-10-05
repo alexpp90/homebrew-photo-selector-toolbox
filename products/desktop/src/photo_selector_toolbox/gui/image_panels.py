@@ -258,7 +258,7 @@ class ImagePanelsMixin:
                 lines.append(f"Noise: {noise_txt}")
 
         details.config(
-            text="\n".join(lines),
+            text="  •  ".join(lines),
         )
         try:
             placeholder_img = create_placeholder_image(w, h, f"Loading: {path.name}")
@@ -304,8 +304,7 @@ class ImagePanelsMixin:
             if not img:
                 return None
 
-            # 3. Return the base unscaled PIL image.
-            # We scale it dynamically in the main thread to fit the UI panel perfectly.
+            # 3. Return the base PIL image scaled to requested container size.
             try:
                 img_copy = img.copy()
                 img_copy.thumbnail(requested_size, Image.Resampling.LANCZOS)

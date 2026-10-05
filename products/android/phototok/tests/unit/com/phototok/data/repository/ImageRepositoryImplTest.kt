@@ -83,6 +83,45 @@ class ImageRepositoryImplTest {
     }
 
     @Test
+    fun `move within one source delegates to that source`() = runTest {
+        coEvery { local.moveImage(localUri, localUri, true, "Sub") } returns true
+
+        assertTrue(repository.moveImage(localUri, localUri, sorting = true, subfolderName = "Sub"))
+    }
+
+    @Test
+    fun `cross-source copy and move are rejected`() = runTest {
+        val resolver = mockk<ImageSourceResolver>()
+        val repo = ImageRepositoryImpl(resolver)
+        val uri1 = mockk<Uri>()
+        val uri2 = mockk<Uri>()
+
+        every { resolver.sameSource(uri1, uri2) } returns false
+
+        org.junit.Assert.assertFalse(repo.copyImage(uri1, uri2, false, "Sub"))
+        org.junit.Assert.assertFalse(repo.moveImage(uri1, uri2, false, "Sub"))
+    }
+
+    @Test
+    fun `prepareSourceFolder and resolveFolderName delegate to source`() = runTest {
+        coEvery { local.prepareSourceFolder(localUri) } returns "Photos"
+        coEvery { local.resolveFolderName(localUri) } returns "Photos"
+
+        assertEquals("Photos", repository.prepareSourceFolder(localUri))
+        assertEquals("Photos", repository.resolveFolderName(localUri))
+    }
+
+    @Test
+    fun `getExifData and getImageDimensions delegate to source`() = runTest {
+        val exif = mockk<com.photoselector.core.model.ExifData>()
+        coEvery { local.getExifData(localUri) } returns exif
+        coEvery { local.getImageDimensions(localUri) } returns Pair(800, 600)
+
+        assertEquals(exif, repository.getExifData(localUri))
+        assertEquals(Pair(800, 600), repository.getImageDimensions(localUri))
+    }
+
+    @Test
     fun `listSelectionImages routes to the owning source`() = runTest {
         coEvery { local.listSelectionImages(localUri, any()) } returns SelectionListing.Missing
 
