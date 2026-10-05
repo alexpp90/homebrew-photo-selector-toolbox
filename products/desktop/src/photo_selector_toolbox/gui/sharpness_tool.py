@@ -1038,16 +1038,25 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         exts_tuple = tuple(extensions)
         files = []
 
-        for dirpath, dirnames, filenames in os.walk(p):
-            # Prune excluded directories in place
-            dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+        # OPTIMIZATION: Replaced os.walk with recursive os.scandir traversal for faster single-pass directory scanning.
+        def _scan_directory(dir_path):
+            try:
+                with os.scandir(dir_path) as it:
+                    for entry in it:
+                        try:
+                            if entry.is_dir(follow_symlinks=False):
+                                if entry.name.lower() not in excluded_names:
+                                    _scan_directory(entry.path)
+                            elif entry.is_file():
+                                name = entry.name
+                                if not name.startswith("._") and name.lower().endswith(exts_tuple):
+                                    files.append(Path(entry.path))
+                        except OSError:
+                            continue
+            except OSError:
+                pass
 
-            dp = Path(dirpath)
-            for f in filenames:
-                if f.startswith("._"):
-                    continue
-                if f.lower().endswith(exts_tuple):
-                    files.append(dp / f)
+        _scan_directory(p)
 
         files.sort(key=lambda x: x.name)
 
