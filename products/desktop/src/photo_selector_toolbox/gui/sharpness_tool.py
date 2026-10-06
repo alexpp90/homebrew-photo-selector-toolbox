@@ -28,7 +28,7 @@ from photo_selector_toolbox.core.utils import (
 from photo_selector_toolbox.gui.aesthetic_settings import AestheticSettingsDialog
 from photo_selector_toolbox.gui.controllers import ImageCacheManager, ScanController
 from photo_selector_toolbox.core.cache import ScoreCache
-from photo_selector_toolbox.core.models import ScanResult, ExifData
+from photo_selector_toolbox.core.models import ScanResult, ExifData, ImageAnalysisContext
 from photo_selector_toolbox.exif.reader import get_exif_data, RAW_EXTENSIONS
 from photo_selector_toolbox.gui.fullscreen_viewer import FullscreenViewer
 from photo_selector_toolbox.gui.image_panels import ImagePanelsMixin
@@ -2588,7 +2588,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             if self.panel_curr.path:
                 self.update_metadata_label(self.panel_curr.path)
 
-    def _set_metadata_labels(self, current_path, exif, res):
+    def _set_metadata_labels(self, current_path, exif=None, res=None):
+        if type(current_path).__name__ == "ImageAnalysisContext" or (
+            hasattr(current_path, "res") and hasattr(current_path, "path") and not isinstance(current_path, Path)
+        ):
+            ctx = current_path
+            current_path = ctx.path
+            res = ctx.res
+            exif = ctx.exif
+
         score_str = format_score(res.score)
         noise_str = format_score(res.noise_score)
         hl_score = res.scores.get("highlight_clipping", "N/A")
@@ -2775,7 +2783,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_meta_lbl.config(text=meta_txt)
             self.focus_meta_lbl.pack(side="top", pady=5, anchor="w")
 
-    def _set_overlay_label(self, overlay, prefix, path, exif, res):
+    def _set_overlay_label(self, overlay, prefix="", path=None, exif=None, res=None):
+        if type(prefix).__name__ == "ImageAnalysisContext" or (
+            hasattr(prefix, "res") and hasattr(prefix, "path") and not isinstance(prefix, (str, Path))
+        ):
+            ctx = prefix
+            prefix = ctx.prefix
+            path = ctx.path
+            exif = ctx.exif
+            res = ctx.res
+
         score_str = format_score(res.score)
         noise_str = format_score(res.noise_score)
         hl_score = res.scores.get("highlight_clipping", "N/A")
@@ -2845,10 +2862,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 except Exception as e:
                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                     res.exif = ExifData()
-                self._set_metadata_labels(current_path, res.exif, res)
+                self._set_metadata_labels(ImageAnalysisContext(path=current_path, res=res, exif=res.exif))
             else:
                 # Initial placeholder display
-                self._set_metadata_labels(current_path, ExifData(), res)
+                self._set_metadata_labels(ImageAnalysisContext(path=current_path, res=res, exif=ExifData()))
                 # Load asynchronously
                 def load_exif_async():
                     try:
@@ -2865,7 +2882,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         pass  # Tk main loop already destroyed (teardown race)
                 threading.Thread(target=load_exif_async, daemon=True).start()
         else:
-            self._set_metadata_labels(current_path, res.exif, res)
+            self._set_metadata_labels(ImageAnalysisContext(path=current_path, res=res, exif=res.exif))
 
         # Resolve authoritative prev_path and next_path if not provided
         if prev_path is None or next_path is None:
@@ -2907,7 +2924,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                 prev_res.exif = ExifData()
                             self._set_overlay_label(
-                                self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res
+                                self.focus_prev_overlay,
+                                ImageAnalysisContext(
+                                    path=prev_path, res=prev_res, exif=prev_res.exif, prefix="Previous"
+                                )
                             )
                         else:
                             def load_prev_exif_async(p=prev_path, r=prev_res):
@@ -2925,11 +2945,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     pass  # Tk main loop already destroyed (teardown race)
                             threading.Thread(target=load_prev_exif_async, daemon=True).start()
                             self._set_overlay_label(
-                                self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res
+                                self.focus_prev_overlay,
+                                ImageAnalysisContext(path=prev_path, res=prev_res, exif=ExifData(), prefix="Previous")
                             )
                     else:
                         self._set_overlay_label(
-                            self.focus_prev_overlay, "Previous", prev_path, prev_res.exif, prev_res
+                            self.focus_prev_overlay,
+                            ImageAnalysisContext(path=prev_path, res=prev_res, exif=prev_res.exif, prefix="Previous")
                         )
                 else:
                     self.focus_prev_overlay.place_forget()
@@ -2952,7 +2974,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             except Exception as e:
                                 logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                 next_res.exif = ExifData()
-                            self._set_overlay_label(self.focus_next_overlay, "Next", next_path, next_res.exif, next_res)
+                            self._set_overlay_label(
+                                self.focus_next_overlay,
+                                ImageAnalysisContext(path=next_path, res=next_res, exif=next_res.exif, prefix="Next")
+                            )
                         else:
                             def load_next_exif_async(p=next_path, r=next_res):
                                 try:
@@ -2968,9 +2993,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 except RuntimeError:
                                     pass  # Tk main loop already destroyed (teardown race)
                             threading.Thread(target=load_next_exif_async, daemon=True).start()
-                            self._set_overlay_label(self.focus_next_overlay, "Next", next_path, ExifData(), next_res)
+                            self._set_overlay_label(
+                                self.focus_next_overlay,
+                                ImageAnalysisContext(path=next_path, res=next_res, exif=ExifData(), prefix="Next")
+                            )
                     else:
-                        self._set_overlay_label(self.focus_next_overlay, "Next", next_path, next_res.exif, next_res)
+                        self._set_overlay_label(
+                            self.focus_next_overlay,
+                            ImageAnalysisContext(path=next_path, res=next_res, exif=next_res.exif, prefix="Next")
+                        )
                 else:
                     self.focus_next_overlay.place_forget()
             else:

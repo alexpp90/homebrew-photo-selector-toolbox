@@ -4,6 +4,16 @@ from typing import Union, Optional, Dict
 
 
 @dataclass
+class ImageAnalysisContext:
+    """Context container bundling an image path, scan result, EXIF data, and optional overlay prefix."""
+
+    path: Path
+    res: "ScanResult"
+    exif: Optional["ExifData"] = None
+    prefix: str = ""
+
+
+@dataclass
 class ExifData:
     """Typed EXIF metadata extracted from an image."""
     shutter_speed: Optional[float] = None
