@@ -5,7 +5,7 @@ import tkinter as tk
 from pathlib import Path
 from typing import List, Dict
 from tkinter import messagebox, ttk
-from photo_selector_toolbox.gui.widgets import ask_directory
+from photo_selector_toolbox.gui.widgets import ask_directory, ToolTip
 import os
 
 import send2trash
@@ -79,8 +79,8 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self._scan_results_idx: Dict[Path, int] = {}
 
        # Defaults
-        self.default_blur_threshold = 100.0
-        self.default_sharp_threshold = 500.0
+        self.default_blur_threshold = 35.0
+        self.default_sharp_threshold = 70.0
         self.default_grid_size = "8x8"
         self.focus_mode = False
         self._pending_triplet_load_id = None
@@ -398,6 +398,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         # Scan button
         self.scan_options_btn = ttk.Button(self.sidebar, text="⚡ Scan for Sharpness/Noise...")
         self.scan_options_btn.pack(fill="x", pady=5)
+        ToolTip(self.scan_options_btn, "Scan current folder for image sharpness and noise")
 
         # Progress Container (holds scan and grouping progress bars)
         self.progress_container = ttk.Frame(self.sidebar)
@@ -533,11 +534,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="◀ Prev (Left)", command=self.prev_candidate
         )
         self.prev_btn.grid(row=0, column=0, sticky="ew", padx=(0, 2), pady=2)
+        ToolTip(self.prev_btn, "Go to the previous image (Hotkey: Left Arrow)")
 
         self.next_btn = ttk.Button(
             btn_frame, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.next_btn.grid(row=0, column=1, sticky="ew", padx=(2, 0), pady=2)
+        ToolTip(self.next_btn, "Go to the next image (Hotkey: Right Arrow)")
 
         ttk.Separator(btn_frame, orient="horizontal").grid(
             row=1, column=0, columnspan=2, sticky="ew", pady=4
@@ -549,6 +552,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.delete_current_candidate,
         )
         self.del_btn.grid(row=2, column=0, columnspan=2, sticky="ew", pady=2)
+        ToolTip(self.del_btn, "Move current image to trash (Hotkey: Delete)")
 
         self.move_btn = ttk.Button(
             btn_frame,
@@ -556,6 +560,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.move_current_to_selection,
         )
         self.move_btn.grid(row=3, column=0, columnspan=2, sticky="ew", pady=2)
+        ToolTip(self.move_btn, "Move current image to Selection folder (Hotkey: M)")
 
         self.copy_btn = ttk.Button(
             btn_frame,
@@ -563,6 +568,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.copy_current_to_selection,
         )
         self.copy_btn.grid(row=4, column=0, columnspan=2, sticky="ew", pady=2)
+        ToolTip(self.copy_btn, "Copy current image to Selection folder (Hotkey: C)")
 
         ttk.Separator(btn_frame, orient="horizontal").grid(
             row=5, column=0, columnspan=2, sticky="ew", pady=4
@@ -572,6 +578,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             btn_frame, text="⛶ Focus Mode (F)", command=self.toggle_focus_mode
         )
         self.focus_toggle_btn.grid(row=6, column=0, columnspan=2, sticky="ew", pady=2)
+        ToolTip(self.focus_toggle_btn, "Toggle distraction-free focus mode (Hotkey: F)")
 
         # --- Bottom Container: Neighbors ---
         self.bottom_container = ttk.Frame(self.preview_area)

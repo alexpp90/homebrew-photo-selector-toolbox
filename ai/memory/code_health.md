@@ -11,6 +11,11 @@ Refactoring candidates and structural lessons. Owned by `@shared-code-health-age
 
 Lessons use the standard `ai/memory/` format (Learning/Action).
 
+## [OPEN] 2026-10-05 - Android Desktop SharpnessAnalyzer still uses un-normalized raw Laplacian variance prone to high-ISO inflation
+**Where:** `products/android/android-desktop/src/com/photoselectortoolbox/domain/analysis/SharpnessAnalyzer.kt`
+**Debt:** Ported originally from the legacy desktop implementation, `SharpnessAnalyzer` computes raw Laplacian variance across grid blocks. On images with high ISO (sensor noise/grain), raw variance spikes into thousands and dominates over actual optical edge focus, causing blurry high-ISO images to score as sharp. Desktop fixed this (2026-10-05) via Laplacian of Gaussian (LoG) pre-filtering, MAD noise-floor subtraction, and compressive 0.0–100.0 normalization. Android Desktop still carries the legacy metric.
+**Proposal:** Port the noise-compensated LoG and MAD baseline subtraction to `SharpnessAnalyzer.kt`, keeping the Android product in parity with the photographic quality metric contract.
+
 ## [OPEN] 2026-08-09 - `save_config` takes a whole file where every caller wants a field, and one caller lost settings for it
 **Where:** `products/desktop/src/photo_selector_toolbox/core/config.py::save_config`, callers in `gui/app.py` (`CollectionSettingsDialog.save_settings`, `_clear_recent_folders`), `gui/sharpness_tool.py` (six load-mutate-save sites), `gui/aesthetic_settings.py::save_settings`
 **Debt:** `save_config(config)` is `json.dump(config)` — it replaces `settings.json` wholesale. Every correct caller therefore has to spell out load → mutate → save, and the one caller that did not (the old Ollama settings dialog, `save_config({"ollama_url": …, "ollama_model": …, "ollama_prompt": …})`) silently erased `selection_folder`, `separate_raw_jpeg`, `recent_folders` and `aesthetic_engine` every time a user pressed Save; `load_config` then refilled them from `DEFAULT_CONFIG`, so the loss reads as "my Selection folder reset itself" rather than as an error. Fixed at that call site while rewriting the dialog (a regression test now asserts an unrelated key survives a save), but the shape that invites the mistake is still the only API. Out of scope here: `core/` belongs to another agent, and three agents were editing this product concurrently.

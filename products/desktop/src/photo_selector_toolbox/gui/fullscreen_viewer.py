@@ -9,6 +9,7 @@ from photo_selector_toolbox.core.utils import load_image_preview
 from photo_selector_toolbox.core.formatting import format_score, format_meta
 from photo_selector_toolbox.exif.reader import get_exif_data
 from photo_selector_toolbox.core.models import ExifData, ScanResult
+from photo_selector_toolbox.gui.widgets import ToolTip
 
 logger = logging.getLogger(__name__)
 
@@ -49,22 +50,28 @@ class FullscreenViewer(tk.Toplevel):
 
         self.close_btn = ttk.Button(self, text="❌ Close (Esc)", command=self.destroy)
         self.close_btn.place(relx=0.95, rely=0.05, anchor="ne")
+        ToolTip(self.close_btn, "Close the fullscreen viewer (Esc)")
 
         # Next / Previous buttons below the Close button
         self.next_btn = ttk.Button(self, text="Next ▶ (N)", command=self.next_image)
         self.next_btn.place(relx=0.95, rely=0.10, anchor="ne")
+        ToolTip(self.next_btn, "Go to the next image (N)")
 
         self.prev_btn = ttk.Button(self, text="◀ Previous (P)", command=self.prev_image)
         self.prev_btn.place(relx=0.95, rely=0.15, anchor="ne")
+        ToolTip(self.prev_btn, "Go to the previous image (P)")
 
         self.del_btn = ttk.Button(self, text="🗑️ Delete (Delete)", command=self.confirm_delete_image)
         self.del_btn.place(relx=0.95, rely=0.20, anchor="ne")
+        ToolTip(self.del_btn, "Move image to trash (Delete)")
 
         self.move_btn = ttk.Button(self, text="⤳ Move to Selection (M)", command=self.move_to_selection)
         self.move_btn.place(relx=0.95, rely=0.25, anchor="ne")
+        ToolTip(self.move_btn, "Move image to selection folder (M)")
 
         self.copy_btn = ttk.Button(self, text="⎘ Copy to Selection (C)", command=self.copy_to_selection)
         self.copy_btn.place(relx=0.95, rely=0.30, anchor="ne")
+        ToolTip(self.copy_btn, "Copy image to selection folder (C)")
 
         self.update_nav_buttons()
 

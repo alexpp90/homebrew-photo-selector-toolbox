@@ -19,6 +19,7 @@ try:
     import rawpy
 except ImportError:
     rawpy = None
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Any
 import logging
@@ -105,8 +106,21 @@ def _calculate_noise_from_gray(gray: np.ndarray) -> float:
     return float(mad / 0.6745)
 
 
-def _calculate_sharpness_from_gray(gray: np.ndarray, grid_size: int = 1) -> float:
-    """Calculates sharpness from a pre-loaded grayscale array (center 50% crop)."""
+def _calculate_sharpness_from_gray(
+    gray: np.ndarray,
+    grid_size: int = 1,
+    noise_level: Optional[float] = None,
+) -> float:
+    """
+    Calculates sharpness from a pre-loaded grayscale array (center 50% crop).
+
+    Uses Laplacian of Gaussian (LoG) and noise-floor subtraction to ensure
+    high-ISO sensor noise does not artificially inflate sharpness scores.
+    The final score is normalized to a 0.0 - 100.0 scale.
+    """
+    if gray.size == 0:
+        return 0.0
+
     h, w = gray.shape
     h_start = int(h * 0.25)
     h_end = int(h * 0.75)
@@ -118,28 +132,61 @@ def _calculate_sharpness_from_gray(gray: np.ndarray, grid_size: int = 1) -> floa
     else:
         cropped = gray[h_start:h_end, w_start:w_end]
 
+    if cropped.size == 0:
+        return 0.0
+
+    # Determine noise floor (standard deviation of the Laplacian of the noise)
+    if noise_level is None:
+        try:
+            noise_sigma = _calculate_noise_from_gray(gray)
+        except Exception:
+            noise_sigma = 0.0
+    else:
+        noise_sigma = float(noise_level)
+
+    # Pre-filter cropped region with Gaussian blur to suppress single-pixel sensor grain
+    min_dim = min(cropped.shape)
+    if min_dim >= 5:
+        blurred = cv2.GaussianBlur(cropped, (5, 5), 1.0)
+    elif min_dim >= 3:
+        blurred = cv2.GaussianBlur(cropped, (3, 3), 1.0)
+    else:
+        blurred = cropped
+
     if grid_size <= 1:
-        return float(cv2.Laplacian(cropped, cv2.CV_32F).var())
+        raw_score = float(cv2.Laplacian(blurred, cv2.CV_32F).var())
+        noise_floor = 0.0035 * (noise_sigma ** 2)
+    else:
+        ch, cw = blurred.shape
+        block_h = ch // grid_size
+        block_w = cw // grid_size
 
-    ch, cw = cropped.shape
-    block_h = ch // grid_size
-    block_w = cw // grid_size
+        if block_h < 10 or block_w < 10:
+            raw_score = float(cv2.Laplacian(blurred, cv2.CV_32F).var())
+            noise_floor = 0.0035 * (noise_sigma ** 2)
+        else:
+            max_score = 0.0
+            for r in range(grid_size):
+                for c in range(grid_size):
+                    y0 = r * block_h
+                    y1 = y0 + block_h
+                    x0 = c * block_w
+                    x1 = x0 + block_w
+                    block = blurred[y0:y1, x0:x1]
+                    score = cv2.Laplacian(block, cv2.CV_32F).var()
+                    if score > max_score:
+                        max_score = float(score)
+            raw_score = float(max_score)
+            noise_floor = 0.0050 * (noise_sigma ** 2)
 
-    if block_h < 10 or block_w < 10:
-        return float(cv2.Laplacian(cropped, cv2.CV_32F).var())
+    corrected = max(0.0, raw_score - noise_floor)
+    if corrected <= 0.0:
+        return 0.0
 
-    max_score = 0.0
-    for r in range(grid_size):
-        for c in range(grid_size):
-            y0 = r * block_h
-            y1 = y0 + block_h
-            x0 = c * block_w
-            x1 = x0 + block_w
-            block = cropped[y0:y1, x0:x1]
-            score = cv2.Laplacian(block, cv2.CV_32F).var()
-            if score > max_score:
-                max_score = float(score)
-    return float(max_score)
+    # Compressive mapping to a 0.0 - 100.0 scale:
+    # S = 100 * (1 - exp(-sqrt(V) / 12))
+    normalized = float(100.0 * (1.0 - np.exp(-np.sqrt(corrected) / 12.0)))
+    return round(normalized, 1)
 
 
 def _calculate_highlight_clipping_from_gray(gray: np.ndarray) -> float:
@@ -231,19 +278,25 @@ def calculate_all_scores(
             results["shadow_clipping"] = 0.0
         return results
 
+    noise_val: Optional[float] = None
+    if need_noise or need_sharpness:
+        try:
+            noise_val = _calculate_noise_from_gray(gray)
+            if need_noise:
+                results["noise"] = noise_val
+        except Exception as e:
+            logger.error(f"Error calculating noise for {filepath}: {e}")
+            if need_noise:
+                results["noise"] = 0.0
+
     if need_sharpness:
         try:
-            results["sharpness"] = _calculate_sharpness_from_gray(gray, grid_size)
+            results["sharpness"] = _calculate_sharpness_from_gray(
+                gray, grid_size, noise_level=noise_val
+            )
         except Exception as e:
             logger.error(f"Error calculating sharpness for {filepath}: {e}")
             results["sharpness"] = 0.0
-
-    if need_noise:
-        try:
-            results["noise"] = _calculate_noise_from_gray(gray)
-        except Exception as e:
-            logger.error(f"Error calculating noise for {filepath}: {e}")
-            results["noise"] = 0.0
 
     if need_highlight:
         try:
@@ -290,13 +343,15 @@ def calculate_noise(filepath: Path) -> float:
 
 def calculate_sharpness(filepath: Path, grid_size: int = 1) -> float:
     """
-    Calculates the sharpness score of an image using the Laplacian Variance method.
+    Calculates the sharpness score of an image normalized to a 0.0 - 100.0 scale.
+    Uses Laplacian of Gaussian (LoG) with noise-floor subtraction to ensure
+    high-ISO sensor noise does not artificially inflate sharpness scores.
     The image is converted to grayscale and cropped to the center 50% before analysis.
 
     If grid_size > 1, the cropped area is split into grid_size x grid_size blocks,
     and the maximum score among the blocks is returned.
 
-    Returns a float score (higher is sharper).
+    Returns a float score in [0.0, 100.0] (higher is sharper).
     Returns 0.0 if image cannot be read.
     """
     img = get_image_data(filepath)
@@ -316,12 +371,12 @@ def calculate_sharpness(filepath: Path, grid_size: int = 1) -> float:
 
 
 def categorize_sharpness(
-    score: float, threshold_blur: float, threshold_sharp: float
+    score: float, threshold_blur: float = 35.0, threshold_sharp: float = 70.0
 ) -> int:
     """
-    Categorizes the sharpness score.
-    < threshold_blur -> Blurry (3)
-    >= threshold_blur and < threshold_sharp -> Acceptable (2)
+    Categorizes the sharpness score (0.0 - 100.0).
+    < threshold_blur (default 35.0) -> Blurry (3)
+    >= threshold_blur and < threshold_sharp (default 70.0) -> Acceptable (2)
     >= threshold_sharp -> Sharp (1)
     """
     if score < threshold_blur:
@@ -330,6 +385,17 @@ def categorize_sharpness(
         return SharpnessCategories.ACCEPTABLE
     else:
         return SharpnessCategories.CRISP
+
+
+@lru_cache(maxsize=128)
+def _get_directory_files(parent_str: str, mtime_ns: int) -> List[str]:
+    """
+    Cached directory listing with st_mtime_ns check to eliminate redundant disk scans.
+    """
+    try:
+        return [entry.name for entry in os.scandir(parent_str) if entry.is_file()]
+    except Exception:
+        return []
 
 
 def find_related_files(filepath: Path) -> List[Path]:
@@ -349,16 +415,19 @@ def find_related_files(filepath: Path) -> List[Path]:
     seen = set(related)
 
     try:
-        # OPTIMIZATION: Replaced Path.glob with single-pass os.scandir traversal.
+        try:
+            mtime_ns = parent.stat().st_mtime_ns
+        except Exception:
+            mtime_ns = 0
+
+        entries = _get_directory_files(str(parent), mtime_ns)
+
         stem_lower = stem.lower()
         stem_dot = stem + "."
         stem_edit = stem_lower + "-edit"
         stem_len = len(stem)
 
-        for entry in os.scandir(parent):
-            if not entry.is_file():
-                continue
-            name = entry.name
+        for name in entries:
             name_lower = name.lower()
 
             if name == stem:
