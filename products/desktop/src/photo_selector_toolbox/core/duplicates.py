@@ -94,27 +94,43 @@ def find_duplicates(root_folder, callback=None):
 
     duplicates = []
 
-    all_files = []
-    for size, group in potential_groups:
-        for filepath in group:
-            all_files.append((filepath, size))
-
-    def _hash_worker(item):
-        filepath, size = item
-        h = get_file_hash(filepath)
-        return filepath, size, h
-
     hash_groups_by_size = defaultdict(lambda: defaultdict(list))
 
-    with ThreadPoolExecutor() as executor:
-        # executor.map yields results sequentially in the main thread
-        for filepath, size, h in executor.map(_hash_worker, all_files):
-            processed_count += 1
-            if callback:
-                callback(processed_count, total_files_to_hash)
+    # To avoid ThreadPoolExecutor overhead for small files, we process them sequentially.
+    # Large files are still processed in parallel since they are I/O bound.
+    LARGE_FILE_THRESHOLD = 1024 * 1024 * 5  # 5 MB
 
-            if h:
-                hash_groups_by_size[size][h].append(filepath)
+    small_files = []
+    large_files = []
+
+    for size, group in potential_groups:
+        for filepath in group:
+            if size <= LARGE_FILE_THRESHOLD:
+                small_files.append((filepath, size))
+            else:
+                large_files.append((filepath, size))
+
+    for filepath, size in small_files:
+        h = get_file_hash(filepath)
+        processed_count += 1
+        if callback:
+            callback(processed_count, total_files_to_hash)
+        if h:
+            hash_groups_by_size[size][h].append(filepath)
+
+    if large_files:
+        def _hash_worker(item):
+            filepath, size = item
+            h = get_file_hash(filepath)
+            return filepath, size, h
+
+        with ThreadPoolExecutor() as executor:
+            for filepath, size, h in executor.map(_hash_worker, large_files):
+                processed_count += 1
+                if callback:
+                    callback(processed_count, total_files_to_hash)
+                if h:
+                    hash_groups_by_size[size][h].append(filepath)
 
     # Add confirmed duplicates
     for size, hash_groups in hash_groups_by_size.items():
