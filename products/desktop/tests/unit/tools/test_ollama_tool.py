@@ -140,3 +140,15 @@ def test_ollama_tool_json_encoding_error(mock_dumps, dummy_image_file, temp_conf
 
     assert "Ollama API request failed" in str(exc_info.value)
     assert "Failed to encode payload" in str(exc_info.value)
+
+
+@patch("socket.getaddrinfo")
+def test_ollama_tool_gaierror(mock_getaddrinfo, dummy_image_file, temp_config_dir):
+    import socket
+    mock_getaddrinfo.side_effect = socket.gaierror("Name or service not known")
+
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError) as exc_info:
+        tool.analyze(dummy_image_file)
+
+    assert "SSRF Protection: Could not resolve hostname" in str(exc_info.value)
