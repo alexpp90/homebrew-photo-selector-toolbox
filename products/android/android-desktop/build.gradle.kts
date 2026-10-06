@@ -195,6 +195,8 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.robolectric)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.hilt.android.testing)
     testImplementation(libs.androidx.room.testing)
     kspTest(libs.hilt.android.compiler)
