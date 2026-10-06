@@ -155,3 +155,47 @@ def test_tooltip_empty_or_hidden_widget():
     tip = ToolTip(mock_widget, "Help")
     tip.show()
     assert tip.tooltip_window is None
+
+
+def test_apply_dark_theme_to_fig():
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
+    from photo_selector_toolbox.gui.app import apply_dark_theme_to_fig
+
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.set_title("Title 1")
+    ax1.set_xlabel("X1")
+    ax1.set_ylabel("Y1")
+    bars = ax1.bar(["A", "B"], [10, 20])
+
+    ax2.set_title("Title 2")
+    ax2.set_xlabel("X2")
+    ax2.set_ylabel("Y2")
+
+    apply_dark_theme_to_fig(fig)
+
+    assert mcolors.to_hex(fig.patch.get_facecolor()).upper() == "#18181B"
+
+    for ax in (ax1, ax2):
+        assert mcolors.to_hex(ax.get_facecolor()).upper() == "#27272A"
+        for spine in ("bottom", "top", "left", "right"):
+            assert mcolors.to_hex(ax.spines[spine].get_edgecolor()).upper() == "#3F3F46"
+        assert mcolors.to_hex(ax.title.get_color()).upper() == "#F4F4F5"
+        assert mcolors.to_hex(ax.xaxis.label.get_color()).upper() == "#F4F4F5"
+        assert mcolors.to_hex(ax.yaxis.label.get_color()).upper() == "#F4F4F5"
+
+    for bar in bars:
+        assert mcolors.to_hex(bar.get_facecolor()).upper() == "#6366F1"
+
+    plt.close(fig)
+
+
+def test_apply_dark_theme_to_fig_empty():
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
+    from photo_selector_toolbox.gui.app import apply_dark_theme_to_fig
+
+    fig = plt.figure()
+    apply_dark_theme_to_fig(fig)
+    assert mcolors.to_hex(fig.patch.get_facecolor()).upper() == "#18181B"
+    plt.close(fig)
