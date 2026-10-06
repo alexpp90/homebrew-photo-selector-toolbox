@@ -140,3 +140,23 @@ def test_ollama_tool_json_encoding_error(mock_dumps, dummy_image_file, temp_conf
 
     assert "Ollama API request failed" in str(exc_info.value)
     assert "Failed to encode payload" in str(exc_info.value)
+
+
+@patch("photo_selector_toolbox.tools.ollama.load_image_preview", return_value=None)
+def test_ollama_tool_image_preview_none(mock_load_preview, dummy_image_file, temp_config_dir):
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError) as exc_info:
+        tool.analyze(dummy_image_file)
+
+    assert "Failed to process image bytes: load_image_preview returned None" in str(exc_info.value)
+
+
+@patch("photo_selector_toolbox.tools.ollama.load_image_preview")
+def test_ollama_tool_image_processing_exception(mock_load_preview, dummy_image_file, temp_config_dir):
+    mock_load_preview.side_effect = Exception("Corrupt image file")
+
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError) as exc_info:
+        tool.analyze(dummy_image_file)
+
+    assert "Failed to process image bytes: Corrupt image file" in str(exc_info.value)
