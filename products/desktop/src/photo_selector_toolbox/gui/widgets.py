@@ -3,7 +3,67 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+import tkinter as tk
 from tkinter import filedialog
+
+
+class ToolTip:
+    """
+    A simple Tooltip for Tkinter widgets.
+    """
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tipwindow = None
+        self.id = None
+        self.widget.bind("<Enter>", self.enter)
+        self.widget.bind("<Leave>", self.leave)
+
+    def enter(self, event=None):
+        self.schedule()
+
+    def leave(self, event=None):
+        self.unschedule()
+        self.hidetip()
+
+    def schedule(self):
+        self.unschedule()
+        self.id = self.widget.after(500, self.showtip)
+
+    def unschedule(self):
+        id_ = self.id
+        self.id = None
+        if id_:
+            self.widget.after_cancel(id_)
+
+    def showtip(self, event=None):
+        if self.tipwindow or not self.text:
+            return
+
+        # Calculate popup position
+        try:
+            x, y, cx, cy = self.widget.bbox("insert")
+        except tk.TclError:
+            x = y = 0
+
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 25
+
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+
+        label = tk.Label(tw, text=self.text, justify="left",
+                         background="#ffffe0", foreground="#000000",
+                         relief="solid", borderwidth=1,
+                         font=("Helvetica", "9", "normal"))
+        label.pack(ipadx=1)
+
+    def hidetip(self):
+        tw = self.tipwindow
+        self.tipwindow = None
+        if tw:
+            tw.destroy()
 
 
 def ask_directory(parent=None, title=None, initialdir=None):
