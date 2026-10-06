@@ -1,9 +1,9 @@
 import shutil
 import sys
 import os
-import urllib.request
 from urllib.error import URLError
 from urllib.parse import urlparse, unquote
+from urllib.request import HTTPRedirectHandler, HTTPHandler, HTTPSHandler
 import logging
 import functools
 from pathlib import Path
@@ -689,7 +689,7 @@ def create_placeholder_image(width: int, height: int, text: str) -> Image.Image:
     # Return a copy so the cached original is never mutated
     return img.copy()
 
-class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+class NoRedirectHandler(HTTPRedirectHandler):
     """
     A custom URL handler that prevents following HTTP redirects.
     This is critical for preventing SSRF bypasses where an attacker
@@ -761,7 +761,7 @@ class SafeSSRFHTTPSConnection(http.client.HTTPSConnection):
         else:
             super().connect()
 
-class SafeSSRFHTTPHandler(urllib.request.HTTPHandler):
+class SafeSSRFHTTPHandler(HTTPHandler):
     def __init__(self, safe_ips, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.safe_ips = safe_ips
@@ -772,7 +772,7 @@ class SafeSSRFHTTPHandler(urllib.request.HTTPHandler):
         return self.do_open(_factory, req)
 
 
-class SafeSSRFHTTPSHandler(urllib.request.HTTPSHandler):
+class SafeSSRFHTTPSHandler(HTTPSHandler):
     def __init__(self, safe_ips, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.safe_ips = safe_ips
