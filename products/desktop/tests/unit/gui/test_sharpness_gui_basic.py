@@ -26,6 +26,7 @@ def mock_sys_modules():
             orig_mod = importlib.import_module("photo_selector_toolbox.core.models")
             mock_mod.ScanResult.side_effect = orig_mod.ScanResult
             mock_mod.ExifData.side_effect = orig_mod.ExifData
+            mock_mod.ImageAnalysisContext.side_effect = orig_mod.ImageAnalysisContext
         elif name == "photo_selector_toolbox.core.utils":
             orig_mod = importlib.import_module("photo_selector_toolbox.core.utils")
             mock_mod.select_representative.side_effect = orig_mod.select_representative
