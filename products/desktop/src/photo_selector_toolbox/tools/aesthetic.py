@@ -115,18 +115,20 @@ def _macos_version_tuple() -> Optional[Tuple[int, ...]]:
         return None
 
 
-# Import probes are the expensive part of the availability checks (a failed
-# import walks the whole sys.path, a successful one loads a PyObjC framework),
-# and they are re-run for every scored image. Their answer cannot change within
-# a process, so memoise it behind a lock — the scan runs on a thread pool.
-# The *config* is deliberately not cached: the user can switch engines mid
-# session and must not have to restart.
 _PROBE_LOCK = threading.Lock()
 _PROBE_CACHE: Dict[str, bool] = {}
 
 
 def _module_importable(module_name: str) -> bool:
-    """True when ``import <module_name>`` succeeds. Memoised per process."""
+    """True when ``import <module_name>`` succeeds. Memoised per process.
+
+    Import probes are the expensive part of the availability checks (a failed
+    import walks the whole sys.path, a successful one loads a PyObjC framework),
+    and they are re-run for every scored image. Their answer cannot change within
+    a process, so memoise it behind a lock — the scan runs on a thread pool.
+    The *config* is deliberately not cached: the user can switch engines mid
+    session and must not have to restart.
+    """
     with _PROBE_LOCK:
         cached = _PROBE_CACHE.get(module_name)
         if cached is not None:
