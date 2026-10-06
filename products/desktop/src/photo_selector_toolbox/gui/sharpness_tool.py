@@ -2589,9 +2589,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 self.update_metadata_label(self.panel_curr.path)
 
     def _set_metadata_labels(self, current_path, exif=None, res=None):
-        if type(current_path).__name__ == "ImageAnalysisContext" or (
-            hasattr(current_path, "res") and hasattr(current_path, "path") and not isinstance(current_path, Path)
-        ):
+        if res is None and hasattr(current_path, "res") and hasattr(current_path, "path"):
             ctx = current_path
             current_path = ctx.path
             res = ctx.res
@@ -2784,9 +2782,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_meta_lbl.pack(side="top", pady=5, anchor="w")
 
     def _set_overlay_label(self, overlay, prefix="", path=None, exif=None, res=None):
-        if type(prefix).__name__ == "ImageAnalysisContext" or (
-            hasattr(prefix, "res") and hasattr(prefix, "path") and not isinstance(prefix, (str, Path))
-        ):
+        if res is None and hasattr(prefix, "res") and hasattr(prefix, "path"):
             ctx = prefix
             prefix = ctx.prefix
             path = ctx.path
