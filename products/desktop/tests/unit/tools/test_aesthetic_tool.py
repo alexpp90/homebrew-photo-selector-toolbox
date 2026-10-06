@@ -17,6 +17,7 @@ from photo_selector_toolbox.tools.aesthetic import (
     ENGINE_OLLAMA,
     apple_vision_available,
     apple_vision_unavailable_reason,
+    describe_active_engine,
     map_apple_score_to_10,
     nima_distribution_to_score,
     reset_availability_probe_cache,
@@ -267,3 +268,10 @@ def test_select_engine_still_returns_a_bare_string():
     result = select_engine({"aesthetic_engine": "auto"}, apple_ok=True)
     assert isinstance(result, str)
     assert result == ENGINE_APPLE_VISION
+
+
+def test_describe_active_engine_resolves_current_config():
+    with patch("photo_selector_toolbox.tools.aesthetic.load_config", return_value={"aesthetic_engine": "nima_onnx"}):
+        engine, reason = describe_active_engine()
+        assert engine == ENGINE_NIMA_ONNX
+        assert "explicitly configured as 'nima_onnx'" in reason
