@@ -15,12 +15,14 @@ import org.opencv.imgproc.Imgproc
  *
  * Ported from the desktop Python implementation.
  */
-class ClippingAnalyzer @Inject constructor() {
+open class ClippingAnalyzer @Inject constructor() {
 
     companion object {
         private const val HIGHLIGHT_THRESHOLD = 254.0
         private const val SHADOW_THRESHOLD = 2.0
     }
+
+    internal open fun createMat(): Mat = Mat()
 
     /**
      * Analyze the percentage of highlight-clipped pixels.
@@ -29,7 +31,7 @@ class ClippingAnalyzer @Inject constructor() {
      * @return Percentage of pixels with grayscale value >= 254 (0.0 to 100.0).
      */
     fun analyzeHighlightClipping(bitmap: Bitmap): Double {
-        val srcMat = Mat()
+        val srcMat = createMat()
         try {
             Utils.bitmapToMat(bitmap, srcMat)
             return computeHighlightClipping(srcMat)
@@ -45,7 +47,7 @@ class ClippingAnalyzer @Inject constructor() {
      * @return Percentage of pixels with grayscale value <= 2 (0.0 to 100.0).
      */
     fun analyzeShadowClipping(bitmap: Bitmap): Double {
-        val srcMat = Mat()
+        val srcMat = createMat()
         try {
             Utils.bitmapToMat(bitmap, srcMat)
             return computeShadowClipping(srcMat)
@@ -55,8 +57,8 @@ class ClippingAnalyzer @Inject constructor() {
     }
 
     private fun computeHighlightClipping(srcMat: Mat): Double {
-        val grayMat = Mat()
-        val thresholdMat = Mat()
+        val grayMat = createMat()
+        val thresholdMat = createMat()
         try {
             toGrayscale(srcMat, grayMat)
 
@@ -81,8 +83,8 @@ class ClippingAnalyzer @Inject constructor() {
     }
 
     private fun computeShadowClipping(srcMat: Mat): Double {
-        val grayMat = Mat()
-        val thresholdMat = Mat()
+        val grayMat = createMat()
+        val thresholdMat = createMat()
         try {
             toGrayscale(srcMat, grayMat)
 
@@ -115,10 +117,10 @@ class ClippingAnalyzer @Inject constructor() {
      * @return Pair of (highlightClipping%, shadowClipping%).
      */
     fun analyzeClipping(bitmap: Bitmap): Pair<Double, Double> {
-        val srcMat = Mat()
-        val grayMat = Mat()
-        val highlightThresholdMat = Mat()
-        val shadowThresholdMat = Mat()
+        val srcMat = createMat()
+        val grayMat = createMat()
+        val highlightThresholdMat = createMat()
+        val shadowThresholdMat = createMat()
         try {
             Utils.bitmapToMat(bitmap, srcMat)
             toGrayscale(srcMat, grayMat)
