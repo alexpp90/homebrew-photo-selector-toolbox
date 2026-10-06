@@ -81,11 +81,14 @@ class MoveToSelectionUseCase @Inject constructor(
                 MoveResult(image.uri, null, false, "Cannot create Selection folder")
             }
 
-        // Create subfolders
-        val rawDir = selectionDir.findFile(RAW_SUBFOLDER)
-            ?: selectionDir.createDirectory(RAW_SUBFOLDER)
-        val jpegDir = selectionDir.findFile(JPEG_SUBFOLDER)
-            ?: selectionDir.createDirectory(JPEG_SUBFOLDER)
+        val rawDir by lazy {
+            selectionDir.findFile(RAW_SUBFOLDER)
+                ?: selectionDir.createDirectory(RAW_SUBFOLDER)
+        }
+        val jpegDir by lazy {
+            selectionDir.findFile(JPEG_SUBFOLDER)
+                ?: selectionDir.createDirectory(JPEG_SUBFOLDER)
+        }
 
         val results = images.map { image ->
             async {
