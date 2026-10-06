@@ -148,7 +148,8 @@ class ScoreCache:
             path_map = {os.path.abspath(p): p for p in filepaths}
             path_list = list(path_map.keys())
 
-            chunk_size = 500
+            chunk_size = 999
+            matched_fps = []
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 for i in range(0, len(path_list), chunk_size):
@@ -163,10 +164,10 @@ class ScoreCache:
                         orig_path = path_map.get(fp)
                         if orig_path:
                             results[orig_path] = json.loads(score_str)
+                            matched_fps.append(fp)
 
                 # Bulk update last_used for matches
-                if results:
-                    matched_fps = [os.path.abspath(p) for p in results.keys()]
+                if matched_fps:
                     update_data = [(now, fp) for fp in matched_fps]
                     conn.executemany(
                         "UPDATE image_cache SET last_used = ? WHERE filepath = ?",
