@@ -140,3 +140,43 @@ def test_ollama_tool_json_encoding_error(mock_dumps, dummy_image_file, temp_conf
 
     assert "Ollama API request failed" in str(exc_info.value)
     assert "Failed to encode payload" in str(exc_info.value)
+
+
+def test_ollama_tool_invalid_url_scheme(dummy_image_file, temp_config_dir):
+    save_config({"ollama_url": "ftp://localhost:11434"})
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError) as exc_info:
+        tool.analyze(dummy_image_file)
+    assert "Ollama URL must start with http:// or https://" in str(exc_info.value)
+
+
+@patch("photo_selector_toolbox.tools.ollama.load_image_preview", return_value=None)
+def test_ollama_tool_image_load_failure(mock_load, dummy_image_file, temp_config_dir):
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError) as exc_info:
+        tool.analyze(dummy_image_file)
+    assert "Failed to process image bytes: load_image_preview returned None" in str(exc_info.value)
+
+
+@patch("socket.getaddrinfo")
+def test_ollama_tool_ssrf_resolution_failure(mock_getaddrinfo, dummy_image_file, temp_config_dir):
+    import socket
+    mock_getaddrinfo.side_effect = socket.gaierror("Name or service not known")
+    tool = OllamaAestheticTool()
+    with pytest.raises(RuntimeError) as exc_info:
+        tool.analyze(dummy_image_file)
+    assert "SSRF Protection: Could not resolve hostname" in str(exc_info.value)
+
+
+@patch("urllib.request.OpenerDirector.open")
+def test_ollama_tool_analysis_tag_truncation(mock_open, dummy_image_file, temp_config_dir):
+    long_tag = "A" * 35
+    mock_resp_payload = {"response": f"[SCORE: 8.0] [ANALYSIS: {long_tag}]"}
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps(mock_resp_payload).encode("utf-8")
+    mock_response.__enter__.return_value = mock_response
+    mock_open.return_value = mock_response
+
+    tool = OllamaAestheticTool()
+    _, tag = tool.analyze(dummy_image_file)
+    assert tag == "A" * 27 + "..."
