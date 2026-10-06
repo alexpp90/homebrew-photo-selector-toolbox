@@ -96,6 +96,7 @@ class ScanImagesUseCase @Inject constructor(
         val currentTime = System.currentTimeMillis()
         val validCacheHits = mutableMapOf<String, ScanResult>()
         val urisToUpdate = mutableListOf<String>()
+        val needsAestheticRecompute = aestheticEnabled && aestheticAnalyzer.isAvailable()
 
         for (image in images) {
             val cached = cachedScores[image.uri] ?: continue
@@ -108,7 +109,7 @@ class ScanImagesUseCase @Inject constructor(
             // If the user now wants an aesthetic score but the cached row predates
             // it (and a model is available), recompute rather than serving a stale
             // hit with no aesthetic value.
-            if (aestheticEnabled && cached.aestheticScore == null && aestheticAnalyzer.isAvailable()) {
+            if (needsAestheticRecompute && cached.aestheticScore == null) {
                 continue
             }
 
