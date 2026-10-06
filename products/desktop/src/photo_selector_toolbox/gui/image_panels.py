@@ -1,4 +1,7 @@
+from dataclasses import dataclass
 import logging
+from pathlib import Path
+from typing import Optional, Tuple
 from PIL import Image, ImageTk
 from tkinter import ttk
 
@@ -7,6 +10,27 @@ from photo_selector_toolbox.core.utils import load_image_preview, create_placeho
 from photo_selector_toolbox.core.formatting import format_score
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PathTriplet:
+    prev_path: Optional[Path] = None
+    curr_path: Optional[Path] = None
+    next_path: Optional[Path] = None
+
+
+@dataclass
+class ImageSizes:
+    prev_size: Tuple[int, int] = (800, 600)
+    curr_size: Tuple[int, int] = (800, 600)
+    next_size: Tuple[int, int] = (800, 600)
+
+
+@dataclass
+class ImageTriplet:
+    prev_img: Optional[Image.Image] = None
+    curr_img: Optional[Image.Image] = None
+    next_img: Optional[Image.Image] = None
 
 
 class ImagePanelsMixin:
@@ -275,7 +299,7 @@ class ImagePanelsMixin:
             panel.pil_image = placeholder_img
 
     def load_images_background(
-        self, prev_path, curr_path, next_path, size_curr, size_prev, size_next
+        self, paths: PathTriplet, sizes: ImageSizes
     ):
         CACHE_SIZE = (1200, 900)
 
@@ -313,24 +337,26 @@ class ImagePanelsMixin:
                 logger.error(f"Error preparing {path}: {e}")
                 return None
 
-        p_img = get_image(prev_path, size_prev)
-        c_img = get_image(curr_path, size_curr)
-        n_img = get_image(next_path, size_next)
+        p_img = get_image(paths.prev_path, sizes.prev_size)
+        c_img = get_image(paths.curr_path, sizes.curr_size)
+        n_img = get_image(paths.next_path, sizes.next_size)
+
+        images = ImageTriplet(prev_img=p_img, curr_img=c_img, next_img=n_img)
 
         # Update UI in main thread
         try:
-            self.parent.after(0, lambda: self.update_panels_final(p_img, c_img, n_img, prev_path, curr_path, next_path))
+            self.parent.after(0, lambda: self.update_panels_final(images, paths))
         except RuntimeError:
             pass  # Tk main loop already destroyed (teardown race)
 
-    def update_panels_final(self, p_img, c_img, n_img, prev_path, curr_path, next_path):
+    def update_panels_final(self, images: ImageTriplet, paths: PathTriplet):
         if (
-            self.panel_prev.path != prev_path
-            or self.panel_curr.path != curr_path
-            or self.panel_next.path != next_path
+            self.panel_prev.path != paths.prev_path
+            or self.panel_curr.path != paths.curr_path
+            or self.panel_next.path != paths.next_path
         ):
             return  # Stale load, ignore
-        self.current_triplet_images = (p_img, c_img, n_img)
+        self.current_triplet_images = (images.prev_img, images.curr_img, images.next_img)
         self.refresh_active_view(is_loaded=True)
 
     def refresh_active_view(self, is_loaded=False):
