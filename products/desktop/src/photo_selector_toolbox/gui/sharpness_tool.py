@@ -31,7 +31,7 @@ from photo_selector_toolbox.core.cache import ScoreCache
 from photo_selector_toolbox.core.models import ScanResult, ExifData
 from photo_selector_toolbox.exif.reader import get_exif_data, RAW_EXTENSIONS
 from photo_selector_toolbox.gui.fullscreen_viewer import FullscreenViewer
-from photo_selector_toolbox.gui.image_panels import ImagePanelsMixin
+from photo_selector_toolbox.gui.image_panels import ImagePanelsMixin, PathTriplet, ImageSizes
 
 logger = logging.getLogger(__name__)
 
@@ -2496,10 +2496,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         size_prev = _get_valid_size(p_w, p_h)
         size_next = _get_valid_size(n_w, n_h)
 
+        paths = PathTriplet(prev_path=prev_path, curr_path=current_path, next_path=next_path)
+        sizes = ImageSizes(prev_size=size_prev, curr_size=size_curr, next_size=size_next)
+
         # Start background thread for loading images
         threading.Thread(
             target=self.load_images_background,
-            args=(prev_path, current_path, next_path, size_curr, size_prev, size_next),
+            args=(paths, sizes),
             daemon=True,
         ).start()
 

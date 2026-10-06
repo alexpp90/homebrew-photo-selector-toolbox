@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-from photo_selector_toolbox.gui.image_panels import ImagePanelsMixin
+from photo_selector_toolbox.gui.image_panels import ImagePanelsMixin, PathTriplet, ImageSizes, ImageTriplet
 from photo_selector_toolbox.core.models import ScanResult
 
 @pytest.fixture(autouse=True)
@@ -282,7 +282,10 @@ def test_load_images_background(mock_gui_deps):
     host.panel_next.path = path3
     host.refresh_active_view = MagicMock()
 
-    host.load_images_background(path1, path2, path3, (100, 100), (100, 100), (100, 100))
+    paths = PathTriplet(prev_path=path1, curr_path=path2, next_path=path3)
+    sizes = ImageSizes(prev_size=(100, 100), curr_size=(100, 100), next_size=(100, 100))
+
+    host.load_images_background(paths, sizes)
 
     # check that parent.after was called
     host.parent.after.assert_called_once()
@@ -302,7 +305,9 @@ def test_update_panels_final():
 
     # Case 1: Stale load
     host.panel_prev.path = Path("old1.jpg")
-    host.update_panels_final(None, None, None, Path("new1.jpg"), Path("new2.jpg"), Path("new3.jpg"))
+    stale_images = ImageTriplet(prev_img=None, curr_img=None, next_img=None)
+    stale_paths = PathTriplet(prev_path=Path("new1.jpg"), curr_path=Path("new2.jpg"), next_path=Path("new3.jpg"))
+    host.update_panels_final(stale_images, stale_paths)
     assert not hasattr(host, "current_triplet_images")
 
     # Case 2: Fresh load
@@ -313,7 +318,10 @@ def test_update_panels_final():
     # Mock refresh_active_view
     host.refresh_active_view = MagicMock()
 
-    host.update_panels_final("img1", "img2", "img3", Path("1.jpg"), Path("2.jpg"), Path("3.jpg"))
+    fresh_images = ImageTriplet(prev_img="img1", curr_img="img2", next_img="img3")
+    fresh_paths = PathTriplet(prev_path=Path("1.jpg"), curr_path=Path("2.jpg"), next_path=Path("3.jpg"))
+
+    host.update_panels_final(fresh_images, fresh_paths)
     assert host.current_triplet_images == ("img1", "img2", "img3")
     host.refresh_active_view.assert_called_once()
 
@@ -429,6 +437,8 @@ def test_load_images_background_errors(mock_gui_deps, caplog):
     host = DummyMixinHost()
 
     path = Path("err.jpg")
+    paths = PathTriplet(prev_path=path, curr_path=None, next_path=None)
+    sizes = ImageSizes(prev_size=(100, 100), curr_size=(100, 100), next_size=(100, 100))
 
     # Force get_preview to return None
     host.cache_manager.get_preview.return_value = None
@@ -436,7 +446,7 @@ def test_load_images_background_errors(mock_gui_deps, caplog):
     # Force load_image_preview to raise Exception
     mock_gui_deps["load_image_preview"].side_effect = Exception("Load error")
 
-    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
+    host.load_images_background(paths, sizes)
     assert "Error loading err.jpg: Load error" in caplog.text
 
     # Now make load_image_preview return a valid image, but copy() raise an exception
@@ -445,17 +455,15 @@ def test_load_images_background_errors(mock_gui_deps, caplog):
     mock_gui_deps["load_image_preview"].side_effect = None
     mock_gui_deps["load_image_preview"].return_value = img_mock
 
-    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
+    host.load_images_background(paths, sizes)
     assert "Error preparing err.jpg: Copy error" in caplog.text
-
-
 
     # Now make copy() succeed, but thumbnail() raise an exception
     img_mock.copy.side_effect = None
     img_mock.copy.return_value.thumbnail.side_effect = Exception("Thumbnail error")
     mock_gui_deps["load_image_preview"].return_value = img_mock
 
-    host.load_images_background(path, None, None, (100, 100), (100, 100), (100, 100))
+    host.load_images_background(paths, sizes)
     assert "Error preparing err.jpg: Thumbnail error" in caplog.text
 
 
