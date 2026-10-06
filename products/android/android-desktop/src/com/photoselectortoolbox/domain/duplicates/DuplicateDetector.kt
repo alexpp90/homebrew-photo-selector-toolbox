@@ -6,6 +6,8 @@ import com.photoselectortoolbox.data.model.DuplicateGroup
 import java.security.DigestInputStream
 import java.security.MessageDigest
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -128,6 +130,7 @@ class DuplicateDetector @Inject constructor() {
         val hashMap = mutableMapOf<String, MutableList<String>>()
 
         for (uri in uris) {
+            coroutineContext.ensureActive()
             val hash = computeHash(uri, context)
             if (hash != null) {
                 hashMap.getOrPut(hash) { mutableListOf() }.add(uri.toString())
@@ -153,10 +156,13 @@ class DuplicateDetector @Inject constructor() {
                     val buffer = ByteArray(BUFFER_SIZE)
                     @Suppress("ControlFlowWithEmptyBody")
                     while (digestStream.read(buffer) != -1) {
+                        coroutineContext.ensureActive()
                         // Reading drives the digest computation
                     }
                 }
                 digest.digest().joinToString("") { "%02x".format(it) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 null
             }
