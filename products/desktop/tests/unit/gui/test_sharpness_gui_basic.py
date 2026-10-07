@@ -170,8 +170,30 @@ def test_sharpness_tool_filtering():
         tool.update = MagicMock()
         tool.folder_var.get.return_value = "/mock/folder"
 
-        walk_return = [("/mock/folder", [], ["img1.jpg", "img2.arw", "img3.jpg", "img4.png"])]
-        with patch("os.walk", return_value=walk_return):
+        class MockDirEntry:
+            def __init__(self, name, path, is_dir_val=False):
+                self.name = name
+                self.path = path
+                self._is_dir = is_dir_val
+            def is_file(self): return not self._is_dir
+            def is_dir(self, follow_symlinks=False): return self._is_dir
+
+        class MockScanDir:
+            def __init__(self, entries): self.entries = entries
+            def __enter__(self): return iter(self.entries)
+            def __exit__(self, exc_type, exc_val, exc_tb): pass
+
+        def mock_scandir(path):
+            if str(path) == "/mock/folder":
+                return MockScanDir([
+                    MockDirEntry("img1.jpg", "/mock/folder/img1.jpg"),
+                    MockDirEntry("img2.arw", "/mock/folder/img2.arw"),
+                    MockDirEntry("img3.jpg", "/mock/folder/img3.jpg"),
+                    MockDirEntry("img4.png", "/mock/folder/img4.png")
+                ])
+            return MockScanDir([])
+
+        with patch("os.scandir", side_effect=mock_scandir):
             with patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}):
                 tool._load_folder_contents("/mock/folder")
 
@@ -391,8 +413,30 @@ def test_mac_metadata_ignored():
         tool.update = MagicMock()
         tool.folder_var.get.return_value = "/mock/folder"
 
-        walk_return = [("/mock/folder", [], ["img1.jpg", "._img1.jpg", "img2.arw", "._img2.arw"])]
-        with patch("os.walk", return_value=walk_return):
+        class MockDirEntry:
+            def __init__(self, name, path, is_dir_val=False):
+                self.name = name
+                self.path = path
+                self._is_dir = is_dir_val
+            def is_file(self): return not self._is_dir
+            def is_dir(self, follow_symlinks=False): return self._is_dir
+
+        class MockScanDir:
+            def __init__(self, entries): self.entries = entries
+            def __enter__(self): return iter(self.entries)
+            def __exit__(self, exc_type, exc_val, exc_tb): pass
+
+        def mock_scandir(path):
+            if str(path) == "/mock/folder":
+                return MockScanDir([
+                    MockDirEntry("img1.jpg", "/mock/folder/img1.jpg"),
+                    MockDirEntry("._img1.jpg", "/mock/folder/._img1.jpg"),
+                    MockDirEntry("img2.arw", "/mock/folder/img2.arw"),
+                    MockDirEntry("._img2.arw", "/mock/folder/._img2.arw")
+                ])
+            return MockScanDir([])
+
+        with patch("os.scandir", side_effect=mock_scandir):
             with patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw"}):
                 tool._load_folder_contents("/mock/folder")
 
