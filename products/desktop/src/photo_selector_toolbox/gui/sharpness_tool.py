@@ -873,6 +873,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.toggle_focus_mode,
         )
         self.focus_exit_btn.pack(side="top", pady=10, fill="x")
+        ToolTip(self.focus_exit_btn, "Exit Focus Mode (Hotkey: F or Esc)")
 
         ttk.Separator(self.focus_right_panel, orient="horizontal").pack(
             fill="x", pady=10
@@ -883,11 +884,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_right_panel, text="◀ Previous (Left)", command=self.prev_candidate
         )
         self.focus_prev_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_prev_btn, "Go to the previous image (Hotkey: Left Arrow)")
 
         self.focus_next_btn = ttk.Button(
             self.focus_right_panel, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.focus_next_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_next_btn, "Go to the next image (Hotkey: Right Arrow)")
 
         self.focus_del_btn = ttk.Button(
             self.focus_right_panel,
@@ -895,6 +898,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.delete_current_candidate,
         )
         self.focus_del_btn.pack(side="top", pady=20, fill="x")
+        ToolTip(self.focus_del_btn, "Move current image to trash (Hotkey: Delete)")
 
         self.focus_move_btn = ttk.Button(
             self.focus_right_panel,
@@ -902,6 +906,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.move_current_to_selection,
         )
         self.focus_move_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_move_btn, "Move current image to Selection folder (Hotkey: M)")
 
         self.focus_copy_btn = ttk.Button(
             self.focus_right_panel,
@@ -909,6 +914,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.copy_current_to_selection,
         )
         self.focus_copy_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_copy_btn, "Copy current image to Selection folder (Hotkey: C)")
 
     def _setup_focus_bottom_panel(self):
        # --- Row 1: Bottom Strip ---
