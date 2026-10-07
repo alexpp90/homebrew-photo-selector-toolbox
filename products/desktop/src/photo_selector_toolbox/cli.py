@@ -71,12 +71,15 @@ def _scan_image_files(root_path: Path) -> list[Path]:
         try:
             with os.scandir(path) as it:
                 for entry in it:
-                    if entry.is_file():
-                        if not entry.name.startswith("._") and entry.name.lower().endswith(supported_exts_tuple):
-                            image_files.append(Path(entry.path))
-                    elif entry.is_dir(follow_symlinks=False):
-                        if entry.name.lower() not in excluded_names:
-                            _scan(entry.path)
+                    try:
+                        if entry.is_file():
+                            if not entry.name.startswith("._") and entry.name.lower().endswith(supported_exts_tuple):
+                                image_files.append(Path(entry.path))
+                        elif entry.is_dir(follow_symlinks=False):
+                            if entry.name.lower() not in excluded_names:
+                                _scan(entry.path)
+                    except OSError:
+                        pass
         except OSError:
             pass
 

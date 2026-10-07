@@ -1110,12 +1110,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             try:
                 with os.scandir(path) as it:
                     for entry in it:
-                        if entry.is_file():
-                            if not entry.name.startswith("._") and entry.name.lower().endswith(exts_tuple):
-                                disk_files.append(Path(entry.path))
-                        elif entry.is_dir(follow_symlinks=False):
-                            if entry.name.lower() not in excluded_names:
-                                _scan_disk(entry.path)
+                        try:
+                            if entry.is_file():
+                                if not entry.name.startswith("._") and entry.name.lower().endswith(exts_tuple):
+                                    disk_files.append(Path(entry.path))
+                            elif entry.is_dir(follow_symlinks=False):
+                                if entry.name.lower() not in excluded_names:
+                                    _scan_disk(entry.path)
+                        except OSError:
+                            pass
             except OSError:
                 pass
         _scan_disk(folder_path)
@@ -1153,12 +1156,15 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             try:
                 with os.scandir(path) as it:
                     for entry in it:
-                        if entry.is_file():
-                            if not entry.name.startswith("._") and entry.name.lower().endswith(exts_tuple):
-                                files.append(Path(entry.path))
-                        elif entry.is_dir(follow_symlinks=False):
-                            if entry.name.lower() not in excluded_names:
-                                _scan_files(entry.path)
+                        try:
+                            if entry.is_file():
+                                if not entry.name.startswith("._") and entry.name.lower().endswith(exts_tuple):
+                                    files.append(Path(entry.path))
+                            elif entry.is_dir(follow_symlinks=False):
+                                if entry.name.lower() not in excluded_names:
+                                    _scan_files(entry.path)
+                        except OSError:
+                            pass
             except OSError:
                 pass
         _scan_files(p)
@@ -1977,14 +1983,17 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         for entry in it:
                             if new_found:
                                 return
-                            if entry.is_file():
-                                if not entry.name.startswith("._") and entry.name.lower().endswith(exts_tuple):
-                                    if Path(entry.path) not in current_files_set:
-                                        new_found = True
-                                        return
-                            elif entry.is_dir(follow_symlinks=False):
-                                if entry.name.lower() not in excluded_names:
-                                    _scan_new(entry.path)
+                            try:
+                                if entry.is_file():
+                                    if not entry.name.startswith("._") and entry.name.lower().endswith(exts_tuple):
+                                        if Path(entry.path) not in current_files_set:
+                                            new_found = True
+                                            return
+                                elif entry.is_dir(follow_symlinks=False):
+                                    if entry.name.lower() not in excluded_names:
+                                        _scan_new(entry.path)
+                            except OSError:
+                                pass
                 except OSError:
                     pass
             _scan_new(Path(folder))
