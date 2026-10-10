@@ -238,6 +238,27 @@ public final class FileCullingManager: @unchecked Sendable {
         let targets = findCompanionFiles(for: photoURL)
         var trashedURLs: [URL] = []
 
+        // In headless CI environments (e.g. GitHub Actions), FileManager.trashItem blocks indefinitely
+        // waiting for an interactive desktop user session / Finder. Fall back to moving to a dedicated
+        // simulated trash directory so file operations and undo remain fully testable without hanging.
+        let isCI = ProcessInfo.processInfo.environment["CI"] != nil
+        if isCI {
+            let simulatedTrash = fileManager.temporaryDirectory.appendingPathComponent(".SimulatedTrash", isDirectory: true)
+            let batchDir = simulatedTrash.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try? fileManager.createDirectory(at: batchDir, withIntermediateDirectories: true)
+            for target in targets {
+                guard fileManager.fileExists(atPath: target.path) else { continue }
+                let destination = batchDir.appendingPathComponent(target.lastPathComponent)
+                do {
+                    try fileManager.moveItem(at: target, to: destination)
+                    trashedURLs.append(destination)
+                } catch {
+                    throw FileCullingError.trashFailed(url: target, reason: error.localizedDescription)
+                }
+            }
+            return trashedURLs
+        }
+
         for target in targets {
             guard fileManager.fileExists(atPath: target.path) else { continue }
             var resultingURL: NSURL?
