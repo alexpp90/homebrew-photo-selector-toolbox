@@ -466,7 +466,6 @@ struct AdversarialScoringStressTests {
         }
         let t6 = DispatchTime.now()
 
-        free(src8.data)
         free(srcF.data)
         free(smoothedF.data)
         free(laplacianF.data)
@@ -507,6 +506,7 @@ struct AdversarialScoringStressTests {
         }
         let tNoiseEnd = DispatchTime.now()
         let dNoise = Double(tNoiseEnd.uptimeNanoseconds - tNoiseStart.uptimeNanoseconds) / Double(iterations) / 1_000_000.0
+        free(src8.data)
 
         let tAllocStart = DispatchTime.now()
         for _ in 0..<iterations {
