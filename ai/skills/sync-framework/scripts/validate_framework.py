@@ -639,7 +639,7 @@ def check_product_boundary_leaks() -> None:
             slug = spec["slug"]
             if f'"{slug}":' not in text and f"'{slug}':" not in text:
                 fail(f"ai/hooks/guard_scope.py: missing FORBIDDEN configuration for slug '{slug}'")
-            expected_prefix = str(spec["dir"].relative_to(REPO)) + "/"
+            expected_prefix = spec["dir"].relative_to(REPO).as_posix() + "/"
             if expected_prefix not in text:
                 fail(f"ai/hooks/guard_scope.py: missing path prefix '{expected_prefix}'")
     ok("product boundary leak verification passed")
@@ -677,7 +677,7 @@ def check_toolchain_parity() -> None:
                 combined_cursor_text += mdc.read_text(encoding="utf-8") + "\n"
 
             for prod_id, spec in ACTIVE_PRODUCTS.items():
-                if str(spec["dir"].relative_to(REPO)) not in combined_cursor_text:
+                if spec["dir"].relative_to(REPO).as_posix() not in combined_cursor_text:
                     fail(f".cursor/rules/: missing coverage for active product '{prod_id}'")
             ok(f".cursor/rules/ validated ({len(mdc_files)} rules, all 5 products covered)")
 
@@ -692,7 +692,7 @@ def check_toolchain_parity() -> None:
             fail(f"{rel}: missing generation provenance banner (must indicate generated from ai/)")
 
         for prod_id, spec in ACTIVE_PRODUCTS.items():
-            rel_prod = str(spec["dir"].relative_to(REPO))
+            rel_prod = spec["dir"].relative_to(REPO).as_posix()
             if rel_prod not in text:
                 fail(f"{rel}: missing active product reference '{rel_prod}'")
         ok(f"{rel}: validated (provenance verified, all 5 products covered)")

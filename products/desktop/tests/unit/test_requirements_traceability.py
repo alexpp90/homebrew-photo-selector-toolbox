@@ -383,6 +383,8 @@ struct ScopingSwiftTest {
             [sys.executable, "scripts/verify_requirements_traceability.py", "--check", "--strict"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(REPO_ROOT),
         )
         msg = (

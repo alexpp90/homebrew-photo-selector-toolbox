@@ -23,6 +23,7 @@ This module establishes automated geometric auditing for UI dialogs and controls
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 import tkinter as tk
 from tkinter import ttk
@@ -460,6 +461,10 @@ def tk_root():
         pass
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows headless CI lacks desktop session for live window geometry mapping",
+)
 @pytest.mark.requirement("REQ-DESK-UI.07")
 def test_live_about_dialog_button_audit(tk_root):
     """Audit AboutDialog action button (Close) for target size and containment."""
@@ -483,6 +488,10 @@ def test_live_about_dialog_button_audit(tk_root):
     assert result.inspected_boxes[0].height >= 24
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows headless CI lacks desktop session for live window geometry mapping",
+)
 @pytest.mark.requirement("REQ-DESK-UI.07")
 def test_live_collection_settings_dialog_buttons_audit(tk_root):
     """Audit CollectionSettingsDialog buttons (Reset, Save, Cancel, Browse) for non-intersection."""
@@ -508,6 +517,10 @@ def test_live_collection_settings_dialog_buttons_audit(tk_root):
     assert result.passed, result.summary()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows headless CI lacks desktop session for live window geometry mapping",
+)
 @pytest.mark.requirement("REQ-DESK-UI.07")
 def test_live_aesthetic_settings_dialog_action_buttons_audit(tk_root):
     """Audit AestheticSettingsDialog primary action buttons (Save Settings, Cancel)."""
@@ -536,6 +549,10 @@ def test_live_aesthetic_settings_dialog_action_buttons_audit(tk_root):
     assert result.passed, result.summary()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows headless CI lacks desktop session for live window geometry mapping",
+)
 @pytest.mark.requirement("REQ-DESK-UI.07")
 def test_live_confirm_delete_dialog_audit(tk_root):
     """Audit Confirm Delete dialog buttons (Yes, No) for non-intersection and containment."""
@@ -564,18 +581,24 @@ def test_live_confirm_delete_dialog_audit(tk_root):
     assert result.passed, result.summary()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows headless CI lacks desktop session for live window geometry mapping",
+)
 @pytest.mark.requirement("REQ-DESK-UI.07")
 def test_live_sharpness_tool_review_toolbar_audit(tk_root):
     """Audit SharpnessTool review action buttons (Prev, Next, Delete, Move, Copy, Focus)."""
     from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
 
-    parent = ttk.Frame(tk_root)
+    win = tk.Toplevel(tk_root)
+    win.geometry("1024x768")
+    parent = ttk.Frame(win)
     parent.pack(fill="both", expand=True)
 
     tool = SharpnessTool(parent)
     tool.pack(fill="both", expand=True)
-    tk_root.update_idletasks()
-    tk_root.update()
+    win.update_idletasks()
+    win.update()
 
     action_buttons = [
         tool.prev_btn,
@@ -592,11 +615,15 @@ def test_live_sharpness_tool_review_toolbar_audit(tk_root):
     )
 
     tool.destroy()
-    parent.destroy()
+    win.destroy()
 
     assert result.passed, result.summary()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows headless CI lacks desktop session for live window geometry mapping",
+)
 @pytest.mark.requirement("REQ-DESK-UI.07")
 def test_live_sharpness_tool_scan_dialog_audit(tk_root):
     """Audit ScanSettingsDialog buttons (Start Scan, Cancel) from SharpnessTool."""
@@ -634,6 +661,10 @@ def test_live_sharpness_tool_scan_dialog_audit(tk_root):
     assert result.passed, result.summary()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows headless CI lacks desktop session for live window geometry mapping",
+)
 @pytest.mark.requirement("REQ-DESK-UI.07")
 def test_keyboard_shortcuts_dialog_remedy_audit(tk_root):
     """Verify that sizing KeyboardShortcutsDialog to required height guarantees zero button clipping."""

@@ -576,6 +576,8 @@ class TestRetrospectiveSynthesisEngine(unittest.TestCase):
                 [sys.executable, str(SYNTHESIZE_RETRO_SCRIPT), "--dry-run"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(REPO_ROOT),
             )
             self.assertEqual(proc.returncode, 0, f"synthesize_retro.py --dry-run failed:\n{proc.stderr}")
@@ -691,6 +693,8 @@ class TestRetrospectiveSynthesisEngine(unittest.TestCase):
                 [sys.executable, str(SYNTHESIZE_RETRO_SCRIPT), "--retro-file", str(corrupt_path)],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(REPO_ROOT),
             )
             self.assertNotIn(
@@ -733,6 +737,8 @@ class TestRetrospectiveSynthesisEngine(unittest.TestCase):
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=str(REPO_ROOT),
             )
             self.assertEqual(proc.returncode, 0, f"--apply failed:\n{proc.stderr}")

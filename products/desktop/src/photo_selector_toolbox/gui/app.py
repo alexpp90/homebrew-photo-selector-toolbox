@@ -198,16 +198,16 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
 
     style.configure(
         "Primary.TButton",
-        background=colors.accent_hover,
+        background=colors.accent_blue,
         foreground="#FFFFFF",
-        bordercolor=colors.accent_hover,
+        bordercolor=colors.accent_blue,
         borderwidth=1,
         focuscolor="#FFFFFF",
         padding=[12, 6],
     )
     style.map(
         "Primary.TButton",
-        background=[("active", "#4338CA"), ("disabled", colors.bg_dark)],
+        background=[("active", colors.accent_hover), ("disabled", colors.bg_dark)],
         foreground=[("active", "#FFFFFF"), ("disabled", colors.fg_muted)],
         bordercolor=[("focus", "#FFFFFF")],
         focuscolor=[("focus", "#FFFFFF")],
@@ -309,7 +309,7 @@ def apply_dark_theme(root: tk.Tk) -> None:
     # Configure native menus globally
     root.option_add("*Menu.background", colors.bg_panel)
     root.option_add("*Menu.foreground", colors.fg_light)
-    root.option_add("*Menu.activeBackground", colors.accent_hover)
+    root.option_add("*Menu.activeBackground", colors.accent_blue)
     root.option_add("*Menu.activeForeground", "#FFFFFF")
 
     # Configure Listbox globally
