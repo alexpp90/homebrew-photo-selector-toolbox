@@ -1,4 +1,44 @@
 import pytest
+
+class MockDirEntry:
+    def __init__(self, path, is_dir_val=False, is_file_val=True):
+        self.path = path
+        self.name = __import__('os').path.basename(path)
+        self._is_dir = is_dir_val
+        self._is_file = is_file_val
+
+    def is_dir(self, follow_symlinks=False):
+        return self._is_dir
+
+    def is_file(self):
+        return self._is_file
+
+class MockScandirContextManager:
+    def __init__(self, entries):
+        self.entries = entries
+
+    def __enter__(self):
+        return iter(self.entries)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+def mock_scandir(walk_return):
+    def _scandir_mock(path):
+        # Convert path to posix string for cross-platform comparison with mock paths
+        path_str = __import__('pathlib').Path(path).as_posix()
+        entries = []
+        for dirpath, dirnames, filenames in walk_return:
+            if dirpath == path_str:
+                for d in dirnames:
+                    p = __import__('os').path.join(dirpath, d)
+                    entries.append(MockDirEntry(p, is_dir_val=True, is_file_val=False))
+                for f in filenames:
+                    p = __import__('os').path.join(dirpath, f)
+                    entries.append(MockDirEntry(p, is_dir_val=False, is_file_val=True))
+                break
+        return MockScandirContextManager(entries)
+    return _scandir_mock
 from unittest.mock import patch, MagicMock
 import sys
 
@@ -171,7 +211,7 @@ def test_sharpness_tool_filtering():
         tool.folder_var.get.return_value = "/mock/folder"
 
         walk_return = [("/mock/folder", [], ["img1.jpg", "img2.arw", "img3.jpg", "img4.png"])]
-        with patch("os.walk", return_value=walk_return):
+        with patch("os.walk", return_value=walk_return), patch("os.scandir", side_effect=mock_scandir(walk_return)):
             with patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}):
                 tool._load_folder_contents("/mock/folder")
 
@@ -392,7 +432,7 @@ def test_mac_metadata_ignored():
         tool.folder_var.get.return_value = "/mock/folder"
 
         walk_return = [("/mock/folder", [], ["img1.jpg", "._img1.jpg", "img2.arw", "._img2.arw"])]
-        with patch("os.walk", return_value=walk_return):
+        with patch("os.walk", return_value=walk_return), patch("os.scandir", side_effect=mock_scandir(walk_return)):
             with patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw"}):
                 tool._load_folder_contents("/mock/folder")
 

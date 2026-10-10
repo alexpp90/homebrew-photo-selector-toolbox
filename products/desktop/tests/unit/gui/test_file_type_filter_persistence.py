@@ -2,6 +2,46 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
 
+class MockDirEntry:
+    def __init__(self, path, is_dir_val=False, is_file_val=True):
+        self.path = path
+        self.name = __import__('os').path.basename(path)
+        self._is_dir = is_dir_val
+        self._is_file = is_file_val
+
+    def is_dir(self, follow_symlinks=False):
+        return self._is_dir
+
+    def is_file(self):
+        return self._is_file
+
+class MockScandirContextManager:
+    def __init__(self, entries):
+        self.entries = entries
+
+    def __enter__(self):
+        return iter(self.entries)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+def mock_scandir(walk_return):
+    def _scandir_mock(path):
+        # Convert path to posix string for cross-platform comparison with mock paths
+        path_str = __import__('pathlib').Path(path).as_posix()
+        entries = []
+        for dirpath, dirnames, filenames in walk_return:
+            if dirpath == path_str:
+                for d in dirnames:
+                    p = __import__('os').path.join(dirpath, d)
+                    entries.append(MockDirEntry(p, is_dir_val=True, is_file_val=False))
+                for f in filenames:
+                    p = __import__('os').path.join(dirpath, f)
+                    entries.append(MockDirEntry(p, is_dir_val=False, is_file_val=True))
+                break
+        return MockScandirContextManager(entries)
+    return _scandir_mock
+
 # Save original modules to prevent test pollution
 original_modules = {}
 
@@ -120,6 +160,7 @@ def test_file_type_filter_persists_across_folder_reload():
 
     with (
         patch("os.walk", return_value=walk_return),
+        patch("os.scandir", side_effect=mock_scandir(walk_return)),
         patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}),
     ):
         tool._load_folder_contents("/mock/photos")
@@ -150,6 +191,7 @@ def test_file_type_filter_fallback_when_extension_absent():
 
     with (
         patch("os.walk", return_value=walk_return),
+        patch("os.scandir", side_effect=mock_scandir(walk_return)),
         patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".png"}),
     ):
         tool._load_folder_contents("/mock/photos")
@@ -217,6 +259,7 @@ def test_check_and_reload_folder_if_changed_preserves_filter_and_selection():
 
     with (
         patch("os.walk", return_value=walk_1),
+        patch("os.scandir", side_effect=mock_scandir(walk_1)),
         patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw"}),
         patch("photo_selector_toolbox.gui.sharpness_tool.Path.exists", return_value=True),
         patch("photo_selector_toolbox.gui.sharpness_tool.Path.is_dir", return_value=True),
@@ -232,7 +275,7 @@ def test_check_and_reload_folder_if_changed_preserves_filter_and_selection():
 
         # Now simulate an external file addition
         walk_2 = [("/mock/photos", [], ["img1.jpg", "img2.jpg", "img3.arw", "img4.jpg"])]
-        with patch("os.walk", return_value=walk_2):
+        with patch("os.walk", return_value=walk_2), patch("os.scandir", side_effect=mock_scandir(walk_2)):
             tool._check_and_reload_folder_if_changed()
 
         # Filter must still be .JPG
