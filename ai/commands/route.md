@@ -8,7 +8,7 @@ For the following path or feature description, determine the route.
 
 Answer in this order, using `ai/ROUTING.md`:
 
-1. **Product** — Desktop, Android Desktop, PhotoTok, or `products/android/core/` (which
+1. **Product** — Desktop, macOS Desktop, Android Desktop, PhotoTok, or `products/android/core/` (which
    affects both Android products). If more than one, say so and split the work into one
    independent subtask per product; never let one product's implementation leak into another.
 2. **Agent** — the owning agent from the routing tables, by its exact name.

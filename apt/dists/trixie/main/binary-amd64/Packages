@@ -1,0 +1,22 @@
+Package: photo-selector-linux
+Version: 0.1.0
+Architecture: all
+Maintainer: Alexander Patz <alexander.patz@example.com>
+Installed-Size: 162
+Depends: python3 (>= 3.12), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-gexiv2-0.10, python3-numpy, python3-pil
+Recommends: heif-gdk-pixbuf
+Filename: pool/main/p/photo-selector-linux/photo-selector-linux_0.1.0_all.deb
+Size: 51538
+SHA256: 4412fd636876355de1f5d0ce488d07d4a79448b6fa9b93ae95d6bef7d479bad7
+SHA512: 93e09ac112e9482504399578d8db3b1287b4b203a3481ed92d9105fb1700ae03c787df8df8b836d6c6daa6f3818384b0b79265495c24b312d4aa5e9b3aadf7b3
+Description: native GNOME photograph culling and selection suite
+ Photo Selector Linux is a high-performance native GNOME photograph
+ culling and comparison selection suite built for Debian 13 (Trixie)
+ and modern Linux desktops.
+ .
+ Key features:
+  * 1-Up, 2-Up, and 3-Up Focus Mode with tactile Sliding Triplet navigation
+  * Real-time noise-corrected 2D Laplacian focus sharpness scoring (< 2.0ms)
+  * Non-destructive transactional file operations with copy-undo safety
+  * Native Libadwaita Studio Dark theme and zero-latency keyboard routing
+  * Support for camera RAW formats, JPEG companions, and XMP sidecars

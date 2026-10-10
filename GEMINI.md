@@ -6,8 +6,9 @@ making any changes. Framework documentation: [`ai/README.md`](ai/README.md). Rou
 
 Key rules (summary — `AGENTS.md` is authoritative):
 
-- **Identify the product first.** Three independent products: Desktop (`products/desktop/src/`, Python),
-  Android Desktop (`products/android/android-desktop/`), PhotoTok (`products/android/phototok/`). `products/android/core/` is the
+- **Identify the product first.** Canonical products: Desktop (`products/desktop/src/`, Python),
+  Android Desktop (`products/android/android-desktop/`, Kotlin), PhotoTok (`products/android/phototok/`, Kotlin),
+  Native macOS Desktop (`products/macos-desktop/`, Swift 6), and Linux Desktop (`products/linux-desktop/`, Python/GTK4). `products/android/core/` is the
   only code the two Android products share. Do not leak code between products.
 - **Mandatory task lifecycle.** Start with the `task-lifecycle` skill (pre-work reads), finish
   with the `retrospective` skill (tests, requirements sync, lesson capture, refactoring
@@ -20,9 +21,9 @@ Key rules (summary — `AGENTS.md` is authoritative):
   in `.gemini/settings.json`. Use `shared-code-health-agent` for refactoring and retro
   follow-ups.
 - Learned lessons live in `ai/memory/` (`bolt.md` performance, `palette.md` UI/a11y,
-  `sentinel.md` security, `code_health.md` refactoring backlog). Read the relevant file before
-  working in those areas; write new lessons via the `record-lesson` skill, which requires the
-  `@shared-mentor-agent` gate.
+  `sentinel.md` security, `code_health.md` refactoring backlog, `framework_retro.md` session
+  efficiency and framework evaluation). Read the relevant file before working in those areas;
+  write new lessons via the `record-lesson` skill, which requires the `@shared-mentor-agent` gate.
 
 ## Where Antigravity finds things
 

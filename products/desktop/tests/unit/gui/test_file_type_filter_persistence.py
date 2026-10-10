@@ -110,6 +110,7 @@ def _create_mock_tool():
         return tool
 
 
+@pytest.mark.requirement("REQ-DESK-CULL.12")
 def test_file_type_filter_persists_across_folder_reload():
     """Verify that when a user filters by .JPG, reloading the folder retains the .JPG filter."""
     tool = _create_mock_tool()

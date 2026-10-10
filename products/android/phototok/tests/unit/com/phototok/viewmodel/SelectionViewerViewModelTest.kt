@@ -58,7 +58,7 @@ class SelectionViewerViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isOpen)
         assertEquals("No selection folder yet", state.feedback?.message)
-        assertTrue(state.feedback?.isError == true)
+        assertFalse(state.feedback?.isError == true)
     }
 
     @Test
@@ -97,6 +97,7 @@ class SelectionViewerViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isOpen)
         assertEquals("Selection folder is empty", state.feedback?.message)
+        assertFalse(state.feedback?.isError == true)
     }
 
     @Test

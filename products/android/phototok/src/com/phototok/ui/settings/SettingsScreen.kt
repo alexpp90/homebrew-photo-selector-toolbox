@@ -175,9 +175,22 @@ fun SettingsScreen(
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
+            SettingsToggleItem(
+                title = "Store Selection in Scanned Folder",
+                description = if (uiState.selectionUseSourceRoot) {
+                    "Selection folder created inside each scanned folder"
+                } else {
+                    "Selection saved in central location or custom folder"
+                },
+                checked = uiState.selectionUseSourceRoot,
+                onCheckedChange = { viewModel.updateSelectionUseSourceRoot(it) },
+            )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
             SettingsClickItem(
                 title = "Custom Collection Location",
-                description = if (uiState.collectionUri != null) "Using custom folder" else "Default: subfolder in source",
+                description = if (uiState.collectionUri != null) "Using custom folder" else if (uiState.selectionUseSourceRoot) "Default: subfolder in scanned folder" else "Default: central selection folder",
                 onClick = { selectionFolderPickerLauncher.launch(null) },
                 trailing = {
                     if (uiState.collectionUri != null) {

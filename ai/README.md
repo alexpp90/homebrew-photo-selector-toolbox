@@ -2,7 +2,7 @@
 
 Everything that configures AI coding agents in this repository lives under `ai/` and
 nowhere else. Product documentation lives in [`docs/`](../docs/README.md); source code
-lives in `products/desktop/src/` and `products/android/`. Those three trees do not mix.
+lives in `products/desktop/src/`, `products/android/`, `products/macos-desktop/src/`, and `products/linux-desktop/` (planned). Those trees do not mix.
 
 If you are a human: this directory does not affect the build. Skip it.
 If you are an agent: read this file, then [`ROUTING.md`](ROUTING.md), then your own
@@ -14,13 +14,15 @@ If you are an agent: read this file, then [`ROUTING.md`](ROUTING.md), then your 
 ai/
   README.md          This file — how the framework works
   ROUTING.md         Which agent owns which product and path; delegation rules
-  agents/            CANONICAL agent definitions (14 files: name, description, tools, model)
+  agents/            CANONICAL agent definitions (16 files: name, description, tools, model)
   skills/            CANONICAL skills — the lifecycle, split by the moment it applies
   hooks/             CANONICAL hook scripts + the injected lifecycle payload
   commands/          CANONICAL slash commands / Antigravity workflows
   rules/             CANONICAL always-on rule (Antigravity's rules mechanism)
   memory/            Persistent lessons: bolt.md (perf), palette.md (UI/a11y),
-                     sentinel.md (security), code_health.md (refactoring backlog)
+                     sentinel.md (security), code_health.md (refactoring backlog),
+                     framework_retro.md (session efficiency, quality, agent/skill/hook performance),
+                     intent_ledger.jsonl (passive user intent audit log)
 ```
 
 Everything outside `ai/` is a pointer:
@@ -56,7 +58,7 @@ locations are symlinks or thin pointers.
 **Tool neutrality.** Any agent product that reads `AGENTS.md` (the cross-tool standard) gets
 the full picture; Claude and Gemini additionally get native subagent and skill registration.
 
-**Product separation.** The repository ships three independent products. Every agent belongs
+**Product separation.** The repository ships five products (four active native solutions alongside the archived legacy Desktop). Every agent belongs
 to exactly one product, or is explicitly shared. An agent's name carries its product prefix so
 that misrouting is visible at a glance rather than discovered in a diff.
 
@@ -93,12 +95,14 @@ matching `ai/agents/*.md` file and adopt that role before touching files in its 
 
 ## Agent roster
 
-Fourteen agents, grouped by the product they serve. Full scopes and delegation rules are in
+Sixteen agents, grouped by the product they serve. Full scopes and delegation rules are in
 [`ROUTING.md`](ROUTING.md).
 
 | Product | Agents |
 |---|---|
 | Desktop | `desktop-backend-agent`, `desktop-gui-agent`, `desktop-test-agent`, `desktop-build-agent` |
+| macOS Desktop | `macos-desktop-agent` |
+| Linux Desktop | `linux-desktop-agent` |
 | Android Desktop | `android-desktop-ui-agent`, `android-desktop-core-agent` |
 | PhotoTok | `phototok-ui-agent`, `phototok-core-agent` |
 | Both Android products | `android-shared-build-agent` |
@@ -161,10 +165,16 @@ Continuous improvement is closed-loop, with `shared-code-health-agent` as the ow
 
 ## Persistent memory (`ai/memory/`)
 
-Append-only lesson files, newest first, format `## YYYY-MM-DD - Title` / `**Learning:**` /
+Append-only lesson and retrospective files, newest first, format `## YYYY-MM-DD - Title` / `**Learning:**` /
 `**Action:**`. Lessons must be generalisable rules, not task diaries; skim before appending so
 you extend rather than duplicate. `code_health.md` additionally holds backlog items tagged
-`[OPEN]`/`[DONE]`.
+`[OPEN]`/`[DONE]`. `framework_retro.md` holds post-session evaluations of AI efficiency,
+implementation quality, and Agent/Skill/Hook performance to drive framework improvements.
+
+`intent_ledger.jsonl` holds a passive, chronological audit log of raw user inputs and context
+(session ID, turn type, git branch, timestamp) captured by `record_intent.py`. It is **dormant memory** —
+intentionally excluded from routine pre-work `task-lifecycle` reads to preserve tokens, and queried
+on-demand via the `trace-intent` skill / `/trace-intent` command to reconstruct user intent or debug misdirection.
 
 ## How to
 
@@ -216,6 +226,7 @@ frontmatter and `PostToolUse` respectively):
 | `check_retrospective.py` | `Stop` | ending a session that changed product source with no sign the retrospective ran |
 | `guard_scope.py` | `PreToolUse` on writes, per-agent (Claude Code frontmatter hooks only) | a product agent writing into another product's source tree — AGENTS.md rule 1, mechanically |
 | `post_lint.py` | `PostToolUse` on writes (Claude Code only; advisory) | nothing — it feeds `flake8` findings on the just-edited Desktop Python file back to the model so they are fixed before `/verify` |
+| `record_intent.py` | `PreInvocation`/`UserPromptSubmit` & `Stop` (both hosts; advisory) | nothing — silently appends user prompts and context into `ai/memory/intent_ledger.jsonl` |
 | `session_report.py` | `Stop` (both hosts; advisory) | nothing — when the session did major work (an implementation or a plan), it reports which AI definitions were actually used: agents, skills, and hooks (from the usage ledger every guard writes via `hooklib.record_use`) |
 
 Every denial states what to do instead, so the model can correct itself rather than merely

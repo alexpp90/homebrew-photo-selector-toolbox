@@ -14,9 +14,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 enum class NavTab { Sources, Cards, History }
@@ -53,7 +54,8 @@ fun ViewerBottomBar(
             .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
             .background(colors.surfaceContainerLowest.copy(alpha = 0.8f))
             .navigationBarsPadding()
-            .padding(horizontal = 32.dp, vertical = 12.dp),
+            .padding(horizontal = 32.dp, vertical = 12.dp)
+            .testTag("viewer_bottom_bar"),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -64,14 +66,16 @@ fun ViewerBottomBar(
             isActive = false,
             enabled = true,
             onClick = onGoToLanding,
+            modifier = Modifier.testTag("viewer_sources_button"),
         )
         // Middle: Jump to selection folder
         ActionButton(
-            icon = Icons.Default.Star,
+            icon = Icons.Default.CollectionsBookmark,
             label = "Selection",
             isActive = false,
             enabled = true,
             onClick = onJumpToSelection,
+            modifier = Modifier.testTag("viewer_selection_button"),
         )
         // Right: Revert (highlighted/active when there is something to revert)
         ActionButton(
@@ -80,6 +84,7 @@ fun ViewerBottomBar(
             isActive = canRevert,
             enabled = canRevert,
             onClick = onRevert,
+            modifier = Modifier.testTag("viewer_revert_button"),
         )
     }
 }
@@ -91,6 +96,7 @@ private fun ActionButton(
     isActive: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
     val tint = when {
@@ -100,7 +106,7 @@ private fun ActionButton(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(48.dp)
             .then(
                 if (isActive) Modifier.clip(CircleShape).background(colors.primaryContainer)

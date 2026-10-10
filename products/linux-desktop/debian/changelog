@@ -1,0 +1,10 @@
+photo-selector-linux (0.1.0-1) trixie; urgency=medium
+
+  * Initial release for Debian 13 (Trixie).
+  * Native GNOME Libadwaita photograph culling and selection suite.
+  * Vectorized Laplacian focus scoring with MAD noise floor compensation.
+  * Transactional file operations (Move, Copy, Trash) with copy-undo safety.
+  * Multi-view canvas: 1-Up, 2-Up, and 3-Up Focus Mode with BoundarySlotPane.
+  * Zero-latency keyboard router with root-level capture and modifier masking.
+
+ -- Alexander Patz <alexander.patz@example.com>  Sat, 10 Oct 2026 12:00:00 +0000

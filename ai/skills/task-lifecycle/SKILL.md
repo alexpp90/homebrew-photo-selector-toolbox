@@ -1,6 +1,6 @@
 ---
 name: task-lifecycle
-description: "Pre-work reads for any task in this repository: identify the target product (Desktop, Android Desktop or PhotoTok), read that product's REQUIREMENTS.md, read the matching ai/memory/ lesson file, read the owning agent config, and follow any matching playbook. Use at the START of every coding task, before opening a source file."
+description: "Pre-work reads for any task in this repository: identify the target product (Desktop, Android Desktop, PhotoTok, or macOS Desktop), read that product's REQUIREMENTS.md, read the matching ai/memory/ lesson file, read the owning agent config, and follow any matching playbook. Use at the START of every coding task, before opening a source file."
 allowed-tools: Read, Grep, Glob
 ---
 
@@ -11,19 +11,21 @@ finalizing.
 
 ## 1. Identify the product — before any file is opened
 
-This repository ships **three independent products**. Getting this wrong is the most
+This repository ships **five products** (four active native solutions alongside the archived legacy Desktop). Getting this wrong is the most
 expensive mistake available, because it produces code in the wrong place that looks correct.
 
 | Product | Code | Requirements |
 |---|---|---|
 | Desktop | `products/desktop/src/photo_selector_toolbox/` | `docs/products/desktop/REQUIREMENTS.md` |
+| macOS Desktop | `products/macos-desktop/` (`PhotoSelectorKit`, `PhotoSelectorApp`) | `docs/products/macos-desktop/REQUIREMENTS.md` |
+| Linux Desktop | `products/linux-desktop/` (`photo_selector_linux`) | `docs/products/linux-desktop/REQUIREMENTS.md` (planned for M2) |
 | Android Desktop | `products/android/android-desktop/` (`:android-desktop`) | `docs/products/android-desktop/REQUIREMENTS.md` |
 | PhotoTok | `products/android/phototok/` (`:phototok`) | `docs/products/phototok/REQUIREMENTS.md` |
 
 `products/android/core/` (`:core`) is the only code the two Android products share, and a
 change there affects both by definition.
 
-The three products share photographic *concepts* — the EXIF contract, score semantics, what
+The products share photographic *concepts* — the EXIF contract, score semantics, what
 "Selection" means — and nothing else. **Copying a file from one product into another is a
 defect, not reuse.** A feature wanted in more than one product splits into one independent
 subtask per product, each tailored to its stack.
@@ -37,6 +39,9 @@ cover what you are about to change. Cross-product policy lives in `docs/shared/`
 
 Your agent config names the sections that bind your scope — read those at minimum.
 
+If the user says a defect has returned ("wrong again", "still broken"), first check whether
+the requirement text itself specifies the defect. A stale spec makes every fix regress.
+
 ## 3. Read the matching lessons
 
 `ai/memory/` holds what previous tasks learned. Read the file that matches the work:
@@ -47,6 +52,9 @@ Your agent config names the sections that bind your scope — read those at mini
 | `ai/memory/palette.md` | UI or accessibility work |
 | `ai/memory/sentinel.md` | anything touching security, archives, URLs, or user input |
 | `ai/memory/code_health.md` | refactoring work, and to check for existing backlog items in your area |
+| `ai/memory/framework_retro.md` | framework changes, playbook creation, or when evaluating agent workflows and session friction |
+
+*(Note: `ai/memory/intent_ledger.jsonl` is dormant memory — do NOT read it routinely; query it via the `trace-intent` skill only when investigating user intent divergence).*
 
 ## 4. Read your agent config
 

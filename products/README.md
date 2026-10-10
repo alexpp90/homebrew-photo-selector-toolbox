@@ -5,6 +5,8 @@ One directory per product. Same shape in each, whatever the language.
 ```
 products/
   desktop/              Desktop — Python + Tkinter
+  macos-desktop/        Native macOS Desktop — Swift 6 + SwiftUI
+  linux-desktop/        Native Linux Desktop — GNOME HIG / Libadwaita (planned)
   android/              The Android platform group (one Gradle build)
     android-desktop/    Android Desktop — :android-desktop, tablets and Samsung DeX
     phototok/           PhotoTok — :phototok, phones
@@ -19,7 +21,7 @@ Every product directory exposes the same four things:
 |---|---|
 | `src/` | Sources. Nothing else. |
 | `tests/` | Tests. `tests/unit/` everywhere; Android additionally has `tests/instrumented/`. |
-| build config | `pyproject.toml` for Desktop, `build.gradle.kts` for the Android modules. |
+| build config | `pyproject.toml` for Desktop, `Package.swift` for macOS Desktop, `pyproject.toml` / `debian/` for Linux Desktop, `build.gradle.kts` for the Android modules. |
 | `README.md` | What the product is, how to build it, how to test it, what it must not do. |
 
 The Android modules do not use Gradle's `src/main | src/test | src/androidTest` convention.
@@ -49,6 +51,6 @@ code beyond `core/`, do not share layouts, and are owned by separate agents. See
 - **`Formula/` and `Casks/`** — these must stay at the repository root. This repository is a
   Homebrew tap, and `brew tap` only looks for formulae at the tap root. Moving them into
   `products/desktop/` would break installation for every existing user.
-- **`scripts/run_tests.sh`** — cross-product (it drives both the Python and the Gradle gates),
+- **`scripts/run_tests.sh`** — cross-product (it drives the Python, Swift SPM, Linux GTK, and Gradle gates),
   so it lives in the root `scripts/`. Desktop's own build scripts are in
   `desktop/scripts/`.

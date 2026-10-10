@@ -7,6 +7,7 @@ import com.phototok.data.repository.ImageRepository
 import com.phototok.data.repository.SettingsRepository
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FirstRunHint
+import com.phototok.domain.FolderScanInfo
 import com.phototok.domain.SwipeAction
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -52,6 +53,7 @@ class PhoneModeViewModelTest {
     private val sortingEnabledFlow = MutableStateFlow(true)
     // A recent timestamp so the gesture tutorial stays hidden during tests.
     private val gestureTutorialTsFlow = MutableStateFlow(System.currentTimeMillis())
+    private val lastAppUsedTsFlow = MutableStateFlow(System.currentTimeMillis())
 
     private val settingsRepository: SettingsRepository = mockk(relaxed = true) {
         every { phoneSettings } returns phoneSettingsFlow
@@ -60,6 +62,8 @@ class PhoneModeViewModelTest {
         every { lastFolderUri } returns lastFolderUriFlow
         every { sortingEnabled } returns sortingEnabledFlow
         every { phoneGestureTutorialTs } returns gestureTutorialTsFlow
+        every { lastAppUsedTs } returns lastAppUsedTsFlow
+        coEvery { getFolderScanInfo(any()) } returns FolderScanInfo(0L, 0)
     }
 
     private val imageRepository: ImageRepository = mockk(relaxed = true) {
@@ -587,6 +591,22 @@ class PhoneModeViewModelTest {
     }
 
     @Test
+    fun `dismissing raw jpeg suggestion leaves settings unchanged (don't change settings)`() = runTest {
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo1.raw", 10),
+        )
+
+        assertTrue(viewModel.uiState.value.showRawJpegSuggestion)
+        viewModel.dismissRawJpegSuggestion()
+
+        assertFalse(viewModel.uiState.value.showRawJpegSuggestion)
+        coVerify { settingsRepository.markFirstRunHintSeen(FirstRunHint.RAW_JPEG_PAIRS) }
+        coVerify(exactly = 0) { settingsRepository.setPhoneFileTypeFilter(any()) }
+        coVerify(exactly = 0) { settingsRepository.setPhoneMoveRelatedFiles(any()) }
+    }
+
+    @Test
     fun `applying raw jpeg filter updates settings and hides suggestion`() = runTest {
         val viewModel = loadFolder(
             image("photo1.jpg", 10),
@@ -615,6 +635,83 @@ class PhoneModeViewModelTest {
     }
 
     @Test
+    fun `folder with filter mismatch triggers filter mismatch hint`() = runTest {
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(
+            fileTypeFilter = com.phototok.domain.FileTypeFilter.RAW,
+        )
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo2.jpg", 20),
+            image("photo3.jpg", 30),
+            image("photo4.raw", 40),
+        )
+
+        val hint = viewModel.uiState.value.firstRunHint
+        assertNotNull(hint)
+        assertEquals(FirstRunHint.FILTER_MISMATCH, hint!!.hint)
+        assertEquals("Filter Active", hint.title)
+        assertTrue(hint.message.contains("RAW photos only"))
+        assertEquals("SHOW ALL", hint.actionLabel)
+        coVerify { settingsRepository.markFirstRunHintSeen(FirstRunHint.FILTER_MISMATCH) }
+    }
+
+    @Test
+    fun `folder with raw and jpeg pairs does not trigger filter mismatch hint`() = runTest {
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(
+            fileTypeFilter = com.phototok.domain.FileTypeFilter.RAW,
+        )
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo1.raw", 10),
+            image("photo2.jpg", 20),
+            image("photo2.raw", 20),
+        )
+
+        val hint = viewModel.uiState.value.firstRunHint
+        assertNull(hint)
+    }
+
+    @Test
+    fun `show all action on filter mismatch hint switches filter to all and marks hint seen`() = runTest {
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(
+            fileTypeFilter = com.phototok.domain.FileTypeFilter.RAW,
+        )
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo2.jpg", 20),
+            image("photo3.jpg", 30),
+        )
+
+        val hint = viewModel.uiState.value.firstRunHint
+        assertNotNull(hint)
+        assertNotNull(hint!!.onAction)
+
+        hint.onAction!!.invoke()
+
+        assertNull(viewModel.uiState.value.firstRunHint)
+        coVerify { settingsRepository.setPhoneFileTypeFilter(com.phototok.domain.FileTypeFilter.ALL) }
+        coVerify { settingsRepository.markFirstRunHintSeen(FirstRunHint.FILTER_MISMATCH) }
+    }
+
+    @Test
+    fun `dismissing filter mismatch hint hides it and marks hint seen`() = runTest {
+        phoneSettingsFlow.value = phoneSettingsFlow.value.copy(
+            fileTypeFilter = com.phototok.domain.FileTypeFilter.RAW,
+        )
+        val viewModel = loadFolder(
+            image("photo1.jpg", 10),
+            image("photo2.jpg", 20),
+            image("photo3.jpg", 30),
+        )
+
+        assertNotNull(viewModel.uiState.value.firstRunHint)
+        viewModel.dismissFirstRunHint()
+
+        assertNull(viewModel.uiState.value.firstRunHint)
+        coVerify { settingsRepository.markFirstRunHintSeen(FirstRunHint.FILTER_MISMATCH) }
+    }
+
+    @Test
     fun `reloadSourceFolder re-scans images and preserves current image position`() = runTest {
         val img1 = image("photo1.jpg", 10)
         val img2 = image("photo2.jpg", 20)
@@ -634,6 +731,114 @@ class PhoneModeViewModelTest {
         assertEquals(listOf("photo0.jpg", "photo1.jpg", "photo2.jpg", "photo3.jpg"), names)
         // Current index should track img2 ("photo2.jpg", which is now at index 2)
         assertEquals(2, viewModel.uiState.value.currentIndex)
+        assertEquals(img2.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
+    }
+
+    @Test
+    fun `reloadSourceFolder with new photos sets reloadPrompt and confirmReloadJumpToLatest navigates to new photos`() = runTest {
+        val img1 = image("photo1.jpg", 10)
+        val img2 = image("photo2.jpg", 20)
+        val viewModel = loadFolder(img1, img2)
+        viewModel.navigateToImage(1)
+
+        val imgNew = image("photo3.jpg", 30)
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, imgNew))
+
+        viewModel.reloadSourceFolder()
+        advanceUntilIdle()
+
+        // Should preserve current photo while showing prompt
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+        val prompt = viewModel.uiState.value.reloadPrompt
+        assertNotNull(prompt)
+        assertEquals(1, prompt?.newCount)
+        assertEquals(2, prompt?.firstNewIndex)
+
+        // Confirming jump to latest navigates to new photo
+        viewModel.confirmReloadJumpToLatest()
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.currentIndex)
+        assertNull(viewModel.uiState.value.reloadPrompt)
+        coVerify { settingsRepository.setFolderScanInfo(any(), match { it.maxLastModified == 30L && it.fileCount == 3 }) }
+    }
+
+    @Test
+    fun `reloadSourceFolder with new photos and dismissReloadPrompt stays at current photo`() = runTest {
+        val img1 = image("photo1.jpg", 10)
+        val img2 = image("photo2.jpg", 20)
+        val viewModel = loadFolder(img1, img2)
+        viewModel.navigateToImage(1)
+
+        val imgNew = image("photo3.jpg", 30)
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, imgNew))
+
+        viewModel.reloadSourceFolder()
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.reloadPrompt)
+        viewModel.dismissReloadPrompt()
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+        assertNull(viewModel.uiState.value.reloadPrompt)
+    }
+
+    @Test
+    fun `reloadSourceFolder with no new photos does not show prompt and shows feedback`() = runTest {
+        val img1 = image("photo1.jpg", 10)
+        val img2 = image("photo2.jpg", 20)
+        val viewModel = loadFolder(img1, img2)
+        viewModel.navigateToImage(1)
+
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2))
+
+        viewModel.reloadSourceFolder()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.reloadPrompt)
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+        assertTrue(viewModel.uiState.value.lastActionFeedback?.message?.contains("no new photos") == true)
+    }
+
+    @Test
+    fun `selectSourceFolder jumps to first unscanned photo when new photos exist outside active session`() = runTest {
+        val img1 = image("photo1.jpg", 10)
+        val img2 = image("photo2.jpg", 20)
+        val img3 = image("photo3.jpg", 30)
+        val img4 = image("photo4.jpg", 40)
+
+        // Folder previously had max timestamp 20L (img1 & img2 were scanned), last position was 0
+        coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(maxLastModified = 20L, fileCount = 2)
+        coEvery { settingsRepository.getFolderLastPosition("content://tree/photos") } returns 0
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, img3, img4))
+
+        val viewModel = buildViewModel()
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+        advanceUntilIdle()
+
+        // img3 (30L) is the first unscanned photo (index 2 in chronological order)
+        assertEquals(2, viewModel.uiState.value.currentIndex)
+        assertEquals(img3.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
+    }
+
+    @Test
+    fun `selectSourceFolder restores saved position when no new unscanned photos exist`() = runTest {
+        val img1 = image("photo1.jpg", 10)
+        val img2 = image("photo2.jpg", 20)
+        val img3 = image("photo3.jpg", 30)
+
+        // Folder previously had max timestamp 30L (all were scanned), last position was 1
+        coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(maxLastModified = 30L, fileCount = 3)
+        coEvery { settingsRepository.getFolderLastPosition("content://tree/photos") } returns 1
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, img3))
+
+        val viewModel = buildViewModel()
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+        advanceUntilIdle()
+
+        // Should restore saved position 1
+        assertEquals(1, viewModel.uiState.value.currentIndex)
         assertEquals(img2.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
     }
 
@@ -721,5 +926,92 @@ class PhoneModeViewModelTest {
         assertEquals(4000, images[0].imageWidth)
         assertEquals(3000, images[0].imageHeight)
         assertEquals(1, viewModel.uiState.value.portraitSectionStart)
+    }
+
+    @Test
+    fun `scrolling through feed does not finalize pending delete`() = runTest {
+        val viewModel = loadFolder(image("a.jpg", 3), image("b.jpg", 2), image("c.jpg", 1))
+
+        viewModel.requestDelete()
+        assertNotNull(viewModel.uiState.value.pendingDelete)
+
+        // Navigate to remaining photos
+        viewModel.navigateToImage(1)
+        advanceUntilIdle()
+
+        // Pending delete must remain available across scrolls
+        assertNotNull("pending delete must not be finalized by vertical scroll", viewModel.uiState.value.pendingDelete)
+    }
+
+    @Test
+    fun `empty folder sets emptyFolderMessage and selecting new folder clears it`() = runTest {
+        val viewModel = loadFolder()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.images.isEmpty())
+        assertNotNull(state.emptyFolderMessage)
+        assertTrue(state.emptyFolderMessage!!.contains("No supported photos found"))
+
+        // Selecting a folder with photos clears the emptyFolderMessage
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(image("photo.jpg", 1)))
+        viewModel.selectSourceFolder(Uri.parse("content://tree/new_photos"))
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.emptyFolderMessage)
+    }
+
+    @Test
+    fun `gesture tutorial fires when app was not used for 7 days`() = runTest {
+        val now = System.currentTimeMillis()
+        gestureTutorialTsFlow.value = now - 14 * 24 * 60 * 60 * 1000L // dismissed 2 weeks ago
+        lastAppUsedTsFlow.value = now - 8 * 24 * 60 * 60 * 1000L // last used 8 days ago (> 7 days)
+
+        val viewModel = loadFolder(image("a.jpg", 1))
+        advanceUntilIdle()
+
+        assertTrue("tutorial should fire after 7 days of inactivity", viewModel.uiState.value.showGestureTutorial)
+    }
+
+    @Test
+    fun `gesture tutorial does not fire when app was used recently`() = runTest {
+        val now = System.currentTimeMillis()
+        gestureTutorialTsFlow.value = now - 14 * 24 * 60 * 60 * 1000L // dismissed 2 weeks ago
+        lastAppUsedTsFlow.value = now - 2 * 24 * 60 * 60 * 1000L // last used 2 days ago (< 7 days)
+
+        val viewModel = loadFolder(image("a.jpg", 1))
+        advanceUntilIdle()
+
+        assertFalse("tutorial should NOT fire for active user", viewModel.uiState.value.showGestureTutorial)
+    }
+
+    @Test
+    fun `selectCameraFolder opens directly when permission exists`() = runTest {
+        coEvery { imageRepository.prepareSourceFolder(match { it.toString().contains("DCIM") }) } returns "Camera"
+        var pickerLaunched = false
+        val viewModel = buildViewModel()
+
+        viewModel.selectCameraFolder { pickerLaunched = true }
+        advanceUntilIdle()
+
+        assertFalse(pickerLaunched)
+        assertTrue(viewModel.uiState.value.sourceFolderUri?.contains("DCIM") == true)
+    }
+
+    @Test
+    fun `selectCameraFolder launches fallback picker when permission not yet granted`() = runTest {
+        coEvery { imageRepository.prepareSourceFolder(match { it.toString().contains("DCIM") }) } returns null
+        var pickerLaunched = false
+        var launchedUri: Uri? = null
+        val viewModel = buildViewModel()
+
+        viewModel.selectCameraFolder { uri ->
+            pickerLaunched = true
+            launchedUri = uri
+        }
+        advanceUntilIdle()
+
+        assertTrue(pickerLaunched)
+        assertNotNull(launchedUri)
+        assertTrue(launchedUri.toString().contains("DCIM"))
     }
 }

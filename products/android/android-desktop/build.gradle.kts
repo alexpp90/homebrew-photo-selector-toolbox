@@ -34,7 +34,7 @@ android {
         applicationId = "com.photoselectortoolbox"
         minSdk = 26
         targetSdk = 36
-        val baseVersion = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 5
+        val baseVersion = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 6
         val offset = System.getenv("TOOLBOX_VERSION_CODE_OFFSET")?.toIntOrNull()
             ?: System.getenv("VERSION_CODE_OFFSET")?.toIntOrNull()
             ?: 0
@@ -42,7 +42,7 @@ android {
         // Overridable from CI (e.g. derived from the git tag on release builds).
         versionName = System.getenv("TOOLBOX_VERSION_NAME")
             ?: System.getenv("VERSION_NAME")
-            ?: "0.4.0"
+            ?: "0.5.0"
 
         testInstrumentationRunner = "com.photoselectortoolbox.HiltTestRunner"
 

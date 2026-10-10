@@ -28,7 +28,7 @@ SPECULATIVE = re.compile(r"^fix\((?:ci|test|tests|build)\)", re.I)
 
 # Writes through a mirrored directory that bypass the Write/Edit tools entirely.
 MIRROR_WRITE = re.compile(
-    r"(?:>>?|tee\s+|sed\s+-i[^|]*?|cp\s+[^|]*?|mv\s+[^|]*?)\s*\.?/?\.(claude|gemini|agents)/",
+    r"(?:>>?|tee\s+|sed\s+-i[^|]*?|cp\s+[^|]*?|mv\s+[^|]*?)\s*\.?/?\.(claude|gemini|agents)/(?!teamwork/)",
 )
 
 SCRATCH_STAGED = [

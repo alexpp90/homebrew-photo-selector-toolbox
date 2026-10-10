@@ -1,5 +1,6 @@
 package com.phototok.domain
 
+import com.photoselector.core.Requirement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -14,6 +15,7 @@ import org.junit.Test
 class SwipeLabelsTest {
 
     @Test
+    @Requirement("REQ-TOK-GESTURE.01")
     fun `swipe right is labelled with the configured collection action`() {
         assertEquals("COPY", SwipeLabels.rightLabel(CollectionAction.COPY))
         assertEquals("MOVE", SwipeLabels.rightLabel(CollectionAction.MOVE))

@@ -1,0 +1,4 @@
+data/org.photoselector.Linux.desktop usr/share/applications/
+data/org.photoselector.Linux.metainfo.xml usr/share/metainfo/
+data/icons/hicolor/scalable/apps/org.photoselector.Linux.svg usr/share/icons/hicolor/scalable/apps/
+data/icons/hicolor/128x128/apps/org.photoselector.Linux.png usr/share/icons/hicolor/128x128/apps/

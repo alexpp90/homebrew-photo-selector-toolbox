@@ -1,6 +1,6 @@
 [project]
 name = "photo-selector-toolbox"
-version = "0.4.0"
+version = "0.5.0"
 description = "A tool to analyze image metadata and provide statistics."
 authors = [
     {name = "Jules"}
@@ -65,6 +65,7 @@ testpaths = [
   "tests"
 ]
 markers = [
+  "requirement(id): Traceability requirement ID marker linking test to formal specification",
   "linux_only: skip unless running on Linux",
   "mac_only: skip unless running on macOS",
   "windows_only: skip unless running on Windows",

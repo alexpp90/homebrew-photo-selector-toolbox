@@ -1,5 +1,6 @@
 package com.photoselectortoolbox.domain.curation
 
+import com.photoselector.core.Requirement
 import com.photoselectortoolbox.data.model.ImageItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,6 +30,7 @@ class DeferredDeletionTest {
         SelectorListState(names.map(::image), currentIndex)
 
     @Test
+    @Requirement("REQ-AND-LAYOUT.21", "REQ-AND-LAYOUT.22")
     fun `the frame leaves the list at once and the files are held back`() {
         val (state, pending) = DeferredDeletion.beginForCurrent(
             stateOf("a.jpg", "b.jpg", "c.jpg", currentIndex = 1),

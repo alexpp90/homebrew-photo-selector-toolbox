@@ -5,14 +5,17 @@ framework is wired; this file is only about *who owns what*.
 
 ## Step 1 — identify the product
 
-This repository ships **three independent products**. Determining which one a task targets is
-the first action of every task, before any file is opened.
+This repository ships **five products** (four active native solutions alongside the archived
+legacy Desktop). Determining which one a task targets is the first action of every task, before
+any file is opened.
 
 | Product | Code | Tech | Target | Documentation |
 |---|---|---|---|---|
 | **Desktop** | `products/desktop/src/photo_selector_toolbox/`, `products/desktop/tests/`, `products/desktop/benchmarks/` | Python + Tkinter | macOS, Linux, Windows workstations | [`docs/products/desktop/`](../docs/products/desktop/) |
 | **Android Desktop** | `products/android/android-desktop/` (`:android-desktop`, `com.photoselectortoolbox`) | Kotlin, Compose, Room, OpenCV, Vico | Samsung DeX, tablets ≥ 840 dp, Chromebooks | [`docs/products/android-desktop/`](../docs/products/android-desktop/) |
 | **PhotoTok** | `products/android/phototok/` (`:phototok`, `com.phototok`) | Kotlin, Compose, DataStore | Phones < 600 dp, portrait, gesture-first | [`docs/products/phototok/`](../docs/products/phototok/) |
+| **Native macOS Desktop** | `products/macos-desktop/` (`PhotoSelectorKit`, `PhotoSelectorApp`, `tests/`) | Swift 6, SwiftUI, Apple Vision, Accelerate | macOS 14+ / macOS 15+ workstations | [`docs/products/macos-desktop/`](../docs/products/macos-desktop/) |
+| **Linux Desktop** | `products/linux-desktop/` (`photo_selector_linux`, `tests/`) | Python, PyGObject, GTK4, Libadwaita | Debian 13 (Trixie), GNOME 46+ workstations | [`docs/products/linux-desktop/`](../docs/products/linux-desktop/) |
 
 Shared code is deliberately minimal and lives in exactly two places:
 
@@ -25,7 +28,7 @@ Canonical names, slugs and the mapping to Gradle modules and package names:
 [`docs/GLOSSARY.md`](../docs/GLOSSARY.md). Use those names in commits, docs and agent output —
 "the Android app" is ambiguous and therefore wrong.
 
-**The separation rule.** The three products share photographic *concepts* (the EXIF contract,
+**The separation rule.** The products share photographic *concepts* (the EXIF contract,
 score semantics, the meaning of "Selection") and nothing else. They do not share
 implementations, layouts or UX models. When a feature is wanted in more than one product, split
 it into one independent subtask per product and tailor each to its stack — never force identical
@@ -41,6 +44,18 @@ code where it does not fit. Copying a file from one product into another is a de
 | Tkinter UI, controllers, threading — `products/desktop/src/photo_selector_toolbox/gui/` | `@desktop-gui-agent` |
 | Tests and benchmarks — `products/desktop/tests/`, `products/desktop/benchmarks/` | `@desktop-test-agent` |
 | Build, packaging, desktop CI — `products/desktop/scripts/` (build tooling), `scripts/run_tests.sh` (the cross-product CI mirror), `.github/workflows/desktop.yml`, `Formula/`, `Casks/`, `products/desktop/pyproject.toml`, `products/desktop/poetry.lock` | `@desktop-build-agent` |
+
+### Native macOS Desktop
+
+| Change | Agent |
+|---|---|
+| Native Swift/SwiftUI application, Apple Vision aesthetics (`VNCalculateImageAestheticsScoresRequest`), Accelerate focus metrics, ImageIO RAW/JPEG decoding, culling workspace, comparison modes, Settings scene (`⌘,`), Tools menu, SPM build (`Package.swift`), and unit tests — `products/macos-desktop/` | `@macos-desktop-agent` |
+
+### Linux Desktop
+
+| Change | Agent |
+|---|---|
+| Native GNOME / Libadwaita application, HeaderBar, comparison workspace, optical/metadata engine, culling operations, Debian 13 packaging (`debian/`), and APT repository pipeline — `products/linux-desktop/` | `@linux-desktop-agent` |
 
 ### Android Desktop (`:android-desktop`)
 
@@ -114,6 +129,7 @@ arrives rather than being read up front.
 | [`refactoring-guide`](skills/refactoring-guide/SKILL.md) | any refactoring — centralised constants, controller/view separation, thread-pool sizing, image-loading safety, the EXIF data contract, error handling |
 | [`playbook-port-pattern-across-products`](skills/playbook-port-pattern-across-products/SKILL.md) | adapting an interaction or performance pattern proven in one product into another |
 | [`playbook-verify-android-desktop-on-reference-device`](skills/playbook-verify-android-desktop-on-reference-device/SKILL.md) | running the `:android-desktop` instrumented suite at the 1480×924 dp reference tablet geometry |
+| [`trace-intent`](skills/trace-intent/SKILL.md) | tracing user intent and prompt history from `ai/memory/intent_ledger.jsonl` |
 | `playbook-*` | a learned procedure matches the task type (template: `skills/playbook-template/`) |
 
 ## Commands
@@ -126,4 +142,5 @@ workflows.
 | `/route` | names the target product, owning agent, requirements sections, memory file and playbook for a path or feature |
 | `/verify` | runs the CI mirror and reports failed and skipped gates |
 | `/retro` | runs the retrospective against the current diff |
+| `/trace-intent` | queries and formats user prompt history from the intent ledger |
 | `/sync-framework` | regenerates `.gemini/settings.json` and validates the framework |

@@ -11,9 +11,9 @@ documentation lives in [`docs/`](docs/README.md).
 3. `ai/agents/<your-agent>.md` — your scope and role.
 4. `docs/products/<product>/REQUIREMENTS.md` — what the product you are touching must do.
 
-## The three products
+## The five products
 
-The repository ships **three independent products**. Identifying which one a task targets is
+The repository ships **five products** (four active native solutions alongside the archived legacy Desktop). Identifying which one a task targets is
 the first action of every task.
 
 | Product | Code | Tech | Target |
@@ -21,6 +21,8 @@ the first action of every task.
 | **Desktop** | `products/desktop/src/photo_selector_toolbox/` | Python + Tkinter | macOS, Linux, Windows |
 | **Android Desktop** | `products/android/android-desktop/` (`:android-desktop`) | Kotlin, Compose, Room, OpenCV, Vico | Samsung DeX, tablets ≥ 840 dp |
 | **PhotoTok** | `products/android/phototok/` (`:phototok`) | Kotlin, Compose, DataStore | Phones < 600 dp, gesture-first |
+| **macOS Desktop** | `products/macos-desktop/` (`PhotoSelectorKit`, `PhotoSelectorApp`) | Swift 6, SwiftUI, Vision, Accelerate | macOS 14+ / 15+ Apple Silicon & Intel |
+| **Linux Desktop** | `products/linux-desktop/` (`photo_selector_linux`) | Python, PyGObject, GTK4, Libadwaita | Debian 13 (Trixie), GNOME 46+ |
 
 They share photographic *concepts* — the EXIF contract, score semantics, what "Selection"
 means — and nothing else. The only shared implementation is `products/android/core/` (`:core`), which
@@ -34,6 +36,8 @@ Canonical names and the mapping to modules and packages: [`docs/GLOSSARY.md`](do
 
 1. **Identify the product first, and stay inside it.** Files under `products/desktop/src/` and `products/desktop/tests/` are
    Desktop; `products/android/android-desktop/` is Android Desktop; `products/android/phototok/` is PhotoTok;
+   `products/macos-desktop/src/` and `products/macos-desktop/tests/` are macOS Desktop;
+   `products/linux-desktop/src/` and `products/linux-desktop/tests/` are Linux Desktop;
    `products/android/core/` affects both Android products and needs both core agents to review.
    Leaking code between products is a defect, not reuse. In Claude Code this is enforced
    mechanically: every product agent carries an `ai/hooks/guard_scope.py` frontmatter hook
@@ -76,6 +80,8 @@ same shape: `src/` for sources, `tests/` for tests, its own build configuration,
 ```
 products/
   desktop/            Desktop product (Python)      — src/ tests/ benchmarks/ scripts/ pyproject.toml
+  macos-desktop/      Native macOS Desktop (Swift)  — src/ tests/ Package.swift
+  linux-desktop/      Native Linux Desktop (GNOME)  — src/ tests/ debian/ scripts/ pyproject.toml (planned)
   android/            The Android platform group    — one Gradle build for both Android products
     android-desktop/  Android Desktop product       — src/ tests/ res/ AndroidManifest.xml
     phototok/         PhotoTok product              — src/ tests/ res/ AndroidManifest.xml

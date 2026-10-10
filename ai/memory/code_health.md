@@ -11,6 +11,39 @@ Refactoring candidates and structural lessons. Owned by `@shared-code-health-age
 
 Lessons use the standard `ai/memory/` format (Learning/Action).
 
+## [OPEN] 2026-10-10 - `SelectorScreenTest.cullingAction_CopyAndMove_showSnackbar` is flaky on the phone AVD
+**Where:** `products/android/android-desktop/tests/instrumented/com/photoselectortoolbox/ui/SelectorScreenTest.kt`. Owner: `@android-desktop-agent`.
+**Why:** In `run_tests.sh --all` with two emulators it failed once on `Medium_Phone_API_36.0` after 15 s ("could not find node TestTag = 'move_button_compact'"), then passed 25/25 when the class was rerun alone on the same AVD. It passed 38/38 on the reference tablet (1480x924 dp). An intermittent red gate gets ignored.
+**Proposal:** Wait for the compact action bar with `waitUntil { onAllNodesWithTag(...).fetchSemanticsNodes().isNotEmpty() }` before clicking, or gate the compact-layout test on the measured window class.
+
+## [OPEN] 2026-10-10 - `verify_intent_delivery.py` Stop hook blocks read-only subagents and accepts failing runs
+**Where:** `ai/hooks/verify_intent_delivery.py`. Owner: `@shared-code-health-agent`.
+**Why:** It inspects the shared working tree and regex-matches runner names in the session's commands. A read-only subagent (mentor) can never satisfy it for its parent's edits and loops on the block; a command that merely contains `pytest`/`swift test` clears it even when it exits non-zero ("No module named pytest" passed).
+**Proposal:** Exempt subagent/read-only sessions or scope the check to files that session wrote; require a passing exit status, not a name match.
+
+## [OPEN] 2026-10-10 - Linux 3-Up spec R-LINUX-UI-06 encodes the three-column layout macOS abandoned
+**Where:** `docs/products/linux-desktop/REQUIREMENTS.md` R-LINUX-UI-06 and the Linux 3-Up view. Owner: `@linux-desktop-agent`.
+**Why:** The same stale spec made the macOS 3-Up regress to three columns on every attempt (palette.md 2026-08-08, extended 2026-10-10). Most photos are landscape; three columns shrink the current photo to its neighbours' size.
+**Proposal:** One-over-two (current full-width on top, previous bottom-left, next bottom-right) from a pure geometry solver with unit tests; fix the spec in the same commit.
+
+## [OPEN] 2026-10-10 - Linux `scan_stream` lists the parent directory once per file
+**Where:** `products/linux-desktop/src/photo_selector_linux/core/scanner.py` (`find_companion_files` / `scan_stream`). Owner: `@linux-desktop-agent`.
+**Why:** `os.scandir(parent)` plus `Path.resolve()` per entry for every file is O(N²) on SD cards; first batch is 30 (bolt.md 2026-07-31, extended 2026-10-10).
+**Proposal:** Group by stem from the single `os.walk` listing, avoid per-entry `Path.resolve()`, first batch 1 then ramp ×4.
+
+## [OPEN] 2026-10-10 - macOS Kit still imports AppKit/SwiftUI in adapter files
+**Where:** `products/macos-desktop/src/PhotoSelectorKit/Navigation/KeyboardShortcutRouter.swift`, `Navigation/ForegroundActivation.swift`, `ViewModels/CullingWorkspaceViewModel.swift` (SwiftUI `withAnimation`). Owner: `@macos-desktop-agent`.
+**Why:** README/ARCHITECTURE tolerate it for adapters while the agent rule used to forbid it outright; the Kit should stay headless.
+**Proposal:** Move the NSEvent monitor and activation call sites to the App target behind small protocols; keep only pure mapping logic (`handleKeyEvent` decision table) in the Kit.
+
+## 2026-10-06 - Tkinter Focus Stealing on macOS and the Cocoa Swizzle That Silences It
+**Learning:** Running Tkinter GUI tests locally on macOS repeatedly stole keyboard and window focus from the developer. In Aqua Tkinter, initializing `tk.Tk()` or mapping windows explicitly invokes Cocoa's `[NSApp activateIgnoringOtherApps:YES]` and `[NSWindow makeKeyAndOrderFront:]`. Even when tests called `withdraw()` or ran in the background, Cocoa activated the application and flashed windows over the active workstation. On Linux headless testing is achieved via `xvfb-run`, but macOS lacks an out-of-the-box virtual X11 framebuffer.
+**Action:** In `products/desktop/tests/conftest.py`, use standard library `ctypes` on `sys.platform == 'darwin'` to swizzle `activateIgnoringOtherApps:` and `activate:` on `NSApplication`, as well as `orderFront:`, `makeKeyAndOrderFront:`, and `orderFrontRegardless:` on `NSWindow` to no-ops during pytest execution. Retain ctypes callback function pointers alive in module memory to prevent garbage collection crashes. Provide an opt-out via `PST_SHOW_GUI=1` for intentional visual debugging. This guarantees completely backgrounded, non-intrusive GUI test runs on macOS while preserving 100% test assertion and event-loop fidelity in memory.
+
+## 2026-10-06 - Test Runner Product Change Detection Matching CI Paths
+**Learning:** `scripts/run_tests.sh` defaulted to running all gates across both Desktop (Python) and Android (Gradle) when invoked without flags. In GitHub Actions, however, `.github/workflows/desktop.yml` and `android.yml` have path filters (`paths:`) that skip Desktop CI if only Android changed, and skip Android CI if only Desktop changed. Blindly running all products locally caused unnecessary 2–3 minute test cycles and ran Desktop GUI tests when working exclusively on Android or AI framework code.
+**Action:** In `scripts/run_tests.sh`, implement intelligent git change detection when no explicit product flag (`--python`, `--android`, `--all`) is passed. Inspect git status (unstaged, staged, untracked) and merge-base diff against `main`. Run only the gates relevant to modified products, skip untouched products with an explanatory message, and only run the full suite when cross-cutting files (`scripts/run_tests.sh`, `.github/workflows/`) change, when `--all` is passed, or on a pristine checkout.
+
 ## [OPEN] 2026-10-05 - Android Desktop SharpnessAnalyzer still uses un-normalized raw Laplacian variance prone to high-ISO inflation
 **Where:** `products/android/android-desktop/src/com/photoselectortoolbox/domain/analysis/SharpnessAnalyzer.kt`
 **Debt:** Ported originally from the legacy desktop implementation, `SharpnessAnalyzer` computes raw Laplacian variance across grid blocks. On images with high ISO (sensor noise/grain), raw variance spikes into thousands and dominates over actual optical edge focus, causing blurry high-ISO images to score as sharp. Desktop fixed this (2026-10-05) via Laplacian of Gaussian (LoG) pre-filtering, MAD noise-floor subtraction, and compressive 0.0–100.0 normalization. Android Desktop still carries the legacy metric.
@@ -224,3 +257,29 @@ Lessons use the standard `ai/memory/` format (Learning/Action).
 **Where:** `products/android/android-desktop/src/com/photoselectortoolbox/ui/settings/SettingsScreen.kt:249-256`, `products/android/android-desktop/src/com/photoselectortoolbox/domain/grouping/GroupingLevel.kt`
 **Debt:** The label and description for each `GroupingLevel` are produced by a `when (level)` inside the settings composable, so the enum does not own its own wording. This is the shape that `ScoreMetric` (glyph, label, description, direction) and the new `domain.guidance.SidebarAction` (label, description, meaning) both moved away from, and for the reason recorded in `palette.md` 2026-08-07 as extended: a second mapping of the same concept is invisible to a totality test and drifts from the first. Found by the grep that entry's Action now prescribes — it was the only remaining instance in this product; `ScoreMetricIcon` has exactly one mapping again, and `FilingAction`/`SelectorHint` are already domain-owned.
 **Proposal:** Move `label` and `description` onto `GroupingLevel` as constructor properties and have `SettingsScreen` read them, matching `SidebarAction`. Cheap and mechanical. Worth doing before anything else needs to name a grouping level — the guide is the obvious next caller, and that is exactly how the score glyphs ended up with two vocabularies.
+
+## [OPEN] 2026-10-10 - Local CI Mirror & Test Runner Optimization
+**Where:** scripts/run_tests.sh, docs/build/CI_PARITY.md
+**Debt:** Recurring friction detected across 8 sessions (2026-10-06 ('PhotoTok Folder Reload Unscanned Photos & Jump Prompt'), 2026-10-06 ('PhotoTok Filter Mismatch Guidance Hint & One-Tap Remediation'), 2026-10-06 ('PhotoTok RAW+JPEG Prompt Occlusion Fix and Choice Clarification'), 2026-10-06 ('Test Runner Optimization and Headless macOS GUI Test Backgrounding'), 2026-10-06 ('Initial Framework Retrospective Integration'), 2026-10-09 ('macOS Desktop Contrast, Folder Ingestion HUD & Sliding Triplet Focus Alignment'), 2026-10-10 ('Multi-Product v0.5.0 Release Preparation, Legacy Desktop Archival, and CI Parity'), 2026-10-10 ('Comprehensive AI Framework Audit, Remediation & Standardization')). Local test execution blindly runs all products regardless of what changed, introducing multi-minute test latency when working on localized subsystems.
+**Proposal:** Maintain path-based change detection in scripts/run_tests.sh matching GitHub Actions path filters, ensuring every CI gate is faithfully mirrored locally. Reference playbook `playbook-ci-parity-and-runner`.
+
+## [OPEN] 2026-10-10 - UI Layout Occlusion & Modal Presentation Architecture
+**Where:** products/android/phototok/src/com/phototok/ui/, products/macos-desktop/src/PhotoSelectorApp/
+**Debt:** Recurring friction detected across 5 sessions (2026-10-06 ('PhotoTok Folder Reload Unscanned Photos & Jump Prompt'), 2026-10-06 ('PhotoTok Filter Mismatch Guidance Hint & One-Tap Remediation'), 2026-10-06 ('PhotoTok RAW+JPEG Prompt Occlusion Fix and Choice Clarification'), 2026-10-09 ('macOS Desktop Contrast, Folder Ingestion HUD & Sliding Triplet Focus Alignment'), 2026-10-10 ('Comprehensive AI Framework Audit, Remediation & Standardization')). In-layout notification cards collide with persistent navigation bars or obscure interactive controls, while dark mode palettes risk illegible dark-on-dark text contrast.
+**Proposal:** Migrate multi-choice decision prompts from floating cards to centered, scrim-dimmed Dialog/AlertDialog containers, enforce explicit neutral options, and assert contrast and bounds non-intersection in tests. Reference playbook `playbook-modal-dialogs-and-occlusion`.
+
+## [OPEN] 2026-10-10 - Asynchronous Concurrency & Timing Test Standardization
+**Where:** products/android/phototok/tests/, products/macos-desktop/tests/PhotoSelectorKitTests/
+**Debt:** Recurring friction detected across 4 sessions (2026-10-07 ('Native macOS Desktop Swift/SwiftUI Application & Culling Overhaul'), 2026-10-09 ('PhotoTok FTUE, Usability & File Safety Improvements'), 2026-10-09 ('macOS Desktop Contrast, Folder Ingestion HUD & Sliding Triplet Focus Alignment'), 2026-10-10 ('Comprehensive AI Framework Audit, Remediation & Standardization')). Asynchronous tests rely on fragile sleep timers, unconfined dispatcher timing assumptions, or lack transactional barriers, causing false test failures under heavy CPU loads.
+**Proposal:** Standardize asynchronous test execution using condition polling with SLA budgets rather than fixed sleeps, explicitly mock sequential coroutine launches, and enforce transactional write barriers. Reference playbook `playbook-async-concurrency-testing`.
+
+## [OPEN] 2026-10-10 - Test Isolation & Mock Lifecycle Management
+**Where:** products/desktop/tests/unit/gui/, products/android/phototok/tests/
+**Debt:** Recurring friction detected across 4 sessions (2026-10-06 ('Test Runner Optimization and Headless macOS GUI Test Backgrounding'), 2026-10-07 ('macOS Desktop Arrow Navigation, EXIF Extraction & Focus Mode Polish'), 2026-10-07 ('Native macOS Desktop Swift/SwiftUI Application & Culling Overhaul'), 2026-10-09 ('PhotoTok FTUE, Usability & File Safety Improvements')). Tests pollute global module state (sys.modules) or reuse stale mocks during multi-phase state transitions, causing ordering-dependent test failures and unmocked dialog hangs.
+**Proposal:** Enforce strict fixture cleanup, replace whole-module sys.modules mocking with targeted attribute monkeypatching, and configure mock expectations sequentially for multi-step transitions. Reference playbook `playbook-test-isolation-and-mocking`.
+
+## [OPEN] 2026-10-10 - UI Focus Management & Keyboard Routing Supremacy
+**Where:** products/macos-desktop/src/PhotoSelectorApp/, products/desktop/tests/conftest.py
+**Debt:** Recurring friction detected across 3 sessions (2026-10-06 ('Test Runner Optimization and Headless macOS GUI Test Backgrounding'), 2026-10-07 ('macOS Desktop Arrow Navigation, EXIF Extraction & Focus Mode Polish'), 2026-10-10 ('macOS Desktop Keyboard Delivery, One-Over-Two 3-Up, Zoom Hit-Testing & Folder Load')). Native desktop UI controls (SwiftUI buttons, Tkinter windows) hijack arrow keys from viewport containers or steal OS workstation focus during headless test execution.
+**Proposal:** Enforce keyboard routing supremacy with .focusable(false) on clickable toolbar controls, route shortcuts via native event monitors (NSEvent), and swizzle Cocoa focus activation in test runners. Reference playbook `playbook-ui-focus-and-key-routing`.
+

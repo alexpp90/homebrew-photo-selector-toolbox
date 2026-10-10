@@ -22,4 +22,6 @@ data class PhoneSettings(
     val recentPaths: List<RecentPath> = emptyList(),
     /** Keys of the one-time action explanations the user has already seen. */
     val seenFirstRunHints: Set<String> = emptySet(),
+    /** When true, Selection folder is created inside the scanned source folder instead of central location. */
+    val selectionUseSourceRoot: Boolean = false,
 )

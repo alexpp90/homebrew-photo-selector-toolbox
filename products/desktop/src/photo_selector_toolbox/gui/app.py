@@ -50,6 +50,7 @@ class ThemeColors:
     fg_muted: str = "#A1A1AA"
     accent_blue: str = "#6366F1"
     accent_hover: str = "#4F46E5"
+    accent_text: str = "#818CF8"  # Accessible accent text on dark backgrounds
     border_color: str = "#3F3F46"
 
 
@@ -97,7 +98,7 @@ def _configure_container_styles(style: ttk.Style, colors: ThemeColors) -> None:
     style.map(
         "TNotebook.Tab",
         background=[("selected", colors.bg_dark), ("active", colors.bg_hover)],
-        foreground=[("selected", colors.accent_blue), ("active", colors.fg_light)],
+        foreground=[("selected", colors.accent_text), ("active", colors.fg_light)],
         lightcolor=[("focus", colors.accent_blue)],
         darkcolor=[("focus", colors.accent_blue)],
         focuscolor=[("focus", colors.accent_blue)],
@@ -197,16 +198,16 @@ def _configure_button_styles(style: ttk.Style, colors: ThemeColors) -> None:
 
     style.configure(
         "Primary.TButton",
-        background=colors.accent_blue,
+        background=colors.accent_hover,
         foreground="#FFFFFF",
-        bordercolor=colors.accent_blue,
+        bordercolor=colors.accent_hover,
         borderwidth=1,
         focuscolor="#FFFFFF",
         padding=[12, 6],
     )
     style.map(
         "Primary.TButton",
-        background=[("active", colors.accent_hover), ("disabled", colors.bg_dark)],
+        background=[("active", "#4338CA"), ("disabled", colors.bg_dark)],
         foreground=[("active", "#FFFFFF"), ("disabled", colors.fg_muted)],
         bordercolor=[("focus", "#FFFFFF")],
         focuscolor=[("focus", "#FFFFFF")],
@@ -308,7 +309,7 @@ def apply_dark_theme(root: tk.Tk) -> None:
     # Configure native menus globally
     root.option_add("*Menu.background", colors.bg_panel)
     root.option_add("*Menu.foreground", colors.fg_light)
-    root.option_add("*Menu.activeBackground", colors.accent_blue)
+    root.option_add("*Menu.activeBackground", colors.accent_hover)
     root.option_add("*Menu.activeForeground", "#FFFFFF")
 
     # Configure Listbox globally
@@ -1129,7 +1130,7 @@ class AboutDialog(tk.Toplevel):
             font=("Helvetica", 8, "italic"),
             justify="center",
             background="#18181B",
-            foreground="#71717A",
+            foreground="#A1A1AA",
         )
         lbl_credits.pack(pady=(0, 20))
 
@@ -1233,7 +1234,7 @@ class CollectionSettingsDialog(tk.Toplevel):
             justify="left",
             wraplength=420,
             background="#18181B",
-            foreground="#71717A",
+            foreground="#A1A1AA",
         )
         lbl_note.pack(anchor="w", pady=(2, 15))
 
@@ -1255,7 +1256,7 @@ class CollectionSettingsDialog(tk.Toplevel):
             text=lr_note,
             font=("Helvetica", 8, "italic"),
             background="#18181B",
-            foreground="#71717A",
+            foreground="#A1A1AA",
         )
         lbl_lr_note.pack(anchor="w", pady=(2, 20))
 
@@ -1333,19 +1334,16 @@ class KeyboardShortcutsDialog(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Keyboard Shortcuts")
-        self.geometry("500x520")
         self.configure(bg="#18181B")
         self.transient(parent)
         self.grab_set()
 
-        # Make it centered
-        self.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() - 500) // 2
-        y = parent.winfo_y() + (parent.winfo_height() - 520) // 2
-        self.geometry(f"+{x}+{y}")
-
         frame = ttk.Frame(self, padding=20)
         frame.pack(fill="both", expand=True)
+
+        # Action button packed with side="bottom" so it is guaranteed space before list items
+        btn_close = ttk.Button(frame, text="Close", command=self.destroy, style="Primary.TButton")
+        btn_close.pack(side="bottom", pady=(15, 0))
 
         ttk.Label(frame, text="Keyboard Shortcuts", style="Header.TLabel").pack(anchor="w", pady=(0, 15))
 
@@ -1385,7 +1383,20 @@ class KeyboardShortcutsDialog(tk.Toplevel):
                 ttk.Label(row, text=key, width=25, style="Muted.TLabel").pack(side="left")
                 ttk.Label(row, text=desc).pack(side="left")
 
-        ttk.Button(frame, text="Close", command=self.destroy).pack(pady=(15, 0))
+        # Dynamically size and center relative to parent
+        self.update_idletasks()
+        width = max(500, int(self.winfo_reqwidth()))
+        height = max(640, int(self.winfo_reqheight()))
+
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+
+        x = parent_x + (parent_width - width) // 2
+        y = parent_y + (parent_height - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        self.bind("<Escape>", lambda e: self.destroy())
 
 
 class MainApp(tk.Tk):

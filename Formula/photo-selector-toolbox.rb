@@ -1,7 +1,7 @@
 class PhotoSelectorToolbox < Formula
   desc "Analyze image EXIF metadata, find duplicates, and detect blur"
   homepage "https://github.com/alexpp90/homebrew-photo-selector-toolbox"
-  version "0.4.0"
+  version "0.5.0"
 
   on_macos do
     if Hardware::CPU.arm?

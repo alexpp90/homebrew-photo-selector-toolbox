@@ -196,8 +196,11 @@ def record_use(payload: Payload, decision: str, hook: str | None = None) -> None
     if name == "session_report":
         return
     try:
+        data: dict[str, str] = {"hook": name, "decision": decision, "tool": payload.tool_name}
+        if payload.is_shell and payload.command:
+            data["command"] = payload.command
         with ledger_path(payload).open("a", encoding="utf-8") as fh:
-            json.dump({"hook": name, "decision": decision, "tool": payload.tool_name}, fh)
+            json.dump(data, fh)
             fh.write("\n")
     except OSError:
         pass

@@ -53,9 +53,10 @@ BG_PANEL = "#27272A"
 FG_LIGHT = "#F4F4F5"
 FG_MUTED = "#A1A1AA"
 ACCENT = "#6366F1"
+ACCENT_TEXT = "#818CF8"
 COLOR_OK = "#22C55E"
 COLOR_WARN = "#F59E0B"
-COLOR_ERROR = "#EF4444"
+COLOR_ERROR = "#F87171"
 
 LEVEL_OK = "ok"
 LEVEL_WARN = "warn"
@@ -679,7 +680,7 @@ class AestheticSettingsDialog(tk.Toplevel):
         # worker as plain strings.
         url = self.url_var.get().strip()
         model = self.model_var.get().strip()
-        self._set_ollama_status("Connecting to Ollama...", ACCENT)
+        self._set_ollama_status("Connecting to Ollama...", ACCENT_TEXT)
         threading.Thread(
             target=self._run_connection_test, args=(url, model), daemon=True
         ).start()

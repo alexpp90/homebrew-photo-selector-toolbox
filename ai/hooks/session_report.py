@@ -37,6 +37,8 @@ from hooklib import (  # noqa: E402
 
 PRODUCTS = (
     ("products/desktop/", "Desktop"),
+    ("products/macos-desktop/", "macOS Desktop"),
+    ("products/linux-desktop/", "Linux Desktop"),
     ("products/android/android-desktop/", "Android Desktop"),
     ("products/android/phototok/", "PhotoTok"),
     ("products/android/core/", ":core (both Android products)"),

@@ -1,15 +1,17 @@
 # Glossary — Canonical Product Names
 
-The repository ships three products that have historically been called by six or seven
-different names. This file fixes the vocabulary. Use the **canonical name** in commits, pull
-requests, documentation, agent output and issue titles. "The Android app" is ambiguous and
-therefore wrong — there are two of them.
+The repository ships five products (four active native solutions alongside the archived
+legacy Desktop) that have historically been called by multiple different names. This file fixes
+the vocabulary. Use the **canonical name** in commits, pull requests, documentation, agent
+output and issue titles. "The Android app" is ambiguous and therefore wrong — there are two of them.
 
-## The three products
+## The five products
 
-| Canonical name | Slug | Code | Gradle module | Package / distribution | Target |
+| Canonical name | Slug | Code | Build target / module | Package / distribution | Target |
 |---|---|---|---|---|---|
 | **Desktop** | `desktop` | `products/desktop/src/photo_selector_toolbox/` | — | `photo-selector-toolbox` (PyPI-style dist name), Homebrew Formula + Cask | macOS, Linux, Windows workstations |
+| **macOS Desktop** | `macos-desktop` | `products/macos-desktop/` | `PhotoSelectorKit`, `PhotoSelectorApp` (SPM) | `PhotoSelectorApp.app`, Homebrew Cask | macOS 14+ / 15+ Apple Silicon & Intel workstations |
+| **Linux Desktop** | `linux-desktop` | `products/linux-desktop/` | `photo-selector-linux` | `.deb` package via in-repo APT repository | Debian 13 (Trixie), GNOME 46+, Linux workstations |
 | **Android Desktop** | `android-desktop` | `products/android/android-desktop/` | `:android-desktop` | `com.photoselectortoolbox` | Samsung DeX, tablets ≥ 840 dp, Chromebooks |
 | **PhotoTok** | `phototok` | `products/android/phototok/` | `:phototok` | `com.phototok` | Phones < 600 dp, portrait, gesture-first |
 
@@ -25,6 +27,7 @@ Plus one shared library, which is not a product:
 |---|---|---|
 | "the Android app" | Android Desktop, or PhotoTok | There are two Android products |
 | "Toolbox" (on its own) | Android Desktop, or Desktop | `:android-desktop`'s artifacts are named `photo-selector-toolbox-android-*`, but so is the Python product |
+| "the Mac app", "the Linux app" or "the desktop app" (without product qualifier) | Desktop (for Python), macOS Desktop (for Swift), or Linux Desktop (for GNOME/GTK4) | The repository ships multiple desktop apps across distinct platforms |
 | `Android Phone`, `Phone mode`, `Phone Tok` | PhotoTok | One product, one name |
 | `Photo Tok`, `Photo-Tok` | PhotoTok | One spelling, no space, capital T |
 | "the desktop app" for `:android-desktop` | Android Desktop | `:android-desktop` runs on Android in a desktop-shaped window; the Python product is Desktop |
@@ -40,8 +43,8 @@ those identifiers. Prose uses the canonical name; build configuration keeps the 
 
 | Term | Meaning |
 |---|---|
-| **Selection** | The destination subfolder (default name `Selection`) that kept photos are moved or copied into. Same concept in all three products. |
-| **Selector** | The comparison workspace: previous / current / next, with quality scores. Desktop and Android Desktop only. |
+| **Selection** | The destination subfolder (default name `Selection`) that kept photos are moved or copied into. Same concept across all products. |
+| **Selector** | The comparison workspace: previous / current / next, with quality scores. Desktop, Android Desktop, macOS Desktop, and Linux Desktop. |
 | **Feed** | PhotoTok's vertically paged stream of photos. PhotoTok only. |
-| **Score** | One of sharpness, noise, highlight clipping, shadow clipping — computed identically in Desktop and Android Desktop (see [`shared/FEATURE_PARITY.md`](shared/FEATURE_PARITY.md)). PhotoTok computes none of them. |
+| **Score** | One of sharpness, noise, highlight clipping, shadow clipping, aesthetics — computed identically in Desktop and Android Desktop (see [`shared/FEATURE_PARITY.md`](shared/FEATURE_PARITY.md)), natively via Apple Accelerate and Vision in macOS Desktop, and natively via OpenCV Laplacian focus variance in Linux Desktop. PhotoTok computes none of them. |
 | **Window size class** | Compact (< 600 dp), Medium (600–840 dp), Expanded (≥ 840 dp). A layout dimension, never a product name. |

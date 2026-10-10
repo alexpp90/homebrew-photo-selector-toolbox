@@ -8,9 +8,11 @@ from photo_selector_toolbox.core.sharpness import (
     HighlightClippingTool,
     ShadowClippingTool,
 )
+import pytest
 from photo_selector_toolbox.tools.registry import ToolRegistry
 
 
+@pytest.mark.requirement("REQ-DESK-CULL.03", "REQ-DESK-CULL.04")
 def test_exposure_clipping_calculators(tmp_path):
     img_path = tmp_path / "exposure_test.jpg"
 

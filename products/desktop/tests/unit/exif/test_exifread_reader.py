@@ -2,6 +2,7 @@ import logging
 import builtins
 from pathlib import Path
 from unittest.mock import patch
+import pytest
 
 from photo_selector_toolbox.exif.readers.exifread_reader import ExifReadReader
 
@@ -22,6 +23,7 @@ class MockStringTag:
         self.values = value
 
 
+@pytest.mark.requirement("REQ-DESK-EXIF.04")
 def test_can_handle():
     reader = ExifReadReader()
     assert reader.can_handle(Path("test.dng")) is True
@@ -29,6 +31,7 @@ def test_can_handle():
     assert reader.can_handle(Path("test.jpg")) is False
 
 
+@pytest.mark.requirement("REQ-DESK-EXIF.01", "REQ-DESK-EXIF.02", "REQ-DESK-EXIF.03")
 def test_read_success_full(tmp_path, caplog):
     reader = ExifReadReader()
     test_file = tmp_path / "test.dng"

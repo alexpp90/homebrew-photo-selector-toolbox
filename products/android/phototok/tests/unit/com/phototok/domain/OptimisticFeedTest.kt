@@ -1,5 +1,6 @@
 package com.phototok.domain
 
+import com.photoselector.core.Requirement
 import com.phototok.data.model.ImageItem
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -21,6 +22,7 @@ class OptimisticFeedTest {
     private val c = img("c.jpg", 3)
 
     @Test
+    @Requirement("REQ-TOK-ARCH.16", "REQ-TOK-GESTURE.01")
     fun `slots record the position in both lists`() {
         val images = listOf(a, c)
         val allImages = listOf(a, b, c)

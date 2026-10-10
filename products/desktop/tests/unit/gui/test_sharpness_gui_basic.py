@@ -344,6 +344,7 @@ def test_update_metadata_label_loads_exif():
                 # Mock get_exif_data to return a valid ExifData
                 mock_exif = ExifData(iso=100.0, shutter_speed=0.005, aperture=2.8, focal_length=50.0)
                 mock_get_exif.return_value = mock_exif
+                mock_get_exif.reset_mock()
 
                 tool.update_metadata_label(path)
 
@@ -1159,6 +1160,7 @@ def test_two_row_folder_controls_layout():
     import tkinter as tk
 
     root = tk.Tk()
+    root.withdraw()
     try:
         with (
             patch("photo_selector_toolbox.gui.sharpness_tool.tk.Toplevel"),

@@ -25,6 +25,7 @@ FOCUSABLE_STYLES = (
 def tk_root():
     try:
         root = tk.Tk()
+        root.withdraw()
     except tk.TclError as e:  # pragma: no cover - no display available
         pytest.skip(f"Tk unavailable: {e}")
     yield root

@@ -1,0 +1,100 @@
+name: Linux Desktop CI
+
+# Single pipeline for the native Linux Desktop product (photo_selector_linux).
+# Lint, headless unit tests, and Debian packaging & in-repo APT verification.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - 'products/linux-desktop/**'
+      - 'apt/**'
+      - '.github/workflows/linux.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'products/linux-desktop/**'
+      - 'apt/**'
+      - '.github/workflows/linux.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: linux-${{ github.ref }}
+  # Cancel superseded PR runs; preserve in-flight main/tag release builds
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Static Analysis & Lint Gate (Mirror: scripts/run_tests.sh `linux.yml:lint`) ──
+  lint:
+    name: Lint (flake8)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: products/linux-desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Run flake8
+        run: flake8 src/ tests/ --max-line-length=120 --extend-ignore=E203,W503
+
+  # ── Headless Unit Tests (Mirror: scripts/run_tests.sh `linux.yml:test`) ──
+  test:
+    name: Headless Unit Tests (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: products/linux-desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgirepository1.0-dev libcairo2-dev gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gexiv2-0.10
+
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install --no-interaction
+
+      - name: Run pytest
+        run: poetry run pytest tests/unit -q --tb=short
+
+  # ── Debian Packaging & APT Validation (Mirror: scripts/run_tests.sh `linux.yml:package`) ──
+  package:
+    name: Debian Packaging & APT Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev binutils
+
+      - name: Verify package & repository integrity
+        run: python3 products/linux-desktop/scripts/verify_package.py

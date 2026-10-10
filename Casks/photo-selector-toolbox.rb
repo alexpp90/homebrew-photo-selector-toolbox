@@ -1,5 +1,5 @@
 cask "photo-selector-toolbox" do
-  version "0.4.0"
+  version "0.5.0"
   sha256 "1d983c6b26d3ecdf487141db59692533be0614ccfca25a9c88304adff56cae39" # macos_sha256
 
   url "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/v#{version}/photo-selector-toolbox-macos-apple-silicon.zip"

@@ -12,6 +12,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "windows_only: skip unless running on Windows")
     config.addinivalue_line("markers", "gui_required: skip when no display is available")
     config.addinivalue_line("markers", "visual: visual regression tests requiring a display")
+    _suppress_macos_gui_focus()
 
 
 def pytest_collection_modifyitems(config, items):
@@ -32,6 +33,62 @@ def _display_available():
     if sys.platform == "win32" or sys.platform == "darwin":
         return True  # Windows/macOS always have a display context
     return bool(os.environ.get("DISPLAY"))
+
+
+def _suppress_macos_gui_focus():
+    """Prevent Tk on macOS from stealing focus and flashing windows during test runs.
+
+    On macOS Aqua Tkinter, initializing `tk.Tk()` or creating windows invokes
+    `[NSApp activateIgnoringOtherApps:YES]` and `[NSWindow makeKeyAndOrderFront:]`.
+    This steals the developer's window focus and flashes native Aqua windows on screen.
+    We swizzle NSApplication's activation methods and NSWindow's order-front methods
+    using ctypes to make them no-ops during pytest execution, keeping test execution
+    completely backgrounded with zero loss of test quality.
+    """
+    if sys.platform != "darwin" or os.environ.get("PST_SHOW_GUI"):
+        return
+    try:
+        import ctypes
+        import ctypes.util
+
+        ctypes.cdll.LoadLibrary("/System/Library/Frameworks/AppKit.framework/AppKit")
+        objc = ctypes.cdll.LoadLibrary(ctypes.util.find_library("objc"))
+
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+        objc.class_getInstanceMethod.restype = ctypes.c_void_p
+        objc.class_getInstanceMethod.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        objc.method_setImplementation.restype = ctypes.c_void_p
+        objc.method_setImplementation.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+        imp_activate = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool)(
+            lambda self, _cmd, flag: None
+        )
+        app_cls = objc.objc_getClass(b"NSApplication")
+        for sel_name in [b"activateIgnoringOtherApps:", b"activate:"]:
+            sel = objc.sel_registerName(sel_name)
+            m = objc.class_getInstanceMethod(app_cls, sel)
+            if m:
+                objc.method_setImplementation(m, ctypes.cast(imp_activate, ctypes.c_void_p))
+
+        imp_order = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(
+            lambda self, _cmd, sender: None
+        )
+        win_cls = objc.objc_getClass(b"NSWindow")
+        for sel_name in [b"makeKeyAndOrderFront:", b"orderFront:", b"orderFrontRegardless"]:
+            sel = objc.sel_registerName(sel_name)
+            m = objc.class_getInstanceMethod(win_cls, sel)
+            if m:
+                objc.method_setImplementation(m, ctypes.cast(imp_order, ctypes.c_void_p))
+
+        _suppress_macos_gui_focus._c_callbacks = (imp_activate, imp_order)
+    except Exception:
+        pass
+
+
+_suppress_macos_gui_focus()
 
 
 @pytest.fixture(autouse=True)

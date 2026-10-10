@@ -33,6 +33,7 @@ def mock_sys_modules():
 def test_key_handlers_early_returns():
     from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
     root = tk.Tk()
+    root.withdraw()
     parent = tk.Frame(root)
     with patch("photo_selector_toolbox.gui.sharpness_tool.tk.Toplevel"), \
          patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.setup_ui"), \
@@ -88,6 +89,7 @@ def test_key_handlers_early_returns():
 def test_escape_key_handler():
     from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
     root = tk.Tk()
+    root.withdraw()
     parent = tk.Frame(root)
     with patch("photo_selector_toolbox.gui.sharpness_tool.tk.Toplevel"), \
          patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.setup_ui"), \
@@ -129,6 +131,7 @@ def test_escape_key_handler():
 def test_show_scan_dialog_validation():
     from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
     root = tk.Tk()
+    root.withdraw()
     parent = tk.Frame(root)
     with patch("photo_selector_toolbox.gui.sharpness_tool.tk.Toplevel") as mock_toplevel, \
          patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.setup_ui"), \
@@ -158,6 +161,7 @@ def test_show_scan_dialog_validation():
 def test_show_scan_dialog_creation():
     from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
     root = tk.Tk()
+    root.withdraw()
     parent = tk.Frame(root)
 
     # We need to mock a lot of tk widgets to not have to spawn a real Toplevel
@@ -191,6 +195,7 @@ def test_show_scan_dialog_creation():
 def test_toggle_focus_mode():
     from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
     root = tk.Tk()
+    root.withdraw()
     parent = tk.Frame(root)
     main_app = MagicMock()
     parent.master = main_app
@@ -245,6 +250,7 @@ def test_resolve_widget():
     from unittest.mock import patch, MagicMock
 
     root = tk.Tk()
+    root.withdraw()
     parent = tk.Frame(root)
     with patch("photo_selector_toolbox.gui.sharpness_tool.tk.Toplevel"), \
          patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.setup_ui"), \

@@ -1,9 +1,9 @@
 PHOTO SELECTOR TOOLBOX — MANDATORY LIFECYCLE
 
-Three independent products. Identify which one a task targets before opening any file:
-Desktop (products/desktop/), Android Desktop (products/android/android-desktop/), PhotoTok
-(products/android/phototok/). products/android/core/ affects both Android products. Copying
-code between products is a defect, not reuse.
+Four independent products. Identify which one a task targets before opening any file:
+Desktop (products/desktop/), macOS Desktop (products/macos-desktop/), Android Desktop
+(products/android/android-desktop/), PhotoTok (products/android/phototok/). products/android/core/
+affects both Android products. Copying code between products is a defect, not reuse.
 
 BEFORE work — invoke the `task-lifecycle` skill. It covers the pre-work reads: the target
 product's docs/products/<product>/REQUIREMENTS.md, the matching ai/memory/ lesson file, the

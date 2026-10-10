@@ -33,6 +33,7 @@ def _clear_probe_cache():
     reset_availability_probe_cache()
 
 
+@pytest.mark.requirement("REQ-DESK-AESTH.03", "REQ-DESK-AESTH.04")
 def test_map_apple_score_endpoints_and_midpoint():
     # Apple documents overallScore in [-1.0, 1.0]; that maps onto [1, 10].
     assert map_apple_score_to_10(-1.0) == 1.0
@@ -68,6 +69,7 @@ def test_map_apple_score_does_not_pin_realistic_photos_to_ten():
     assert all(s < 10.0 for s in scores), f"scores pinned at the ceiling: {scores}"
 
 
+@pytest.mark.requirement("REQ-DESK-AESTH.05")
 def test_nima_distribution_expected_value():
     # All mass on rating 10 -> score 10; uniform -> 5.5.
     peaked = [0.0] * 9 + [1.0]
@@ -88,6 +90,7 @@ def test_nima_distribution_rejects_bad_input():
         nima_distribution_to_score([0.0, 0.0])
 
 
+@pytest.mark.requirement("REQ-DESK-AESTH.01", "REQ-DESK-AESTH.02")
 def test_select_engine_honours_explicit_choice():
     assert select_engine({"aesthetic_engine": "ollama"}) == ENGINE_OLLAMA
     assert select_engine({"aesthetic_engine": "apple_vision"}) == ENGINE_APPLE_VISION

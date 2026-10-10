@@ -32,12 +32,15 @@ the tag. A `[PROPOSED]` entry must never reach `main`.
 | `ai/memory/palette.md` | UI and accessibility: layout, theming, contrast, gestures, semantics |
 | `ai/memory/sentinel.md` | security and privacy: archives, URLs, user input, OAuth scopes, permissions |
 | `ai/memory/code_health.md` | structure and debt — also holds the refactoring backlog |
+| `ai/memory/framework_retro.md` | framework & process: session efficiency, implementation quality, Agent/Skill/Hook performance, and framework improvements |
 
 If a lesson fits two files, it is probably two lessons, or it is too vague.
 
 ## Format
 
 Newest entries at the top. Always use the real current date.
+
+### Domain lessons (`bolt.md`, `palette.md`, `sentinel.md`, `code_health.md`)
 
 ```markdown
 ## YYYY-MM-DD - Short title
@@ -47,10 +50,16 @@ Newest entries at the top. Always use the real current date.
 
 `code_health.md` backlog items additionally carry `[OPEN]` / `[DONE]` status and file paths.
 
+### Framework retrospectives (`framework_retro.md`)
+
+Used during step 7 of the `retrospective` skill to evaluate session efficiency, quality, and how well the framework (agents, skills, hooks) matched the task. See `ai/memory/framework_retro.md` for the entry template.
+
 ## What makes a lesson worth keeping
 
 A lesson is **generalizable**: it changes what a future agent does in a situation that will
-recur.
+recur. Domain lessons require a concrete **Action** line and must not be task diaries.
+Conversely, process friction, search bottlenecks, and framework usability gaps belong in
+`ai/memory/framework_retro.md` to improve the framework itself.
 
 | Keep | Drop |
 |---|---|

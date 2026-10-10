@@ -15,6 +15,7 @@ import com.phototok.data.model.RecentPath
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FileTypeFilter
 import com.phototok.domain.FirstRunHint
+import com.phototok.domain.FolderScanInfo
 import com.phototok.domain.SwipeAction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -53,6 +54,8 @@ class SettingsRepository @Inject constructor(
         private val KEY_RECENT_PATHS_COUNT = intPreferencesKey("recent_paths_count")
         private val KEY_RECENT_PATHS = stringPreferencesKey("recent_paths")
         private val KEY_SEEN_FIRST_RUN_HINTS = stringSetPreferencesKey("seen_first_run_hints")
+        private val KEY_LAST_APP_USED_TS = longPreferencesKey("last_app_used_ts")
+        private val KEY_SELECTION_USE_SOURCE_ROOT = booleanPreferencesKey("selection_use_source_root")
 
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
         const val DEFAULT_SORTING_ENABLED = true
@@ -76,6 +79,7 @@ class SettingsRepository @Inject constructor(
             recentPathsCount = prefs[KEY_RECENT_PATHS_COUNT] ?: DEFAULT_RECENT_PATHS_COUNT,
             recentPaths = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS]),
             seenFirstRunHints = prefs[KEY_SEEN_FIRST_RUN_HINTS] ?: emptySet(),
+            selectionUseSourceRoot = prefs[KEY_SELECTION_USE_SOURCE_ROOT] ?: false,
         )
     }
 
@@ -195,6 +199,28 @@ class SettingsRepository @Inject constructor(
         prefs[KEY_SEEN_FIRST_RUN_HINTS] ?: emptySet()
     }
 
+    /** Timestamp (millis) when the app was last opened/used. 0 = never recorded. */
+    val lastAppUsedTs: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LAST_APP_USED_TS] ?: 0L
+    }
+
+    suspend fun recordAppUsed(timestamp: Long = System.currentTimeMillis()) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_APP_USED_TS] = timestamp
+        }
+    }
+
+    /** Whether to store the Selection folder inside the scanned source folder instead of central location. */
+    val selectionUseSourceRoot: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SELECTION_USE_SOURCE_ROOT] ?: false
+    }
+
+    suspend fun setSelectionUseSourceRoot(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SELECTION_USE_SOURCE_ROOT] = enabled
+        }
+    }
+
     /** Record that [hint] has been shown, so it never fires again. */
     suspend fun markFirstRunHintSeen(hint: FirstRunHint) {
         context.dataStore.edit { prefs ->
@@ -283,6 +309,8 @@ class SettingsRepository @Inject constructor(
             RecentPathCodec.evictedUris(current, updated).forEach { evictedUri ->
                 prefs.remove(folderPositionKey(evictedUri))
                 prefs.remove(legacyFolderPositionKey(evictedUri))
+                prefs.remove(folderScanMaxTimeKey(evictedUri))
+                prefs.remove(folderScanCountKey(evictedUri))
             }
             prefs[KEY_RECENT_PATHS] = RecentPathCodec.encode(updated)
         }
@@ -312,17 +340,39 @@ class SettingsRepository @Inject constructor(
             ?: 0
     }
 
-    /** Clear all stored per-folder positions. */
+    // ── Per-folder scan info ──────────────────────────────────────────────
+
+    private fun folderScanMaxTimeKey(folderUri: String) =
+        longPreferencesKey("folder_scan_time_v1_$folderUri")
+
+    private fun folderScanCountKey(folderUri: String) =
+        intPreferencesKey("folder_scan_count_v1_$folderUri")
+
+    suspend fun setFolderScanInfo(folderUri: String, info: FolderScanInfo) {
+        context.dataStore.edit { prefs ->
+            prefs[folderScanMaxTimeKey(folderUri)] = info.maxLastModified
+            prefs[folderScanCountKey(folderUri)] = info.fileCount
+        }
+    }
+
+    suspend fun getFolderScanInfo(folderUri: String): FolderScanInfo {
+        val prefs = context.dataStore.data.first()
+        val maxTime = prefs[folderScanMaxTimeKey(folderUri)] ?: 0L
+        val count = prefs[folderScanCountKey(folderUri)] ?: 0
+        return FolderScanInfo(maxLastModified = maxTime, fileCount = count)
+    }
+
+    /** Clear all stored per-folder positions and scan metadata. */
     suspend fun clearFolderPositions() {
         context.dataStore.edit { prefs ->
             val keysToRemove = prefs.asMap().keys.filter {
-                it.name.startsWith("folder_pos_")
+                it.name.startsWith("folder_pos_") || it.name.startsWith("folder_scan_")
             }
             keysToRemove.forEach { prefs.remove(it) }
         }
     }
 
-    /** Clear image caches (Coil memory and disk) and all stored folder positions. */
+    /** Clear image caches (Coil memory and disk) and all stored folder positions and scan info. */
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     suspend fun clearCache() {
         try {

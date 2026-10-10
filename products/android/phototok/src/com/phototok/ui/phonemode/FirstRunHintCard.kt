@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.TouchApp
@@ -136,17 +137,38 @@ fun FirstRunHintCard(
                         color = colors.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "GOT IT",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.primary,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable { onDismiss() }
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                            .testTag("first_run_hint_dismiss"),
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (current.actionLabel != null && current.onAction != null) {
+                            Text(
+                                text = current.actionLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        current.onAction.invoke()
+                                        onDismiss()
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                                    .testTag("first_run_hint_action"),
+                            )
+                        }
+                        Text(
+                            text = "GOT IT",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (current.actionLabel != null) colors.onSurfaceVariant else colors.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { onDismiss() }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                .testTag("first_run_hint_dismiss"),
+                        )
+                    }
                 }
             }
         }
@@ -162,4 +184,5 @@ private fun iconFor(hint: FirstRunHint): ImageVector = when (hint) {
     FirstRunHint.DOUBLE_TAP_ZOOM -> Icons.Default.ZoomIn
     FirstRunHint.REVERT -> Icons.AutoMirrored.Filled.Undo
     FirstRunHint.RAW_JPEG_PAIRS -> Icons.Default.Style
+    FirstRunHint.FILTER_MISMATCH -> Icons.Default.FilterList
 }

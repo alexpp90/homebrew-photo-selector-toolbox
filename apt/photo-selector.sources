@@ -1,0 +1,6 @@
+Types: deb
+URIs: https://alexanderpatz.github.io/homebrew-photo-selector-toolbox/apt/
+Suites: trixie
+Components: main
+Architectures: amd64 all
+Signed-By: /etc/apt/keyrings/photo-selector-archive-keyring.gpg

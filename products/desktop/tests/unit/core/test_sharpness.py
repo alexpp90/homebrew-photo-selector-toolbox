@@ -36,6 +36,7 @@ def test_sharpness_categories():
     assert SharpnessCategories.get_name(3) == "Blurry"
 
 
+@pytest.mark.requirement("REQ-DESK-CULL.01")
 def test_categorize_sharpness():
     # Thresholds: Blur < 100, Sharp > 500
     blur_t = 100
@@ -79,6 +80,7 @@ def test_get_image_data_raw(mock_rawpy):
     mock_raw_obj.postprocess.assert_called_once()
 
 
+@pytest.mark.requirement("REQ-DESK-CULL.13")
 def test_find_related_files(tmp_path):
     # Create dummy files
     (tmp_path / "DSC001.ARW").touch()
@@ -279,6 +281,7 @@ def test_calculate_shadow_clipping_from_gray_all_clipping():
     assert shp._calculate_shadow_clipping_from_gray(gray) == 100.0
 
 
+@pytest.mark.requirement("REQ-DESK-CULL.02")
 def test_calculate_noise_from_gray():
     flat = np.zeros((100, 100), dtype=np.uint8)
     score_flat = shp._calculate_noise_from_gray(flat)

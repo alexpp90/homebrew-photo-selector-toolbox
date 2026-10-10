@@ -1,5 +1,6 @@
 package com.phototok.domain
 
+import com.photoselector.core.Requirement
 import com.phototok.data.model.ImageItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -22,6 +23,7 @@ class PendingDeleteLogicTest {
     private val c = img("c.jpg")
 
     @Test
+    @Requirement("REQ-TOK-ARCH.08", "REQ-TOK-GESTURE.03")
     fun `remove deletes current image from both lists and keeps index`() {
         val (lists, pending) = PendingDeleteLogic.remove(
             images = listOf(a, b, c),

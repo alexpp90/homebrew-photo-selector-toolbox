@@ -1,0 +1,110 @@
+"""Main Libadwaita application controller.
+
+Adheres to:
+- R-LINUX-UI-01: AdwApplication Lifecycle and Global Action Registration
+- R-LINUX-UI-02: Studio Dark Theme Installation
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+try:
+    import gi
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from gi.repository import Gtk, Gdk, Adw, Gio, GLib
+    HAS_GI = True
+except (ImportError, ValueError):
+    HAS_GI = False
+    Gtk = Gdk = Adw = Gio = GLib = None
+
+
+class PhotoSelectorApplication(Adw.Application if HAS_GI else object):
+    """Main Libadwaita Application controller managing window lifecycle and global actions."""
+
+    def __init__(self, application_id: str = "org.photoselector.Linux"):
+        if HAS_GI:
+            super().__init__(
+                application_id=application_id,
+                flags=Gio.ApplicationFlags.HANDLES_OPEN,
+            )
+        self.app_id = application_id
+        self.window = None
+
+    def do_startup(self) -> None:
+        if not HAS_GI:
+            return
+        Adw.Application.do_startup(self)
+        self._setup_theme_and_styling()
+        self._register_actions()
+
+    def do_activate(self) -> None:
+        if not HAS_GI:
+            return
+        if not self.window:
+            from photo_selector_linux.ui.window import MainWindow
+            self.window = MainWindow(application=self)
+        self.window.present()
+
+    def do_open(self, files, n_files, hint) -> None:
+        self.do_activate()
+        if n_files > 0 and files:
+            target_path = Path(files[0].get_path())
+            if target_path.exists() and self.window:
+                self.window.open_directory(target_path)
+
+    def _setup_theme_and_styling(self) -> None:
+        style_mgr = Adw.StyleManager.get_default()
+        style_mgr.set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+
+        css_provider = Gtk.CssProvider()
+        from photo_selector_linux.ui.styling import STUDIO_DARK_CSS
+        css_provider.load_from_data(STUDIO_DARK_CSS.encode("utf-8"))
+
+        display = Gdk.Display.get_default()
+        if display:
+            Gtk.StyleContext.add_provider_for_display(
+                display,
+                css_provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+            )
+
+    def _register_actions(self) -> None:
+        actions = [
+            ("open_folder", self._on_action_open_folder, ["<Control>o"]),
+            ("preferences", self._on_action_preferences, ["<Control>comma"]),
+            ("shortcuts", self._on_action_shortcuts, ["<Control>question", "question"]),
+            ("duplicate_finder", self._on_action_duplicate_finder, ["<Control>d"]),
+            ("statistics", self._on_action_statistics, ["<Control>l"]),
+            ("quit", lambda a, p: self.quit(), ["<Control>q"]),
+        ]
+        for name, callback, accels in actions:
+            action = Gio.SimpleAction.new(name, None)
+            action.connect("activate", callback)
+            self.add_action(action)
+            self.set_accels_for_action(f"app.{name}", accels)
+
+    def _on_action_open_folder(self, action, param) -> None:
+        if self.window:
+            self.window.show_open_folder_dialog()
+
+    def _on_action_preferences(self, action, param) -> None:
+        if self.window:
+            self.window.show_preferences()
+
+    def _on_action_shortcuts(self, action, param) -> None:
+        if self.window:
+            self.window.show_shortcuts_guide()
+
+    def _on_action_duplicate_finder(self, action, param) -> None:
+        if self.window:
+            self.window.show_duplicate_finder()
+
+    def _on_action_statistics(self, action, param) -> None:
+        if self.window:
+            self.window.show_library_statistics()
+
+
+# Alias for backward compatibility
+PhotoSelectorApp = PhotoSelectorApplication

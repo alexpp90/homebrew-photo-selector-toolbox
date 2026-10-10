@@ -6,8 +6,9 @@ making any changes. Framework documentation: [`ai/README.md`](ai/README.md). Rou
 
 Key rules (summary — `AGENTS.md` is authoritative):
 
-- **Identify the product first.** Three independent products: Desktop (`products/desktop/src/`, Python),
-  Android Desktop (`products/android/android-desktop/`), PhotoTok (`products/android/phototok/`). `products/android/core/` is the
+- **Identify the product first.** Canonical products: Desktop (`products/desktop/src/`, Python),
+  Android Desktop (`products/android/android-desktop/`, Kotlin), PhotoTok (`products/android/phototok/`, Kotlin),
+  Native macOS Desktop (`products/macos-desktop/`, Swift 6), and Linux Desktop (`products/linux-desktop/`, Python/GTK4). `products/android/core/` is the
   only code the two Android products share. Do not leak code between products.
 - **Mandatory task lifecycle.** Start with the `task-lifecycle` skill (pre-work reads), finish
   with the `retrospective` skill (tests, requirements sync, lesson capture, refactoring

@@ -18,7 +18,7 @@ from hooklib import bypassed, deny, allow, read_payload  # noqa: E402
 
 # Rule 6 — no scratch files, report dumps or PR-description drafts in the repository.
 SCRATCH = [
-    (re.compile(r"(^|/)scratch[^/]*\.(py|js|ts|kt|sh|txt|json|md)$", re.I),
+    (re.compile(r"(^|/)scratch([0-9_.-][^/]*)?\.(py|js|ts|kt|swift|sh|txt|json|md)$", re.I),
      "scratch file"),
     (re.compile(r"(^|/)(pr_desc|pr_description|pr-body|pr_body)[^/]*$", re.I),
      "PR-description draft"),
@@ -31,7 +31,7 @@ SCRATCH = [
 ]
 
 # The canonical-source rule: these trees are symlinks into ai/.
-MIRROR = re.compile(r"^\.(claude|gemini|agents)/")
+MIRROR = re.compile(r"^\.(claude|gemini|agents)/(?!teamwork/)", re.I)
 
 # Real files that legitimately live inside the mirror directories: per-host hook
 # registration is canonical *at* these paths (see ai/README.md), not mirrored from ai/.
@@ -46,15 +46,22 @@ MIRROR_TARGET = {
 ROOT_ALLOWED = {
     "AGENTS.md", "CLAUDE.md", "GEMINI.md", "README.md", "CHANGELOG.md", "LICENSE",
     "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "SECURITY.md", "THIRDPARTY_NOTICES.txt",
+    "ROUTING.md", ".cursorrules", ".windsurfrules", ".sync_mode",
     ".gitignore", ".firebaserc", ".gitattributes", ".editorconfig",
 }
-ROOT_CODE = re.compile(r"^[^/]+\.(py|kt|java|js|ts|ipynb)$", re.I)
+ROOT_CODE = re.compile(r"^[^/]+\.(py|kt|java|swift|js|ts|ipynb)$", re.I)
 
 # Generated artifacts must be regenerated, not hand-edited.
 GENERATED = {
     ".gemini/settings.json":
-        "Regenerate it: python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py "
+        "Regenerate it: python3 ai/skills/sync-framework/scripts/sync_framework.py "
         "(edit ai/agents/*.md instead).",
+    ".windsurfrules":
+        "Regenerate it: python3 ai/skills/sync-framework/scripts/sync_framework.py",
+    ".cursorrules":
+        "Regenerate it: python3 ai/skills/sync-framework/scripts/sync_framework.py",
+    ".github/copilot-instructions.md":
+        "Regenerate it: python3 ai/skills/sync-framework/scripts/sync_framework.py",
 }
 
 
@@ -70,16 +77,16 @@ def main() -> int:
 
     # The mirror check must run on the path as written: .claude/, .gemini/ and .agents/ are
     # symlinks into ai/, so a resolved path never shows the violation.
-    if MIRROR.match(literal) and literal not in MIRROR_REAL:
+    if MIRROR.match(literal) and literal.lower() not in {m.lower() for m in MIRROR_REAL}:
         top = literal.split("/")[1] if "/" in literal else ""
-        target = MIRROR_TARGET.get(top)
+        target = MIRROR_TARGET.get(top.lower())
         tail = literal.split("/", 2)[-1] if literal.count("/") >= 2 else ""
         hint = f" Edit {target}{tail} instead." if target else ""
         deny(payload, (
             f"Blocked: '{literal}' is inside a mirrored directory. Everything under .claude/, "
-            f".gemini/ and .agents/ is a symlink to the canonical tree under ai/.{hint}\n"
+            f".gemini/ and .agents/ is a mirror (symlink or copy) of the canonical tree under ai/.{hint}\n"
             f"Edit the canonical file, then run: "
-            f"python3 ai/skills/sync-framework/scripts/validate_framework.py"
+            f"python3 ai/skills/sync-framework/scripts/sync_framework.py"
         ))
 
     for pattern, kind in SCRATCH:
@@ -101,6 +108,8 @@ def main() -> int:
             f"product-specific lives there — every product owns a directory under products/.\n"
             f"Desktop: products/desktop/src/ or products/desktop/scripts/. "
             f"Android: products/android/<product>/src/. "
+            f"macOS Desktop: products/macos-desktop/src/. "
+            f"Linux Desktop: products/linux-desktop/src/. "
             f"Cross-product tooling: scripts/."
         ))
 

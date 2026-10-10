@@ -1,8 +1,16 @@
 # Desktop
 
-Python + Tkinter culling suite for macOS, Linux and Windows workstations. The most complete
-of the three products: it has the CLI, the statistics plots, the duplicate finder and the only
+Python + Tkinter culling suite for macOS, Linux and Windows workstations. One of four independent
+products in the repository: it provides the CLI, statistics plots, duplicate finder and the only
 local-VLM aesthetic scoring.
+
+> [!WARNING]
+> **Deprecation & Archival Notice:**
+> The multiplatform Python + Tkinter desktop application has been deprecated in favor of native platform applications (macOS Desktop in Swift 6 and Linux Desktop in GNOME/GTK4).
+> The historical multiplatform desktop codebase prior to deprecation is fully preserved and can be restored at any time via:
+> ```bash
+> git checkout archive/legacy-desktop
+> ```
 
 | | |
 |---|---|

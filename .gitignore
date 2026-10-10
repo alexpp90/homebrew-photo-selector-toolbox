@@ -51,4 +51,11 @@ products/android/.kotlin/
 
 # Antigravity local symlinks
 .agents/ai
+.agents/teamwork/
+
+# AI framework local synchronization mode
+/.sync_mode
+
+# APT GPG private keyring directory
+apt/.gnupg_repo/
 

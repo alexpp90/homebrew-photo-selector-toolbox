@@ -4,14 +4,17 @@ Documentation is organised by **product**, using the same slugs as the code. Eve
 states at the top which product it governs. If a file would need to say "except on PhotoTok",
 it belongs in [`shared/`](shared/) or it belongs in two files.
 
-Start with the [Glossary](GLOSSARY.md) — the three products have accumulated several names
-each, and using the wrong one is how a change lands in the wrong app.
+Start with the [Glossary](GLOSSARY.md) — the five products (four active native solutions
+alongside the archived legacy Desktop) have accumulated several names each, and using the wrong
+one is how a change lands in the wrong app.
 
 ## The repository in one screen
 
 ```
 products/                   ALL product code. One directory per product, same shape in each.
   desktop/                    src/ tests/ benchmarks/ scripts/ pyproject.toml
+  macos-desktop/              src/ tests/ Package.swift
+  linux-desktop/              src/ tests/ debian/ scripts/ pyproject.toml (planned)
   android/                    Gradle build root for both Android products
     android-desktop/          src/ tests/ res/ AndroidManifest.xml build.gradle.kts
     phototok/                 src/ tests/ res/ AndroidManifest.xml build.gradle.kts
@@ -29,6 +32,8 @@ Code slug ↔ docs slug:
 | Product | Code | Docs |
 |---|---|---|
 | Desktop | `products/desktop/` | [`products/desktop/`](products/desktop/) |
+| macOS Desktop | `products/macos-desktop/` | [`products/macos-desktop/`](products/macos-desktop/) |
+| Linux Desktop | `products/linux-desktop/` | [`products/linux-desktop/`](products/linux-desktop/) |
 | Android Desktop | `products/android/android-desktop/` | [`products/android-desktop/`](products/android-desktop/) |
 | PhotoTok | `products/android/phototok/` | [`products/phototok/`](products/phototok/) |
 | *(shared Android code)* | `products/android/core/` | [`shared/`](shared/) |
@@ -45,6 +50,14 @@ docs/
       README.md          What it is, how to run it, where the code lives
       REQUIREMENTS.md    Authoritative behaviour spec
       ARCHITECTURE.md    Package layout and layering rules
+    macos-desktop/     Native macOS Desktop — Swift 6 + SwiftUI
+      README.md          What it is, how to build/run it, where the code lives
+      REQUIREMENTS.md    Authoritative behaviour spec
+      ARCHITECTURE.md    Layering rules, concurrency models, and service interfaces
+    linux-desktop/     Native Linux Desktop — GNOME HIG / Libadwaita (planned)
+      README.md          What it is, how to test it, where the code lives
+      REQUIREMENTS.md    Authoritative behaviour spec
+      ARCHITECTURE.md    Layering rules and GNOME HIG conventions (planned)
     android-desktop/   Android Desktop — :android-desktop, tablets and DeX
       README.md
       REQUIREMENTS.md    Authoritative behaviour spec
@@ -78,6 +91,10 @@ The agent framework is **not** documentation and does not live here — it is in
 | I changed… | Edit |
 |---|---|
 | Desktop behaviour | `products/desktop/REQUIREMENTS.md` |
+| macOS Desktop behaviour | `products/macos-desktop/REQUIREMENTS.md` |
+| macOS Desktop architecture | `products/macos-desktop/ARCHITECTURE.md` |
+| Linux Desktop behaviour | `products/linux-desktop/REQUIREMENTS.md` |
+| Linux Desktop architecture | `products/linux-desktop/ARCHITECTURE.md` (planned) |
 | Android Desktop behaviour | `products/android-desktop/REQUIREMENTS.md` |
 | PhotoTok behaviour | `products/phototok/REQUIREMENTS.md` |
 | Android Desktop visuals | `products/android-desktop/DESIGN.md` |
