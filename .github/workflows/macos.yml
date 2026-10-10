@@ -63,7 +63,7 @@ jobs:
         run: swift build -c release
 
       - name: Run Unit & Adversarial Test Suites (Release)
-        run: swift test -c release --enable-code-coverage
+        run: swift test -c release
 
       - name: Verify Focus Latency SLA Benchmark (<2.0ms)
         run: |

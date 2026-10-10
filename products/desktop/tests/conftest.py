@@ -17,6 +17,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     platform = sys.platform
+    display_ok = _display_available()
     for item in items:
         if "linux_only" in item.keywords and platform != "linux":
             item.add_marker(pytest.mark.skip(reason="Linux only"))
@@ -24,14 +25,26 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.skip(reason="macOS only"))
         if "windows_only" in item.keywords and platform != "win32":
             item.add_marker(pytest.mark.skip(reason="Windows only"))
-        if "gui_required" in item.keywords and not _display_available():
-            item.add_marker(pytest.mark.skip(reason="No display available"))
+        if not display_ok:
+            is_gui = (
+                "gui_required" in item.keywords
+                or "visual" in item.keywords
+                or "/gui/" in str(item.fspath)
+                or "\\gui\\" in str(item.fspath)
+                or "tk_root" in getattr(item, "fixturenames", ())
+            )
+            if is_gui:
+                item.add_marker(pytest.mark.skip(reason="No display available"))
 
 
 def _display_available():
     """Check if a display is available for GUI tests."""
-    if sys.platform == "win32" or sys.platform == "darwin":
-        return True  # Windows/macOS always have a display context
+    if sys.platform == "darwin":
+        if os.environ.get("CI"):
+            return False
+        return True
+    if sys.platform == "win32":
+        return True
     return bool(os.environ.get("DISPLAY"))
 
 
@@ -101,6 +114,20 @@ def guard_tkinter_messagebox(monkeypatch):
         monkeypatch.setattr(tkinter.messagebox, "showwarning", lambda *a, **k: None)
         monkeypatch.setattr(tkinter.messagebox, "askyesno", lambda *a, **k: False)
         monkeypatch.setattr(tkinter.messagebox, "askokcancel", lambda *a, **k: False)
+        monkeypatch.setattr(tkinter.messagebox, "askquestion", lambda *a, **k: "no")
+        monkeypatch.setattr(tkinter.messagebox, "askretrycancel", lambda *a, **k: False)
+        monkeypatch.setattr(tkinter.messagebox, "askyesnocancel", lambda *a, **k: None)
+    except ImportError:
+        pass
+    try:
+        import tkinter.filedialog
+        monkeypatch.setattr(tkinter.filedialog, "askdirectory", lambda *a, **k: "")
+        monkeypatch.setattr(tkinter.filedialog, "askopenfilename", lambda *a, **k: "")
+        monkeypatch.setattr(tkinter.filedialog, "askopenfilenames", lambda *a, **k: ())
+        monkeypatch.setattr(tkinter.filedialog, "asksaveasfilename", lambda *a, **k: "")
+        monkeypatch.setattr(tkinter.filedialog, "askopenfile", lambda *a, **k: None)
+        monkeypatch.setattr(tkinter.filedialog, "askopenfiles", lambda *a, **k: [])
+        monkeypatch.setattr(tkinter.filedialog, "asksaveasfile", lambda *a, **k: None)
     except ImportError:
         pass
 
