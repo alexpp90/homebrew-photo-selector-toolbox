@@ -61,8 +61,7 @@ public final class KeyboardShortcutRouter: ObservableObject {
     /// Returns `true` if handled, or `false` to let the event proceed to standard responders.
     public func handleKeyEvent(_ event: NSEvent, viewModel: CullingWorkspaceViewModel) -> Bool {
         // Do not intercept keystrokes if the user is typing into an editable text field
-        let window = event.window ?? NSApp?.keyWindow
-        if let window, let firstResponder = window.firstResponder {
+        if let window = event.window, let firstResponder = window.firstResponder {
             if firstResponder is NSTextView || firstResponder is NSTextField {
                 return false
             }
