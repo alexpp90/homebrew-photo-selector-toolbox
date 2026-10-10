@@ -1,6 +1,7 @@
 package com.photoselectortoolbox.viewmodel
 
 import android.net.Uri
+import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
 import com.photoselectortoolbox.data.cache.ScoreDao
 import kotlinx.coroutines.yield
@@ -135,16 +136,22 @@ class SelectorViewModelTest {
         mimeType = "image/jpeg",
     )
 
-    private fun buildViewModel() = SelectorViewModel(
-        imageRepository = imageRepository,
-        scanImagesUseCase = scanImagesUseCase,
-        moveToSelectionUseCase = mockk<MoveToSelectionUseCase>(relaxed = true),
-        cacheRepository = mockk<CacheRepository>(relaxed = true),
-        settingsRepository = settingsRepository,
-        scoreDao = scoreDao,
-        appScope = appScope,
-        context = ApplicationProvider.getApplicationContext(),
-    )
+    private val viewModels = mutableListOf<SelectorViewModel>()
+
+    private fun buildViewModel(): SelectorViewModel {
+        val viewModel = SelectorViewModel(
+            imageRepository = imageRepository,
+            scanImagesUseCase = scanImagesUseCase,
+            moveToSelectionUseCase = mockk<MoveToSelectionUseCase>(relaxed = true),
+            cacheRepository = mockk<CacheRepository>(relaxed = true),
+            settingsRepository = settingsRepository,
+            scoreDao = scoreDao,
+            appScope = appScope,
+            context = ApplicationProvider.getApplicationContext(),
+        )
+        viewModels.add(viewModel)
+        return viewModel
+    }
 
     private suspend fun loadFolder(vararg images: ImageItem): SelectorViewModel {
         val viewModel = buildViewModel()
@@ -161,6 +168,8 @@ class SelectorViewModelTest {
     @After
     fun tearDown() {
         appScope.cancel()
+        viewModels.forEach { it.viewModelScope.cancel() }
+        viewModels.clear()
         Dispatchers.resetMain()
         discovery.resetReplayCache()
     }
