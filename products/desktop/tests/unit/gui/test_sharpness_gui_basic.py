@@ -25,8 +25,8 @@ class MockScandirContextManager:
 
 def mock_scandir(walk_return):
     def _scandir_mock(path):
-        # Convert path to string just in case
-        path_str = str(path)
+        # Convert path to posix string for cross-platform comparison with mock paths
+        path_str = __import__('pathlib').Path(path).as_posix()
         entries = []
         for dirpath, dirnames, filenames in walk_return:
             if dirpath == path_str:
