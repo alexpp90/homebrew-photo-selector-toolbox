@@ -31,9 +31,11 @@ def mock_scandir(walk_return):
         for dirpath, dirnames, filenames in walk_return:
             if dirpath == path_str:
                 for d in dirnames:
-                    entries.append(MockDirEntry(__import__('os').path.join(dirpath, d), is_dir_val=True, is_file_val=False))
+                    p = __import__('os').path.join(dirpath, d)
+                    entries.append(MockDirEntry(p, is_dir_val=True, is_file_val=False))
                 for f in filenames:
-                    entries.append(MockDirEntry(__import__('os').path.join(dirpath, f), is_dir_val=False, is_file_val=True))
+                    p = __import__('os').path.join(dirpath, f)
+                    entries.append(MockDirEntry(p, is_dir_val=False, is_file_val=True))
                 break
         return MockScandirContextManager(entries)
     return _scandir_mock

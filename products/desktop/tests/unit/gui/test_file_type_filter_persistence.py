@@ -33,9 +33,11 @@ def mock_scandir(walk_return):
         for dirpath, dirnames, filenames in walk_return:
             if dirpath == path_str:
                 for d in dirnames:
-                    entries.append(MockDirEntry(__import__('os').path.join(dirpath, d), is_dir_val=True, is_file_val=False))
+                    p = __import__('os').path.join(dirpath, d)
+                    entries.append(MockDirEntry(p, is_dir_val=True, is_file_val=False))
                 for f in filenames:
-                    entries.append(MockDirEntry(__import__('os').path.join(dirpath, f), is_dir_val=False, is_file_val=True))
+                    p = __import__('os').path.join(dirpath, f)
+                    entries.append(MockDirEntry(p, is_dir_val=False, is_file_val=True))
                 break
         return MockScandirContextManager(entries)
     return _scandir_mock
@@ -158,7 +160,7 @@ def test_file_type_filter_persists_across_folder_reload():
 
     with (
         patch("os.walk", return_value=walk_return),
-            patch("os.scandir", side_effect=mock_scandir(walk_return)),
+        patch("os.scandir", side_effect=mock_scandir(walk_return)),
         patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}),
     ):
         tool._load_folder_contents("/mock/photos")
@@ -189,7 +191,7 @@ def test_file_type_filter_fallback_when_extension_absent():
 
     with (
         patch("os.walk", return_value=walk_return),
-            patch("os.scandir", side_effect=mock_scandir(walk_return)),
+        patch("os.scandir", side_effect=mock_scandir(walk_return)),
         patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".png"}),
     ):
         tool._load_folder_contents("/mock/photos")

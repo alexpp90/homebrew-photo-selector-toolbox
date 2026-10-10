@@ -649,7 +649,10 @@ class ImageLibraryStatistics(ttk.Frame):
                                     if entry.name.lower() not in excluded_names:
                                         dirs_to_visit.append(Path(entry.path))
                                 elif entry.is_file():
-                                    if not entry.name.startswith("._") and entry.name.lower().endswith(supported_exts_tuple):
+                                    if (
+                                        not entry.name.startswith("._") and
+                                        entry.name.lower().endswith(supported_exts_tuple)
+                                    ):
                                         image_files.append(Path(entry.path))
                             except OSError:
                                 pass
