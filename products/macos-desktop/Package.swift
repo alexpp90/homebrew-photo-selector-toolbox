@@ -1,6 +1,31 @@
 // swift-tools-version: 6.0
 import Foundation
 import PackageDescription
+var testingPluginFlags: [String] = []
+
+let candidateDirs = [
+    ProcessInfo.processInfo.environment["DEVELOPER_DIR"],
+    "/Applications/Xcode.app/Contents/Developer",
+    "/Applications/Xcode_26.6.app/Contents/Developer",
+    "/Applications/Xcode_16.2.app/Contents/Developer",
+    "/Applications/Xcode_16.1.app/Contents/Developer",
+    "/Applications/Xcode_16.0.app/Contents/Developer",
+    "/Applications/Xcode_16.app/Contents/Developer",
+    "/Library/Developer/CommandLineTools",
+].compactMap { $0 }
+
+for dir in candidateDirs {
+    let toolchainTesting = (dir as NSString).appendingPathComponent("Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing")
+    if FileManager.default.fileExists(atPath: toolchainTesting) {
+        testingPluginFlags = ["-plugin-path", toolchainTesting]
+        break
+    }
+    let cltTesting = (dir as NSString).appendingPathComponent("usr/lib/swift/host/plugins/testing")
+    if FileManager.default.fileExists(atPath: cltTesting) {
+        testingPluginFlags = ["-plugin-path", cltTesting]
+        break
+    }
+}
 
 let package = Package(
     name: "PhotoSelector",
@@ -46,6 +71,9 @@ let package = Package(
                 "PhotoSelectorKit"
             ],
             path: "tests/unit",
+            swiftSettings: testingPluginFlags.isEmpty ? [] : [
+                .unsafeFlags(testingPluginFlags)
+            ],
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-w"])
             ]

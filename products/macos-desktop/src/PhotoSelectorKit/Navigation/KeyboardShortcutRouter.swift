@@ -15,6 +15,57 @@ extension NSWindow: SheetContextInspectable {
     public var hasAttachedSheet: Bool { attachedSheet != nil }
 }
 
+/// Protocol abstracting key event data so routing is unit-testable without WindowServer event creation.
+@MainActor
+public protocol KeyEventRepresentable {
+    var sheetContextInspectableWindow: (any SheetContextInspectable)? { get }
+    var isTextInputActive: Bool { get }
+    var modifierFlags: NSEvent.ModifierFlags { get }
+    var charactersIgnoringModifiers: String? { get }
+    var keyCode: UInt16 { get }
+    var specialKey: NSEvent.SpecialKey? { get }
+}
+
+@MainActor
+extension NSEvent: KeyEventRepresentable {
+    public var sheetContextInspectableWindow: (any SheetContextInspectable)? {
+        window
+    }
+
+    public var isTextInputActive: Bool {
+        if let firstResponder = window?.firstResponder {
+            return firstResponder is NSTextView || firstResponder is NSTextField
+        }
+        return false
+    }
+}
+
+/// Lightweight test double for simulating key events in headless environments.
+public struct SyntheticKeyEvent: KeyEventRepresentable {
+    public var sheetContextInspectableWindow: (any SheetContextInspectable)?
+    public var isTextInputActive: Bool
+    public var modifierFlags: NSEvent.ModifierFlags
+    public var charactersIgnoringModifiers: String?
+    public var keyCode: UInt16
+    public var specialKey: NSEvent.SpecialKey?
+
+    public init(
+        keyCode: UInt16,
+        characters: String = "",
+        modifierFlags: NSEvent.ModifierFlags = [],
+        specialKey: NSEvent.SpecialKey? = nil,
+        isTextInputActive: Bool = false,
+        window: (any SheetContextInspectable)? = nil
+    ) {
+        self.keyCode = keyCode
+        self.charactersIgnoringModifiers = characters
+        self.modifierFlags = modifierFlags
+        self.specialKey = specialKey
+        self.isTextInputActive = isTextInputActive
+        self.sheetContextInspectableWindow = window
+    }
+}
+
 /// Dedicated window-level keyboard event interceptor.
 /// Uses `NSEvent.addLocalMonitorForEvents(matching: .keyDown)` to capture navigation
 /// and culling hotkeys (←, →, ↑, ↓, M, C, Delete, Space, 1, 2, 3, Tab, ⌘Z, J, K) before SwiftUI focus
@@ -57,19 +108,17 @@ public final class KeyboardShortcutRouter: ObservableObject {
         window.isSheet || window.hasSheetParent || window.hasAttachedSheet
     }
 
-    /// Evaluates whether an `NSEvent` corresponds to a culling or navigation shortcut.
+    /// Evaluates whether a key event corresponds to a culling or navigation shortcut.
     /// Returns `true` if handled, or `false` to let the event proceed to standard responders.
-    public func handleKeyEvent(_ event: NSEvent, viewModel: CullingWorkspaceViewModel) -> Bool {
+    public func handleKeyEvent(_ event: any KeyEventRepresentable, viewModel: CullingWorkspaceViewModel) -> Bool {
         // Do not intercept keystrokes if the user is typing into an editable text field
-        if let window = event.window, let firstResponder = window.firstResponder {
-            if firstResponder is NSTextView || firstResponder is NSTextField {
-                return false
-            }
+        if event.isTextInputActive {
+            return false
         }
 
         // Sheets (Guide, Duplicate Finder, Statistics) own the keyboard while presented:
         // arrows must not move the workspace hidden behind them.
-        if let window = event.window, Self.isSheetContext(window) {
+        if let window = event.sheetContextInspectableWindow, Self.isSheetContext(window) {
             return false
         }
 

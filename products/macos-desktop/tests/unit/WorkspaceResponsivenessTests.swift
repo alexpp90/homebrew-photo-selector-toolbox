@@ -150,9 +150,7 @@ struct ZoomBehaviourTests {
     func escapeKeyRouting() {
         let vm = makeViewModel()
         let router = KeyboardShortcutRouter()
-        let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                                      windowNumber: 0, context: nil, characters: "\u{1B}",
-                                      charactersIgnoringModifiers: "\u{1B}", isARepeat: false, keyCode: 53)!
+        let escape = SyntheticKeyEvent(keyCode: 53, characters: "\u{1B}")
         #expect(router.handleKeyEvent(escape, viewModel: vm) == false, "unzoomed Esc must reach sheets / system")
         vm.setPinchMagnification(2.5)
         #expect(router.handleKeyEvent(escape, viewModel: vm) == true)
@@ -215,10 +213,12 @@ struct ForegroundActivationTests {
 
         let vm = CullingWorkspaceViewModel()
         vm.setPhotos((0..<3).map { PhotoItem(id: UUID(), url: URL(fileURLWithPath: "/tmp/s_\($0).jpg"), status: .candidate) })
-        let arrow = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.numericPad, .function], timestamp: 0,
-                                     windowNumber: 0, context: nil, characters: "\u{F703}",
-                                     charactersIgnoringModifiers: "\u{F703}", isARepeat: false, keyCode: 124)!
-        // windowNumber 0 → no window: the workspace path still navigates.
+        let arrow = SyntheticKeyEvent(
+            keyCode: 124,
+            characters: "\u{F703}",
+            modifierFlags: [.numericPad, .function]
+        )
+        // No sheet window attached: the workspace path still navigates.
         #expect(KeyboardShortcutRouter().handleKeyEvent(arrow, viewModel: vm) == true)
         #expect(vm.currentIndex == 1)
     }

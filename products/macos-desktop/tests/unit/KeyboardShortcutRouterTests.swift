@@ -4,25 +4,20 @@ import Foundation
 @testable import PhotoSelectorKit
 
 @Suite("KeyboardShortcutRouter Unit Tests")
+@MainActor
 struct KeyboardShortcutRouterTests {
 
+    @MainActor
     private func createKeyEvent(
         keyCode: UInt16,
         characters: String = "",
         modifiers: NSEvent.ModifierFlags = []
-    ) -> NSEvent {
-        NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: modifiers,
-            timestamp: 0,
-            windowNumber: 0,
-            context: nil,
+    ) -> SyntheticKeyEvent {
+        SyntheticKeyEvent(
+            keyCode: keyCode,
             characters: characters,
-            charactersIgnoringModifiers: characters,
-            isARepeat: false,
-            keyCode: keyCode
-        )!
+            modifierFlags: modifiers
+        )
     }
 
     private func createTestPhotos(count: Int) -> [PhotoItem] {
