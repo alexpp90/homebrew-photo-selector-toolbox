@@ -16,8 +16,8 @@ Usage (in ai/agents/<agent>.md frontmatter):
             - type: command
               command: "python3 \"$CLAUDE_PROJECT_DIR/ai/hooks/guard_scope.py\" <slug>"
 
-Slugs: desktop, android-desktop, phototok, android-build (spans both Android
-products), no-products (consultants that must never touch product source).
+Slugs: desktop, android-desktop, phototok, macos-desktop, linux-desktop, android-build (spans both
+Android products), no-products (consultants that must never touch product source).
 
 Claude Code only — Antigravity and Gemini have no per-subagent hooks, so there the
 rule stays enforced by prose in AGENTS.md and review. Denials explain the routing so
@@ -36,10 +36,26 @@ from hooklib import allow, bypassed, deny, read_payload  # noqa: E402
 # lifecycle obliges every agent to touch docs/, ai/ and scripts/ (requirements sync,
 # retrospective, framework fixes), so only the *other products' source* is off-limits.
 FORBIDDEN: dict[str, tuple[str, ...]] = {
-    "desktop": ("products/android/",),
-    "android-desktop": ("products/desktop/", "products/android/phototok/"),
-    "phototok": ("products/desktop/", "products/android/android-desktop/"),
-    "android-build": ("products/desktop/",),
+    "desktop": (
+        "products/android/", "products/macos-desktop/", "products/linux-desktop/",
+    ),
+    "android-desktop": (
+        "products/desktop/", "products/android/phototok/",
+        "products/macos-desktop/", "products/linux-desktop/",
+    ),
+    "phototok": (
+        "products/desktop/", "products/android/android-desktop/",
+        "products/macos-desktop/", "products/linux-desktop/",
+    ),
+    "macos-desktop": (
+        "products/desktop/", "products/android/", "products/linux-desktop/",
+    ),
+    "android-build": (
+        "products/desktop/", "products/macos-desktop/", "products/linux-desktop/",
+    ),
+    "linux-desktop": (
+        "products/desktop/", "products/android/", "products/macos-desktop/",
+    ),
     "no-products": ("products/",),
 }
 
@@ -49,6 +65,8 @@ OWNERS = {
     "products/android/android-desktop/": "@android-desktop-ui-agent or @android-desktop-core-agent",
     "products/android/phototok/": "@phototok-ui-agent or @phototok-core-agent",
     "products/android/": "the owning Android agent (see ai/ROUTING.md)",
+    "products/macos-desktop/": "@macos-desktop-agent (see ai/ROUTING.md)",
+    "products/linux-desktop/": "@linux-desktop-agent (see ai/ROUTING.md)",
     "products/": "the owning product agent (see ai/ROUTING.md)",
 }
 
@@ -69,8 +87,9 @@ def main() -> int:
     if not path or path.startswith("..") or path.startswith("/"):
         allow(payload)  # outside the repository: not this guard's concern
 
+    path_lower = path.lower()
     for prefix in forbidden:
-        if path.startswith(prefix):
+        if path_lower.startswith(prefix.lower()):
             owner = OWNERS.get(prefix, "the owning agent (see ai/ROUTING.md)")
             deny(payload, (
                 f"Blocked: '{path}' is outside your product scope ('{slug}'). "

@@ -2,6 +2,7 @@ from pathlib import Path
 from PIL import Image
 from unittest import mock
 import tkinter as tk
+import pytest
 
 from photo_selector_toolbox.core.utils import (
     calculate_dhash,
@@ -29,6 +30,7 @@ def test_calculate_dhash():
     assert hash_solid != hash_half
 
 
+@pytest.mark.requirement("REQ-DESK-CULL.07")
 def test_group_files_by_similarity():
     files = [
         Path("img1.jpg"),

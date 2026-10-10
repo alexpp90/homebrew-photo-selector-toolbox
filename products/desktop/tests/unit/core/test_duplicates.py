@@ -44,6 +44,7 @@ def test_get_file_hash(temp_image_folder):
     assert len(h) == 64  # SHA256 hexdigest length
 
 
+@pytest.mark.requirement("REQ-DESK-DUPE.01")
 def test_find_duplicates(temp_image_folder):
     duplicates = find_duplicates(temp_image_folder)
 
@@ -86,6 +87,7 @@ def test_find_duplicates_progress_callback(temp_image_folder):
     mock_callback.assert_called_with(4, 4)
 
 
+@pytest.mark.requirement("REQ-DESK-DUPE.02")
 @patch("photo_selector_toolbox.core.duplicates.send2trash")
 def test_move_to_trash(mock_send2trash, tmp_path):
     f = tmp_path / "delete_me.txt"
@@ -95,6 +97,7 @@ def test_move_to_trash(mock_send2trash, tmp_path):
     mock_send2trash.assert_called_once_with(str(f))
 
 
+@pytest.mark.requirement("REQ-DESK-DUPE.03")
 @patch("photo_selector_toolbox.core.duplicates.send2trash")
 def test_move_to_trash_failure(mock_send2trash, tmp_path):
     mock_send2trash.side_effect = OSError("Access denied")

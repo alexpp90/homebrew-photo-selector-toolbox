@@ -30,8 +30,9 @@ At the end of a task (the `retrospective` skill, step 3), the working agent brin
 2. For each candidate, decide one of:
    - **Memorize as lesson** — it is a generalizable rule a future agent would otherwise rediscover the hard way. Rewrite it into the strict format (dated, Learning/Action, no task narrative) and place it in the right file (`bolt`=perf, `palette`=UI/a11y, `sentinel`=security, `code_health`=structure).
    - **Memorize as playbook** — it is procedural ("how to do X efficiently"), not a rule. Create/update `ai/skills/playbook-<task>/SKILL.md` instead.
+   - **Memorize as framework retrospective** — it reflects on AI session efficiency, implementation quality, or framework/tool performance (Agents, Skills, Hooks). Shape it and place it in `ai/memory/framework_retro.md`.
    - **Merge** — it refines an existing entry; edit that entry rather than appending a near-duplicate.
-   - **Reject** — task-specific, obvious from the code, or restates documentation. Say why, so the agent calibrates.
+   - **Reject** — task-specific, obvious from the code, or restates documentation without offering framework/process improvement. Say why, so the agent calibrates.
 3. **Probe for missed lessons**: ask what failed on the first attempt, what took longest, what an expert would have done differently. Repeated friction that the agent considered "normal" is often the most valuable memory.
 4. **Check framework drift**: if the struggle came from wrong/stale instructions in `ai/agents/`, `ai/skills/`, or `AGENTS.md`, the fix is an instruction edit, not a lesson.
 

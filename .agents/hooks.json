@@ -27,12 +27,37 @@
       }
     ]
   },
+  "verify-intent-delivery": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python3 ./ai/hooks/verify_intent_delivery.py",
+        "timeout": 20
+      }
+    ]
+  },
   "check-retrospective": {
     "Stop": [
       {
         "type": "command",
         "command": "python3 ./ai/hooks/check_retrospective.py",
         "timeout": 15
+      }
+    ]
+  },
+  "record-intent": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python3 ./ai/hooks/record_intent.py",
+        "timeout": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python3 ./ai/hooks/record_intent.py",
+        "timeout": 10
       }
     ]
   },

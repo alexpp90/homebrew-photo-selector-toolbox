@@ -1,6 +1,7 @@
 package com.phototok.domain
 
 import android.content.pm.PackageManager
+import com.photoselector.core.Requirement
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,6 +16,7 @@ import java.net.URL
 class LegalLinksTest {
 
     @Test
+    @Requirement("REQ-TOK-ARCH.20")
     fun `privacy policy and impressum are valid https URLs`() {
         assertTrue(LegalLinks.PRIVACY_POLICY.startsWith("https://"))
         assertTrue(LegalLinks.IMPRESSUM.startsWith("https://"))
@@ -28,6 +30,7 @@ class LegalLinksTest {
     }
 
     @Test
+    @Requirement("REQ-TOK-ARCH.19")
     fun `manifest does not request INTERNET permission`() {
         val context = RuntimeEnvironment.getApplication()
         val packageInfo = context.packageManager.getPackageInfo(

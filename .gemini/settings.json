@@ -87,6 +87,30 @@
       ],
       "enable_write_tools": true
     },
+    "linux-desktop-agent": {
+      "description": "Sole specialist for the Native Linux Desktop product (products/linux-desktop/): GNOME HIG, GTK4, Libadwaita, optical metadata parsing, Laplacian focus metrics, transactional culling workspace, Debian 13 APT packaging. Never touches products/desktop/, products/macos-desktop/, or products/android/.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
+    },
+    "macos-desktop-agent": {
+      "description": "Sole specialist for the Native macOS Desktop product (products/macos-desktop/): Swift 6, SwiftUI, Apple Vision aesthetic scoring, Accelerate Laplacian focus metrics, ImageIO RAW decoding, borderless comparison workspace, settings (⌘,), Tools menu, SPM build and unit tests. Never touches products/desktop/ or products/android/.",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "enable_write_tools": true
+    },
     "phototok-core-agent": {
       "description": "Data and domain specialist for the PhotoTok product only (products/android/phototok/src/com/phototok/data/, .../domain/, .../di/). DataStore settings, progressive SAF discovery, pure feed-ordering logic, optimistic copy/move. Use proactively for any :phototok non-UI work. Never touches :app.",
       "tools": [
@@ -112,7 +136,7 @@
       "enable_write_tools": true
     },
     "shared-code-health-agent": {
-      "description": "Code health and continuous-improvement specialist. Use proactively after any feature or fix lands, and for refactoring, tech-debt reduction, dead-code removal, de-duplication, and complexity reduction across all three solutions. Owns the refactoring backlog in ai/memory/code_health.md and the post-task retrospective.",
+      "description": "Code health and continuous-improvement specialist. Use proactively after any feature or fix lands, and for refactoring, tech-debt reduction, dead-code removal, de-duplication, and complexity reduction across all products. Owns the refactoring backlog in ai/memory/code_health.md and the post-task retrospective.",
       "tools": [
         "Read",
         "Grep",

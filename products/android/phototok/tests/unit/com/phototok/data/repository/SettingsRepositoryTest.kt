@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FileTypeFilter
 import com.phototok.domain.FirstRunHint
+import com.phototok.domain.FolderScanInfo
 import com.phototok.domain.SwipeAction
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -52,6 +53,8 @@ class SettingsRepositoryTest {
         assertEquals(3, repository.phoneRecentPathsCount.first())
         assertTrue(repository.phoneRecentPaths.first().isEmpty())
         assertTrue(repository.phoneSeenFirstRunHints.first().isEmpty())
+        assertEquals(0L, repository.lastAppUsedTs.first())
+        assertFalse(repository.selectionUseSourceRoot.first())
     }
 
     @Test
@@ -109,6 +112,12 @@ class SettingsRepositoryTest {
 
         repository.setPhoneRecentPathsCount(7)
         assertEquals(7, repository.phoneRecentPathsCount.first())
+
+        repository.recordAppUsed(555555L)
+        assertEquals(555555L, repository.lastAppUsedTs.first())
+
+        repository.setSelectionUseSourceRoot(true)
+        assertTrue(repository.selectionUseSourceRoot.first())
     }
 
     @Test
@@ -201,5 +210,28 @@ class SettingsRepositoryTest {
 
         // Evicted folder position should have been cleaned up (fallback defaults to 0)
         assertEquals(0, repository.getFolderLastPosition("${baseUri}1"))
+    }
+
+    @Test
+    fun `folder scan info stores and retrieves by URI`() = runTest {
+        val uri = "content://com.android.externalstorage.documents/tree/SD%3ADCIM"
+        assertEquals(FolderScanInfo(0L, 0), repository.getFolderScanInfo(uri))
+
+        repository.setFolderScanInfo(uri, FolderScanInfo(maxLastModified = 1700000000L, fileCount = 42))
+        val retrieved = repository.getFolderScanInfo(uri)
+        assertEquals(1700000000L, retrieved.maxLastModified)
+        assertEquals(42, retrieved.fileCount)
+    }
+
+    @Test
+    fun `clearFolderPositions deletes scan info alongside positions`() = runTest {
+        val uri = "content://com.android.externalstorage.documents/tree/SD%3ADCIM"
+        repository.setFolderLastPosition(uri, 5)
+        repository.setFolderScanInfo(uri, FolderScanInfo(12345L, 10))
+
+        repository.clearFolderPositions()
+
+        assertEquals(0, repository.getFolderLastPosition(uri))
+        assertEquals(FolderScanInfo(0L, 0), repository.getFolderScanInfo(uri))
     }
 }

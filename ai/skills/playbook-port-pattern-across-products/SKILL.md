@@ -1,13 +1,13 @@
 ---
 name: playbook-port-pattern-across-products
-description: "Adapt an interaction, guidance or performance pattern proven in one product into another — Desktop, Android Desktop or PhotoTok. Covers reading the source lesson, grepping the target for the anti-pattern, sequencing the core-then-UI delegation, and the flow-contract trap. Use when a retrospective or the user identifies a pattern worth propagating."
+description: "Adapt an interaction, guidance or performance pattern proven in one product into another — Desktop, macOS Desktop, Android Desktop or PhotoTok. Covers reading the source lesson, grepping the target for the anti-pattern, sequencing the core-then-UI delegation, and the flow-contract trap. Use when a retrospective or the user identifies a pattern worth propagating."
 last_validated: 2026-08-08
 ---
 
 # Playbook: Port a Pattern Across Products
 
 Makes "PhotoTok does X well, Android Desktop should too" a reliable diff instead of a
-rewrite. Applies to all three products in both directions.
+rewrite. Applies to all four products across platforms.
 
 ## When to use
 

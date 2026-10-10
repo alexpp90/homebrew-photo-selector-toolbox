@@ -1,6 +1,7 @@
 package com.photoselectortoolbox.domain
 
 import android.content.Context
+import com.photoselector.core.Requirement
 import com.photoselectortoolbox.domain.analysis.AestheticAnalyzer
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
@@ -18,6 +19,7 @@ class AestheticAnalyzerTest {
     private fun analyzer(): AestheticAnalyzer = AestheticAnalyzer(mockk<Context>(relaxed = true))
 
     @Test
+    @Requirement("REQ-AND-FEATURE.02")
     fun `distribution peaked at 10 scores 10`() {
         val probs = FloatArray(10) { if (it == 9) 1.0f else 0.0f }
         val score = analyzer().distributionToScore(probs)

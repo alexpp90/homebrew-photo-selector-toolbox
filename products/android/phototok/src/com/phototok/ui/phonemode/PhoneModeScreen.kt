@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,14 +33,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lens
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -267,7 +270,7 @@ fun PhoneModeScreen(
                         )
                         // Selection
                         SidePanelButton(
-                            icon = Icons.Default.Star,
+                            icon = Icons.Default.CollectionsBookmark,
                             description = "Selection",
                             isActive = false,
                             enabled = true,
@@ -354,6 +357,18 @@ fun PhoneModeScreen(
                             )
                         }
                         IconButton(
+                            onClick = { viewModel.toggleExifOverlay() },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("landscape_info_exif_button"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Toggle EXIF stats",
+                                tint = if (uiState.showExifOverlay) colors.primary else sideIconTint,
+                            )
+                        }
+                        IconButton(
                             onClick = { showSettingsSheet = true },
                             modifier = Modifier.size(48.dp),
                         ) {
@@ -420,6 +435,12 @@ fun PhoneModeScreen(
                     sourceFolderName = uiState.sourceFolderName,
                     collectionFolderName = uiState.collectionFolderName,
                     isLoading = uiState.isLoading,
+                    emptyFolderMessage = uiState.emptyFolderMessage,
+                    onSelectCamera = {
+                        viewModel.selectCameraFolder { cameraUri ->
+                            folderPickerLauncher.launch(cameraUri)
+                        }
+                    },
                     onSelectSource = { viewModel.selectSourceFolder(it) },
                     onSelectCollection = { viewModel.selectCollectionFolder(it) },
                     onStart = {
@@ -460,7 +481,7 @@ fun PhoneModeScreen(
             dismissLabel = "CLOSE",
         )
 
-        // ── One-time explanation of a first-time action / RAW+JPEG suggestions ─
+        // ── RAW + JPEG pair suggestions dialog ──────────────────────────────
         if (!uiState.showGestureTutorial && !uiState.showControlsGuide) {
             RawJpegSuggestionCard(
                 visible = uiState.showRawJpegSuggestion,
@@ -468,9 +489,6 @@ fun PhoneModeScreen(
                 onFilterJpg = { viewModel.applyRawJpegFilter(FileTypeFilter.JPG) },
                 onEnableMoveRelatedFiles = { viewModel.enableMoveRelatedFiles() },
                 onDismiss = { viewModel.dismissRawJpegSuggestion() },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = if (isLandscape && isViewing) 24.dp else 96.dp),
             )
 
             if (!uiState.showRawJpegSuggestion) {
@@ -479,9 +497,55 @@ fun PhoneModeScreen(
                     onDismiss = viewModel::dismissFirstRunHint,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = if (isLandscape && isViewing) 24.dp else 96.dp),
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                        .padding(bottom = if (isLandscape && isViewing) 24.dp else 88.dp),
                 )
             }
+        }
+
+        // ── Reload folder & Jump to Latest confirmation dialog ──────────────
+        val reloadPrompt = uiState.reloadPrompt
+        if (reloadPrompt != null) {
+            val countText = if (reloadPrompt.newCount == 1) {
+                "1 new photo was found"
+            } else {
+                "${reloadPrompt.newCount} new photos were found"
+            }
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissReloadPrompt() },
+                title = {
+                    Text(
+                        text = "New Photos Found",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                },
+                text = {
+                    Text(
+                        text = "$countText while reviewing. Would you like to jump to the new photos or stay at your current photo?",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.confirmReloadJumpToLatest() },
+                        modifier = Modifier.testTag("reload_jump_confirm_button"),
+                    ) {
+                        Text("Jump to Latest")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.dismissReloadPrompt() },
+                        modifier = Modifier.testTag("reload_jump_stay_button"),
+                    ) {
+                        Text("Stay at Current")
+                    }
+                },
+                modifier = Modifier
+                    .widthIn(max = 460.dp)
+                    .testTag("reload_jump_dialog"),
+            )
         }
 
         // ── Overlay App Bars (Only when not in Landscape Viewer / selection) ──
@@ -551,6 +615,19 @@ fun PhoneModeScreen(
                                 imageVector = Icons.AutoMirrored.Filled.HelpOutline,
                                 contentDescription = "Show controls",
                                 tint = topIconTint,
+                            )
+                        }
+                        // Info: toggles the EXIF stats overlay
+                        IconButton(
+                            onClick = { viewModel.toggleExifOverlay() },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("info_exif_button"),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Toggle EXIF stats",
+                                tint = if (uiState.showExifOverlay) colors.primary else topIconTint,
                             )
                         }
                     }

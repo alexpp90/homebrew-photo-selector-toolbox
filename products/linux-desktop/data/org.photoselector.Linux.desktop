@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.5
+Type=Application
+Name=Photo Selector
+GenericName=Photograph Culling Suite
+Comment=High-performance photograph culling and comparison for GNOME
+Exec=photo-selector-linux %F
+Icon=org.photoselector.Linux
+Terminal=false
+Categories=Graphics;Photography;Viewer;
+MimeType=image/jpeg;image/png;image/tiff;image/x-sony-arw;image/x-canon-cr2;image/x-canon-cr3;image/x-nikon-nef;image/x-adobe-dng;image/heic;
+Keywords=photo;photography;cull;culling;raw;exif;selector;comparison;
+StartupNotify=true
+StartupWMClass=org.photoselector.Linux

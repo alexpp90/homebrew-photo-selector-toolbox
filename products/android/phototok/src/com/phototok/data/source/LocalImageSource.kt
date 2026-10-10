@@ -302,6 +302,10 @@ class LocalImageSourceImpl @Inject constructor(
                         continue
                     }
 
+                    val parentUriString = DocumentsContract
+                        .buildDocumentUriUsingTree(treeUri, parentId)
+                        .toString()
+
                     onImage(
                         ImageItem(
                             uri = DocumentsContract
@@ -313,6 +317,7 @@ class LocalImageSourceImpl @Inject constructor(
                             mimeType = mimeType,
                             imageWidth = 0,
                             imageHeight = 0,
+                            parentUri = parentUriString,
                         )
                     )
                 }

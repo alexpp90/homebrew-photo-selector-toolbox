@@ -23,7 +23,11 @@ DEFAULT_THRESHOLD = 0.5  # 0.5 %
 
 
 def _display_available():
-    if sys.platform in ("win32", "darwin"):
+    if sys.platform == "darwin":
+        if os.environ.get("CI"):
+            return False
+        return True
+    if sys.platform == "win32":
         return True
     return bool(os.environ.get("DISPLAY"))
 

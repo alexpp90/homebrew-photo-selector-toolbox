@@ -1,0 +1,24 @@
+Origin: PhotoSelector
+Label: Photo Selector Toolbox
+Suite: trixie
+Codename: trixie
+Version: 13
+Date: Sat, 10 Oct 2026 11:34:55 +0000
+Architectures: amd64 all
+Components: main
+Description: Official Debian 13 (Trixie) repository for Photo Selector Linux
+MD5Sum:
+ 8798cae8b052db110321d2ead745d85c 1201 main/binary-all/Packages
+ 8a3be21dac6d28c1111df01943f5a757 764 main/binary-all/Packages.gz
+ 8798cae8b052db110321d2ead745d85c 1201 main/binary-amd64/Packages
+ 8a3be21dac6d28c1111df01943f5a757 764 main/binary-amd64/Packages.gz
+SHA256:
+ 8e4e32a9195a84df4eabfc8b62ce688c5a05bf4d2af8717775d1d9bfcea37d59 1201 main/binary-all/Packages
+ 216d7b0b893fb987fa4e7a9198ec5a3eb2498006e7160a1000cbcbc1075abc78 764 main/binary-all/Packages.gz
+ 8e4e32a9195a84df4eabfc8b62ce688c5a05bf4d2af8717775d1d9bfcea37d59 1201 main/binary-amd64/Packages
+ 216d7b0b893fb987fa4e7a9198ec5a3eb2498006e7160a1000cbcbc1075abc78 764 main/binary-amd64/Packages.gz
+SHA512:
+ ae3036d54473fd436c87c2940addf24dace69f13fdd4c07dd65c8a6ba2c432a74ce0bfdb29bc6785e6041cec363793f10c1c44947f8c9d7767e9b5f661c2b4b3 1201 main/binary-all/Packages
+ 935f4751529d69593225f3a575d0e49bca86b7d201a679b9cb7ec9cab9d6034292473f44fb39c581c239e04fb713ff1663aa85479c5a1d7afcab406b37681e32 764 main/binary-all/Packages.gz
+ ae3036d54473fd436c87c2940addf24dace69f13fdd4c07dd65c8a6ba2c432a74ce0bfdb29bc6785e6041cec363793f10c1c44947f8c9d7767e9b5f661c2b4b3 1201 main/binary-amd64/Packages
+ 935f4751529d69593225f3a575d0e49bca86b7d201a679b9cb7ec9cab9d6034292473f44fb39c581c239e04fb713ff1663aa85479c5a1d7afcab406b37681e32 764 main/binary-amd64/Packages.gz

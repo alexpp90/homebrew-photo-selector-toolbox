@@ -43,7 +43,7 @@ class SelectionViewerViewModel @Inject constructor(
     fun open(targetFolderUri: String?) {
         if (targetFolderUri == null) {
             _uiState.update {
-                it.copy(feedback = ActionFeedback("No selection folder yet", isError = true))
+                it.copy(feedback = ActionFeedback("No selection folder yet", isError = false))
             }
             return
         }
@@ -64,7 +64,7 @@ class SelectionViewerViewModel @Inject constructor(
                     SelectionListing.Missing -> _uiState.update {
                         it.copy(
                             isOpen = false,
-                            feedback = ActionFeedback("Selection folder is empty", isError = true),
+                            feedback = ActionFeedback("Selection folder is empty", isError = false),
                         )
                     }
                 }

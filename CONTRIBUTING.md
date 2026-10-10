@@ -6,13 +6,14 @@ Thank you for your interest in contributing to Photo Selector Toolbox! This docu
 
 By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please report any unacceptable behavior to the project maintainers.
 
-## Project Structure (Three Independent Solutions)
+## Project Structure (Four Independent Solutions)
 
-This repository contains **three independent solutions** targeting different platforms, sharing the same repository:
+This repository contains **four independent solutions** targeting different platforms, sharing the same repository:
 
 | Solution | Code Directory | Tech Stack | Primary Target |
 |----------|-----------------|------------|----------------|
 | **Desktop** | `products/desktop/src/` | Python + Tkinter | Desktop (macOS, Linux, Windows) |
+| **macOS Desktop** | `products/macos-desktop/` | Swift 6 + SwiftUI + Vision + Accelerate | macOS 14+ / 15+ (Apple Silicon & Intel) |
 | **Android Desktop** | `products/android/android-desktop/` | Jetpack Compose + Room + OpenCV + Vico | Samsung DeX, Tablets (>= 840dp) |
 | **PhotoTok** | `products/android/phototok/` | Jetpack Compose (Lightweight) | Mobile Phone (< 600dp, portrait) |
 

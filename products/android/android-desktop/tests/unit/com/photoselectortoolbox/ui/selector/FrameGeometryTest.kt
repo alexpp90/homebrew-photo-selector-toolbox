@@ -1,6 +1,7 @@
 package com.photoselectortoolbox.ui.selector
 
 import androidx.compose.ui.unit.dp
+import com.photoselector.core.Requirement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -21,6 +22,7 @@ class FrameGeometryTest {
     private val referenceHeight = 908.dp
 
     @Test
+    @Requirement("REQ-AND-LAYOUT.01", "REQ-AND-LAYOUT.03", "REQ-AND-LAYOUT.04")
     fun `one over two beats a row by a wide margin on the reference device`() {
         val oneOverTwo = FrameGeometry.frameSize(
             regionWidth = referenceWidth,

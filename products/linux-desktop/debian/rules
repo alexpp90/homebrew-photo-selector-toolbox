@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME = photo-selector-linux
+export PYBUILD_SYSTEM = pyproject
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_test:
+	# Run headless unit test suite during package build
+	dh_auto_test -- --test-pytest --test-args="tests/unit"

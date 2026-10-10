@@ -29,6 +29,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,15 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Redesigned landing screen: hero branding, a single source picker,
- * recent folders, and a prominent CTA.
- *
- * There is exactly **one** source entry point on purpose. The Android Storage
- * Access Framework picker is itself the storage browser: internal storage, a
- * mounted SD card or USB drive, and cloud providers (e.g. Google Drive) are all
- * reachable from it. Offering a separate "External Storage" card promised a
- * different browser and then opened the same one, which only added a choice the
- * user could get wrong.
+ * Landing screen: hero branding, source pickers (Phone Camera / Custom folder),
+ * recent folders, and empty-state messaging.
  */
 @Composable
 fun PhoneModeLanding(
@@ -68,6 +64,8 @@ fun PhoneModeLanding(
     sourceFolderName: String,
     collectionFolderName: String,
     isLoading: Boolean,
+    emptyFolderMessage: String? = null,
+    onSelectCamera: () -> Unit = {},
     onSelectSource: (Uri) -> Unit,
     onSelectCollection: (Uri) -> Unit,
     onStart: () -> Unit,
@@ -207,18 +205,69 @@ fun PhoneModeLanding(
             )
 
             SourceCard(
+                icon = Icons.Default.PhotoCamera,
+                label = "Phone Camera",
+                supportingText = "Default camera roll (DCIM/Camera)",
+                isActive = false,
+                onClick = onSelectCamera,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("landing_phone_camera_card"),
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            SourceCard(
                 icon = Icons.Default.FolderOpen,
-                label = "Select Photo Folder",
+                label = "Custom Folder",
                 supportingText = "Phone storage, SD card or cloud",
                 isActive = hasSourceFolder,
                 onClick = { sourcePickerLauncher.launch(null) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("landing_custom_folder_card"),
             )
 
-            if (hasSourceFolder && sourceFolderName.isNotEmpty()) {
+            if (emptyFolderMessage != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("empty_folder_warning_card"),
+                    shape = RoundedCornerShape(12.dp),
+                    color = colors.errorContainer.copy(alpha = 0.85f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = colors.onErrorContainer,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "No Photos Found",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.onErrorContainer,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = emptyFolderMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onErrorContainer.copy(alpha = 0.9f),
+                            )
+                        }
+                    }
+                }
+            } else if (hasSourceFolder && sourceFolderName.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = sourceFolderName,
+                    text = "Current: $sourceFolderName",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.primary.copy(alpha = 0.8f),
                     textAlign = TextAlign.Center,
@@ -248,35 +297,35 @@ fun PhoneModeLanding(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // ── CTA button ───────────────────────────────────────────
-            val enabled = hasSourceFolder && !isLoading
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .clickable(enabled = enabled) { onStart() },
-                shape = RoundedCornerShape(12.dp),
-                color = if (enabled) colors.primaryContainer else colors.primaryContainer.copy(alpha = 0.3f),
-                shadowElevation = if (enabled) 8.dp else 0.dp,
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
+            // ── CTA button (Only shown when there is an active/valid session to resume) ──
+            val canResume = hasSourceFolder && !isLoading && emptyFolderMessage == null
+            if (canResume) {
+                Spacer(modifier = Modifier.height(32.dp))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .clickable(enabled = canResume) { onStart() }
+                        .testTag("landing_start_browsing_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    color = colors.primaryContainer,
+                    shadowElevation = 8.dp,
                 ) {
-                    Text(
-                        text = if (isLoading) "Loading..." else "Start Browsing",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (enabled) colors.onPrimaryContainer else Color.White.copy(alpha = 0.4f),
-                    )
-                    if (!isLoading) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = if (sourceFolderName.isNotEmpty()) "Resume $sourceFolderName" else "Start Browsing",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colors.onPrimaryContainer,
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = null,
-                            tint = if (enabled) colors.onPrimaryContainer else Color.White.copy(alpha = 0.4f),
+                            tint = colors.onPrimaryContainer,
                             modifier = Modifier.size(20.dp),
                         )
                     }

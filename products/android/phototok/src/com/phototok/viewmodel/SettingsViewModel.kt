@@ -34,6 +34,7 @@ data class SettingsUiState(
     val recentPathsCount: Int = 3,
     val sourceFolderUri: String? = null,
     val sourceFolderName: String = "",
+    val selectionUseSourceRoot: Boolean = false,
 )
 
 @HiltViewModel
@@ -69,6 +70,7 @@ class SettingsViewModel @Inject constructor(
                         recentPathsEnabled = phone.recentPathsEnabled,
                         recentPathsCount = phone.recentPathsCount,
                         leftSwipeAction = phone.leftSwipeAction,
+                        selectionUseSourceRoot = phone.selectionUseSourceRoot,
                     )
                 }
             }
@@ -152,6 +154,10 @@ class SettingsViewModel @Inject constructor(
 
     fun updateLeftSwipeUri(uri: String?) {
         viewModelScope.launch { settingsRepository.setPhoneLeftSwipeUri(uri) }
+    }
+
+    fun updateSelectionUseSourceRoot(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSelectionUseSourceRoot(enabled) }
     }
 
     /**

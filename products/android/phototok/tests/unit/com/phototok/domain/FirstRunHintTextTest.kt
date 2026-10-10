@@ -90,4 +90,25 @@ class FirstRunHintTextTest {
             assertTrue(hint.name, FirstRunHintText.message(hint).isNotBlank())
         }
     }
+
+    @Test
+    fun `filter mismatch hint reflects active filter`() {
+        assertEquals("Filter Active", FirstRunHintText.title(FirstRunHint.FILTER_MISMATCH))
+
+        val rawMsg = FirstRunHintText.message(
+            hint = FirstRunHint.FILTER_MISMATCH,
+            fileTypeFilter = FileTypeFilter.RAW,
+        )
+        assertTrue(rawMsg, rawMsg.contains("RAW photos only"))
+        assertTrue(rawMsg, rawMsg.contains("JPEG"))
+        assertTrue(rawMsg, rawMsg.contains("Settings"))
+
+        val jpgMsg = FirstRunHintText.message(
+            hint = FirstRunHint.FILTER_MISMATCH,
+            fileTypeFilter = FileTypeFilter.JPG,
+        )
+        assertTrue(jpgMsg, jpgMsg.contains("JPEG photos only"))
+        assertTrue(jpgMsg, jpgMsg.contains("RAW"))
+        assertTrue(jpgMsg, jpgMsg.contains("Settings"))
+    }
 }

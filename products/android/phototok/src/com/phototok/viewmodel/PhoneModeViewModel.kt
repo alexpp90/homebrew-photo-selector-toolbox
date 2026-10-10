@@ -16,6 +16,8 @@ import com.phototok.domain.CopyMoveFeedback
 import com.phototok.domain.FileTypeFilter
 import com.phototok.domain.FirstRunHint
 import com.phototok.domain.FirstRunHintText
+import com.phototok.domain.FolderScanInfo
+import com.phototok.domain.FolderScanLogic
 import com.phototok.domain.OptimisticFeed
 import com.phototok.domain.PendingDeleteLogic
 import com.phototok.domain.PhoneFeedOrdering
@@ -82,6 +84,17 @@ data class PhoneModeUiState(
     val recentPathsCount: Int = 3,
     /** Whether to show suggestion for folders containing both RAW and JPEG pairs. */
     val showRawJpegSuggestion: Boolean = false,
+    /** Prompt shown after active session reload when new photos were discovered. */
+    val reloadPrompt: ReloadPrompt? = null,
+    /** Friendly explanation when a selected folder contains 0 supported photos. */
+    val emptyFolderMessage: String? = null,
+    /** When true, Selection folder is stored inside each scanned folder. */
+    val selectionUseSourceRoot: Boolean = false,
+)
+
+data class ReloadPrompt(
+    val newCount: Int,
+    val firstNewIndex: Int,
 )
 
 /** True when there is a pending deletion that can still be reverted. */
@@ -99,6 +112,8 @@ data class FirstRunHintUi(
     val hint: FirstRunHint,
     val title: String,
     val message: String,
+    val actionLabel: String? = null,
+    val onAction: (() -> Unit)? = null,
     val id: Long = System.nanoTime(),
 )
 
@@ -173,6 +188,7 @@ class PhoneModeViewModel @Inject constructor(
                         recentPathsCount = s.recentPathsCount,
                         recentPaths = s.recentPaths,
                         seenFirstRunHints = s.seenFirstRunHints,
+                        selectionUseSourceRoot = s.selectionUseSourceRoot,
                     )
                 }
                 val prev = previous
@@ -227,6 +243,26 @@ class PhoneModeViewModel @Inject constructor(
         selectSourceFolder(Uri.parse(path.uri))
     }
 
+    /**
+     * Quick-start for default phone camera roll.
+     * If permission is already granted, opens immediately;
+     * otherwise calls [onLaunchPicker] with the camera tree URI to prompt the user.
+     */
+    fun selectCameraFolder(onLaunchPicker: (Uri) -> Unit) {
+        val cameraUri = android.provider.DocumentsContract.buildTreeDocumentUri(
+            "com.android.externalstorage.documents",
+            "primary:DCIM/Camera",
+        )
+        viewModelScope.launch {
+            val name = imageRepository.prepareSourceFolder(cameraUri)
+            if (name != null) {
+                selectSourceFolder(cameraUri)
+            } else {
+                onLaunchPicker(cameraUri)
+            }
+        }
+    }
+
     private fun restoreLastFolders() {
         viewModelScope.launch {
             val lastUri = settingsRepository.lastFolderUri.first()
@@ -244,6 +280,7 @@ class PhoneModeViewModel @Inject constructor(
         dimensionsJob?.cancel()
         publishedUris.clear()
         dimensionsResolved.clear()
+        _uiState.update { it.copy(emptyFolderMessage = null) }
         discoveryJob = viewModelScope.launch {
             // The previous folder's feed is dropped up front: batches are merged
             // by appending, so a stale list would be prefixed to the new folder.
@@ -252,6 +289,7 @@ class PhoneModeViewModel @Inject constructor(
                     isLoading = true,
                     isDiscovering = true,
                     error = null,
+                    emptyFolderMessage = null,
                     sourceFolderUri = uri.toString(),
                     images = emptyList(),
                     allImages = emptyList(),
@@ -277,7 +315,14 @@ class PhoneModeViewModel @Inject constructor(
             settingsRepository.setLastFolderUri(uri.toString())
             settingsRepository.addRecentPath(uri.toString(), folderName)
 
-            collectDiscoveredImages(uri, restorePosition = true, errorLabel = "images")
+            val scanInfo = settingsRepository.getFolderScanInfo(uri.toString())
+            collectDiscoveredImages(
+                folderUri = uri,
+                restorePosition = true,
+                errorLabel = "images",
+                previousMaxLastModified = scanInfo.maxLastModified,
+                wasActiveSession = false,
+            )
         }
     }
 
@@ -293,6 +338,9 @@ class PhoneModeViewModel @Inject constructor(
         restorePosition: Boolean,
         errorLabel: String,
         targetUriToKeep: String? = null,
+        previousMaxLastModified: Long = 0L,
+        wasActiveSession: Boolean = false,
+        urisBeforeReload: Set<String> = emptySet(),
     ) {
         publishedUris.clear()
         dimensionsResolved.clear()
@@ -314,34 +362,87 @@ class PhoneModeViewModel @Inject constructor(
             // If not randomized, sort cumulative list chronologically to guarantee whole folder order,
             // while preserving current item or targetUriToKeep.
             val current = _uiState.value
-            if (!settings.randomizeOrder && current.allImages.isNotEmpty()) {
-                val uriToPreserve = targetUriToKeep
-                    ?: current.images.getOrNull(current.currentIndex)?.uri
-                val filtered = PhoneFeedOrdering.filterByType(current.allImages, settings.fileTypeFilter)
-                val sorted = PhoneFeedOrdering.order(
+            val uriToPreserve = targetUriToKeep
+                ?: current.images.getOrNull(current.currentIndex)?.uri
+            val filtered = PhoneFeedOrdering.filterByType(current.allImages, settings.fileTypeFilter)
+            val sorted = if (!settings.randomizeOrder && current.allImages.isNotEmpty()) {
+                PhoneFeedOrdering.order(
                     filtered,
                     randomize = false,
                     sortByOrientation = settings.sortByOrientation,
                 )
-                val newIndex = if (uriToPreserve != null) {
-                    val idx = sorted.images.indexOfFirst { it.uri == uriToPreserve }
-                    if (idx >= 0) idx else resolveFeedIndex(current.currentIndex, sorted.images.size, targetUriToKeep, sorted.images)
+            } else {
+                PhoneFeedOrdering.Result(current.images, current.portraitSectionStart)
+            }
+
+            var promptToSet: ReloadPrompt? = null
+            val newIndex: Int
+
+            if (wasActiveSession) {
+                // In an active session, preserve current viewing position
+                val preservedIdx = if (uriToPreserve != null) {
+                    sorted.images.indexOfFirst { it.uri == uriToPreserve }
+                } else -1
+                newIndex = if (preservedIdx >= 0) {
+                    preservedIdx
                 } else {
                     resolveFeedIndex(current.currentIndex, sorted.images.size, targetUriToKeep, sorted.images)
                 }
-                _uiState.update {
-                    it.copy(
-                        images = sorted.images,
-                        portraitSectionStart = sorted.portraitSectionStart,
-                        currentIndex = newIndex,
-                        isLoading = false,
-                        isDiscovering = false,
+
+                // Identify newly added photos
+                val newPhotos = sorted.images.filter {
+                    (previousMaxLastModified > 0L && it.lastModified > previousMaxLastModified) ||
+                        (urisBeforeReload.isNotEmpty() && it.uri !in urisBeforeReload)
+                }
+                if (newPhotos.isNotEmpty()) {
+                    val firstNewIdx = sorted.images.indexOfFirst { img ->
+                        newPhotos.any { it.uri == img.uri }
+                    }
+                    promptToSet = ReloadPrompt(
+                        newCount = newPhotos.size,
+                        firstNewIndex = firstNewIdx,
                     )
+                } else {
+                    showFeedback("Folder reloaded — no new photos found")
+                    val updatedScan = FolderScanLogic.computeUpdatedScanInfo(sorted.images)
+                    settingsRepository.setFolderScanInfo(folderUri.toString(), updatedScan)
                 }
             } else {
-                _uiState.update { it.copy(isLoading = false, isDiscovering = false) }
+                // Outside an active session:
+                // If there are new files that were not yet scanned, jump to the first new file
+                val firstNewIndex = FolderScanLogic.findFirstNewImageIndex(sorted.images, previousMaxLastModified)
+                if (firstNewIndex >= 0 && !userHasNavigated) {
+                    newIndex = firstNewIndex
+                } else {
+                    newIndex = if (uriToPreserve != null) {
+                        val idx = sorted.images.indexOfFirst { it.uri == uriToPreserve }
+                        if (idx >= 0) idx else resolveFeedIndex(current.currentIndex, sorted.images.size, targetUriToKeep, sorted.images)
+                    } else {
+                        resolveFeedIndex(current.currentIndex, sorted.images.size, targetUriToKeep, sorted.images)
+                    }
+                }
+                val updatedScan = FolderScanLogic.computeUpdatedScanInfo(sorted.images)
+                settingsRepository.setFolderScanInfo(folderUri.toString(), updatedScan)
+            }
+
+            val emptyMsg = if (sorted.images.isEmpty()) {
+                val fName = current.sourceFolderName.ifEmpty { "folder" }
+                "No supported photos found in $fName"
+            } else null
+
+            _uiState.update {
+                it.copy(
+                    images = sorted.images,
+                    portraitSectionStart = sorted.portraitSectionStart,
+                    currentIndex = newIndex,
+                    isLoading = false,
+                    isDiscovering = false,
+                    reloadPrompt = promptToSet,
+                    emptyFolderMessage = emptyMsg,
+                )
             }
             maybeShowRawJpegSuggestion()
+            maybeShowFilterMismatchHint()
             loadDimensionsAsynchronously(force = true)
         } catch (e: CancellationException) {
             // A newer discovery job owns the state now — do not touch it.
@@ -402,6 +503,7 @@ class PhoneModeViewModel @Inject constructor(
 
         if (isFirstBatch) checkGestureTutorial()
         maybeShowRawJpegSuggestion()
+        maybeShowFilterMismatchHint()
         loadExifForCurrent()
         loadDimensionsAsynchronously()
     }
@@ -516,12 +618,9 @@ class PhoneModeViewModel @Inject constructor(
                 userHasNavigated = true
                 pendingRestoreIndex = null
             }
-            val newUri = state.images.getOrNull(index)?.uri
-            if (state.pendingDelete != null && newUri != state.pendingDelete.revertAllowedUri) {
-                finalizePendingDelete()
-            }
             _uiState.update { it.copy(currentIndex = index) }
             maybeShowRawJpegSuggestion()
+            maybeShowFilterMismatchHint()
             loadExifForCurrent()
             // Persist position for this folder
             _uiState.value.sourceFolderUri?.let { uri ->
@@ -546,12 +645,18 @@ class PhoneModeViewModel @Inject constructor(
     fun addToCollection() {
         val state = _uiState.value
         maybeShowFirstRunHint(FirstRunHint.SWIPE_RIGHT)
+        val target = resolveCollectionTargetUri(state)
         copyOrMoveCurrent(
-            targetUri = state.collectionFolderUri ?: state.sourceFolderUri,
+            targetUri = target,
             isCopy = state.collectionAction == CollectionAction.COPY,
             subfolderName = PhotoFolders.SELECTION,
             destinationNoun = "collection",
         )
+    }
+
+    private fun resolveCollectionTargetUri(state: PhoneModeUiState): String? {
+        if (state.collectionFolderUri != null) return state.collectionFolderUri
+        return state.sourceFolderUri
     }
 
     /** Swipe left (copy/move mode): copy or move the current photo to the custom folder. */
@@ -786,17 +891,22 @@ class PhoneModeViewModel @Inject constructor(
 
     private fun checkGestureTutorial() {
         viewModelScope.launch {
-            val lastTs = settingsRepository.phoneGestureTutorialTs.first()
+            val tutorialTs = settingsRepository.phoneGestureTutorialTs.first()
+            val lastUsed = settingsRepository.lastAppUsedTs.first()
             val now = System.currentTimeMillis()
-            if (lastTs == 0L || (now - lastTs) > ONE_WEEK_MS) {
+            // Tutorial fires on fresh install (never seen) OR after 7 days of inactivity (app not used for 7 days)
+            if (tutorialTs == 0L || (lastUsed > 0L && (now - lastUsed) > ONE_WEEK_MS)) {
                 _uiState.update { it.copy(showGestureTutorial = true) }
             }
+            settingsRepository.recordAppUsed(now)
         }
     }
 
     fun dismissGestureTutorial() {
         viewModelScope.launch {
-            settingsRepository.setPhoneGestureTutorialTs(System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            settingsRepository.setPhoneGestureTutorialTs(now)
+            settingsRepository.recordAppUsed(now)
             _uiState.update { it.copy(showGestureTutorial = false) }
         }
     }
@@ -880,9 +990,10 @@ class PhoneModeViewModel @Inject constructor(
     }
 
     fun applyRawJpegFilter(filter: FileTypeFilter) {
-        _uiState.update { it.copy(showRawJpegSuggestion = false) }
+        _uiState.update { it.copy(showRawJpegSuggestion = false, firstRunHint = null) }
         viewModelScope.launch {
             settingsRepository.markFirstRunHintSeen(FirstRunHint.RAW_JPEG_PAIRS)
+            settingsRepository.markFirstRunHintSeen(FirstRunHint.FILTER_MISMATCH)
             settingsRepository.setPhoneFileTypeFilter(filter)
         }
         val label = when (filter) {
@@ -902,6 +1013,45 @@ class PhoneModeViewModel @Inject constructor(
         showFeedback("Actions now apply to both RAW and JPEG")
     }
 
+    // ── Filter mismatch hint ─────────────────────────────────────────────
+
+    fun maybeShowFilterMismatchHint() {
+        val state = _uiState.value
+        if (state.showGestureTutorial || state.showControlsGuide) return
+        if (state.showRawJpegSuggestion) return
+        if (state.firstRunHint != null) return
+        if (FirstRunHint.FILTER_MISMATCH.key in state.seenFirstRunHints) return
+        if (state.fileTypeFilter == FileTypeFilter.ALL) return
+        if (state.allImages.isEmpty()) return
+
+        if (RelatedFiles.hasFilterMismatch(state.allImages, state.fileTypeFilter)) {
+            val title = FirstRunHintText.title(FirstRunHint.FILTER_MISMATCH)
+            val message = FirstRunHintText.message(
+                hint = FirstRunHint.FILTER_MISMATCH,
+                collectionAction = state.collectionAction,
+                leftSwipeAction = state.leftSwipeAction,
+                collectionFolderName = state.collectionFolderName,
+                leftSwipeFolderName = state.leftSwipeFolderName,
+                fileTypeFilter = state.fileTypeFilter,
+            )
+            _uiState.update {
+                it.copy(
+                    seenFirstRunHints = it.seenFirstRunHints + FirstRunHint.FILTER_MISMATCH.key,
+                    firstRunHint = FirstRunHintUi(
+                        hint = FirstRunHint.FILTER_MISMATCH,
+                        title = title,
+                        message = message,
+                        actionLabel = "SHOW ALL",
+                        onAction = { applyRawJpegFilter(FileTypeFilter.ALL) },
+                    ),
+                )
+            }
+            viewModelScope.launch {
+                settingsRepository.markFirstRunHintSeen(FirstRunHint.FILTER_MISMATCH)
+            }
+        }
+    }
+
     /**
      * Rescan the current source folder from disk.
      *
@@ -912,6 +1062,8 @@ class PhoneModeViewModel @Inject constructor(
         val folderUriStr = _uiState.value.sourceFolderUri ?: return
         val folderUri = Uri.parse(folderUriStr)
         val currentUri = _uiState.value.images.getOrNull(_uiState.value.currentIndex)?.uri
+        val wasActive = _uiState.value.images.isNotEmpty()
+        val urisBefore = _uiState.value.images.map { it.uri }.toSet()
         finalizePendingDelete()
         discoveryJob?.cancel()
         dimensionsJob?.cancel()
@@ -920,6 +1072,7 @@ class PhoneModeViewModel @Inject constructor(
         loadedExifCache.clear()
 
         discoveryJob = viewModelScope.launch {
+            val scanInfo = settingsRepository.getFolderScanInfo(folderUriStr)
             _uiState.update {
                 it.copy(
                     isLoading = true,
@@ -930,6 +1083,7 @@ class PhoneModeViewModel @Inject constructor(
                     currentIndex = 0,
                     portraitSectionStart = -1,
                     showRawJpegSuggestion = false,
+                    reloadPrompt = null,
                 )
             }
             collectDiscoveredImages(
@@ -937,7 +1091,40 @@ class PhoneModeViewModel @Inject constructor(
                 restorePosition = false,
                 errorLabel = "images",
                 targetUriToKeep = currentUri,
+                previousMaxLastModified = scanInfo.maxLastModified,
+                wasActiveSession = wasActive,
+                urisBeforeReload = urisBefore,
             )
+        }
+    }
+
+    /** User chose to jump to latest/new photos discovered during active session reload. */
+    fun confirmReloadJumpToLatest() {
+        val prompt = _uiState.value.reloadPrompt ?: return
+        val target = if (prompt.firstNewIndex in _uiState.value.images.indices) {
+            prompt.firstNewIndex
+        } else {
+            (_uiState.value.images.size - 1).coerceAtLeast(0)
+        }
+        _uiState.update { it.copy(reloadPrompt = null) }
+        navigateToImage(target)
+        showFeedback("Jumped to newest photos")
+        _uiState.value.sourceFolderUri?.let { uri ->
+            viewModelScope.launch {
+                val updatedScan = FolderScanLogic.computeUpdatedScanInfo(_uiState.value.images)
+                settingsRepository.setFolderScanInfo(uri, updatedScan)
+            }
+        }
+    }
+
+    /** User chose to stay at current photo after active session reload. */
+    fun dismissReloadPrompt() {
+        _uiState.update { it.copy(reloadPrompt = null) }
+        _uiState.value.sourceFolderUri?.let { uri ->
+            viewModelScope.launch {
+                val updatedScan = FolderScanLogic.computeUpdatedScanInfo(_uiState.value.images)
+                settingsRepository.setFolderScanInfo(uri, updatedScan)
+            }
         }
     }
 
@@ -964,6 +1151,7 @@ class PhoneModeViewModel @Inject constructor(
                 currentIndex = 0,
                 portraitSectionStart = -1,
                 isDiscovering = false,
+                reloadPrompt = null,
             )
         }
     }

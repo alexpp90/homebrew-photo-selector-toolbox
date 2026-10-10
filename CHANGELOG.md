@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
+### Added
+- **Native macOS Desktop (`products/macos-desktop/`):**
+  - High-performance native Swift 6 and SwiftUI photo culling suite for macOS 14+ and 15+.
+  - Sub-millisecond focus quality scoring via Apple Accelerate vImage + vDSP with sensor noise-floor compensation.
+  - Native Apple Vision aesthetic scoring using Neural Engine hardware (`VNCalculateImageAestheticsScoresRequest`).
+  - Maximize viewport culling layouts (1-Up, 2-Up, and Focus 3-Up sliding triplet).
+  - Instant zero-latency keyboard router and transactional undo-safe culling engine.
+- **Native Linux Desktop (`products/linux-desktop/`):**
+  - GNOME Libadwaita photograph culling and selection suite for Debian 13 (Trixie).
+  - Vectorized Laplacian focus scoring with MAD noise floor compensation.
+  - Transactional file operations with copy-undo safety.
+  - In-repo APT repository and Debian packaging.
+
+### Deprecated
+- **Legacy Desktop (`products/desktop/`):**
+  - The multiplatform Python/Tkinter desktop application is deprecated and archived.
+  - Historical source code preserved at tag/branch `archive/legacy-desktop` for restoration.
+
 ### Changed & Fixed
 - **Agent framework: modernised registration, split the lifecycle into skills, and made the rules enforceable.**
   - *Fixed stale instructions.* Seven agents pointed at a repository-root `REQUIREMENTS.md` that has not existed since the `products/` reorganisation; `android-shared-build-agent` claimed `.github/workflows/build-android.yml` (actual: `android.yml`); `desktop-build-agent`'s scope listed build scripts at `scripts/` (actual: `products/desktop/scripts/`). `ai/README.md` also claimed `ai/memory/` was untracked by git, which it is not.

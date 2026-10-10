@@ -31,7 +31,10 @@ enum class FirstRunHint(val key: String) {
     REVERT("revert"),
 
     /** Folder contains RAW+JPEG pairs of the same pictures. */
-    RAW_JPEG_PAIRS("raw_jpeg_pairs");
+    RAW_JPEG_PAIRS("raw_jpeg_pairs"),
+
+    /** Active file filter hides the majority of photos in the folder. */
+    FILTER_MISMATCH("filter_mismatch");
 
     companion object {
         fun fromKey(key: String?): FirstRunHint? = entries.firstOrNull { it.key == key }
@@ -62,6 +65,7 @@ object FirstRunHintText {
         FirstRunHint.DOUBLE_TAP_ZOOM -> "Zoom"
         FirstRunHint.REVERT -> "Undo"
         FirstRunHint.RAW_JPEG_PAIRS -> "RAW + JPEG Pairs Detected"
+        FirstRunHint.FILTER_MISMATCH -> "Filter Active"
     }
 
     fun message(
@@ -70,6 +74,7 @@ object FirstRunHintText {
         leftSwipeAction: SwipeAction = SwipeAction.DEFAULT,
         collectionFolderName: String = "",
         leftSwipeFolderName: String = "",
+        fileTypeFilter: FileTypeFilter = FileTypeFilter.DEFAULT,
     ): String = when (hint) {
         FirstRunHint.SWIPE_RIGHT -> {
             val verb = if (collectionAction == CollectionAction.COPY) "copied" else "moved"
@@ -100,6 +105,15 @@ object FirstRunHintText {
             "The photo is back in your feed. Revert only undoes the most recent deletion."
 
         FirstRunHint.RAW_JPEG_PAIRS ->
-            "This folder contains matching RAW and JPEG photos. You can filter to view only one type or link actions across both."
+            "This folder contains matching RAW and JPEG versions of your photos. You can link actions across both, filter to one format, or leave settings unchanged."
+
+        FirstRunHint.FILTER_MISMATCH -> when (fileTypeFilter) {
+            FileTypeFilter.RAW ->
+                "Showing RAW photos only. Most photos in this folder are JPEG and are hidden. You can switch to All or change this in Settings."
+            FileTypeFilter.JPG ->
+                "Showing JPEG photos only. Most photos in this folder are RAW and are hidden. You can switch to All or change this in Settings."
+            FileTypeFilter.ALL ->
+                "A file filter is active and hiding photos in this folder. You can change this in Settings."
+        }
     }
 }

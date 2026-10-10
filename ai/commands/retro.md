@@ -12,7 +12,7 @@ git status --short
 git diff HEAD
 ```
 
-Then work the eight steps in order. For each, report one of: done (with what changed),
+Then work the retrospective steps in order. For each, report one of: done (with what changed),
 not applicable (with why), or blocked (with what is needed).
 
 $ARGUMENTS

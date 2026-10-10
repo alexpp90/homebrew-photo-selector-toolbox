@@ -1,5 +1,6 @@
 package com.photoselectortoolbox.domain.session
 
+import com.photoselector.core.Requirement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -15,6 +16,7 @@ import org.junit.Test
 class SelectorWorkQueueTest {
 
     @Test
+    @Requirement("REQ-AND-LAYOUT.10")
     fun `a request with nothing running starts immediately`() {
         listOf(SelectorWork.SCAN, SelectorWork.GROUPING).forEach { work ->
             val (state, decision) = SelectorWorkQueue.request(WorkQueueState(), work)

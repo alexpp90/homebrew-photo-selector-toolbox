@@ -1,0 +1,125 @@
+name: macOS Desktop CI
+
+# Single pipeline for the native Swift 6 macOS Desktop product (PhotoSelectorKit & PhotoSelectorApp).
+# Unit, adversarial, and performance tests run on every push and PR touching products/macos-desktop/.
+# Release builds and artifact packaging execute on pushes to main or v* tags (and manual dispatch).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - 'products/macos-desktop/**'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'products/macos-desktop/**'
+      - '.github/workflows/macos.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: macos-${{ github.ref }}
+  # Cancel superseded PR runs; preserve in-flight main/tag release builds
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Native Swift Test Suite (Mirror: scripts/run_tests.sh `macos.yml:swift-test`) ──
+  swift-test:
+    name: Swift Tests (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: products/macos-desktop
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode 16 / Swift 6 Toolchain
+        run: |
+          echo "=== Available Xcode Installations ==="
+          ls -d /Applications/Xcode* 2>/dev/null || true
+          
+          # Select Xcode 16 if installed at standard runner paths
+          if [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+          elif [ -d "/Applications/Xcode_16.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.0.app
+          elif [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.app
+          fi
+          
+          echo "Active Xcode: $(xcode-select -p)"
+          xcodebuild -version
+          swift --version
+
+      - name: Build PhotoSelectorKit & PhotoSelectorApp (Release)
+        run: swift build -c release
+
+      - name: Run Unit & Adversarial Test Suites (Release)
+        run: swift test -c release --no-parallel
+
+      - name: Verify Focus Latency SLA Benchmark (<2.0ms)
+        run: |
+          echo "Verifying FocusMetricService release SLA..."
+          swift test -c release --no-parallel --filter "FocusMetricService"
+
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-desktop-test-artifacts
+          path: products/macos-desktop/.build/release/PhotoSelectorApp
+          if-no-files-found: ignore
+
+  # ── Release Packaging (Main / Tags / Dispatch Only) ──
+  build:
+    name: Build & Package macOS Binary
+    needs: swift-test
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: products/macos-desktop
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16 / Swift 6 Toolchain
+        run: |
+          if [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+          elif [ -d "/Applications/Xcode_16.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.0.app
+          elif [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.app
+          fi
+          xcodebuild -version
+
+      - name: Build Release Executable
+        run: swift build -c release
+
+      - name: Package macOS Binary
+        run: |
+          mkdir -p dist
+          cp .build/release/PhotoSelectorApp dist/
+          tar -czvf PhotoSelectorApp-macos-arm64.tar.gz -C dist PhotoSelectorApp
+
+      - name: Upload Release Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoSelectorApp-macos-arm64
+          path: products/macos-desktop/PhotoSelectorApp-macos-arm64.tar.gz
+          if-no-files-found: error

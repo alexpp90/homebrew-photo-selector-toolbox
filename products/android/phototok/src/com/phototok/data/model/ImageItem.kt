@@ -12,6 +12,7 @@ data class ImageItem(
     val imageHeight: Int = 0,
     val exifData: ExifData? = null,
     val groupId: Int? = null,
+    val parentUri: String? = null,
 ) {
     /** True when the image is wider than it is tall (or dimensions unknown). */
     val isLandscape: Boolean

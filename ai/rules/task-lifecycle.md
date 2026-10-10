@@ -6,10 +6,11 @@ Full instructions: `@/AGENTS.md`. Framework: `@/ai/README.md`. Routing: `@/ai/RO
 
 ## Non-negotiable
 
-1. **Identify the product first, and stay inside it.** Three independent products —
+1. **Identify the product first, and stay inside it.** Four independent products —
    Desktop (`products/desktop/`), Android Desktop (`products/android/android-desktop/`),
-   PhotoTok (`products/android/phototok/`). `products/android/core/` affects both Android
-   products. Copying code between products is a defect, not reuse.
+   PhotoTok (`products/android/phototok/`), Native macOS Desktop (`products/macos-desktop/`).
+   `products/android/core/` affects both Android products. Copying code between products is a
+   defect, not reuse.
 
 2. **Start with the `task-lifecycle` skill.** Read the target product's
    `docs/products/<product>/REQUIREMENTS.md`, the matching `ai/memory/` lesson file, the
@@ -23,8 +24,9 @@ Full instructions: `@/AGENTS.md`. Framework: `@/ai/README.md`. Routing: `@/ai/RO
    CI adjudicate it.
 
 5. **Finish with the `retrospective` skill.** Requirements synced, mentor consulted before
-   any `ai/memory/` write, debt filed, framework drift fixed, no scratch files committed, and
-   an **Agent Report** table included in the final task summary.
+   any `ai/memory/` write, framework evaluated in `ai/memory/framework_retro.md`, debt filed,
+   framework drift fixed, no scratch files committed, and an **Agent Report** table with
+   Framework & Session Evaluation included in the final task summary.
 
 6. **Edit canonical files only.** Everything under `ai/` is canonical; `.agents/`, `.claude/`
    and `.gemini/` are symlinks to it. Edit through `ai/`.

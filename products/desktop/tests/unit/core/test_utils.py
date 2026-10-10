@@ -27,6 +27,7 @@ except ImportError:
     rawpy = mock_rawpy
 
 import unittest
+import pytest
 from unittest.mock import patch
 from pathlib import Path
 from photo_selector_toolbox.core.utils import resolve_path, get_exiftool_path, load_image_preview, is_excluded_subfolder
@@ -108,6 +109,7 @@ class TestResolvePath(unittest.TestCase):
         self.assertIsInstance(result, Path)
         self.assertEqual(result.as_posix(), "/tmp/test.jpg")
 
+    @pytest.mark.requirement("REQ-DESK-PATH.02")
     @patch("sys.platform", "linux")
     @patch("photo_selector_toolbox.core.utils.os.getuid", return_value=1000, create=True)
     def test_smb_linux(self, mock_getuid):
@@ -117,6 +119,7 @@ class TestResolvePath(unittest.TestCase):
         expected = Path("/run/user/1000/gvfs/smb-share:server=myserver,share=myshare/path/to/image.jpg")
         self.assertEqual(str(result), str(expected))
 
+    @pytest.mark.requirement("REQ-DESK-PATH.03")
     @patch("sys.platform", "darwin")
     def test_smb_macos(self):
         """Tests SMB URL resolution to /Volumes mount points on macOS."""
@@ -125,6 +128,7 @@ class TestResolvePath(unittest.TestCase):
         expected = Path("/Volumes/myshare/path/to/image.jpg")
         self.assertEqual(str(result), str(expected))
 
+    @pytest.mark.requirement("REQ-DESK-PATH.04")
     @patch("sys.platform", "win32")
     def test_smb_windows_fallback(self):
         """Tests that SMB URLs return as-is on platforms like Windows."""
@@ -133,6 +137,7 @@ class TestResolvePath(unittest.TestCase):
         # On non-linux/non-darwin, it should return Path(path_str)
         self.assertEqual(str(result), str(Path(path_str)))
 
+    @pytest.mark.requirement("REQ-DESK-PATH.05")
     @patch("sys.platform", "darwin")
     def test_smb_url_decoding(self):
         """Tests that URL-encoded characters in SMB URLs are correctly decoded."""
@@ -141,6 +146,7 @@ class TestResolvePath(unittest.TestCase):
         expected = Path("/Volumes/share with space/file name.jpg")
         self.assertEqual(str(result), str(expected))
 
+    @pytest.mark.requirement("REQ-DESK-PATH.01")
     def test_smb_no_path(self):
         """Tests handling of SMB URLs with no path component."""
         path_str = "smb://myserver"
@@ -354,6 +360,7 @@ class TestLoadImagePreview(unittest.TestCase):
 
 
 class TestIsExcludedSubfolder(unittest.TestCase):
+    @pytest.mark.requirement("REQ-DESK-EXIF.05")
     def test_excluded_subfolders(self):
         root = Path("/Users/alex/Photos")
         # Subfolder named 'Selection'

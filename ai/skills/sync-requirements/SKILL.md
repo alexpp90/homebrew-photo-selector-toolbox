@@ -57,7 +57,7 @@ ambiguous.
 
 When a feature lands in one product, evaluate it for the others against
 `docs/shared/FEATURE_PARITY.md` and record the decision — including a decision *not* to port
-it, with the reason. The three products are deliberately different; an unrecorded gap is
+it, with the reason. The four products are deliberately different; an unrecorded gap is
 indistinguishable from an oversight.
 
 ## Related

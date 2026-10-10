@@ -1,5 +1,6 @@
 package com.photoselectortoolbox.domain.curation
 
+import com.photoselector.core.Requirement
 import com.photoselectortoolbox.data.model.ImageItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -31,6 +32,7 @@ class OptimisticEditsTest {
     // ── Optimistic removal ────────────────────────────────────────────────
 
     @Test
+    @Requirement("REQ-AND-LAYOUT.23", "REQ-AND-PLATFORM.05")
     fun `a move takes the frame out of the list immediately`() {
         val state = stateOf("a.jpg", "b.jpg", "c.jpg", currentIndex = 1)
 

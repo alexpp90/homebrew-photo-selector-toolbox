@@ -2,7 +2,7 @@
 
 Rules that must hold for **more than one product**. This directory is intentionally small.
 
-The default is *not* shared. The three products are independent implementations that happen to
+The default is *not* shared. The products are independent implementations that happen to
 live in one repository; they share photographic concepts, not code. A rule belongs here only if
 breaking it in one product would make the products inconsistent in a way users or maintainers
 would notice.
@@ -12,7 +12,7 @@ would notice.
 | File | Applies to | Contents |
 |---|---|---|
 | [`ANDROID_PLATFORM.md`](ANDROID_PLATFORM.md) | Android Desktop + PhotoTok | The Android baseline both apps obey: tech stack, EXIF extraction contract, storage and file access, project structure |
-| [`FEATURE_PARITY.md`](FEATURE_PARITY.md) | All three | The feature sync policy, the permanent exclusions, and the desktop → Android feature mapping |
+| [`FEATURE_PARITY.md`](FEATURE_PARITY.md) | All products | The feature sync policy, the permanent exclusions, and cross-product feature mapping |
 
 ## What is shared in code
 
@@ -27,7 +27,7 @@ Android Desktop's carries a `scanResult` field that PhotoTok has no concept of.
 
 `:core` must not depend on Compose, Room, OpenCV, Vico or on either app module.
 
-The Desktop product shares no code with the Android products — only the data *contract*.
+The Desktop and macOS Desktop products share no code with the Android products — only the data *contract*.
 `core/models.py`'s `ExifData` and `com.photoselector.core.model.ExifData` must describe the
 same fields; changing one is a cross-product change.
 
@@ -41,3 +41,5 @@ same fields; changing one is a cross-product change.
   vocabulary, not a shared abstraction.
 - **Anything in `products/desktop/src/`.** The Desktop product is a separate implementation in a separate
   language.
+- **Anything in `products/macos-desktop/src/`.** The macOS Desktop product is a separate implementation in Swift.
+- **Anything in `products/linux-desktop/src/`.** The Linux Desktop product is a separate implementation in Python / GTK4 / Libadwaita.

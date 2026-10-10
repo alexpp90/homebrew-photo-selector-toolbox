@@ -9,10 +9,20 @@ import com.phototok.data.model.ImageItem
  */
 object RelatedFiles {
 
-    /** Sibling images of [target] within [all] (excludes [target] itself). Case-insensitive. */
+    /**
+     * Sibling images of [target] within [all] (excludes [target] itself). Case-insensitive.
+     * Matches only files in the same directory (when parent URIs are known) with matching stems
+     * and differing, complementary extensions.
+     */
     fun siblings(all: List<ImageItem>, target: ImageItem): List<ImageItem> {
         val stem = stemOf(target.fileName)
-        return all.filter { it.uri != target.uri && stemOf(it.fileName) == stem }
+        val targetExt = PhotoExtensions.extensionOf(target.fileName)
+        return all.filter { candidate ->
+            candidate.uri != target.uri &&
+                stemOf(candidate.fileName) == stem &&
+                PhotoExtensions.extensionOf(candidate.fileName) != targetExt &&
+                (target.parentUri == null || candidate.parentUri == null || candidate.parentUri == target.parentUri)
+        }
     }
 
     /**
@@ -26,6 +36,27 @@ object RelatedFiles {
             val hasJpeg = group.any { PhotoExtensions.isJpeg(it.fileName) }
             hasRaw && hasJpeg
         }
+    }
+
+    /**
+     * Checks if the majority of unique photos (stems) in [images] do NOT match [filter].
+     *
+     * Photos with matching RAW and JPEG pairs of the same shot are considered matching
+     * if either format satisfies the filter (e.g. shooting RAW+JPEG does not trigger a warning
+     * when filtered to RAW only or JPEG only).
+     */
+    fun hasFilterMismatch(images: List<ImageItem>, filter: FileTypeFilter): Boolean {
+        if (filter == FileTypeFilter.ALL || images.isEmpty()) return false
+        val byStem = images.groupBy { stemOf(it.fileName) }
+        val matchingCount = byStem.values.count { group ->
+            when (filter) {
+                FileTypeFilter.ALL -> true
+                FileTypeFilter.RAW -> group.any { PhotoExtensions.isRaw(it.fileName) }
+                FileTypeFilter.JPG -> group.any { PhotoExtensions.isJpeg(it.fileName) }
+            }
+        }
+        val unmatchedCount = byStem.size - matchingCount
+        return unmatchedCount > matchingCount
     }
 
     private fun stemOf(fileName: String): String =
