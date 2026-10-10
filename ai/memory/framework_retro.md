@@ -39,11 +39,11 @@ Newest entries at the top. Always use the real current date.
 - **Skills:** `task-lifecycle`, `retrospective`, `verify-build`, `sync-requirements`.
 - **Hooks:** PreToolUse hook blocked `bug_report.md` edit due to strict regex match on `_report.md`, preventing unintended edits to issue templates.
 **Session Efficiency:** High
-- **Observations:** Git log inspection revealed existing local `archive/legacy-desktop` tag and branch, allowing instant preservation to remote `origin`. Full CI test suite ran synchronously in under 2 minutes with zero failures.
+- **Observations:** Git log inspection revealed existing local `archive/legacy-desktop` tag and branch, allowing instant preservation to remote `origin`. Full local CI test suite ran synchronously in under 2 minutes with zero failures. When GitHub Actions macOS runner hung on concurrent Swift Testing execution, log analysis identified cooperative thread pool starvation across 28 suites, solved by enforcing `--no-parallel` serialized test execution in both `.github/workflows/macos.yml` and `scripts/run_tests.sh`.
 **Implementation Quality:** High
-- **Observations:** All gates passed on the first run; version code offsets and version names cleanly bumped to 0.5.0 and code 6 across Android, Python Desktop, Formula, and Cask.
-**Framework Root Cause:** The Linux Desktop product was lacking a mirrored `.github/workflows/linux.yml` file, which was immediately added to guarantee CI parity with the local test mirror.
-**Actionable Framework Improvement:** Ensure newly added products always receive their corresponding `.github/workflows/<product>.yml` file in the same commit they are introduced.
+- **Observations:** All gates passed; version code offsets and version names cleanly bumped to 0.5.0 and code 6 across Android, Python Desktop, Formula, and Cask. All 4 GitHub Actions pipelines (Android CI with API 30 emulator, Desktop CI on Ubuntu/macOS/Windows, Linux Desktop CI, and macOS Desktop CI) achieved 100% green status.
+**Framework Root Cause:** The Linux Desktop product was lacking a mirrored `.github/workflows/linux.yml` file, and `swift test -c release` defaulted to unbounded parallel testing under Swift 6 on virtualized macOS CI runners.
+**Actionable Framework Improvement:** Ensure newly added products always receive their corresponding `.github/workflows/<product>.yml` file in the same commit they are introduced, and configure `--no-parallel` for Swift Testing on resource-constrained virtualized CI runners.
 
 ## 2026-10-10 - macOS Desktop Keyboard Delivery, One-Over-Two 3-Up, Zoom Hit-Testing & Folder Load
 **Agents Involved:** `@macos-desktop-agent`, `@shared-mentor-agent`
