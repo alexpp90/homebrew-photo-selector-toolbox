@@ -96,7 +96,7 @@ These proprietary frameworks require Apple Darwin operating system kernels:
    matching local developer environments.
 3. **Performance SLA Verification**: The test suite includes latency SLA gates
    (e.g., `FocusMetricService` 1080p frame latency < 2.0ms core compute in release mode),
-   which run under `swift test -c release`.
+   which run under `swift test -c release --no-parallel`.
 
 ### macOS UI smoke test (local-only)
 

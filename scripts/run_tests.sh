@@ -337,7 +337,7 @@ if $run_macos; then
         skip "swift test (macos-desktop)" "macos.yml:swift-test" "swift toolchain not found"
     else
         gate "swift test (products/macos-desktop)" "macos.yml:swift-test" \
-            swift test -c release --package-path "$ROOT_DIR/products/macos-desktop"
+            swift test -c release --no-parallel --package-path "$ROOT_DIR/products/macos-desktop"
 
         # Local-only gate: drives the RUNNING app (activation policy, real key events,
         # rendered Focus 3-Up geometry, clicks while zoomed, time-to-first-photo). Unit

@@ -66,12 +66,12 @@ jobs:
         run: swift build -c release
 
       - name: Run Unit & Adversarial Test Suites (Release)
-        run: swift test -c release
+        run: swift test -c release --no-parallel
 
       - name: Verify Focus Latency SLA Benchmark (<2.0ms)
         run: |
           echo "Verifying FocusMetricService release SLA..."
-          swift test -c release --filter "FocusMetricService"
+          swift test -c release --no-parallel --filter "FocusMetricService"
 
       - name: Upload Test Artifacts
         if: always()
