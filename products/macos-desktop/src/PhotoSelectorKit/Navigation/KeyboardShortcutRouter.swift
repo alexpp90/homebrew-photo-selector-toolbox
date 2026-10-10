@@ -1,6 +1,20 @@
 import SwiftUI
 import AppKit
 
+/// Protocol abstracting sheet presentation checks so testing does not require live AppKit NSWindow instances.
+@MainActor
+public protocol SheetContextInspectable: AnyObject {
+    var isSheet: Bool { get }
+    var hasSheetParent: Bool { get }
+    var hasAttachedSheet: Bool { get }
+}
+
+@MainActor
+extension NSWindow: SheetContextInspectable {
+    public var hasSheetParent: Bool { sheetParent != nil }
+    public var hasAttachedSheet: Bool { attachedSheet != nil }
+}
+
 /// Dedicated window-level keyboard event interceptor.
 /// Uses `NSEvent.addLocalMonitorForEvents(matching: .keyDown)` to capture navigation
 /// and culling hotkeys (←, →, ↑, ↓, M, C, Delete, Space, 1, 2, 3, Tab, ⌘Z, J, K) before SwiftUI focus
@@ -39,8 +53,8 @@ public final class KeyboardShortcutRouter: ObservableObject {
     public var isAttached: Bool { monitor != nil }
 
     /// `true` when the window is a sheet, or a window currently presenting a sheet.
-    public static func isSheetContext(_ window: NSWindow) -> Bool {
-        window.isSheet || window.sheetParent != nil || window.attachedSheet != nil
+    public static func isSheetContext(_ window: any SheetContextInspectable) -> Bool {
+        window.isSheet || window.hasSheetParent || window.hasAttachedSheet
     }
 
     /// Evaluates whether an `NSEvent` corresponds to a culling or navigation shortcut.

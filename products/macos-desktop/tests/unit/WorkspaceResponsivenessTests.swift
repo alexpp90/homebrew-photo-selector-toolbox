@@ -206,9 +206,9 @@ struct ForegroundActivationTests {
 
     @Test("Sheet windows own the keyboard: arrows do not move the workspace behind them")
     func sheetGuard() {
-        let plain = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
-        let presenting = PresentingWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
-        let sheet = SheetWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        let plain = FakePlainWindow()
+        let presenting = FakePresentingWindow()
+        let sheet = FakeSheetWindow()
         #expect(KeyboardShortcutRouter.isSheetContext(plain) == false)
         #expect(KeyboardShortcutRouter.isSheetContext(presenting) == true, "a window presenting a sheet")
         #expect(KeyboardShortcutRouter.isSheetContext(sheet) == true, "the sheet itself")
@@ -224,13 +224,25 @@ struct ForegroundActivationTests {
     }
 }
 
-private final class PresentingWindow: NSWindow {
-    private let fakeSheet = NSWindow()
-    override var attachedSheet: NSWindow? { fakeSheet }
+@MainActor
+private final class FakePresentingWindow: SheetContextInspectable {
+    var isSheet: Bool { false }
+    var hasSheetParent: Bool { false }
+    var hasAttachedSheet: Bool { true }
 }
 
-private final class SheetWindow: NSWindow {
-    override var isSheet: Bool { true }
+@MainActor
+private final class FakeSheetWindow: SheetContextInspectable {
+    var isSheet: Bool { true }
+    var hasSheetParent: Bool { false }
+    var hasAttachedSheet: Bool { false }
+}
+
+@MainActor
+private final class FakePlainWindow: SheetContextInspectable {
+    var isSheet: Bool { false }
+    var hasSheetParent: Bool { false }
+    var hasAttachedSheet: Bool { false }
 }
 
 // MARK: - Progressive loading (REQ-MAC-CULL.01 / .02)
