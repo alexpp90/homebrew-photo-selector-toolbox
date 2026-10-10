@@ -129,8 +129,8 @@ def test_cross_filesystem_two_phase_staging_and_rollback(tmp_path: Path):
     # Simulate cross-mount by faking different st_dev
     real_stat = Path.stat
 
-    def mock_stat(self_path):
-        st = real_stat(self_path)
+    def mock_stat(self_path, *args, **kwargs):
+        st = real_stat(self_path, *args, **kwargs)
         if "Selection" in str(self_path):
             st_mock = MagicMock()
             st_mock.st_dev = 999  # Different filesystem device ID
@@ -279,8 +279,8 @@ def test_cross_filesystem_move_commit_partial_failure_preserves_destinations(tmp
 
     real_stat = Path.stat
 
-    def mock_stat(self_path):
-        st = real_stat(self_path)
+    def mock_stat(self_path, *args, **kwargs):
+        st = real_stat(self_path, *args, **kwargs)
         if "Selection" in str(self_path):
             st_mock = MagicMock()
             st_mock.st_dev = 999
@@ -331,8 +331,8 @@ def test_cross_filesystem_move_staging_failure_cleans_inflight_and_staged_replic
 
     real_stat = Path.stat
 
-    def mock_stat(self_path):
-        st = real_stat(self_path)
+    def mock_stat(self_path, *args, **kwargs):
+        st = real_stat(self_path, *args, **kwargs)
         if "Selection" in str(self_path):
             st_mock = MagicMock()
             st_mock.st_dev = 999
