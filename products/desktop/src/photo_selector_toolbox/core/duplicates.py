@@ -106,15 +106,26 @@ def find_duplicates(root_folder, callback=None):
 
     hash_groups_by_size = defaultdict(lambda: defaultdict(list))
 
-    with ThreadPoolExecutor() as executor:
-        # executor.map yields results sequentially in the main thread
-        for filepath, size, h in executor.map(_hash_worker, all_files):
-            processed_count += 1
-            if callback:
-                callback(processed_count, total_files_to_hash)
+    small_files = [f for f in all_files if f[1] < 5 * 1024 * 1024]
+    large_files = [f for f in all_files if f[1] >= 5 * 1024 * 1024]
 
-            if h:
-                hash_groups_by_size[size][h].append(filepath)
+    for item in small_files:
+        filepath, size, h = _hash_worker(item)
+        processed_count += 1
+        if callback:
+            callback(processed_count, total_files_to_hash)
+        if h:
+            hash_groups_by_size[size][h].append(filepath)
+
+    if large_files:
+        with ThreadPoolExecutor() as executor:
+            # executor.map yields results sequentially in the main thread
+            for filepath, size, h in executor.map(_hash_worker, large_files):
+                processed_count += 1
+                if callback:
+                    callback(processed_count, total_files_to_hash)
+                if h:
+                    hash_groups_by_size[size][h].append(filepath)
 
     # Add confirmed duplicates
     for size, hash_groups in hash_groups_by_size.items():
