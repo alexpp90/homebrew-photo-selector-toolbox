@@ -1106,14 +1106,28 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         excluded_names = excluded if isinstance(excluded, (set, frozenset, list)) else {"selection", "selected"}
 
         disk_files = []
-        for dirpath, dirnames, filenames in os.walk(folder_path):
-            dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-            dp = Path(dirpath)
-            for f in filenames:
-                if f.startswith("._"):
-                    continue
-                if f.lower().endswith(exts_tuple):
-                    disk_files.append(dp / f)
+        def _scan(path):
+            dirs_to_visit = []
+            try:
+                with os.scandir(path) as it:
+                    for entry in it:
+                        try:
+                            if entry.is_file():
+                                if (
+                                    not entry.name.startswith("._") and
+                                    entry.name.lower().endswith(exts_tuple)
+                                ):
+                                    disk_files.append(Path(entry.path))
+                            elif entry.is_dir(follow_symlinks=False):
+                                if entry.name.lower() not in excluded_names:
+                                    dirs_to_visit.append(entry.path)
+                        except OSError:
+                            pass
+            except OSError:
+                pass
+            for d in dirs_to_visit:
+                _scan(d)
+        _scan(folder_path)
 
         disk_files.sort(key=lambda x: x.name)
         if set(disk_files) != set(self.sorted_files):
@@ -1144,16 +1158,28 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         exts_tuple = tuple(extensions)
         files = []
 
-        for dirpath, dirnames, filenames in os.walk(p):
-            # Prune excluded directories in place
-            dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-
-            dp = Path(dirpath)
-            for f in filenames:
-                if f.startswith("._"):
-                    continue
-                if f.lower().endswith(exts_tuple):
-                    files.append(dp / f)
+        def _scan(path):
+            dirs_to_visit = []
+            try:
+                with os.scandir(path) as it:
+                    for entry in it:
+                        try:
+                            if entry.is_file():
+                                if (
+                                    not entry.name.startswith("._") and
+                                    entry.name.lower().endswith(exts_tuple)
+                                ):
+                                    files.append(Path(entry.path))
+                            elif entry.is_dir(follow_symlinks=False):
+                                if entry.name.lower() not in excluded_names:
+                                    dirs_to_visit.append(entry.path)
+                        except OSError:
+                            pass
+            except OSError:
+                pass
+            for d in dirs_to_visit:
+                _scan(d)
+        _scan(p)
 
         files.sort(key=lambda x: x.name)
 
@@ -1962,16 +1988,35 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             exts_tuple = tuple(SUPPORTED_EXTENSIONS)
             excluded_names = get_excluded_folder_names()
             new_found = False
-            for dirpath, dirnames, filenames in os.walk(Path(folder)):
-                dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-                dp = Path(dirpath)
-                for f in filenames:
-                    if not f.startswith("._") and f.lower().endswith(exts_tuple):
-                        if (dp / f) not in current_files_set:
-                            new_found = True
-                            break
+            def _scan(path):
+                nonlocal new_found
                 if new_found:
-                    break
+                    return
+                dirs_to_visit = []
+                try:
+                    with os.scandir(path) as it:
+                        for entry in it:
+                            try:
+                                if entry.is_file():
+                                    if (
+                                        not entry.name.startswith("._") and
+                                        entry.name.lower().endswith(exts_tuple)
+                                    ):
+                                        if Path(entry.path) not in current_files_set:
+                                            new_found = True
+                                            break
+                                elif entry.is_dir(follow_symlinks=False):
+                                    if entry.name.lower() not in excluded_names:
+                                        dirs_to_visit.append(entry.path)
+                            except OSError:
+                                pass
+                except OSError:
+                    pass
+                for d in dirs_to_visit:
+                    if new_found:
+                        break
+                    _scan(d)
+            _scan(Path(folder))
             if new_found:
                 self._load_folder_contents(folder)
 

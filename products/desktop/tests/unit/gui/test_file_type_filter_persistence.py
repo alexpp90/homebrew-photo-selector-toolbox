@@ -117,10 +117,36 @@ def test_file_type_filter_persists_across_folder_reload():
     tool.folder_var.set("/mock/photos")
     tool.file_type_var.set("All Supported")
 
-    walk_return = [("/mock/photos", [], ["photo1.jpg", "photo2.arw", "photo3.jpg", "photo4.png"])]
+    class MockDirEntry:
+        def __init__(self, name, path, is_dir_val=False):
+            self.name = name
+            self.path = path
+            self._is_dir = is_dir_val
+        def is_dir(self, follow_symlinks=False):
+            return self._is_dir
+        def is_file(self, follow_symlinks=False):
+            return not self._is_dir
+
+    class MockScandir:
+        def __init__(self, entries):
+            self.entries = entries
+        def __enter__(self):
+            return iter(self.entries)
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    def mock_scandir(path):
+        if Path(path).as_posix() == "/mock/photos":
+            return MockScandir([
+                MockDirEntry("photo1.jpg", "/mock/photos/photo1.jpg", False),
+                MockDirEntry("photo2.arw", "/mock/photos/photo2.arw", False),
+                MockDirEntry("photo3.jpg", "/mock/photos/photo3.jpg", False),
+                MockDirEntry("photo4.png", "/mock/photos/photo4.png", False),
+            ])
+        return MockScandir([])
 
     with (
-        patch("os.walk", return_value=walk_return),
+        patch("os.scandir", side_effect=mock_scandir),
         patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw", ".png"}),
     ):
         tool._load_folder_contents("/mock/photos")
@@ -147,10 +173,34 @@ def test_file_type_filter_fallback_when_extension_absent():
     tool = _create_mock_tool()
     tool.file_type_var.set(".CR3")
 
-    walk_return = [("/mock/photos", [], ["photo1.jpg", "photo2.png"])]
+    class MockDirEntry:
+        def __init__(self, name, path, is_dir_val=False):
+            self.name = name
+            self.path = path
+            self._is_dir = is_dir_val
+        def is_dir(self, follow_symlinks=False):
+            return self._is_dir
+        def is_file(self, follow_symlinks=False):
+            return not self._is_dir
+
+    class MockScandir:
+        def __init__(self, entries):
+            self.entries = entries
+        def __enter__(self):
+            return iter(self.entries)
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    def mock_scandir(path):
+        if Path(path).as_posix() == "/mock/photos":
+            return MockScandir([
+                MockDirEntry("photo1.jpg", "/mock/photos/photo1.jpg", False),
+                MockDirEntry("photo2.png", "/mock/photos/photo2.png", False),
+            ])
+        return MockScandir([])
 
     with (
-        patch("os.walk", return_value=walk_return),
+        patch("os.scandir", side_effect=mock_scandir),
         patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".png"}),
     ):
         tool._load_folder_contents("/mock/photos")
@@ -214,10 +264,45 @@ def test_check_and_reload_folder_if_changed_preserves_filter_and_selection():
     tool.folder_var.set("/mock/photos")
     tool.file_type_var.set("All Supported")
 
-    walk_1 = [("/mock/photos", [], ["img1.jpg", "img2.jpg", "img3.arw"])]
+    class MockDirEntry:
+        def __init__(self, name, path, is_dir_val=False):
+            self.name = name
+            self.path = path
+            self._is_dir = is_dir_val
+        def is_dir(self, follow_symlinks=False):
+            return self._is_dir
+        def is_file(self, follow_symlinks=False):
+            return not self._is_dir
+
+    class MockScandir:
+        def __init__(self, entries):
+            self.entries = entries
+        def __enter__(self):
+            return iter(self.entries)
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    def mock_scandir_1(path):
+        if Path(path).as_posix() == "/mock/photos":
+            return MockScandir([
+                MockDirEntry("img1.jpg", "/mock/photos/img1.jpg", False),
+                MockDirEntry("img2.jpg", "/mock/photos/img2.jpg", False),
+                MockDirEntry("img3.arw", "/mock/photos/img3.arw", False),
+            ])
+        return MockScandir([])
+
+    def mock_scandir_2(path):
+        if Path(path).as_posix() == "/mock/photos":
+            return MockScandir([
+                MockDirEntry("img1.jpg", "/mock/photos/img1.jpg", False),
+                MockDirEntry("img2.jpg", "/mock/photos/img2.jpg", False),
+                MockDirEntry("img3.arw", "/mock/photos/img3.arw", False),
+                MockDirEntry("img4.jpg", "/mock/photos/img4.jpg", False),
+            ])
+        return MockScandir([])
 
     with (
-        patch("os.walk", return_value=walk_1),
+        patch("os.scandir", side_effect=mock_scandir_1),
         patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg", ".arw"}),
         patch("photo_selector_toolbox.gui.sharpness_tool.Path.exists", return_value=True),
         patch("photo_selector_toolbox.gui.sharpness_tool.Path.is_dir", return_value=True),
@@ -232,8 +317,7 @@ def test_check_and_reload_folder_if_changed_preserves_filter_and_selection():
         tool.candidate_listbox.curselection.return_value = (1,)
 
         # Now simulate an external file addition
-        walk_2 = [("/mock/photos", [], ["img1.jpg", "img2.jpg", "img3.arw", "img4.jpg"])]
-        with patch("os.walk", return_value=walk_2):
+        with patch("os.scandir", side_effect=mock_scandir_2):
             tool._check_and_reload_folder_if_changed()
 
         # Filter must still be .JPG

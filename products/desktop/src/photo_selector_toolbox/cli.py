@@ -67,16 +67,28 @@ def _scan_image_files(root_path: Path) -> list[Path]:
     # Pre-compute tuple of extensions for fast string matching
     supported_exts_tuple = tuple(SUPPORTED_EXTENSIONS)
 
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        # Prune excluded directories in place
-        dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-
-        dp = Path(dirpath)
-        for f in filenames:
-            if f.startswith("._"):
-                continue
-            if f.lower().endswith(supported_exts_tuple):
-                image_files.append(dp / f)
+    def _scan(path):
+        dirs_to_visit = []
+        try:
+            with os.scandir(path) as it:
+                for entry in it:
+                    try:
+                        if entry.is_file():
+                            if (
+                                not entry.name.startswith("._") and
+                                entry.name.lower().endswith(supported_exts_tuple)
+                            ):
+                                image_files.append(Path(entry.path))
+                        elif entry.is_dir(follow_symlinks=False):
+                            if entry.name.lower() not in excluded_names:
+                                dirs_to_visit.append(entry.path)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+        for d in dirs_to_visit:
+            _scan(d)
+    _scan(root_path)
 
     return image_files
 
