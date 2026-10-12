@@ -94,6 +94,7 @@ fun CandidateStrip(
     onImageSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
     groups: List<List<Int>>? = null,
+    selectedUri: String? = null,
 ) {
     val listState = rememberLazyListState()
 
@@ -112,12 +113,22 @@ fun CandidateStrip(
     }
     val currentGroup = indexToGroup[currentIndex]
 
+    // Determine the scroll target index honoring selectedUri if present
+    val scrollToIndex = remember(images, selectedUri, currentIndex) {
+        if (selectedUri != null) {
+            val found = images.indexOfFirst { it.uri == selectedUri }
+            if (found >= 0) found else currentIndex
+        } else {
+            currentIndex
+        }
+    }
+
     // Keep the current frame visible without yanking the strip about: scrolling
     // to a fixed offset puts it above centre, where the frames the user is
     // about to reach are still on screen.
-    LaunchedEffect(currentIndex) {
-        if (images.isNotEmpty() && currentIndex in images.indices) {
-            listState.animateScrollToItem(index = currentIndex, scrollOffset = -200)
+    LaunchedEffect(scrollToIndex) {
+        if (images.isNotEmpty() && scrollToIndex in images.indices) {
+            listState.animateScrollToItem(index = scrollToIndex, scrollOffset = -200)
         }
     }
 
@@ -160,10 +171,15 @@ fun CandidateStrip(
                 ) { index, image ->
                     val group = indexToGroup[index]
                     val startsNewBurst = group != null && group != indexToGroup[index - 1]
+                    val isCurrent = if (selectedUri != null) {
+                        image.uri == selectedUri
+                    } else {
+                        index == currentIndex
+                    }
 
                     CandidateThumbnail(
                         image = image,
-                        isCurrent = index == currentIndex,
+                        isCurrent = isCurrent,
                         inCurrentBurst = group != null && group == currentGroup,
                         position = index + 1,
                         total = images.size,
@@ -232,7 +248,10 @@ private fun CandidateThumbnail(
                 )
                 .pointerHoverIcon(PointerIcon.Hand)
                 .clickable(onClick = onClick)
-                .semantics { contentDescription = "${image.fileName}, $position of $total" },
+                .semantics {
+                    contentDescription = "${image.fileName}, $position of $total" +
+                        if (image.rating != 0) ", rated ${image.rating}" else ""
+                },
         ) {
             AsyncImage(
                 model = image.uri,
@@ -240,6 +259,37 @@ private fun CandidateThumbnail(
                 modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
             )
+
+            // Compact star rating badge (bottom start) staying strictly within 60dp thumbnail bounds
+            if (image.rating != 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(2.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xCC000000))
+                        .padding(horizontal = 2.dp, vertical = 1.dp)
+                        .testTag("thumbnail_rating_${image.rating}"),
+                ) {
+                    if (image.rating in 1..5) {
+                        Text(
+                            text = "★${image.rating}",
+                            color = Color(0xFFFBBF24),
+                            fontSize = 8.sp,
+                            lineHeight = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    } else if (image.rating == -1) {
+                        Text(
+                            text = "✕",
+                            color = Color(0xFFEF4444),
+                            fontSize = 8.sp,
+                            lineHeight = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
+            }
 
             image.scanResult?.sharpnessScore?.let { sharpness ->
                 Box(

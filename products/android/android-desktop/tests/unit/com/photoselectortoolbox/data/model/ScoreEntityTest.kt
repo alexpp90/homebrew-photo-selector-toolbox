@@ -25,6 +25,9 @@ class ScoreEntityTest {
         assertNull(entity.noiseLevel)
         assertNull(entity.highlightClipping)
         assertNull(entity.shadowClipping)
+        assertNull(entity.aestheticScore)
+        assertEquals(0, entity.rating)
+        assertNull(entity.compositionAnalysis)
     }
 
     @Test
@@ -36,12 +39,18 @@ class ScoreEntityTest {
             sharpnessScore = 55.5,
             noiseLevel = 3.2,
             highlightClipping = 0.1,
-            shadowClipping = 2.3
+            shadowClipping = 2.3,
+            aestheticScore = 8.5,
+            rating = 4,
+            compositionAnalysis = """{"leadingLines":[]}"""
         )
         assertEquals(55.5, entity.sharpnessScore!!, 1e-9)
         assertEquals(3.2, entity.noiseLevel!!, 1e-9)
         assertEquals(0.1, entity.highlightClipping!!, 1e-9)
         assertEquals(2.3, entity.shadowClipping!!, 1e-9)
+        assertEquals(8.5, entity.aestheticScore!!, 1e-9)
+        assertEquals(4, entity.rating)
+        assertEquals("""{"leadingLines":[]}""", entity.compositionAnalysis)
     }
 
     @Test

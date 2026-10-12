@@ -64,6 +64,7 @@ import androidx.compose.ui.window.Popup
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photoselectortoolbox.domain.format.SelectorLabels
+import com.photoselectortoolbox.domain.model.RatingFilter
 import com.photoselectortoolbox.ui.components.EmptyStateCard
 import com.photoselectortoolbox.ui.theme.Zinc800
 import com.photoselectortoolbox.ui.theme.Zinc900
@@ -302,6 +303,14 @@ fun SelectorScreen(
                                         uiState.maximisedFrame != null -> viewModel.clearMaximised()
                                     }
                                 },
+                                onSetRating = { rating ->
+                                    if (uiState.maximisedFrame != null) {
+                                        viewModel.setRatingForMaximised(rating)
+                                    } else {
+                                        viewModel.setRatingForCurrent(rating)
+                                    }
+                                },
+                                onNavigate = onNavigate,
                             )
                         }
                 } else {
@@ -404,6 +413,15 @@ fun SelectorScreen(
                                 // explanations of it at once is neither.
                                 pendingHint = uiState.pendingHintText.takeIf { !guideOpen },
                                 onDismissHint = viewModel::dismissHint,
+                                ratingFilter = uiState.ratingFilter,
+                                onRatingFilterSelected = viewModel::setRatingFilter,
+                                onSetRating = { rating ->
+                                    if (uiState.maximisedFrame != null) {
+                                        viewModel.setRatingForMaximised(rating)
+                                    } else {
+                                        viewModel.setRatingForCurrent(rating)
+                                    }
+                                },
                                 // Passed as a slot and drawn as a vertical column
                                 // at the outer edge of the control flank. It
                                 // used to span the bottom of the window, which
@@ -414,10 +432,19 @@ fun SelectorScreen(
                                 // a second condition.
                                 filmstrip = {
                                     CandidateStrip(
-                                        images = uiState.images,
-                                        currentIndex = uiState.currentIndex,
-                                        onImageSelected = viewModel::navigateToImage,
-                                        groups = if (uiState.groupingEnabled) {
+                                        images = uiState.filteredImages,
+                                        currentIndex = uiState.filteredPosition,
+                                        selectedUri = uiState.currentImage?.uri,
+                                        onImageSelected = { filteredIdx ->
+                                            val targetImage = uiState.filteredImages.getOrNull(filteredIdx)
+                                            if (targetImage != null) {
+                                                val globalIdx = uiState.images.indexOfFirst { it.uri == targetImage.uri }
+                                                if (globalIdx >= 0) {
+                                                    viewModel.navigateToImage(globalIdx)
+                                                }
+                                            }
+                                        },
+                                        groups = if (uiState.groupingEnabled && uiState.ratingFilter == RatingFilter.All) {
                                             uiState.groups
                                         } else {
                                             null
@@ -521,6 +548,8 @@ internal fun handleSelectorKey(
     onMaximise: (SelectorFrame) -> Unit,
     onShowShortcuts: () -> Unit,
     onCloseOverlays: () -> Unit,
+    onSetRating: ((Int) -> Unit)? = null,
+    onNavigate: ((Screen) -> Unit)? = null,
 ): Boolean {
     if (key == Key.Escape) {
         if (sheetOpen || contextMenuOpen || fullscreenOpen || maximised) {
@@ -532,7 +561,24 @@ internal fun handleSelectorKey(
 
     if (sheetOpen) return false
 
+    // When a frame is maximised, keys 0–5 set the rating of that maximised frame (0 = unrate, 1..5 = stars)
+    if (maximised && onSetRating != null) {
+        when (key) {
+            Key.Zero, Key.NumPad0 -> { onSetRating(0); return true }
+            Key.One, Key.NumPad1 -> { onSetRating(1); return true }
+            Key.Two, Key.NumPad2 -> { onSetRating(2); return true }
+            Key.Three, Key.NumPad3 -> { onSetRating(3); return true }
+            Key.Four, Key.NumPad4 -> { onSetRating(4); return true }
+            Key.Five, Key.NumPad5 -> { onSetRating(5); return true }
+            else -> Unit
+        }
+    }
+
     return when (key) {
+        Key.L, Key.I -> {
+            onNavigate?.invoke(Screen.Inspect)
+            true
+        }
         Key.DirectionLeft -> { onPrevious(); true }
         Key.DirectionRight -> { onNext(); true }
         Key.M -> { actions.onMove(); true }
@@ -540,13 +586,17 @@ internal fun handleSelectorKey(
         Key.Delete, Key.Backspace -> { actions.onDelete(); true }
         Key.F -> { actions.onFullscreen(); true }
         // 1/2/3 maximise the frame in that position, left to right as they
-        // appear on screen. Space used to toggle between two comparison
-        // layouts; there is only one now, so the key is free and goes to the
-        // thing users actually want mid-burst — a closer look at one frame.
+        // appear on screen.
         Key.One -> { onMaximise(SelectorFrame.PREVIOUS); true }
         Key.Two -> { onMaximise(SelectorFrame.CURRENT); true }
         Key.Three -> { onMaximise(SelectorFrame.NEXT); true }
         Key.Slash -> { onShowShortcuts(); true }
+        Key.Zero, Key.NumPad0 -> { onSetRating?.invoke(0); true }
+        Key.Four, Key.NumPad4 -> { onSetRating?.invoke(4); true }
+        Key.Five, Key.NumPad5 -> { onSetRating?.invoke(5); true }
+        Key.NumPad1 -> { onSetRating?.invoke(1); true }
+        Key.NumPad2 -> { onSetRating?.invoke(2); true }
+        Key.NumPad3 -> { onSetRating?.invoke(3); true }
         else -> false
     }
 }

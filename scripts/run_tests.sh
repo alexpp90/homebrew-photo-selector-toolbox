@@ -330,14 +330,18 @@ fi
 # ── macOS Desktop native Swift gates (mirror: macos.yml `swift-test`) ──
 if $run_macos; then
     section "macOS Desktop native Swift tests"
-    cd "$ROOT_DIR" || exit 1
     if [ "$(uname -s)" != "Darwin" ]; then
         skip "swift test (macos-desktop)" "macos.yml:swift-test" "macOS native product requires Darwin runner" false
     elif ! have swift; then
         skip "swift test (macos-desktop)" "macos.yml:swift-test" "swift toolchain not found"
     else
+        SWIFT_TEST_ARGS=(-c release --no-parallel --package-path "$ROOT_DIR/products/macos-desktop")
+        CLT_TESTING_MACRO="/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+        if [ -f "$CLT_TESTING_MACRO" ]; then
+            SWIFT_TEST_ARGS+=("-Xswiftc" "-load-plugin-library" "-Xswiftc" "$CLT_TESTING_MACRO")
+        fi
         gate "swift test (products/macos-desktop)" "macos.yml:swift-test" \
-            swift test -c release --no-parallel --package-path "$ROOT_DIR/products/macos-desktop"
+            swift test "${SWIFT_TEST_ARGS[@]}"
 
         # Local-only gate: drives the RUNNING app (activation policy, real key events,
         # rendered Focus 3-Up geometry, clicks while zoomed, time-to-first-photo). Unit

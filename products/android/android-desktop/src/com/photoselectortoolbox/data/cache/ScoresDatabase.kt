@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ScoreEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class ScoresDatabase : RoomDatabase() {
@@ -24,5 +24,18 @@ abstract class ScoresDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE scores_cache ADD COLUMN aestheticScore REAL")
             }
         }
+
+        /**
+         * v2 → v3: add `rating` (INTEGER NOT NULL DEFAULT 0) and
+         * `compositionAnalysis` (TEXT nullable).
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE scores_cache ADD COLUMN rating INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE scores_cache ADD COLUMN compositionAnalysis TEXT")
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }

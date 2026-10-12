@@ -25,6 +25,12 @@ import com.photoselectortoolbox.domain.guidance.HintSlot
 import com.photoselectortoolbox.domain.guidance.SelectorGuidance
 import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.domain.scoring.ScoreMetric
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import com.photoselectortoolbox.domain.model.RatingFilter
+import com.photoselectortoolbox.ui.components.StarRatingBar
 import com.photoselectortoolbox.viewmodel.SelectorFrame
 import com.photoselectortoolbox.viewmodel.SelectorHintUi
 
@@ -87,6 +93,9 @@ fun ThreeUpSelectorLayout(
     /** The one-time explanation waiting to be shown, already worded. */
     pendingHint: SelectorHintUi? = null,
     onDismissHint: () -> Unit = {},
+    ratingFilter: RatingFilter = RatingFilter.All,
+    onRatingFilterSelected: (RatingFilter) -> Unit = {},
+    onSetRating: (Int) -> Unit = {},
     /**
      * The filmstrip, drawn as a vertical column at the outer edge of the
      * control flank.
@@ -121,6 +130,7 @@ fun ThreeUpSelectorLayout(
                 onLongPress = onLongPressFrame,
                 pendingHint = pendingHint,
                 onDismissHint = onDismissHint,
+                onSetRating = onSetRating,
                 modifier = Modifier.weight(1f),
             )
             return@Row
@@ -233,6 +243,10 @@ fun ThreeUpSelectorLayout(
                                 onNavigatePrevious = onNavigatePrevious,
                                 onNavigateNext = onNavigateNext,
                                 stillEnumerating = stillEnumerating,
+                                ratingFilter = ratingFilter,
+                                onRatingFilterSelected = onRatingFilterSelected,
+                                currentRating = current?.rating ?: 0,
+                                onSetRating = onSetRating,
                             )
                         }
 
@@ -458,6 +472,7 @@ private fun MaximisedFrame(
     onLongPress: () -> Unit,
     pendingHint: SelectorHintUi?,
     onDismissHint: () -> Unit,
+    onSetRating: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -519,6 +534,19 @@ private fun MaximisedFrame(
                     onClick = onExit,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
                 )
+                if (image != null) {
+                    StarRatingBar(
+                        rating = image.rating,
+                        onRatingChanged = onSetRating,
+                        starSize = 28.dp,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 12.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xCC000000))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
             }
         }
     }

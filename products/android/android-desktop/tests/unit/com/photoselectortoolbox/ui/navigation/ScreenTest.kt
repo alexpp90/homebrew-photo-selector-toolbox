@@ -23,14 +23,21 @@ class ScreenTest {
     }
 
     @Test
-    fun `Screen all contains exactly 4 desktop screens`() {
-        assertEquals(4, Screen.all.size)
+    fun `Screen all contains exactly 5 desktop screens`() {
+        assertEquals(5, Screen.all.size)
     }
 
     @Test
     fun `PhotoSelector is start destination`() {
         assertEquals("selector", Screen.PhotoSelector.route)
         assertEquals("Selector", Screen.PhotoSelector.label)
+    }
+
+    @Test
+    fun `Inspect route and label`() {
+        assertEquals("inspect", Screen.Inspect.route)
+        assertEquals("Inspect & Learn", Screen.Inspect.label)
+        assertEquals("Inspect", Screen.Inspect.shortLabel)
     }
 
     @Test
@@ -52,10 +59,11 @@ class ScreenTest {
     }
 
     @Test
-    fun `Screen all order is Selector, Statistics, Duplicates, Settings`() {
+    fun `Screen all order is Selector, Inspect, Statistics, Duplicates, Settings`() {
         assertEquals(Screen.PhotoSelector, Screen.all[0])
-        assertEquals(Screen.Statistics, Screen.all[1])
-        assertEquals(Screen.DuplicateFinder, Screen.all[2])
-        assertEquals(Screen.Settings, Screen.all[3])
+        assertEquals(Screen.Inspect, Screen.all[1])
+        assertEquals(Screen.Statistics, Screen.all[2])
+        assertEquals(Screen.DuplicateFinder, Screen.all[3])
+        assertEquals(Screen.Settings, Screen.all[4])
     }
 }

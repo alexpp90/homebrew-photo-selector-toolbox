@@ -2,6 +2,7 @@ package com.photoselectortoolbox.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Settings
@@ -31,6 +32,14 @@ sealed class Screen(
         shortLabel = "Cull",
     )
 
+    data object Inspect : Screen(
+        route = "inspect",
+        meaning = "Inspect composition, exposure technique, and coaching guidance for the selected photograph.",
+        icon = Icons.Default.CenterFocusStrong,
+        label = "Inspect & Learn",
+        shortLabel = "Inspect",
+    )
+
     data object Statistics : Screen(
         route = "statistics",
         meaning = "How the folder scored overall, once it has been scanned.",
@@ -57,6 +66,7 @@ sealed class Screen(
 
     companion object {
         /** Screens shown in the desktop/tablet navigation bars. */
-        val all: List<Screen> = listOf(PhotoSelector, Statistics, DuplicateFinder, Settings)
+        val all: List<Screen>
+            get() = listOf(PhotoSelector, Inspect, Statistics, DuplicateFinder, Settings)
     }
 }

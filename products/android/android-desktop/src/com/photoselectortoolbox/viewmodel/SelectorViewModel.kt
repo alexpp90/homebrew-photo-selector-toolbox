@@ -12,6 +12,11 @@ import coil.size.Precision
 import coil.size.Scale
 import com.photoselector.core.model.ExifData
 import com.photoselectortoolbox.data.cache.ScoreDao
+import java.io.File
+import com.photoselectortoolbox.data.metadata.MetadataWriter
+import com.photoselectortoolbox.data.metadata.MetadataWriterImpl
+import com.photoselectortoolbox.domain.model.PhotoItem
+import com.photoselectortoolbox.domain.model.RatingFilter
 import com.photoselectortoolbox.data.model.ImageDimensions
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.model.ScanResult
@@ -48,6 +53,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -150,7 +156,25 @@ data class SelectorUiState(
     val selectionFolderName: String = FilingAction.DEFAULT_SELECTION_FOLDER,
     /** Whether RAW and JPEG are filed into subfolders (persisted). */
     val sortingEnabled: Boolean = true,
+    /** Active rating filter driving the filmstrip and navigation order. */
+    val ratingFilter: RatingFilter = RatingFilter.All,
 ) {
+    /** The active images adhering to the rating filter. */
+    val filteredImages: List<ImageItem>
+        get() = if (ratingFilter is RatingFilter.All) {
+            images
+        } else {
+            images.filter { ratingFilter.matches(it.rating) }
+        }
+
+    /** Position within filtered collection (1-based), or 0 if none. */
+    val filteredPosition: Int
+        get() {
+            val curr = currentImage ?: return 0
+            val idx = filteredImages.indexOfFirst { it.uri == curr.uri }
+            return if (idx >= 0) idx + 1 else 0
+        }
+
     /** The frame being judged, or null when no folder is loaded. */
     val currentImage: ImageItem?
         get() = images.getOrNull(currentIndex)
@@ -222,12 +246,19 @@ class SelectorViewModel @Inject constructor(
     private val cacheRepository: CacheRepository,
     private val settingsRepository: SettingsRepository,
     private val scoreDao: ScoreDao,
+    private val metadataWriter: MetadataWriter = MetadataWriterImpl(),
     @ApplicationScope private val appScope: CoroutineScope,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SelectorUiState())
     val uiState: StateFlow<SelectorUiState> = _uiState.asStateFlow()
+
+    private val _ratingFilter = MutableStateFlow<RatingFilter>(RatingFilter.All)
+    val ratingFilter: StateFlow<RatingFilter> = _ratingFilter.asStateFlow()
+
+    /** Dispatched to for Room / IO work; overridable in tests to keep virtual time intact. */
+    internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     // ── Session state ────────────────────────────────────────────────────
     //
@@ -399,6 +430,7 @@ class SelectorViewModel @Inject constructor(
         loadedExifCache.clear()
         workQueue = SelectorWorkQueue.reset()
         pendingScanAesthetic = false
+        _ratingFilter.value = RatingFilter.All
         _uiState.update {
             it.copy(
                 images = emptyList(),
@@ -412,6 +444,7 @@ class SelectorViewModel @Inject constructor(
                 snackbarMessage = null,
                 undoOperation = null,
                 pendingDeletion = null,
+                ratingFilter = RatingFilter.All,
             )
         }
     }
@@ -529,7 +562,26 @@ class SelectorViewModel @Inject constructor(
         scheduleScoreRestore()
     }
 
-    // ── Navigation ───────────────────────────────────────────────────────
+    // ── Navigation & Rating Filtering ────────────────────────────────────
+
+    fun setRatingFilter(filter: RatingFilter) {
+        _ratingFilter.value = filter
+        _uiState.update { it.copy(ratingFilter = filter) }
+        adjustCurrentIndexForFilter(filter)
+    }
+
+    private fun adjustCurrentIndexForFilter(filter: RatingFilter) {
+        val state = _uiState.value
+        val current = state.currentImage ?: return
+        if (filter.matches(current.rating)) return
+
+        val matchingIndices = state.images.indices.filter { filter.matches(state.images[it].rating) }
+        if (matchingIndices.isNotEmpty()) {
+            val closest = matchingIndices.minByOrNull { kotlin.math.abs(it - state.currentIndex) } ?: matchingIndices.first()
+            _uiState.update { it.copy(currentIndex = closest) }
+            onFrameChanged()
+        }
+    }
 
     fun navigateToImage(index: Int) {
         val images = _uiState.value.images
@@ -541,18 +593,92 @@ class SelectorViewModel @Inject constructor(
 
     fun navigateNext() {
         val state = _uiState.value
-        if (state.currentIndex < state.images.size - 1) {
-            _uiState.update { it.copy(currentIndex = state.currentIndex + 1) }
-            onFrameChanged()
+        if (state.ratingFilter is RatingFilter.All) {
+            if (state.currentIndex < state.images.size - 1) {
+                _uiState.update { it.copy(currentIndex = state.currentIndex + 1) }
+                onFrameChanged()
+            }
+        } else {
+            val nextIndex = state.images.indices
+                .filter { it > state.currentIndex && state.ratingFilter.matches(state.images[it].rating) }
+                .firstOrNull()
+            if (nextIndex != null) {
+                _uiState.update { it.copy(currentIndex = nextIndex) }
+                onFrameChanged()
+            }
         }
     }
 
     fun navigatePrevious() {
         val state = _uiState.value
-        if (state.currentIndex > 0) {
-            _uiState.update { it.copy(currentIndex = state.currentIndex - 1) }
-            onFrameChanged()
+        if (state.ratingFilter is RatingFilter.All) {
+            if (state.currentIndex > 0) {
+                _uiState.update { it.copy(currentIndex = state.currentIndex - 1) }
+                onFrameChanged()
+            }
+        } else {
+            val prevIndex = state.images.indices
+                .filter { it < state.currentIndex && state.ratingFilter.matches(state.images[it].rating) }
+                .lastOrNull()
+            if (prevIndex != null) {
+                _uiState.update { it.copy(currentIndex = prevIndex) }
+                onFrameChanged()
+            }
         }
+    }
+
+    /**
+     * Sets user star rating (1..5, -1 for reject, 0 for unrated).
+     *
+     * 1. Updates in-memory rating state immediately for reactive UI feedback.
+     * 2. Persists to Room via [CacheRepository.updateRating].
+     * 3. Asynchronously writes back to disk using [MetadataWriter].
+     */
+    fun setRating(photo: ImageItem, rating: Int) {
+        _uiState.update { state ->
+            val updatedImages = state.images.map { img ->
+                if (img.uri == photo.uri) img.copy(rating = rating) else img
+            }
+            state.copy(images = updatedImages)
+        }
+
+        viewModelScope.launch {
+            try {
+                cacheRepository.updateRating(photo.uri, rating)
+            } catch (e: Exception) {
+                Log.e("SelectorViewModel", "Failed to persist rating to Room for ${photo.uri}", e)
+            }
+        }
+
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val uri = Uri.parse(photo.uri)
+                val file = when {
+                    uri.scheme == "file" -> uri.path?.let { File(it) } ?: File(photo.uri)
+                    uri.scheme == null -> File(photo.uri)
+                    uri.path != null && File(uri.path!!).exists() -> File(uri.path!!)
+                    else -> File(photo.uri)
+                }
+                metadataWriter.writeRating(file, rating)
+            } catch (e: Exception) {
+                Log.e("SelectorViewModel", "Failed to write rating metadata to disk for ${photo.uri}", e)
+            }
+        }
+    }
+
+    fun setRatingForCurrent(rating: Int) {
+        val current = _uiState.value.currentImage ?: return
+        setRating(current, rating)
+    }
+
+    fun setRatingForMaximised(rating: Int) {
+        val state = _uiState.value
+        val target = when (state.maximisedFrame) {
+            SelectorFrame.PREVIOUS -> state.previousImage
+            SelectorFrame.NEXT -> state.nextImage
+            else -> state.currentImage
+        } ?: return
+        setRating(target, rating)
     }
 
     /** Everything the frame under judgement changing implies. */
@@ -1222,7 +1348,10 @@ class SelectorViewModel @Inject constructor(
     private fun updateImageExif(uri: String, exif: ExifData) {
         _uiState.update { state ->
             val updatedImages = state.images.map { img ->
-                if (img.uri == uri) img.copy(exifData = exif) else img
+                if (img.uri == uri) {
+                    val rating = if (img.rating != 0) img.rating else exif.rating
+                    img.copy(exifData = exif, rating = rating)
+                } else img
             }
             state.copy(images = updatedImages)
         }
@@ -1401,10 +1530,8 @@ class SelectorViewModel @Inject constructor(
         val images = _uiState.value.images
         if (images.isEmpty()) return
 
-        val updatedImages = withContext(Dispatchers.IO) {
+        val updatedImages = withContext(ioDispatcher) {
             images.map { image ->
-                if (image.scanResult != null) return@map image
-
                 val cached = try {
                     scoreDao.getScore(image.uri)
                 } catch (e: Exception) {
@@ -1416,14 +1543,20 @@ class SelectorViewModel @Inject constructor(
                     return@map image
                 }
 
+                val currentRating = if (image.rating != 0) image.rating else cached.rating
+
+                val scanResult = image.scanResult ?: ScanResult(
+                    filePath = image.uri,
+                    sharpnessScore = cached.sharpnessScore,
+                    noiseLevel = cached.noiseLevel,
+                    highlightClipping = cached.highlightClipping,
+                    shadowClipping = cached.shadowClipping,
+                    aestheticScore = cached.aestheticScore,
+                )
+
                 image.copy(
-                    scanResult = ScanResult(
-                        filePath = image.uri,
-                        sharpnessScore = cached.sharpnessScore,
-                        noiseLevel = cached.noiseLevel,
-                        highlightClipping = cached.highlightClipping,
-                        shadowClipping = cached.shadowClipping
-                    )
+                    rating = currentRating,
+                    scanResult = scanResult,
                 )
             }
         }
@@ -1432,7 +1565,16 @@ class SelectorViewModel @Inject constructor(
         // for why merging the items themselves is a rollback rather than a merge.
         val restored = ScoreMerge.scoresOf(updatedImages)
         _uiState.update { state ->
-            state.copy(images = ScoreMerge.apply(state.images, restored))
+            val withScores = ScoreMerge.apply(state.images, restored)
+            val withRatings = withScores.map { img ->
+                val cachedItem = updatedImages.firstOrNull { it.uri == img.uri }
+                if (cachedItem != null && img.rating == 0 && cachedItem.rating != 0) {
+                    img.copy(rating = cachedItem.rating)
+                } else {
+                    img
+                }
+            }
+            state.copy(images = withRatings)
         }
     }
 
