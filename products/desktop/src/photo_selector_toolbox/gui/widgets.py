@@ -88,7 +88,9 @@ class ToolTip:
 
         for seq, handler in [
             ("<Enter>", self._on_enter),
+            ("<FocusIn>", self._on_enter),
             ("<Leave>", self._on_leave),
+            ("<FocusOut>", self._on_leave),
             ("<ButtonPress>", self._on_leave),
             ("<Destroy>", self._on_destroy),
         ]:
