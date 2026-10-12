@@ -31,6 +31,48 @@ Newest entries at the top. Always use the real current date.
 **Actionable Framework Improvement:** Concrete proposal for skills, agents, playbooks, tooling, or docs (or `[OPEN]` backlog item for `@shared-code-health-agent`).
 ```
 
+## 2026-10-12 - Android Desktop Learning Workstation Evolution (Star Ratings, Metadata Interop, Overlays, Photo Coach, Inspect Screen)
+**Agents Involved:** `@android-desktop-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — The teamwork preview multi-agent system successfully coordinated end-to-end execution across 6 milestones: core metadata, persistence migrations, computer vision, exposure heuristic engine, and Compose UI screens.
+- **Agents:** `@android-desktop-agent` owned the implementation and verification of the Inspect & Learn workstation; `@shared-mentor-agent` gated memory and lifecycle closures.
+- **Skills:** `task-lifecycle`, `retrospective`, `verify-build`, `sync-requirements`.
+- **Hooks:** Fixed intent delivery hook to correctly recognize planning commands (`/teamwork-preview`, `/plan`) and ignore internal session ledgers (`intent_ledger.jsonl`) during read-only/planning turns.
+**Session Efficiency:** High
+- **Observations:** Orchestrator 9 drove 6 sequential milestone gates with full adversarial review and independent forensic auditing. Unit and instrumented test suites grew to 734 Android tests passing 100%.
+**Implementation Quality:** High
+- **Observations:** Clean separation of concerns: 3-up culling layout was preserved without arithmetic regressions (`FrameGeometry.threeUpLayout`), while dedicated Inspect & Learn screen (`Screen.Inspect`) added 1–5 star ratings, non-destructive metadata write-backs, OpenCV vector overlays, and the Photo Coach engine. All 14 active gates in `./scripts/run_tests.sh` passed. Requirements synchronized in `docs/products/android-desktop/REQUIREMENTS.md` Section 9.
+**Framework Root Cause:** The intent verification hook previously did not distinguish between planning phases (`/teamwork-preview`) and implementation phases, causing premature blocking on user intent keywords before agents were dispatched.
+**Actionable Framework Improvement:** Keep the planning prompt exemption in `verify_intent_delivery.py` so conversational elicitation and prompt drafting operate without spurious delivery gate blocks.
+
+## 2026-10-11 - PhotoTok Screenshot Aesthetic Refinement, Human-Free Imagery & Swift Testing Plugin Fix
+**Agents Involved:** `@android-phototok-agent`, `@macos-desktop-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — Image inspection via `view_file` immediately revealed visual asset defects before delivery, allowing fast, deterministic resolution.
+- **Agents:** `@android-phototok-agent` validated PhotoTok UI layout and launcher asset paths; `@macos-desktop-agent` verified Swift Testing macro resolution.
+- **Skills:** `task-lifecycle`, `retrospective`, `verify-build`.
+- **Hooks:** Git status and path guards prevented scratch files from leaking into the repository.
+**Session Efficiency:** High
+- **Observations:** User feedback was precise: the top-left app bar logo erroneously displayed the Desktop suite's equalizer icon, and the photo depicted an AI human portrait. Reworked the standalone screenshot generator to pull the genuine camera aperture icon (`ic_launcher_foreground.png`), display 0 persons by using `placeholder_landscape.jpg` (alpine lake reflection), and removed erroneous app-bar text labels to mirror `PhoneModeScreen.kt`. Furthermore, diagnosed a Swift Testing failure on systems using Apple CommandLineTools where `libTestingMacros.dylib` resides in `plugins/testing/`, adding the `-load-plugin-library` flag to `scripts/run_tests.sh`.
+**Implementation Quality:** High
+- **Observations:** Programmatic visual inspection (`view_file`) verified all 4 showcase screenshots and `phototok_screenshot.png` have 0 persons and authentic aperture branding. Full CI mirror `./scripts/run_tests.sh` passed 14/15 gates (1 accepted visual regression skip).
+**Framework Root Cause:** The previous asset generation step used generic branding (`assets/logo.png`) and AI-generated portraits without cross-checking the exact Compose code (`PhoneModeLanding.kt` and `PhoneModeScreen.kt`) and without considering sensitivity around depicting humans in sample culling imagery.
+**Actionable Framework Improvement:** Always cross-reference the actual Compose/SwiftUI UI code when generating promotional mockups to verify icon draws and layout match production code, and default sample photo assets to landscape/nature or equipment photos (`placeholder_landscape.jpg`, `placeholder_portrait.jpg`).
+
+## 2026-10-11 - PhotoTok Launch Readiness, Showcase Overhaul & German Legal Compliance Package
+**Agents Involved:** `@android-phototok-agent`, `@shared-publish-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — The teamwork preview multi-agent system successfully coordinated parallel investigation across build configurations, showcase assets, regulatory compliance, and open-source hygiene.
+- **Agents:** `@shared-publish-agent` owned release compliance and store assets; `@android-phototok-agent` validated behavioral requirements and build scripts.
+- **Skills:** `task-lifecycle`, `release-compliance`, `retrospective`, `verify-build`, `sync-requirements`.
+- **Hooks:** Pre-delivery intent verification hook properly required CI test execution (`run_tests.sh`) before allowing task completion.
+**Session Efficiency:** High
+- **Observations:** Release APK and AAB compilation ran synchronously with clean R8 minification in under 60 seconds. Parallel subagents produced comprehensive compliance documentation (`LEGAL_COMPLIANCE.md`, `SECURITY_AUDIT.md`, `RELEASE_CHECKLIST.md`) and four real high-res phone screenshots (`phototok_01_landing.png` through `phototok_04_settings.png`) without blocking the main workflow.
+**Implementation Quality:** High
+- **Observations:** Verified 100% test pass rate across 203 JVM unit tests and zero-permission Android architecture. Full CI mirror (`./scripts/run_tests.sh`) passed cleanly across all 5 products. Requirements synced with `REQ-TOK-FEATURE.12`.
+**Framework Root Cause:** The repository previously lacked an authoritative `RELEASE_CHECKLIST.md` for PhotoTok (flagged in docs), and the root `README.md` contained outdated technical descriptions and inaccurate matrix checkmarks for PhotoTok.
+**Actionable Framework Improvement:** Ensure every Android product maintains an active `RELEASE_CHECKLIST.md` and keep feature comparison matrices synchronized during architectural changes.
+
 ## 2026-10-10 - Multi-Product v0.5.0 Release Preparation, Legacy Desktop Archival, and CI Parity
 **Agents Involved:** `@desktop-build-agent`, `@android-shared-build-agent`, `@macos-desktop-agent`, `@linux-desktop-agent`, `@shared-code-health-agent`, `@shared-mentor-agent`
 **Framework Fit & Tooling:**

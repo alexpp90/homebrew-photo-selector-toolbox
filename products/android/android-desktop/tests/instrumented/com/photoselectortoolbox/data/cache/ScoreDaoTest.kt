@@ -119,4 +119,53 @@ class ScoreDaoTest {
         assertNotNull(dao.getScore("path4"))
         assertNull(dao.getScore("path1"))
     }
+
+    @Test
+    fun updateRatingModifiesRatingColumn() = runTest {
+        val entity = ScoreEntity("path", 100, 200, rating = 0)
+        dao.insertOrUpdate(entity)
+
+        dao.updateRating("path", 5)
+
+        val result = dao.getScore("path")
+        assertEquals(5, result!!.rating)
+    }
+
+    @Test
+    fun updateCompositionAnalysisModifiesAnalysisColumn() = runTest {
+        val entity = ScoreEntity("path", 100, 200)
+        dao.insertOrUpdate(entity)
+
+        val analysisJson = """{"leadingLines":[{"startX":0.1,"startY":0.2,"endX":0.8,"endY":0.9,"strength":0.95}]}"""
+        dao.updateCompositionAnalysis("path", analysisJson)
+
+        val result = dao.getScore("path")
+        assertEquals(analysisJson, result!!.compositionAnalysis)
+    }
+
+    @Test
+    fun getScoresWithMinRatingFiltersCorrectly() = runTest {
+        dao.insertOrUpdate(ScoreEntity("p1", 1, 1, rating = 1))
+        dao.insertOrUpdate(ScoreEntity("p2", 2, 2, rating = 3))
+        dao.insertOrUpdate(ScoreEntity("p3", 3, 3, rating = 4))
+        dao.insertOrUpdate(ScoreEntity("p4", 4, 4, rating = 5))
+
+        val min3 = dao.getScoresWithMinRating(3)
+        assertEquals(3, min3.size)
+        assertTrue(min3.any { it.filePath == "p2" })
+        assertTrue(min3.any { it.filePath == "p3" })
+        assertTrue(min3.any { it.filePath == "p4" })
+        assertFalse(min3.any { it.filePath == "p1" })
+    }
+
+    @Test
+    fun getScoresWithRatingFiltersExactMatch() = runTest {
+        dao.insertOrUpdate(ScoreEntity("p1", 1, 1, rating = 2))
+        dao.insertOrUpdate(ScoreEntity("p2", 2, 2, rating = 5))
+        dao.insertOrUpdate(ScoreEntity("p3", 3, 3, rating = 5))
+
+        val exact5 = dao.getScoresWithRating(5)
+        assertEquals(2, exact5.size)
+        assertTrue(exact5.all { it.rating == 5 })
+    }
 }

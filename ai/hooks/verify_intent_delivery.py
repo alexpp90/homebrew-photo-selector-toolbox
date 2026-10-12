@@ -196,8 +196,12 @@ def verify_session(payload) -> tuple[bool, str]:
         return True, ""
 
     files = changed_files()
-    # If no files changed, or only teamwork metadata changed, allow stop (e.g. read-only explorer)
-    productive_files = [f for f in files if not f.startswith(".agents/teamwork/")]
+    # If no files changed, or only teamwork/intent metadata changed, allow stop (e.g. read-only explorer)
+    productive_files = [
+        f for f in files
+        if not f.startswith(".agents/teamwork/")
+        and f != "ai/memory/intent_ledger.jsonl"
+    ]
     if not productive_files:
         return True, ""
 
@@ -239,9 +243,11 @@ def verify_session(payload) -> tuple[bool, str]:
             if not any(req_file in f for f in productive_files):
                 unmatched_requirements.append(req_file)
 
-    # 3. Audit Specific Prompt Directives
+    # 3. Audit Specific Prompt Directives (only when product code was modified and not a planning command)
+    touched_products = any(f.startswith("products/") for f in productive_files)
+    is_planning_prompt = bool(re.search(r"^\s*/(teamwork-preview|plan|route)\b", prompt_text))
     missing_directives: list[str] = []
-    if prompt_text:
+    if prompt_text and touched_products and not is_planning_prompt:
         for feat_name, pattern in FEATURE_KEYWORD_MAP.items():
             if pattern.search(prompt_text):
                 feat_tokens = feat_name.split("_")

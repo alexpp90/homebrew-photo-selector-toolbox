@@ -25,7 +25,7 @@ object DatabaseModule {
             ScoresDatabase::class.java,
             "scores_cache.db"
         )
-            .addMigrations(ScoresDatabase.MIGRATION_1_2)
+            .addMigrations(*ScoresDatabase.MIGRATIONS)
             .build()
     }
 

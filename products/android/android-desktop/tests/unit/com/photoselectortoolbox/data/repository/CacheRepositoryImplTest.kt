@@ -91,4 +91,44 @@ class CacheRepositoryImplTest {
 
         coVerify { dao.pruneToMru(10000) }
     }
+
+    @Test
+    fun `updateRating delegates to DAO`() = runTest {
+        coEvery { dao.updateRating("path", 5) } just Runs
+
+        repo.updateRating("path", 5)
+
+        coVerify { dao.updateRating("path", 5) }
+    }
+
+    @Test
+    fun `updateCompositionAnalysis delegates to DAO`() = runTest {
+        coEvery { dao.updateCompositionAnalysis("path", "analysis_json") } just Runs
+
+        repo.updateCompositionAnalysis("path", "analysis_json")
+
+        coVerify { dao.updateCompositionAnalysis("path", "analysis_json") }
+    }
+
+    @Test
+    fun `getScoresWithMinRating delegates to DAO`() = runTest {
+        val list = listOf(ScoreEntity("path", 100, 200, rating = 4))
+        coEvery { dao.getScoresWithMinRating(3) } returns list
+
+        val result = repo.getScoresWithMinRating(3)
+
+        assertEquals(list, result)
+        coVerify { dao.getScoresWithMinRating(3) }
+    }
+
+    @Test
+    fun `getScoresWithRating delegates to DAO`() = runTest {
+        val list = listOf(ScoreEntity("path", 100, 200, rating = 5))
+        coEvery { dao.getScoresWithRating(5) } returns list
+
+        val result = repo.getScoresWithRating(5)
+
+        assertEquals(list, result)
+        coVerify { dao.getScoresWithRating(5) }
+    }
 }

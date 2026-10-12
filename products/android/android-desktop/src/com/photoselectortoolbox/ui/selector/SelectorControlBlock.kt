@@ -60,6 +60,11 @@ import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
 import com.photoselectortoolbox.ui.theme.Zinc600
 import com.photoselectortoolbox.ui.theme.Zinc700
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import com.photoselectortoolbox.domain.model.RatingFilter
+import com.photoselectortoolbox.ui.components.StarRatingBar
+import com.photoselectortoolbox.ui.theme.TonalIndigoHover
 import com.photoselectortoolbox.ui.theme.Zinc800
 
 /**
@@ -91,6 +96,10 @@ fun SelectorControlBlock(
     onNavigateNext: () -> Unit,
     modifier: Modifier = Modifier,
     stillEnumerating: Boolean = false,
+    ratingFilter: RatingFilter = RatingFilter.All,
+    onRatingFilterSelected: (RatingFilter) -> Unit = {},
+    currentRating: Int = 0,
+    onSetRating: (Int) -> Unit = {},
 ) {
     Column(
         modifier = modifier.padding(horizontal = 10.dp).testTag("control_block"),
@@ -208,6 +217,25 @@ fun SelectorControlBlock(
             )
         }
 
+        // Star rating bar for current image
+        if (position > 0) {
+            StarRatingBar(
+                rating = currentRating,
+                onRatingChanged = onSetRating,
+                starSize = 18.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+            )
+        }
+
+        // Rating Filter Selector
+        RatingFilterSelector(
+            currentFilter = ratingFilter,
+            onFilterSelected = onRatingFilterSelected,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+
         // `127 / 842+` while the folder is still enumerating. Discovery streams,
         // so the total is a running total for the first seconds of a large
         // shoot; printing it bare would state a folder size nobody has counted.
@@ -228,6 +256,48 @@ fun SelectorControlBlock(
                 }
                 .testTag("position_counter"),
         )
+    }
+}
+
+/**
+ * Filter chips allowing rapid selection of rating criteria in the control flank.
+ */
+@Composable
+fun RatingFilterSelector(
+    currentFilter: RatingFilter,
+    onFilterSelected: (RatingFilter) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scrollState = rememberScrollState()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState)
+            .testTag("rating_filter_selector"),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RatingFilter.PRESETS.forEach { filter ->
+            val isSelected = filter == currentFilter
+            val tag = "filter_${filter.label.replace("★", "star").replace("+", "plus").trim()}"
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (isSelected) TonalIndigoHover else Zinc800)
+                    .border(1.dp, if (isSelected) Indigo500 else Zinc700, RoundedCornerShape(4.dp))
+                    .clickable { onFilterSelected(filter) }
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .testTag(tag),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = filter.label,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (isSelected) Zinc50 else Zinc400,
+                )
+            }
+        }
     }
 }
 

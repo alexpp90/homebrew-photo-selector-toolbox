@@ -7,5 +7,6 @@ data class ExifData(
     val focalLength35mm: Double? = null,
     val iso: Int? = null,
     val lens: String = "Unknown",
-    val isFallback: Boolean = false
+    val isFallback: Boolean = false,
+    val rating: Int = 0
 )

@@ -116,21 +116,24 @@ Built specifically for desktop mode environments like Samsung DeX, Chromebooks, 
 
 ## 📱 3. PhotoTok (Phone)
 
-A lightweight, gesture-first, touch-optimized portrait client designed for quick, single-handed photo curation on your phone.
+A lightweight, gesture-first, touch-optimized portrait client designed for lightning-fast, single-handed photo curation on your phone.
 
 <div align="center">
-  <img src="assets/phototok_screenshot.png" alt="PhotoTok Mobile Interface" width="360" style="border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 15px;" />
-  <p><em>Vertical TikTok-style culling with a gesture tutorial overlay and glassmorphic HUD</em></p>
+  <img src="assets/phototok_02_viewer.png" alt="PhotoTok Mobile Culling Interface" width="360" style="border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 15px;" />
+  <p><em>Vertical TikTok-style culling with a glassmorphic EXIF HUD, responsive action feedback, and in-place coach marks</em></p>
 </div>
 
 ### Key Features
-*   **TikTok-Style Navigation:** Browse through local collections by swiping vertically up and down (`HorizontalPager` adapted to vertical scrolling).
-*   **Fluid Swipes & Gestures:**
-    *   **Swipe-Left to Discard:** Dragging progressive distance reveals a pulsing red trash icon, tilts the card ($2^\circ$), and fades it before executing trashing via `MediaStore`.
-    *   **Double-Tap to Collect:** Instantly copies or moves the photo to your Selection folder with a bouncy green checkmark animation.
-    *   **One-Tap HUD:** Single tap anywhere on screen hides/shows the glassmorphic metadata panel and controls to allow unobstructed viewing.
-*   **Orientation-Aware Sorting:** Intelligently groups and sorts landscape images first, followed by portrait, or shuffles files randomly via the **Picture Randomization** settings toggle.
-*   **Non-Blocking Undo:** Deletions are kept in a temporary state for 30 seconds with a quick Snackbar undo option before committing to disk.
+*   **TikTok-Style Vertical Feed:** Browse local collections seamlessly via Jetpack Compose native `VerticalPager` with background prefetching and progressive SAF loading (sub-second time-to-first-swipe).
+*   **Tactile Culling Swipes:**
+    *   **Swipe-Right to File:** Instantly copy or move photos to your designated `Selection/` folder with an animated green confirmation glow.
+    *   **Swipe-Left to Discard or Route:** Configurable action (Trash/Delete, Copy, or Move to secondary folder). Deletions feature a progressive pulsing indicator, card tilt ($2^\circ$), and optional direct-delete confirmation via Storage Access Framework (`DocumentsContract.deleteDocument`) with zero-permission offline privacy.
+    *   **Non-Blocking Revert:** Deletions remain undoable across vertical scrolls via the persistent viewer bottom bar Revert button until session change or subsequent file mutation.
+*   **Fluid Zoom & Pan:** Pinch-to-zoom (up to $6\times$) and double-tap to 2.5x zoom with single-finger panning; gestures automatically disable paging conflicts while zoomed.
+*   **One-Tap HUD:** Single tap anywhere on screen toggles the glassmorphic camera metadata panel and navigation controls for unobstructed viewing.
+*   **In-Place Coach-Mark Guide:** Contextual tutorial overlay (`GestureTutorialOverlay`) anchoring non-scrolling callouts directly to real chrome buttons and visualizing swipe trajectories.
+*   **Orientation-Aware Sorting & Shuffle:** Intelligently groups and sorts landscape images first, followed by portrait, or shuffles files randomly via the **Picture Randomization** settings toggle.
+*   **Smart Ingestion & Pairing:** Automatic RAW+JPEG sibling detection dialog, orientation-aware feed ordering, and zero-cloud privacy.
 
 ---
 
@@ -150,20 +153,21 @@ A high-performance native macOS photo selection and comparison culling suite bui
 
 ## 📊 Platform Feature Sync Matrix
 
-| Feature | Desktop | macOS Desktop | Android Desktop | PhotoTok | Notes |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **Image Review Layouts** | Standard / Focus | 1-Up / 2-Up / 3-Up | 3-Column / Focused | Vertical Pager | macOS features borderless canvas and sliding triplet. |
-| **Center Sharpness Score** | ✅ | ✅ (vImage + vDSP) | ✅ | ✅ | Center crop Laplacian variance with noise floor subtraction. |
-| **Laplacian Noise (MAD)** | ✅ | ✅ (vImage MAD) | ✅ | ✅ | Estimating sensor noise via Median Absolute Deviation. |
-| **Highlights/Shadows Clipping** | ✅ | ✅ (vImage Hist) | ✅ | ✅ | Hardware histogram thresholds $\ge 254$ and $\le 2$. |
-| **SQLite Score Caching** | ✅ | ❌ (LRU In-Memory) | ✅ | ❌ | macOS uses high-speed in-memory LRU + on-demand compute. |
-| **Apple Vision Aesthetics** | ✅ (PyObjC) | ✅ (Pure Native ANE) | ❌ | ❌ | macOS leverages Apple Neural Engine on macOS 15+. |
-| **Ollama Local AI VLM** | ✅ | ❌ (Vision Native) | ❌ | ❌ | Replaced on macOS by native Apple Vision. |
-| **Matplotlib / Vico Charts** | ✅ | ✅ (SwiftUI Charts) | ✅ | ❌ | Native metadata distribution charts. |
-| **dHash / Hash Grouping** | ✅ | ✅ (SHA-256 Dupes) | ✅ | ❌ (Time-only) | Cryptographic streaming duplicate detection. |
-| **SMB Path Resolution** | ✅ | ✅ (Darwin POSIX) | ❌ (SAF) | ❌ (SAF) | Handled transparently by macOS file system. |
-| **ExifTool Integration** | ✅ | ❌ (ImageIO Native) | ❌ (ExifInterface) | ❌ (ExifInterface) | macOS uses Apple ImageIO CGImageSource metadata. |
-| **Picture Randomization** | ❌ | ❌ | ❌ | ✅ | Phone settings toggle to shuffle loaded assets. |
+| Feature | Desktop (Py/Tk) | macOS Desktop (Swift) | Linux Desktop (GTK4/Adw) | Android Desktop (Tablet/DeX) | PhotoTok (Phone) | Notes |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Image Review Layouts** | Standard / Focus | 1-Up / 2-Up / 3-Up | 1-Up / 2-Up / 3-Up | 3-Column / Focused | Vertical Pager | PhotoTok uses gesture-first vertical paging; Desktops use comparative multi-up. |
+| **Center Sharpness Score** | ✅ | ✅ (vImage + vDSP) | ✅ (NumPy Laplacian) | ✅ (OpenCV) | ❌ Omitted | 50% ROI Laplacian variance; omitted on PhotoTok for sub-second launch. |
+| **Laplacian Noise (MAD)** | ✅ | ✅ (vImage MAD) | ✅ (NumPy MAD) | ✅ (MAD) | ❌ Omitted | Median Absolute Deviation sensor noise floor; omitted on PhotoTok. |
+| **Highlights/Shadows Clipping** | ✅ | ✅ (vImage Hist) | ✅ (NumPy Hist) | ✅ (Histograms) | ❌ Omitted | Hardware histogram thresholds $\ge 254$ and $\le 2$. |
+| **SQLite / Room Score Caching** | ✅ (SQLite) | ❌ (LRU In-Memory) | ❌ (LRU In-Memory) | ✅ (Room DB) | ❌ (Lightweight) | Desktops rely on sub-2ms compute & memory LRU; Android Desktop uses Room. |
+| **Apple Vision Aesthetics** | ✅ (PyObjC) | ✅ (Pure Native ANE) | ❌ Excluded | ❌ Excluded | ❌ Excluded | macOS leverages Apple Neural Engine on macOS 15+. |
+| **Ollama Local AI VLM** | ✅ | ❌ (Vision Native) | ❌ Excluded | ❌ Excluded | ❌ Excluded | Preserved in legacy Desktop only; excluded elsewhere to prevent runtime bloat. |
+| **Matplotlib / Vico Charts** | ✅ (Matplotlib) | ✅ (SwiftUI Charts) | ✅ (Libadwaita Charts) | ✅ (Vico) | ❌ Omitted | Native metadata distribution charts. |
+| **Duplicate Detection** | ✅ (SHA-256) | ✅ (CryptoKit SHA) | ✅ (Streaming SHA) | ✅ (Room DB) | ❌ Omitted | Cryptographic streaming duplicate detection. |
+| **SMB Path Resolution** | ✅ | ✅ (Darwin POSIX) | ✅ (GIO / GVFS) | ❌ (SAF) | ❌ (SAF) | Handled transparently by OS file system / GVFS. |
+| **ExifTool Integration** | ✅ | ❌ (ImageIO Native) | ❌ (GExiv2 C++) | ❌ (ExifInterface) | ❌ (ExifInterface) | Native platform EXIF extractors on modern native clients. |
+| **Picture Randomization** | ❌ | ❌ | ❌ | ❌ | ✅ | Phone settings toggle to shuffle loaded assets. |
+| **100% Offline & Zero Network** | ✅ (Local) | ✅ (Local) | ✅ (Local) | ✅ (Local) | ✅ (SAF Only) | Zero telemetry, zero cloud dependencies, strict privacy guarantee. |
 
 ---
 

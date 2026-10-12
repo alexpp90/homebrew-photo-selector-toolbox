@@ -28,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.photoselectortoolbox.ui.duplicates.DuplicatesScreen
+import com.photoselectortoolbox.ui.inspect.InspectScreen
 import com.photoselectortoolbox.ui.selector.SelectorScreen
 import com.photoselectortoolbox.ui.settings.SettingsScreen
 import com.photoselectortoolbox.ui.statistics.StatisticsScreen
@@ -203,6 +204,13 @@ private fun AppNavHost(
     ) {
         composable(Screen.PhotoSelector.route) {
             SelectorScreen(
+                windowSizeClass = windowSizeClass,
+                currentRoute = currentRoute,
+                onNavigate = onNavigate,
+            )
+        }
+        composable(Screen.Inspect.route) {
+            InspectScreen(
                 windowSizeClass = windowSizeClass,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,

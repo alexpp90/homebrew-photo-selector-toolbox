@@ -2,6 +2,8 @@ package com.photoselectortoolbox.data.model
 
 import com.photoselector.core.model.ExifData
 
+typealias PhotoItem = ImageItem
+
 data class ImageItem(
     val uri: String,
     val fileName: String,
@@ -13,6 +15,7 @@ data class ImageItem(
     val exifData: ExifData? = null,
     val scanResult: ScanResult? = null,
     val groupId: Int? = null,
+    val rating: Int = exifData?.rating ?: 0,
 ) {
     /** True when the image is wider than it is tall (or dimensions unknown). */
     val isLandscape: Boolean
