@@ -30,3 +30,9 @@ Full instructions: `@/AGENTS.md`. Framework: `@/ai/README.md`. Routing: `@/ai/RO
 
 6. **Edit canonical files only.** Everything under `ai/` is canonical; `.agents/`, `.claude/`
    and `.gemini/` are symlinks to it. Edit through `ai/`.
+
+7. **Defensive subagent watchdog timer.** When delegating work via `invoke_subagent`, never
+   rely solely on passive reactive wakeup. Schedule a one-shot watchdog timer
+   (`schedule(DurationSeconds=300..600, Prompt="Check subagent status", TimerCondition="any")`)
+   so that silent worker crashes, background command hangs, or multi-level delegation stalls
+   wake the orchestrator up proactively.

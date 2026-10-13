@@ -436,11 +436,14 @@ if have python3; then
         python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py --check
     gate "requirements traceability" "scripts/verify_requirements_traceability.py" \
         python3 scripts/verify_requirements_traceability.py --check --strict
+    gate "readme parity" "scripts/check_readme_parity.py" \
+        python3 scripts/check_readme_parity.py --check
 else
     skip "toolchain sync" "" "python3 not found"
     skip "framework validation" "" "python3 not found"
     skip ".gemini/settings.json in sync" "" "python3 not found"
     skip "requirements traceability" "" "python3 not found"
+    skip "readme parity" "" "python3 not found"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────

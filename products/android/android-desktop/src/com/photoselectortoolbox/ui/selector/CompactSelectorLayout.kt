@@ -54,9 +54,9 @@ import com.photoselectortoolbox.domain.format.SelectionActionLabels
 import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.ui.components.MetadataPanel
 import com.photoselectortoolbox.ui.components.ScoreChipRow
+import com.photoselectortoolbox.ui.theme.FocusCyanTonal
 import com.photoselectortoolbox.ui.theme.ScoreBad
 import com.photoselectortoolbox.ui.theme.ScoreGood
-import com.photoselectortoolbox.ui.theme.TonalIndigo
 import com.photoselectortoolbox.ui.theme.Zinc50
 import com.photoselectortoolbox.ui.theme.Zinc700
 import com.photoselectortoolbox.ui.theme.Zinc900
@@ -342,7 +342,7 @@ private fun CompactActionButton(
         modifier = modifier
             .height(52.dp)
             .background(
-                if (label.isPrimary) TonalIndigo else Color.Transparent,
+                if (label.isPrimary) FocusCyanTonal else Color.Transparent,
                 RoundedCornerShape(8.dp),
             )
             .clickable(onClick = onClick)

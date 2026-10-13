@@ -282,16 +282,19 @@ object FrameGeometry {
      * new chrome above or below the frames therefore fails the build instead of
      * being noticed, two revisions later, as "the images look small".
      *
-     * Measured against the reference device on 2026-08-08, with the strip both
-     * off and on: window 1480 × 924, region 1392 × 924, frames 675 × 450 at
-     * 3:2. The system bars are drawn *through* under `enableEdgeToEdge()` and
-     * consume none of it, which is why they do not appear in this arithmetic —
-     * the screen pads for the horizontal insets only, and that is a priced
-     * decision recorded in [SelectorScreen].
+     * Measured against the reference device: window 1480 × 924, status bar
+     * 36 dp, bottom navigation bars hidden (0 dp). With the status bar
+     * preserved and its space not used by the app, available height is 888 dp,
+     * region height is 872 dp, and frames reach 648 × 432 dp at 3:2.
      */
-    fun imageRegion(windowWidth: Dp, windowHeight: Dp, sidebarWidth: Dp): DpSize = DpSize(
+    fun imageRegion(
+        windowWidth: Dp,
+        windowHeight: Dp,
+        sidebarWidth: Dp,
+        statusBarHeight: Dp = 0.dp,
+    ): DpSize = DpSize(
         (windowWidth - sidebarWidth - OuterPadding * 2).coerceAtLeast(0.dp),
-        (windowHeight - OuterPadding * 2).coerceAtLeast(0.dp),
+        (windowHeight - statusBarHeight - OuterPadding * 2).coerceAtLeast(0.dp),
     )
 
     /**
@@ -307,19 +310,16 @@ object FrameGeometry {
      * The minimum frame height the reference device must produce.
      *
      * Asserted by a UI test, on a reference-class window and for a 3:2 frame —
-     * the standard camera ratio, and the one the 450 dp figure in REQUIREMENTS
-     * §2 is quoted for. A layout change that quietly reintroduces a top bar, a
+     * the standard camera ratio. A layout change that quietly reintroduces a top bar, a
      * bottom action row or a full-width filmstrip drops below it, and the point
-     * is that it fails the build rather than waiting to be noticed by eye — the
-     * previous two revisions of this screen were both shipped with frames far
-     * smaller than the display allowed.
+     * is that it fails the build rather than waiting to be noticed by eye.
      *
      * It is deliberately *not* asserted for every aspect ratio. A 16:9 frame at
      * 1480 × 924 is width-bound at 684 × 385 — two abreast need 1376 dp and that
      * is all there is — so 385 dp is the maximum the display allows, not a
      * shortfall. Confusing the two is what made this look like a height leak.
      */
-    val MinimumReferenceFrameHeight: Dp = 440.dp
+    val MinimumReferenceFrameHeight: Dp = 430.dp
 }
 
 /**

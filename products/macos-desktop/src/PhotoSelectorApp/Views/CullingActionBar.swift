@@ -1,8 +1,8 @@
 import SwiftUI
 import PhotoSelectorKit
 
-/// Prominent culling action bar offering intuitive, one-click buttons with explicit shortcut badges
-/// for moving, copying, and trashing candidate photographs.
+/// Floating glassmorphic culling action dock with Obsidian Studio palette,
+/// tactile embedded hotkey badges, and real-time triage counters.
 public struct CullingActionBar: View {
     @ObservedObject public var viewModel: CullingWorkspaceViewModel
 
@@ -11,203 +11,183 @@ public struct CullingActionBar: View {
     }
 
     public var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 14) {
-                // MARK: - Culling Actions
+        HStack(spacing: 10) {
+            // MARK: - 1. Move to Selection (M)
+            ObsidianDockButton(
+                title: "Move to Selection",
+                icon: "arrow.right.doc.fill",
+                shortcut: "M",
+                fillColor: Color(red: 8/255.0, green: 47/255.0, blue: 30/255.0),    // #082F1E
+                accentColor: Color(red: 16/255.0, green: 185/255.0, blue: 129/255.0), // #10B981
+                isEnabled: !viewModel.photos.isEmpty,
+                action: { viewModel.cullCurrentPhoto(action: .move) }
+            )
+            .accessibilityIdentifier("dock_move")
+            .help("Move active photo and companion RAW/XMP files to Selection folder (Press M)")
 
-                // 1. Move to Selection Button (Green Primary Action)
-                Button(action: {
-                    viewModel.cullCurrentPhoto(action: .move)
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.right.doc.fill")
-                            .font(.system(size: 14, weight: .bold))
+            // MARK: - 2. Copy to Selection (C)
+            ObsidianDockButton(
+                title: "Copy to Selection",
+                icon: "doc.on.doc.fill",
+                shortcut: "C",
+                fillColor: Color(red: 17/255.0, green: 34/255.0, blue: 64/255.0),   // #112240
+                accentColor: Color(red: 59/255.0, green: 130/255.0, blue: 246/255.0), // #3B82F6
+                isEnabled: !viewModel.photos.isEmpty,
+                action: { viewModel.cullCurrentPhoto(action: .copy) }
+            )
+            .accessibilityIdentifier("dock_copy")
+            .help("Copy active photo and companion files to Selection folder (Press C)")
 
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Move to Selection")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Shortcut: M")
-                                .font(.system(size: 10, weight: .regular))
-                                .opacity(0.85)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 7)
-                    .frame(minWidth: 165)
+            // MARK: - 3. Move to Trash (⌫)
+            ObsidianDockButton(
+                title: "Move to Trash",
+                icon: "trash.fill",
+                shortcut: "⌫",
+                fillColor: Color(red: 59/255.0, green: 13/255.0, blue: 17/255.0),   // #3B0D11
+                accentColor: Color(red: 239/255.0, green: 68/255.0, blue: 68/255.0),  // #EF4444
+                isDestructive: true,
+                isEnabled: !viewModel.photos.isEmpty,
+                action: { viewModel.cullCurrentPhoto(action: .trash) }
+            )
+            .accessibilityIdentifier("dock_trash")
+            .help("Move active photo and companion files to macOS Trash (Press Delete)")
+
+            Divider()
+                .frame(height: 22)
+                .background(Color.white.opacity(0.15))
+
+            // MARK: - 4. Undo (⌘Z)
+            ObsidianDockButton(
+                title: "Undo",
+                icon: "arrow.uturn.backward",
+                shortcut: "⌘Z",
+                fillColor: Color(red: 34/255.0, green: 34/255.0, blue: 40/255.0),    // #222228
+                accentColor: Color(red: 228/255.0, green: 228/255.0, blue: 231/255.0), // #E4E4E7
+                isEnabled: viewModel.canUndo,
+                action: { viewModel.undoLastAction() }
+            )
+            .accessibilityIdentifier("dock_undo")
+            .help("Undo the last move, copy, or trash action (⌘Z)")
+
+            Spacer()
+
+            // MARK: - Live Triage Counters HUD
+            HStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color(red: 16/255.0, green: 185/255.0, blue: 129/255.0))
+                        .font(.system(size: 11))
+                    Text("\(viewModel.selectedCount) Selected")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.green)
-                .focusable(false)
-                .disabled(viewModel.photos.isEmpty)
-                .help("Move active photo and companion RAW/XMP files to Selection folder (Press M)")
 
-                // 2. Copy to Selection Button (Blue Action)
-                Button(action: {
-                    viewModel.cullCurrentPhoto(action: .copy)
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "doc.on.doc.fill")
-                            .font(.system(size: 14, weight: .bold))
+                Text("·")
+                    .foregroundStyle(Color.white.opacity(0.35))
 
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Copy to Selection")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Shortcut: C")
-                                .font(.system(size: 10, weight: .regular))
-                                .opacity(0.85)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 7)
-                    .frame(minWidth: 165)
+                HStack(spacing: 5) {
+                    Image(systemName: "trash.fill")
+                        .foregroundStyle(Color(red: 239/255.0, green: 68/255.0, blue: 68/255.0))
+                        .font(.system(size: 11))
+                    Text("\(viewModel.trashedCount) Trashed")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.blue)
-                .focusable(false)
-                .disabled(viewModel.photos.isEmpty)
-                .help("Copy active photo and companion files to Selection folder (Press C)")
 
-                // 3. Move to Trash Button (Red Destructive Action)
-                Button(action: {
-                    viewModel.cullCurrentPhoto(action: .trash)
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 14, weight: .bold))
+                Text("·")
+                    .foregroundStyle(Color.white.opacity(0.35))
 
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Move to Trash")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Shortcut: ⌫ / Del")
-                                .font(.system(size: 10, weight: .regular))
-                                .opacity(0.85)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 7)
-                    .frame(minWidth: 155)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.red)
-                .focusable(false)
-                .disabled(viewModel.photos.isEmpty)
-                .help("Move active photo and companion files to macOS Trash (Press Delete)")
-
-                Divider()
-                    .frame(height: 28)
-
-                // 4. Undo Button
-                Button(action: {
-                    viewModel.undoLastAction()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("Undo")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("⌘Z")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                }
-                .buttonStyle(.bordered)
-                .focusable(false)
-                .disabled(!viewModel.canUndo)
-                .help("Undo the last move, copy, or trash action (⌘Z)")
-
-                Spacer()
-
-                // MARK: - Culling Progress Counts
-                HStack(spacing: 12) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .font(.system(size: 12))
-                        Text("\(viewModel.selectedCount) Selected")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.white)
-                    }
-
-                    HStack(spacing: 5) {
-                        Image(systemName: "trash.fill")
-                            .foregroundStyle(.red)
-                            .font(.system(size: 12))
-                        Text("\(viewModel.trashedCount) Trashed")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.white)
-                    }
-
-                    let remaining = viewModel.photos.count - viewModel.selectedCount - viewModel.trashedCount
-                    Text("\(max(0, remaining)) Remaining")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.75))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.black.opacity(0.5))
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
-                )
-
-                // Shortcuts Help Button
-                Button(action: {
-                    viewModel.presentShortcutsHelp()
-                }) {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.white.opacity(0.75))
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help("Show Keyboard Shortcuts & Guide (?)")
+                let remaining = max(0, viewModel.photos.count - viewModel.selectedCount - viewModel.trashedCount)
+                Text("\(remaining) Remaining")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.75))
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.black.opacity(0.45))
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+            )
 
-            // MARK: - Bottom Shortcuts Hint Strip
-            HStack(spacing: 12) {
-                Text("💡 Hotkeys:")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.85))
-
-                HStack(spacing: 8) {
-                    shortcutPill(key: "← / →", label: "Navigate")
-                    shortcutPill(key: "M", label: "Move to Selection")
-                    shortcutPill(key: "C", label: "Copy to Selection")
-                    shortcutPill(key: "⌫ Del", label: "Trash")
-                    shortcutPill(key: "⌘Z", label: "Undo")
-                    shortcutPill(key: "Space", label: "100% Zoom")
-                    shortcutPill(key: "1 / 2 / 3", label: "View Modes")
-                }
-
-                Spacer()
+            // Guide / Shortcuts Help Button
+            Button(action: {
+                viewModel.presentShortcutsHelp()
+            }) {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.white.opacity(0.75))
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 6)
+            .buttonStyle(.plain)
+            .focusable(false)
+            .help("Show Keyboard Shortcuts & Guide (?)")
         }
-        .background(Color(red: 0.08, green: 0.08, blue: 0.09))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color(red: 58/255.0, green: 58/255.0, blue: 66/255.0).opacity(0.85), lineWidth: 1) // #3A3A42
+        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 4)
         .preferredColorScheme(.dark)
-        .overlay(Divider(), alignment: .top)
     }
+}
 
-    private func shortcutPill(key: String, label: String) -> some View {
-        HStack(spacing: 4) {
-            Text(key)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundStyle(Color.white)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Color.white.opacity(0.18))
-                .clipShape(RoundedRectangle(cornerRadius: 3))
+/// Tactile button style for Obsidian Studio dock buttons with responsive click feedback.
+private struct ObsidianDockButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
 
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.8))
+/// A tactile Obsidian Studio action button with embedded shortcut badge.
+private struct ObsidianDockButton: View {
+    let title: String
+    let icon: String
+    let shortcut: String
+    let fillColor: Color
+    let accentColor: Color
+    var isDestructive: Bool = false
+    var isEnabled: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(accentColor)
+
+                Text(title)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.white)
+
+                Text(shortcut)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.4))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(fillColor)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(accentColor.opacity(0.35), lineWidth: 1)
+            )
         }
+        .buttonStyle(ObsidianDockButtonStyle())
+        .focusable(false)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1.0 : 0.45)
     }
 }

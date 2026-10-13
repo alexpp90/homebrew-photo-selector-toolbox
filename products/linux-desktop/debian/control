@@ -9,9 +9,9 @@ Build-Depends:
  python3-poetry-core,
  pybuild-plugin-pyproject
 Standards-Version: 4.7.0
-Homepage: https://github.com/alexanderpatz/homebrew-photo-selector-toolbox
-Vcs-Git: https://github.com/alexanderpatz/homebrew-photo-selector-toolbox.git
-Vcs-Browser: https://github.com/alexanderpatz/homebrew-photo-selector-toolbox
+Homepage: https://github.com/alexpp90/photo-selector
+Vcs-Git: https://github.com/alexpp90/photo-selector.git
+Vcs-Browser: https://github.com/alexpp90/photo-selector
 Rules-Requires-Root: no
 
 Package: photo-selector-linux

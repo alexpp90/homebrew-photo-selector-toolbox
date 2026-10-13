@@ -371,6 +371,19 @@ class FrameGeometryTest {
     }
 
     @Test
+    fun `the image region accounts for top status bar when specified`() {
+        val region = FrameGeometry.imageRegion(
+            1480.dp,
+            924.dp,
+            sidebarWidth = 88.dp,
+            statusBarHeight = 36.dp,
+        )
+
+        assertEquals(referenceWidth.value, region.width.value, 0.01f)
+        assertEquals(872f, region.height.value, 0.01f)
+    }
+
+    @Test
     fun `a 16 to 9 frame on the reference device is width-bound, not short-changed`() {
         // Measured 2026-08-08: 684 x 385 on the reference device, and no amount
         // of freed height changes it — two 16:9 frames abreast want 1464dp of a

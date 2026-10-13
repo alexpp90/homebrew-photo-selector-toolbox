@@ -19,7 +19,7 @@ sudo apt install -y curl ca-certificates gpg
 Place the official signing key into the system keyrings directory (`/etc/apt/keyrings/`):
 ```bash
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://alexanderpatz.github.io/homebrew-photo-selector-toolbox/apt/KEY.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/photo-selector-archive-keyring.gpg
+curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/KEY.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/photo-selector-archive-keyring.gpg
 sudo chmod 0644 /etc/apt/keyrings/photo-selector-archive-keyring.gpg
 ```
 
@@ -28,7 +28,7 @@ Create `/etc/apt/sources.list.d/photo-selector.sources`:
 ```bash
 sudo tee /etc/apt/sources.list.d/photo-selector.sources <<EOF
 Types: deb
-URIs: https://alexanderpatz.github.io/homebrew-photo-selector-toolbox/apt/
+URIs: https://alexanderpatz.github.io/photo-selector/apt/
 Suites: trixie
 Components: main
 Signed-By: /etc/apt/keyrings/photo-selector-archive-keyring.gpg
@@ -55,7 +55,7 @@ photo-selector-linux
 For rapid installation, run our automated configuration script:
 
 ```bash
-curl -fsSL https://alexanderpatz.github.io/homebrew-photo-selector-toolbox/apt/setup.sh | sudo bash
+curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/setup.sh | sudo bash
 sudo apt install -y photo-selector-linux
 ```
 
@@ -68,10 +68,10 @@ If your tooling or configuration management requires the traditional single-line
 ```bash
 # Import key (same as Step 2 above)
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://alexanderpatz.github.io/homebrew-photo-selector-toolbox/apt/KEY.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/photo-selector-archive-keyring.gpg
+curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/KEY.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/photo-selector-archive-keyring.gpg
 
 # Add one-line source entry
-echo "deb [signed-by=/etc/apt/keyrings/photo-selector-archive-keyring.gpg] https://alexanderpatz.github.io/homebrew-photo-selector-toolbox/apt/ trixie main" | sudo tee /etc/apt/sources.list.d/photo-selector.list
+echo "deb [signed-by=/etc/apt/keyrings/photo-selector-archive-keyring.gpg] https://alexanderpatz.github.io/photo-selector/apt/ trixie main" | sudo tee /etc/apt/sources.list.d/photo-selector.list
 
 # Update and install
 sudo apt update
@@ -85,7 +85,7 @@ sudo apt install -y photo-selector-linux
 For developers working locally or users testing in an offline sandbox, you can configure APT to point directly at your local clone.
 
 ### Option A: Local File-Based APT Repository (`trusted=yes`)
-From the root of your cloned `homebrew-photo-selector-toolbox` repository:
+From the root of your cloned `photo-selector` repository:
 
 ```bash
 REPO_PATH="$(pwd)/apt"
@@ -166,7 +166,7 @@ sudo apt update
 
 ### Issue 2: `E: The repository '...' does not have a Release file.`
 - **Cause**: The URI or suite path in your source definition is incorrect or unreachable.
-- **Fix**: Verify internet connectivity and confirm the URI matches `https://alexanderpatz.github.io/homebrew-photo-selector-toolbox/apt/` and the Suite is `trixie`.
+- **Fix**: Verify internet connectivity and confirm the URI matches `https://alexanderpatz.github.io/photo-selector/apt/` and the Suite is `trixie`.
 
 ### Issue 3: `E: Unable to locate package photo-selector-linux`
 - **Cause**: `sudo apt update` was not run after creating the sources file, or the repository component `main` is missing.

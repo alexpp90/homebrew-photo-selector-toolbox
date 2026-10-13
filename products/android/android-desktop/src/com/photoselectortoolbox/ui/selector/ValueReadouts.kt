@@ -39,16 +39,17 @@ import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.domain.format.ExifFormatter
 import com.photoselectortoolbox.domain.scoring.ScoreMetric
 import com.photoselectortoolbox.domain.scoring.ScoreMetricIcon
-import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.FocusCyanGlow
 import com.photoselectortoolbox.ui.theme.ScoreBad
 import com.photoselectortoolbox.ui.theme.ScoreGood
 import com.photoselectortoolbox.ui.theme.ScoreWarn
+import com.photoselectortoolbox.ui.theme.StudioBorder
+import com.photoselectortoolbox.ui.theme.StudioCanvas
 import com.photoselectortoolbox.ui.theme.WarningAmber
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
 import com.photoselectortoolbox.ui.theme.Zinc600
-import com.photoselectortoolbox.ui.theme.Zinc700
-import com.photoselectortoolbox.ui.theme.Zinc950
 
 /**
  * The glyph for a metric.
@@ -123,7 +124,7 @@ fun CurrentFrameReadout(
                         text = it,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
-                        color = Indigo500,
+                        color = FocusCyan,
                     )
                 }
             }
@@ -156,7 +157,7 @@ fun CurrentFrameReadout(
             LimitedMetadataMarker()
         }
 
-        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Zinc700))
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(StudioBorder))
 
         val scores = image.scanResult
         if (scores == null) {
@@ -221,11 +222,11 @@ private fun NamedMetricRow(
             // The best-of-visible marker keeps its existing rules: absent below
             // two values, ties to the earliest frame, so it cannot flicker.
             if (isBest) {
-                Box(
-                    modifier = Modifier
-                        .size(5.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(Indigo500),
+                Text(
+                    text = "◈",
+                    fontSize = 11.sp,
+                    color = FocusCyanGlow,
+                    modifier = Modifier.padding(start = 2.dp),
                 )
             }
         }
@@ -239,8 +240,8 @@ private fun NamedMetricRow(
 /**
  * The 2 dp direction bar.
  *
- * A small non-zero floor so a worst-case value still reads as "a bar at the
- * bottom of its range" rather than as missing data.
+ * An 8-segment LED meter with a small non-zero floor so a worst-case value still
+ * reads as "a bar at the bottom of its range" rather than as missing data.
  */
 @Composable
 private fun GoodnessBar(
@@ -248,18 +249,27 @@ private fun GoodnessBar(
     modifier: Modifier = Modifier,
     height: androidx.compose.ui.unit.Dp = 2.dp,
 ) {
-    Box(
+    val totalSegments = 8
+    val activeCount = ((0.06f + goodness.toFloat() * 0.94f) * totalSegments).toInt().coerceIn(1, totalSegments)
+    val activeColor = goodnessColor(goodness)
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(height)
-            .background(Zinc700, RoundedCornerShape(1.dp)),
+            .height(height),
+        horizontalArrangement = Arrangement.spacedBy(1.5.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth((0.06f + goodness.toFloat() * 0.94f).coerceIn(0f, 1f))
-                .height(height)
-                .background(goodnessColor(goodness), RoundedCornerShape(1.dp)),
-        )
+        for (i in 0 until totalSegments) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(height)
+                    .background(
+                        if (i < activeCount) activeColor else StudioBorder,
+                        RoundedCornerShape(0.5.dp),
+                    ),
+            )
+        }
     }
 }
 
@@ -299,7 +309,7 @@ fun NeighbourValueOverlay(
                     // already documents.
                     Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Zinc950.copy(alpha = 0.72f))
+                        .background(StudioCanvas.copy(alpha = 0.85f))
                 } else {
                     Modifier
                 }
@@ -347,7 +357,7 @@ fun NeighbourValueOverlay(
             )
         }
 
-        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Zinc700))
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(StudioBorder))
 
         val scores = image.scanResult
         if (scores == null) {
@@ -401,11 +411,11 @@ private fun CompactMetricRow(
                 modifier = Modifier.weight(1f),
             )
             if (isBest) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Indigo500),
+                Text(
+                    text = "◈",
+                    fontSize = 9.sp,
+                    color = FocusCyanGlow,
+                    modifier = Modifier.padding(start = 2.dp),
                 )
             }
         }
@@ -419,7 +429,7 @@ private fun NotScannedRow(compact: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Zinc700, RoundedCornerShape(6.dp))
+            .border(1.dp, StudioBorder, RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .semantics { contentDescription = "This frame has not been scanned" },
         verticalAlignment = Alignment.CenterVertically,

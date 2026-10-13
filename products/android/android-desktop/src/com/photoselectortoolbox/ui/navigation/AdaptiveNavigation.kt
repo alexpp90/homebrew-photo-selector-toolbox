@@ -1,10 +1,16 @@
 package com.photoselectortoolbox.ui.navigation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -32,15 +38,24 @@ import com.photoselectortoolbox.ui.inspect.InspectScreen
 import com.photoselectortoolbox.ui.selector.SelectorScreen
 import com.photoselectortoolbox.ui.settings.SettingsScreen
 import com.photoselectortoolbox.ui.statistics.StatisticsScreen
-import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.FocusCyanNav
+import com.photoselectortoolbox.ui.theme.StudioCanvas
+import com.photoselectortoolbox.ui.theme.StudioPanel
 import com.photoselectortoolbox.ui.theme.Zinc400
-import com.photoselectortoolbox.ui.theme.Zinc800
-import com.photoselectortoolbox.ui.theme.Zinc900
-import com.photoselectortoolbox.ui.theme.Zinc950
 
 @Composable
 fun PhotoSelectorApp(windowSizeClass: WindowSizeClass) {
-    DesktopModeApp(windowSizeClass = windowSizeClass)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(StudioCanvas)
+            .windowInsetsPadding(
+                WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
+            ),
+    ) {
+        DesktopModeApp(windowSizeClass = windowSizeClass)
+    }
 }
 
 @Composable
@@ -76,7 +91,7 @@ private fun DesktopModeApp(
         Row(modifier = Modifier.fillMaxSize()) {
             NavigationRail(
                 modifier = Modifier.fillMaxHeight(),
-                containerColor = Zinc950,
+                containerColor = StudioPanel,
                 contentColor = Zinc400,
             ) {
                 Screen.all.forEach { screen ->
@@ -100,11 +115,11 @@ private fun DesktopModeApp(
                         selected = selected,
                         onClick = { navigateToScreen(screen) },
                         colors = NavigationRailItemDefaults.colors(
-                            selectedIconColor = Indigo500,
-                            selectedTextColor = Indigo500,
+                            selectedIconColor = FocusCyan,
+                            selectedTextColor = FocusCyan,
                             unselectedIconColor = Zinc400,
                             unselectedTextColor = Zinc400,
-                            indicatorColor = Zinc800,
+                            indicatorColor = FocusCyanNav,
                         ),
                     )
                 }
@@ -133,10 +148,10 @@ private fun DesktopModeApp(
         )
     } else {
         Scaffold(
-            containerColor = Zinc900,
+            containerColor = StudioCanvas,
             bottomBar = {
                 NavigationBar(
-                    containerColor = Zinc950,
+                    containerColor = StudioPanel,
                     contentColor = Zinc400,
                     tonalElevation = 0.dp,
                 ) {
@@ -162,11 +177,11 @@ private fun DesktopModeApp(
                             selected = selected,
                             onClick = { navigateToScreen(screen) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Indigo500,
-                                selectedTextColor = Indigo500,
+                                selectedIconColor = FocusCyan,
+                                selectedTextColor = FocusCyan,
                                 unselectedIconColor = Zinc400,
                                 unselectedTextColor = Zinc400,
-                                indicatorColor = Zinc800,
+                                indicatorColor = FocusCyanNav,
                             ),
                         )
                     }

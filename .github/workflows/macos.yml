@@ -108,18 +108,148 @@ jobs:
           fi
           xcodebuild -version
 
-      - name: Build Release Executable
-        run: swift build -c release
-
-      - name: Package macOS Binary
+      - name: Build Application Bundle & Archive
         run: |
-          mkdir -p dist
-          cp .build/release/PhotoSelectorApp dist/
-          tar -czvf PhotoSelectorApp-macos-arm64.tar.gz -C dist PhotoSelectorApp
+          scripts/build_app.sh release
+          cd .build/app
+          zip -r -y ../../../photo-selector-macos-apple-silicon.zip PhotoSelector.app
 
       - name: Upload Release Archive
         uses: actions/upload-artifact@v4
         with:
-          name: PhotoSelectorApp-macos-arm64
-          path: products/macos-desktop/PhotoSelectorApp-macos-arm64.tar.gz
+          name: photo-selector-macos-apple-silicon
+          path: photo-selector-macos-apple-silicon.zip
           if-no-files-found: error
+
+  # ── GitHub Release (Main / Tags / Dispatch Only) ──
+  release:
+    name: Publish macOS Release
+    needs: build
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: photo-selector-macos-apple-silicon
+          path: artifacts
+
+      - name: Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          files: artifacts/*.zip
+          make_latest: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
+
+  # ── Homebrew Tap Synchronization ──
+  update-homebrew-taps:
+    name: Update Homebrew Taps (Native macOS)
+    needs: release
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download release artifact
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TAG_DIR="nightly"
+          else
+            TAG_DIR="${{ github.ref_name }}"
+          fi
+          curl -L -o macos.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-macos-apple-silicon.zip"
+
+      - name: Compute SHA256 hash
+        id: hashes
+        run: |
+          echo "macos_sha256=$(shasum -a 256 macos.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew Files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          update_and_push() {
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              python3 products/desktop/scripts/update_formula.py \
+                --file Casks/photo-selector-toolbox@nightly.rb \
+                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
+
+              git add Casks/photo-selector-toolbox@nightly.rb
+              COMMIT_MSG="Update nightly native macOS Homebrew SHA256 hash"
+            else
+              TAG_NAME="${{ github.ref_name }}"
+              VERSION="${TAG_NAME#v}"
+
+              python3 products/desktop/scripts/update_formula.py \
+                --file Casks/photo-selector-toolbox.rb \
+                --version-val "${VERSION}" \
+                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
+
+              git add Casks/photo-selector-toolbox.rb
+              COMMIT_MSG="Update stable native macOS Homebrew cask to version ${VERSION}"
+            fi
+
+            git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
+            git push origin main
+          }
+
+          for i in {1..5}; do
+            if update_and_push; then
+              echo "Homebrew files updated and pushed successfully."
+              exit 0
+            fi
+            echo "Attempt $i failed. Retrying in 2 seconds..."
+            sleep 2
+          done
+
+          echo "Failed to update and push Homebrew files after 5 attempts."
+          exit 1
+        shell: bash
+
+      - name: Update alexpp90/homebrew-tap Repository
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          TAP_DIR="$(mktemp -d)"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/alexpp90/homebrew-tap.git" "${TAP_DIR}"
+          mkdir -p "${TAP_DIR}/Casks" "${TAP_DIR}/Formula"
+
+          cp Casks/*.rb "${TAP_DIR}/Casks/"
+          cp Formula/*.rb "${TAP_DIR}/Formula/"
+
+          cd "${TAP_DIR}"
+          git add Casks/ Formula/
+          if ! git diff --cached --quiet; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              git commit -m "Update nightly native macOS Homebrew SHA256 hash"
+            else
+              git commit -m "Update stable native macOS Homebrew files to version ${{ github.ref_name }}"
+            fi
+            git push origin main
+            echo "Successfully updated alexpp90/homebrew-tap"
+          else
+            echo "No changes to commit in alexpp90/homebrew-tap"
+          fi
+        shell: bash

@@ -22,11 +22,14 @@ Bare `pytest` or `gradlew testDebugUnitTest` is a strict subset of what CI enfor
 adjudicate it — a chain of `fix(ci)` / `fix(test)` commits on a branch is the anti-pattern
 this step exists to prevent.
 
-## 2. Requirements
+## 2. Requirements & Root README Parity
 
 Did observable behaviour change? Then the owning product's `REQUIREMENTS.md` changes in the
 same commit. Use the `sync-requirements` skill — it covers what counts as observable, which
 file owns which rule, and the workflow-parity obligation.
+
+Additionally, verify root `README.md` parity: does `README.md` reflect all active products in
+`ai/ROUTING.md`, adhere to the canonical product ordering (PhotoTok -> Android Desktop -> macOS Desktop -> Linux Desktop -> Desktop), include realistic visual assets in `assets/`, and omit deprecated features? Tested mechanically via `python3 scripts/check_readme_parity.py --check`.
 
 ## 3. Reflect, then consult the mentor
 
@@ -251,7 +254,7 @@ Agents must format their final summary using this template:
 
 ```
 [ ] 1. ./scripts/run_tests.sh passed; skipped gates named in the summary
-[ ] 2. REQUIREMENTS.md synced (or: behaviour did not change)
+[ ] 2. REQUIREMENTS.md synced and root README.md verified (or: behaviour did not change)
 [ ] 3. Reflected; mentor consulted (or: nothing learned, stated explicitly)
 [ ] 4. Approved lessons written via record-lesson
 [ ] 5. Cross-product propagation evaluated; decision recorded in FEATURE_PARITY.md

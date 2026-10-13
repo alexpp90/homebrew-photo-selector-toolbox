@@ -95,8 +95,8 @@ import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.domain.interaction.SelectorGestures
 import com.photoselectortoolbox.domain.format.ExifFormatter
 import com.photoselectortoolbox.ui.components.ScoreChipRow
-import com.photoselectortoolbox.ui.theme.Indigo200
-import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.FocusCyanText
 import com.photoselectortoolbox.ui.theme.ScoreBad
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
@@ -142,7 +142,8 @@ fun FullscreenViewer(
         }
 
         onDispose {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
+            controller?.show(WindowInsetsCompat.Type.statusBars())
+            controller?.hide(WindowInsetsCompat.Type.navigationBars())
         }
     }
 
@@ -553,7 +554,7 @@ private fun ZoomNavigator(
                 .align(Alignment.Center)
                 .width(48.dp)
                 .height(36.dp)
-                .border(1.dp, Indigo500),
+                .border(1.dp, FocusCyan),
         )
     }
 }
@@ -601,7 +602,7 @@ private fun FullscreenGestureHint(
         Text(
             text = "Got it",
             fontSize = 12.sp,
-            color = Indigo200,
+            color = FocusCyanText,
             modifier = Modifier
                 .align(Alignment.End)
                 .clickable(onClick = onDismiss)

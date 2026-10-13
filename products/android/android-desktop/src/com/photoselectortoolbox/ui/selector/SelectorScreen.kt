@@ -66,8 +66,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photoselectortoolbox.domain.format.SelectorLabels
 import com.photoselectortoolbox.domain.model.RatingFilter
 import com.photoselectortoolbox.ui.components.EmptyStateCard
-import com.photoselectortoolbox.ui.theme.Zinc800
-import com.photoselectortoolbox.ui.theme.Zinc900
+import com.photoselectortoolbox.ui.theme.StudioCanvas
+import com.photoselectortoolbox.ui.theme.StudioCard
 import com.photoselectortoolbox.ui.navigation.Screen
 import com.photoselectortoolbox.viewmodel.SelectorFrame
 import com.photoselectortoolbox.viewmodel.SelectorViewModel
@@ -213,7 +213,7 @@ fun SelectorScreen(
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissDeleteConfirmation() }) { Text("Cancel") }
             },
-            containerColor = Zinc800,
+            containerColor = StudioCard,
         )
     }
 
@@ -259,19 +259,16 @@ fun SelectorScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Zinc900)
-            // Horizontal insets only, and that is a priced decision rather than
-            // an omission. A display cutout or a rotated navigation bar clips
-            // content on the *width*, which this layout has to spare. The
-            // vertical system bars are 36 dp + 32 dp on the reference device
-            // (measured); padding for them would cost 34 dp of height on all
-            // three frames and put the reference frame at 416 dp, below the
-            // documented floor. They are transparent under `enableEdgeToEdge()`
-            // and overlay the outer 28 dp / 24 dp of the top and bottom frames;
-            // a photographer who wants an unobstructed look has maximise and
-            // fullscreen, both of which are already immersive. See
-            // REQUIREMENTS §2 Edge-to-Edge and DESIGN §7.2.
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .background(StudioCanvas)
+            // Pads for horizontal insets (cutouts) and the top status bar.
+            // The top status bar is preserved ("left alone"), but its space is
+            // not used by the app so that it does not overlay content.
+            // On the bottom, navigation bars (launcher, back/home) are hidden
+            // by the system bars controller to maximize space for the app.
+            // See REQUIREMENTS §2 Edge-to-Edge and DESIGN §7.2.
+            .windowInsetsPadding(
+                WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
+            )
             .dragAndDropTarget(
                 shouldStartDragAndDrop = { true },
                 target = dragAndDropTarget,

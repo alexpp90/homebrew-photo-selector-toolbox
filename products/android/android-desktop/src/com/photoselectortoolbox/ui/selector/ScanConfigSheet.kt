@@ -34,9 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.photoselectortoolbox.ui.theme.Indigo500
-import com.photoselectortoolbox.ui.theme.Zinc800
-import com.photoselectortoolbox.ui.theme.Zinc900
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.StudioCard
+import com.photoselectortoolbox.ui.theme.StudioPanel
 
 /**
  * Configuration for which analyses to run during a scan.
@@ -81,7 +81,7 @@ fun ScanConfigSheet(
                     enabled = config.sharpness || config.noise ||
                         config.highlightClipping || config.shadowClipping || config.aesthetic,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Indigo500,
+                        containerColor = FocusCyan,
                         contentColor = Color.White,
                     ),
                 ) {
@@ -93,7 +93,7 @@ fun ScanConfigSheet(
                     Text("Cancel")
                 }
             },
-            containerColor = Zinc800,
+            containerColor = StudioCard,
             shape = RoundedCornerShape(16.dp),
         )
     } else {
@@ -103,7 +103,7 @@ fun ScanConfigSheet(
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            containerColor = Zinc900,
+            containerColor = StudioPanel,
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         ) {
             Column(
@@ -133,7 +133,7 @@ fun ScanConfigSheet(
                     enabled = config.sharpness || config.noise ||
                         config.highlightClipping || config.shadowClipping || config.aesthetic,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Indigo500,
+                        containerColor = FocusCyan,
                         contentColor = Color.White,
                     ),
                     shape = RoundedCornerShape(8.dp),
@@ -218,7 +218,7 @@ private fun AnalysisCheckbox(
             checked = checked,
             onCheckedChange = null, // handled by row click
             colors = CheckboxDefaults.colors(
-                checkedColor = Indigo500,
+                checkedColor = FocusCyan,
                 uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ),
         )

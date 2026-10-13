@@ -66,7 +66,7 @@ points are Lightroom's Library module and Photo Mechanic — not Google Photos.
 | Priority | Device / mode | Logical size | Notes |
 |---|---|---|---|
 | Primary | Samsung Galaxy Tab S11 Ultra, landscape | ~1480 × 924 dp (2960 × 1848 px @2x), 16:10 | The reference frame. Design here first. |
-| Primary | Samsung DeX / Chromebook window | default 1024 × 768 dp, min 800 × 600 dp | Resizable. Hardware keyboard + mouse present. |
+| Primary | Samsung DeX / Chromebook / Tablet window | default 1024 × 768 dp, min 600 × 480 dp | Resizable (supports 50/50 split). Hardware keyboard + mouse or touch. |
 | Secondary | Tablet portrait | 600–840 dp wide | Medium breakpoint. |
 | Tertiary | Phone | < 600 dp wide | Compact breakpoint, reduced feature set. |
 
@@ -114,28 +114,30 @@ deserves the most design effort.
 
 ### 4.1 Colour
 
-Dark theme only. Material 3 `darkColorScheme`. Zinc greys plus an Indigo accent.
+Dark theme only. Material 3 `darkColorScheme`. Calibrated Darkroom & Studio palette with Laser Cyan and Curatorial Amber accents.
 
 | Role | Hex | Name | Use |
 |---|---|---|---|
-| `background` / `surface` | `#18181B` | Zinc-900 | Base canvas |
-| `surfaceVariant` | `#27272A` | Zinc-800 | Cards, panels, rails, chips |
-| `outline` | `#3F3F46` | Zinc-700 | Borders, dividers, chart grid lines |
+| `background` / `surface` | `#0C0D10` | StudioCanvas | Neutral canvas pedestal; zero chromatic cast |
+| `surfaceVariant` | `#141519` | StudioPanel | 88dp navigation sidebar, details pane shell |
+| `surfaceContainer` | `#1C1E24` | StudioCard | Hardware control block card fill & telemetry tiles |
+| `outline` | `#2D3139` | StudioBorder | 1dp structural hairline dividers & borders |
+| `outlineVariant` | `#434854` | StudioBorderActive | Highlighted / active border |
 | `onSurface` / `onBackground` | `#FAFAFA` | Zinc-50 | Primary text |
 | `onSurfaceVariant` | `#A1A1AA` | Zinc-400 | Secondary text, icons at rest |
-| `primary` | `#6366F1` | Indigo-500 | Accent, active nav, current-image border |
-| `onPrimary` | `#FFFFFF` | — | Text on accent |
-| `primaryContainer` | `#4F46E5` | Indigo-600 | Pressed / hovered accent |
+| `primary` | `#0284C7` | FocusCyan | Active 2dp hero frame border, optical chrome, active nav |
+| `tertiary` | `#38BDF8` | FocusCyanGlow | Focus diamond indicator (`◈`), telemetry reticles |
+| `curation` | `#F59E0B` | CurationAmber | Keeper selection, star ratings, curatorial triage |
 | `secondary` | `#A1A1AA` | Zinc-400 | Muted controls |
 
-Semantic accents — used **only** for score direction and destructive actions, never
+Semantic score micro-telemetry — used **only** for score direction and destructive actions, never
 decoratively:
 
 | Role | Hex | Name |
 |---|---|---|
-| Good / pass | `#34D399` | Emerald-400 |
-| Warning | `#FBBF24` | Amber-400 |
-| Bad / destructive | `#F87171` | Red-400 |
+| Good / pass | `#34D399` | Emerald-400 (`ScoreGood`) |
+| Warning | `#FBBF24` | Amber-400 (`ScoreWarn`) |
+| Bad / destructive | `#F87171` | Rose-400 (`ScoreBad`) |
 
 ### 4.2 Type
 
@@ -430,11 +432,12 @@ frame is therefore the same fraction of either. **Measure the region before conc
 anything about the budget** — `image_region` and `selector_sidebar` carry test tags for
 exactly this.
 
-The system bars are 36 dp top and 32 dp bottom and are drawn *through*: the selector pads for
-`safeDrawing` horizontally only. Padding vertically would cost 34 dp on all three frames and
-land the reference frame at 416 dp, below the 440 dp floor. The price is that the transparent
-bars overlay the outer 28 dp of the top frame and 24 dp of the bottom row; maximise and
-fullscreen both hide the bars outright and are one keystroke away.
+The top status bar is 36 dp on the reference device: it is preserved ("left alone") and the app
+pads for `safeDrawing` horizontally and for the top status bar (`safeDrawing.only(Horizontal + Top)`),
+ensuring the status bar never overlays app content. On the bottom, the navigation bar / taskbar
+(32 dp: launcher, back/home buttons) is hidden via `WindowInsetsControllerCompat.hide(navigationBars())`
+with swipe-to-reveal behavior, freeing the bottom space for the app. The reference frame height at
+3:2 is 432 dp with the status bar excluded and bottom navigation bar hidden (MinimumReferenceFrameHeight = 430 dp).
 
 Two consequences that must not be forgotten during implementation:
 

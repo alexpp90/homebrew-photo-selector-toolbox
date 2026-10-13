@@ -11,38 +11,38 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Indigo500,
+    primary = FocusCyan,
     onPrimary = Color.White,
-    primaryContainer = Indigo600,
+    primaryContainer = Color(0xFF0369A1),
     onPrimaryContainer = Zinc50,
     secondary = Zinc600,
     onSecondary = Zinc50,
-    secondaryContainer = Zinc700,
+    secondaryContainer = StudioCard,
     onSecondaryContainer = Zinc200,
-    tertiary = Indigo400,
-    onTertiary = Color.White,
-    tertiaryContainer = Indigo700,
+    tertiary = FocusCyanGlow,
+    onTertiary = StudioCanvas,
+    tertiaryContainer = Color(0xFF075985),
     onTertiaryContainer = Zinc100,
-    surface = Zinc900,
+    surface = StudioCanvas,
     onSurface = Zinc50,
-    surfaceVariant = Zinc800,
+    surfaceVariant = StudioPanel,
     onSurfaceVariant = Zinc400,
-    surfaceContainerLowest = Zinc950,
-    surfaceContainerLow = Zinc900,
-    surfaceContainer = Zinc800,
+    surfaceContainerLowest = StudioCanvas,
+    surfaceContainerLow = StudioPanel,
+    surfaceContainer = StudioCard,
     surfaceContainerHigh = Zinc700,
     surfaceContainerHighest = Zinc600,
-    outline = Zinc700,
+    outline = StudioBorder,
     outlineVariant = Zinc600,
-    background = Zinc900,
+    background = StudioCanvas,
     onBackground = Zinc50,
     error = ErrorRed,
     onError = Color.White,
     errorContainer = Color(0xFF93000A),
     onErrorContainer = Color(0xFFFFDAD6),
     inverseSurface = Zinc100,
-    inverseOnSurface = Zinc900,
-    inversePrimary = Indigo700,
+    inverseOnSurface = StudioCanvas,
+    inversePrimary = FocusCyan,
     scrim = Color.Black,
 )
 
@@ -54,8 +54,8 @@ fun PhotoSelectorToolboxTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = Zinc950.toArgb()
-            window.navigationBarColor = Zinc950.toArgb()
+            window.statusBarColor = StudioCanvas.toArgb()
+            window.navigationBarColor = StudioCanvas.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = false

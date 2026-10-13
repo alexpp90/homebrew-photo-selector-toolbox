@@ -45,15 +45,16 @@ import com.photoselectortoolbox.domain.format.SelectorLabels
 import com.photoselectortoolbox.domain.session.SelectorWork
 import com.photoselectortoolbox.domain.guidance.SidebarAction
 import com.photoselectortoolbox.ui.navigation.Screen
-import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.FocusCyanNav
+import com.photoselectortoolbox.ui.theme.FocusCyanTonal
 import com.photoselectortoolbox.ui.theme.ScoreBad
-import com.photoselectortoolbox.ui.theme.TonalIndigo
-import com.photoselectortoolbox.ui.theme.TonalIndigoNav
+import com.photoselectortoolbox.ui.theme.StudioBorder
+import com.photoselectortoolbox.ui.theme.StudioCard
+import com.photoselectortoolbox.ui.theme.StudioPanel
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
 import com.photoselectortoolbox.ui.theme.Zinc700
-import com.photoselectortoolbox.ui.theme.Zinc800
-import com.photoselectortoolbox.ui.theme.Zinc950
 
 /**
  * Width of the sidebar.
@@ -111,7 +112,7 @@ fun SelectorSidebar(
         modifier = modifier
             .width(SidebarWidth)
             .fillMaxHeight()
-            .background(Zinc950)
+            .background(StudioPanel)
             .testTag("selector_sidebar")
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -248,14 +249,14 @@ private fun SidebarItem(
 
     val contentColor = when {
         !enabled -> Zinc700
-        active -> Indigo500
+        active -> FocusCyan
         else -> Zinc400
     }
     val background = when {
         !enabled -> Color.Transparent
-        emphasised -> TonalIndigo
-        active -> TonalIndigoNav
-        hovered -> Zinc800
+        emphasised -> FocusCyanTonal
+        active -> FocusCyanNav
+        hovered -> StudioCard
         else -> Color.Transparent
     }
 
@@ -323,7 +324,7 @@ private fun BusyItem(
             .height(SidebarItemHeight)
             .padding(vertical = 2.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(TonalIndigo)
+            .background(FocusCyanTonal)
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(onClick = onCancel)
             .semantics { contentDescription = description }
@@ -358,6 +359,6 @@ private fun SidebarDivider() {
             .padding(vertical = 8.dp)
             .width(40.dp)
             .height(1.dp)
-            .background(Zinc800),
+            .background(StudioBorder),
     )
 }

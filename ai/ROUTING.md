@@ -107,6 +107,10 @@ Routing is this file's job; the procedures below belong to skills, which own the
   `retrospective`.
 - **Requirements maintenance:** `sync-requirements`.
 - **Verification before finishing:** `verify-build`.
+- **Watchdog timer on delegation:** when invoking subagents via `invoke_subagent`, never
+  rely solely on passive reactive notification. Always schedule a defensive watchdog timer
+  (`schedule(DurationSeconds=300..600, Prompt="Check subagent status and progress", TimerCondition="any")`)
+  so that an unhandled hang, infinite loop, or silent worker block wakes the coordinator up proactively.
 - **Feature parity:** evaluated at the end of every task by the `retrospective` skill, step 5,
   against [`docs/shared/FEATURE_PARITY.md`](../docs/shared/FEATURE_PARITY.md). The coordinator's
   own duty is only to route a *decided* port as one subtask per product.

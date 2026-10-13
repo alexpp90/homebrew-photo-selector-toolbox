@@ -342,8 +342,8 @@ jobs:
           else
             TAG_DIR="${{ github.ref_name }}"
           fi
-          curl -L -o macos.zip "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/${TAG_DIR}/photo-selector-toolbox-macos-apple-silicon.zip"
-          curl -L -o linux.zip "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/${TAG_DIR}/photo-selector-toolbox-linux-x64.zip"
+          curl -L -o macos.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-toolbox-macos-apple-silicon.zip"
+          curl -L -o linux.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-toolbox-linux-x64.zip"
 
       - name: Compute SHA256 hashes
         id: hashes
@@ -363,7 +363,7 @@ jobs:
 
             if [ "${{ github.ref }}" = "refs/heads/main" ]; then
               python3 products/desktop/scripts/update_formula.py \
-                --file Casks/photo-selector-toolbox@nightly.rb \
+                --file Casks/photo-selector-toolbox-legacy@nightly.rb \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
 
               python3 products/desktop/scripts/update_formula.py \
@@ -371,14 +371,14 @@ jobs:
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
                 --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
 
-              git add Casks/photo-selector-toolbox@nightly.rb Formula/photo-selector-toolbox@nightly.rb
+              git add Casks/photo-selector-toolbox-legacy@nightly.rb Formula/photo-selector-toolbox@nightly.rb
               COMMIT_MSG="Update nightly Homebrew SHA256 hashes"
             else
               TAG_NAME="${{ github.ref_name }}"
               VERSION="${TAG_NAME#v}"
 
               python3 products/desktop/scripts/update_formula.py \
-                --file Casks/photo-selector-toolbox.rb \
+                --file Casks/photo-selector-toolbox-legacy.rb \
                 --version-val "${VERSION}" \
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
 
@@ -388,7 +388,7 @@ jobs:
                 --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
                 --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
 
-              git add Casks/photo-selector-toolbox.rb Formula/photo-selector-toolbox.rb
+              git add Casks/photo-selector-toolbox-legacy.rb Formula/photo-selector-toolbox.rb
               COMMIT_MSG="Update stable Homebrew files to version ${VERSION}"
             fi
 
@@ -407,4 +407,34 @@ jobs:
 
           echo "Failed to update and push Homebrew files after 5 attempts."
           exit 1
+        shell: bash
+
+      - name: Update alexpp90/homebrew-tap Repository
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          TAP_DIR="$(mktemp -d)"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/alexpp90/homebrew-tap.git" "${TAP_DIR}"
+          mkdir -p "${TAP_DIR}/Casks" "${TAP_DIR}/Formula"
+
+          cp Casks/*.rb "${TAP_DIR}/Casks/"
+          cp Formula/*.rb "${TAP_DIR}/Formula/"
+
+          cd "${TAP_DIR}"
+          git add Casks/ Formula/
+          if ! git diff --cached --quiet; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              git commit -m "Update nightly Homebrew SHA256 hashes"
+            else
+              git commit -m "Update stable Homebrew files to version ${{ github.ref_name }}"
+            fi
+            git push origin main
+            echo "Successfully updated alexpp90/homebrew-tap"
+          else
+            echo "No changes to commit in alexpp90/homebrew-tap"
+          fi
         shell: bash

@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.sp
 import com.photoselectortoolbox.data.model.ScanResult
 import com.photoselectortoolbox.domain.scoring.ScoreMetric
 import com.photoselectortoolbox.ui.selector.vector
-import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.FocusCyanGlow
 import com.photoselectortoolbox.ui.theme.ScoreBad
 import com.photoselectortoolbox.ui.theme.ScoreGood
 import com.photoselectortoolbox.ui.theme.ScoreWarn
@@ -151,10 +151,10 @@ fun ScoreChip(
                 maxLines = 1,
             )
             if (isBestOfVisible) {
-                Box(
-                    modifier = Modifier
-                        .size(5.dp)
-                        .background(Indigo500, CircleShape),
+                Text(
+                    text = "◈",
+                    fontSize = 10.sp,
+                    color = FocusCyanGlow,
                 )
             }
         }

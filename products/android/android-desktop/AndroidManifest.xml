@@ -15,6 +15,14 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!-- Camera not required — Googlebooks, clamshell Chromebooks and DeX desktop docks may lack rear cameras -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+
     <application
         android:name=".PhotoSelectorApp"
         android:allowBackup="false"
@@ -38,8 +46,8 @@
             <layout
                 android:defaultWidth="1024dp"
                 android:defaultHeight="768dp"
-                android:minWidth="800dp"
-                android:minHeight="600dp" />
+                android:minWidth="600dp"
+                android:minHeight="480dp" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

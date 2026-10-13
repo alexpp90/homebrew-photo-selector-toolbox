@@ -181,13 +181,13 @@ The Photo Selector Toolbox is a cross-platform desktop application designed to p
 ### 5.3 Homebrew Distribution (macOS & Linux)
 *   **[REQ-DESK-BREW.01] Tap Repository:** The project maintains a single-repo Homebrew Tap at `alexpp90/photo-selector-toolbox` containing Cask definitions (macOS GUI) and Formula definitions (Linux GUI/CLI and macOS CLI) for both stable releases and nightly builds.
 *   **[REQ-DESK-BREW.02] Release Selection:**
-    *   **[REQ-DESK-BREW.03] macOS GUI (Cask):** Users can install the stable release (`brew install --cask photo-selector-toolbox`) or nightly build (`brew install --cask photo-selector-toolbox@nightly`).
+    *   **[REQ-DESK-BREW.03] macOS GUI (Cask):** Users can install the legacy Python/Tkinter release (`brew install --cask photo-selector-toolbox-legacy`) or nightly build (`brew install --cask photo-selector-toolbox-legacy@nightly`) into `/Applications` alongside the native macOS application without filesystem or bundle name collision.
     *   **[REQ-DESK-BREW.04] Linux / macOS CLI (Formula):** Users can install the stable release (`brew install photo-selector-toolbox`) or nightly build (`brew install photo-selector-toolbox@nightly`).
 *   **[REQ-DESK-BREW.05] Auto-Update:** The CI workflow automatically updates both Cask and Formula configurations using a Python utility script `products/desktop/scripts/update_formula.py`:
     *   For nightly builds (on pushes to `main`), the nightly Cask and Formula SHA256 hashes are updated.
     *   For stable releases (on tag pushes matching `v*`), the stable Cask and Formula versions and SHA256 hashes are updated.
 *   **[REQ-DESK-BREW.06] Install Artifacts:**
-    *   The macOS Cask installs the `Photo Selector Toolbox.app` bundle to `/Applications` and symlinks the CLI binary to Homebrew's bin directory.
+    *   The legacy macOS Cask installs the `Photo Selector Toolbox.app` bundle to `/Applications` and symlinks the CLI binary as `photo-selector-toolbox-legacy` to Homebrew's bin directory.
     *   The macOS Formula installs the CLI binary `photo-selector-toolbox` to Homebrew's bin directory.
     *   The Linux Formula installs both the CLI binary `photo-selector-toolbox` and the GUI binary `photo-selector-toolbox-gui` to Homebrew's bin directory.
 

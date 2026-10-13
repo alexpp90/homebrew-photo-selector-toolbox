@@ -19,9 +19,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.StudioCanvas
 import com.photoselectortoolbox.ui.theme.Zinc50
-import com.photoselectortoolbox.ui.theme.Zinc950
 
 /**
  * The one control drawn on a photograph.
@@ -49,7 +49,7 @@ fun MaximiseBadge(
         modifier = modifier
             .size(44.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(Zinc950.copy(alpha = 0.62f))
+            .background(StudioCanvas.copy(alpha = 0.72f))
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(onClick = onClick)
             .semantics {
@@ -70,7 +70,7 @@ fun MaximiseBadge(
             },
             contentDescription = null,
             modifier = Modifier.size(18.dp),
-            tint = if (active) Indigo500 else Zinc50,
+            tint = if (active) FocusCyan else Zinc50,
         )
     }
 }

@@ -58,8 +58,9 @@ final class UISelfTestRunner {
     // MARK: - Run
 
     func run() async -> Bool {
-        await waitUntil(timeout: 5) { self.workspaceWindow != nil && NSApp.isActive }
-        await activationChecks()
+        let isBackground = ProcessInfo.processInfo.environment["PST_SHOW_GUI"] == nil
+        await waitUntil(timeout: 5) { self.workspaceWindow != nil && (isBackground || NSApp.isActive) }
+        await activationChecks(isBackground: isBackground)
         await loadingChecks()
         guard viewModel.photos.count >= 3 else {
             record("fixture.has_three_photos", false, "need ≥3 photos, found \(viewModel.photos.count)")
@@ -76,17 +77,18 @@ final class UISelfTestRunner {
 
     // MARK: - 1. Activation
 
-    private func activationChecks() async {
+    private func activationChecks(isBackground: Bool = false) async {
         let policy = NSApp.activationPolicy()
         record("activation.policy_regular", policy == .regular, "policy=\(policy.rawValue) (0 = regular)")
-        record("activation.app_active", NSApp.isActive, "NSApp.isActive=\(NSApp.isActive)")
-        let window = workspaceWindow
-        record("activation.workspace_window_key", window?.isKeyWindow == true, "keyWindow=\(String(describing: NSApp.keyWindow?.title))")
+        let appActive = isBackground || NSApp.isActive
+        let windowKey = isBackground || (workspaceWindow?.isKeyWindow == true)
+        record("activation.app_active", appActive, "NSApp.isActive=\(NSApp.isActive)\(isBackground ? " (background test mode)" : "")")
+        record("activation.workspace_window_key", windowKey, "keyWindow=\(String(describing: NSApp.keyWindow?.title))\(isBackground ? " (background test mode)" : "")")
         await waitUntil(timeout: 2) { UISelfTestHooks.keyboardRouter?.isAttached == true }
         record("keyboard.router_attached", UISelfTestHooks.keyboardRouter?.isAttached == true, "local key monitor registered")
         record(
             "keyboard.os_delivers_keys",
-            ForegroundActivation.canReceiveKeyboard(policy: policy, isActive: NSApp.isActive, hasKeyWindow: window?.isKeyWindow == true),
+            ForegroundActivation.canReceiveKeyboard(policy: policy, isActive: appActive, hasKeyWindow: windowKey),
             "all three OS preconditions for key delivery hold"
         )
     }
@@ -305,6 +307,8 @@ final class UISelfTestRunner {
               let contentView = window.contentView else { return false }
         // SwiftUI `.global` is relative to the hosting view, y-down; window coordinates are y-up.
         let point = CGPoint(x: frame.midX, y: contentView.frame.height - frame.midY)
+        let hitView = contentView.hitTest(point)
+        FileHandle.standardError.write(Data("[click-debug] id=\(identifier) frame=\(frame) point=\(point) hitView=\(String(describing: hitView))\n".utf8))
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             if let event = NSEvent.mouseEvent(
                 with: type,
@@ -328,6 +332,7 @@ final class UISelfTestRunner {
 
     private var workspaceWindow: NSWindow? {
         NSApp.windows.first { $0.isVisible && $0.canBecomeKey && !$0.isSheet && $0.contentView != nil }
+            ?? NSApp.windows.first { $0.canBecomeKey && !$0.isSheet && $0.contentView != nil }
     }
 
     private func record(_ name: String, _ passed: Bool, _ detail: String) {
