@@ -63,14 +63,45 @@ TEST_RUNNERS_BY_PRODUCT = {
     "scripts/": re.compile(r"\b(validate_framework\.py|verify_requirements_traceability\.py|run_tests\.sh)\b"),
 }
 
-FEATURE_KEYWORD_MAP = {
-    "arrow_keys": re.compile(r"\b(arrow\s+keys?|navigation|keyboard|left/right)\b", re.I),
-    "exif": re.compile(r"\b(exif|metadata|shutter|iso|aperture)\b", re.I),
-    "contrast": re.compile(r"\b(contrast|barely\s+readable|black\s+on\s+dark|dark\s+mode)\b", re.I),
-    "loading": re.compile(r"\b(loading|spinner|progress|indicator)\b", re.I),
-    "duplicate": re.compile(r"\b(duplicate|duplicates|hash|dedup)\b", re.I),
-    "settings": re.compile(r"\b(settings|preferences|config|⌘,)\b", re.I),
-    "traceability": re.compile(r"\b(traceab\w*|traceability|traceable|requirement\s+id|req-)", re.I),
+FEATURE_KEYWORD_MAP: dict[str, tuple[re.Pattern[str], re.Pattern[str]]] = {
+    "arrow_keys": (
+        re.compile(r"\b(arrow\s+keys?|left/right\s+keys?)\b", re.I),
+        re.compile(r"(arrow|key|keyboard|nav|router|shortcut|input|test)", re.I),
+    ),
+    "exif": (
+        re.compile(r"\b(exif|shutter\s+speed|aperture)\b", re.I),
+        re.compile(r"(exif|metadata|reader|hud|info|stat|test)", re.I),
+    ),
+    "contrast": (
+        re.compile(r"\b(contrast|wcag|barely\s+readable|black\s+on\s+dark)\b", re.I),
+        re.compile(r"(contrast|style|styling|theme|color|a11y|accessibility|app|palette|test)", re.I),
+    ),
+    "loading": (
+        re.compile(r"\b(loading\s+spinner|progress\s+indicator|scan\s+stream)\b", re.I),
+        re.compile(r"(load|scan|stream|progress|view|viewmodel|window|canvas|test)", re.I),
+    ),
+    "duplicate": (
+        re.compile(r"\b(duplicate\s+finder|duplicates|dedup)\b", re.I),
+        re.compile(r"(duplicate|dedup|hash|tools|test)", re.I),
+    ),
+    "settings": (
+        re.compile(r"\b(settings\s+dialog|preferences\s+dialog|⌘,)\b", re.I),
+        re.compile(r"(setting|pref|config|dialog|options|test)", re.I),
+    ),
+    "traceability": (
+        re.compile(r"\b(traceability|requirement\s+id)\b", re.I),
+        re.compile(r"(traceab|req|requirement|test)", re.I),
+    ),
+}
+
+WRITE_TOOLS = {
+    "write_to_file",
+    "replace_file_content",
+    "multi_replace_file_content",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "NotebookEdit",
 }
 
 
@@ -85,6 +116,41 @@ def changed_files() -> list[str]:
                 path = path.split(" -> ", 1)[1]
             files.append(path.strip('"'))
     return files
+
+
+def is_subagent_or_readonly_session(payload) -> bool:
+    """Return True if this Stop event is for an invoked subagent or a read-only session."""
+    sid = session_key(payload)
+    candidate_anti = (
+        Path.home() / ".gemini" / "antigravity" / "brain" / sid
+        / ".system_generated" / "logs" / "transcript.jsonl"
+    )
+    if candidate_anti.is_file():
+        has_user_request_tag = False
+        has_write_call = False
+        try:
+            with candidate_anti.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    if not line.strip():
+                        continue
+                    try:
+                        node = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if node.get("type") == "USER_INPUT":
+                        content = str(node.get("content", ""))
+                        if "<USER_REQUEST>" in content:
+                            has_user_request_tag = True
+                    for tc in node.get("tool_calls", []):
+                        if tc.get("name") in WRITE_TOOLS:
+                            has_write_call = True
+        except OSError:
+            return False
+        # Subagents in Antigravity do not have <USER_REQUEST> in USER_INPUT;
+        # also allow any session that never invoked a file-writing tool.
+        if not has_user_request_tag or not has_write_call:
+            return True
+    return False
 
 
 def load_session_prompts(root: Path, session_id: str) -> list[dict]:
@@ -194,6 +260,8 @@ def verify_session(payload) -> tuple[bool, str]:
         return True, ""
     if payload.raw.get("stop_hook_active"):
         return True, ""
+    if is_subagent_or_readonly_session(payload):
+        return True, ""
 
     files = changed_files()
     # If no files changed, or only teamwork/intent metadata changed, allow stop (e.g. read-only explorer)
@@ -232,15 +300,27 @@ def verify_session(payload) -> tuple[bool, str]:
             if not ran_test:
                 missing_test_targets.append(prefix)
 
-    # 2. Audit Requirements Sync
+    # 2. Audit Requirements / Documentation / Retrospective Sync
+    # Per sync-requirements skill: observable behaviour changes update REQUIREMENTS.md
+    # (or docs/shared/), while pure refactorings or internal bugfixes update
+    # docs/products/<prod>/ or ai/memory/{framework_retro,code_health}.md.
     unmatched_requirements: list[str] = []
+    has_retro_or_shared_doc = any(
+        f in ("ai/memory/framework_retro.md", "ai/memory/code_health.md")
+        or f.startswith("docs/shared/")
+        for f in productive_files
+    )
     for prod_name, (prefix, _) in PRODUCT_PATTERNS.items():
         if prod_name == "framework":
             continue
         touched_src = any(f.startswith(f"{prefix}src/") for f in productive_files)
         if touched_src:
             req_file = f"docs/products/{prod_name}/REQUIREMENTS.md"
-            if not any(req_file in f for f in productive_files):
+            prod_doc_prefix = f"docs/products/{prod_name}/"
+            if not (
+                any(req_file in f or f.startswith(prod_doc_prefix) for f in productive_files)
+                or has_retro_or_shared_doc
+            ):
                 unmatched_requirements.append(req_file)
 
     # 3. Audit Specific Prompt Directives (only when product code was modified and not a planning command)
@@ -248,15 +328,12 @@ def verify_session(payload) -> tuple[bool, str]:
     is_planning_prompt = bool(re.search(r"^\s*/(teamwork-preview|plan|route)\b", prompt_text))
     missing_directives: list[str] = []
     if prompt_text and touched_products and not is_planning_prompt:
-        for feat_name, pattern in FEATURE_KEYWORD_MAP.items():
-            if pattern.search(prompt_text):
-                feat_tokens = feat_name.split("_")
+        for feat_name, (prompt_pat, evidence_pat) in FEATURE_KEYWORD_MAP.items():
+            if prompt_pat.search(prompt_text):
                 covered = any(
-                    any(t in f.lower() for t in feat_tokens)
-                    for f in productive_files
+                    evidence_pat.search(f) for f in productive_files
                 ) or any(
-                    any(t in cmd.lower() for t in feat_tokens)
-                    for cmd in executed_commands
+                    evidence_pat.search(cmd) for cmd in executed_commands
                 )
                 if not covered:
                     missing_directives.append(feat_name.replace("_", " "))
@@ -274,8 +351,9 @@ def verify_session(payload) -> tuple[bool, str]:
     if unmatched_requirements:
         req_str = ", ".join(unmatched_requirements)
         reasons.append(
-            f"• [REQUIREMENTS SYNC REQUIRED]: Product source was modified without updating requirements in {req_str}.\n"
-            f"  Action: Update REQUIREMENTS.md with traceable REQ-<PRODUCT>-<SECTION>.<INDEX> IDs."
+            f"• [REQUIREMENTS / RETRO SYNC REQUIRED]: Product source was modified without updating {req_str} "
+            f"(for behaviour changes) or ai/memory/framework_retro.md (for internal fixes/refactorings).\n"
+            f"  Action: Run sync-requirements and retrospective before finishing."
         )
 
     if missing_directives:

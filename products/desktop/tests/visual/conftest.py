@@ -103,19 +103,16 @@ def assert_screenshot_matches(
 
     baseline_path = BASELINES_DIR / f"{name}.png"
 
-    if os.environ.get("UPDATE_BASELINES"):
+    if os.environ.get("UPDATE_BASELINES") == "1":
         screenshot.save(str(baseline_path))
         pytest.skip(f"Baseline updated: {baseline_path}")
         return
 
     if not baseline_path.exists():
-        # First run — store the baseline automatically
-        screenshot.save(str(baseline_path))
-        pytest.skip(
-            f"Baseline created: {baseline_path}. "
-            "Re-run to compare against it."
+        pytest.fail(
+            f"Missing visual baseline: {baseline_path}. "
+            "Run with UPDATE_BASELINES=1 to generate baselines."
         )
-        return
 
     baseline = Image.open(str(baseline_path))
 

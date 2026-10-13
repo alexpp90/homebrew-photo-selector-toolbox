@@ -6,9 +6,10 @@ Full instructions: `@/AGENTS.md`. Framework: `@/ai/README.md`. Routing: `@/ai/RO
 
 ## Non-negotiable
 
-1. **Identify the product first, and stay inside it.** Four independent products —
+1. **Identify the product first, and stay inside it.** Five independent products —
    Desktop (`products/desktop/`), Android Desktop (`products/android/android-desktop/`),
-   PhotoTok (`products/android/phototok/`), Native macOS Desktop (`products/macos-desktop/`).
+   PhotoTok (`products/android/phototok/`), Native macOS Desktop (`products/macos-desktop/`),
+   and Native Linux Desktop (`products/linux-desktop/`).
    `products/android/core/` affects both Android products. Copying code between products is a
    defect, not reuse.
 

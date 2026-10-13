@@ -27,13 +27,47 @@ class AndroidExifReaderTest {
     private val reader = AndroidExifReader()
 
     @Test
-    fun `supportedMimeTypes includes JPEG and RAWs`() {
+    fun `supportedMimeTypes includes JPEG and RAWs including CR3`() {
         val types = reader.supportedMimeTypes()
         assertTrue(types.contains("image/jpeg"))
         assertTrue(types.contains("image/x-adobe-dng"))
         assertTrue(types.contains("image/x-sony-arw"))
         assertTrue(types.contains("image/x-canon-cr2"))
+        assertTrue(types.contains("image/x-canon-cr3"))
         assertFalse(types.contains("image/png"))
+    }
+
+    @Test
+    fun `readExif with context and file Uri reads companion xmp rating`() = runTest {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val imageFile = tempFolder.newFile("URI_TEST.CR3")
+        imageFile.writeBytes(ByteArray(100))
+        val sidecar = File(tempFolder.root, "URI_TEST.CR3.xmp")
+        sidecar.writeText("<xmp:Rating>4</xmp:Rating>")
+
+        val uri = android.net.Uri.fromFile(imageFile)
+        val exif = reader.readExif(context, uri)
+        assertNotNull(exif)
+        assertEquals(4, exif?.rating)
+    }
+
+    @Test
+    fun `readExif with context and content Uri via ContentResolver stream returns ExifData`() = runTest {
+        val imageFile = tempFolder.newFile("STREAM_TEST.JPG")
+        imageFile.writeBytes(ByteArray(64))
+
+        val resolver = io.mockk.mockk<android.content.ContentResolver>()
+        val context = io.mockk.mockk<android.content.Context>()
+        val uri = android.net.Uri.parse("content://com.photoselector.test/images/1")
+
+        io.mockk.every { context.contentResolver } returns resolver
+        io.mockk.every { resolver.openFileDescriptor(uri, "r") } returns null
+        io.mockk.every { resolver.openInputStream(uri) } answers { imageFile.inputStream() }
+
+        val exif = reader.readExif(context, uri)
+        assertNotNull(exif)
+        assertEquals("Unknown", exif?.lens)
+        assertFalse(exif!!.isFallback)
     }
 
     @Test

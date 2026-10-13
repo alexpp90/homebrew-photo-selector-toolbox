@@ -27,6 +27,7 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
             "image/jpeg",
             "image/x-adobe-dng",
             "image/x-canon-cr2",
+            "image/x-canon-cr3",
             "image/x-nikon-nef",
             "image/x-sony-arw",
             "image/x-fuji-raf",

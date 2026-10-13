@@ -23,8 +23,8 @@ You own the build, package, and CI configuration files for both modules:
 - `products/android/build.gradle.kts` — Root-level Gradle build file
 - `products/android/android-desktop/build.gradle.kts` — App module build file (Android Desktop: dependencies, SDK versions, ProGuard/R8)
 - `products/android/phototok/build.gradle.kts` — PhotoTok module build file (PhotoTok: dependencies, SDK versions, ProGuard/R8)
-- `products/android/settings.gradle.kts` — Gradle settings including both `:android-desktop` and `:phototok` modules
-- `android/gradle.properties` — Gradle JVM, AndroidX, and Kotlin properties
+- `products/android/settings.gradle.kts` — Gradle settings including `:core`, `:android-desktop`, and `:phototok` modules
+- `products/android/gradle.properties` — Gradle JVM, AndroidX, and Kotlin properties
 - `products/android/gradle/` — Gradle wrapper and centralized version catalog (`libs.versions.toml`)
 - `.github/workflows/android.yml` — Consolidated GitHub Actions workflow running tests and building release APKs/AABs for Android solutions
 - `products/android/android-desktop/proguard-rules.pro` — ProGuard/R8 configuration rules for `:android-desktop`

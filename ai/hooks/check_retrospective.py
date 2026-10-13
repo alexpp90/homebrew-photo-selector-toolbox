@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hooklib import bypassed, git, read_payload, stop_allow, stop_block  # noqa: E402
-from verify_intent_delivery import verify_session  # noqa: E402
+from verify_intent_delivery import is_subagent_or_readonly_session, verify_session  # noqa: E402
 
 PRODUCT_PREFIXES = ("products/",)
 REQUIREMENTS_HINT = "REQUIREMENTS.md"
@@ -50,6 +50,8 @@ def main() -> int:
     # Claude Code re-enters Stop after a block; never block twice.
     if payload.raw.get("stop_hook_active"):
         stop_allow(payload)
+    if is_subagent_or_readonly_session(payload):
+        stop_allow(payload)
 
     # 1. Prerequisite: Pre-Delivery Intent & Test Execution Gate
     passed, intent_reason = verify_session(payload)
@@ -65,7 +67,10 @@ def main() -> int:
         stop_allow(payload)
 
     synced_requirements = any(REQUIREMENTS_HINT in f for f in files)
-    wrote_memory = any(f.startswith(MEMORY_PREFIX) for f in files)
+    wrote_memory = any(
+        f.startswith(MEMORY_PREFIX) and f != "ai/memory/intent_ledger.jsonl"
+        for f in files
+    )
     touched_framework = any(f.startswith(FRAMEWORK_PREFIXES) for f in files)
 
     # Retrospective check: must have at least one observable lifecycle outcome
@@ -76,7 +81,7 @@ def main() -> int:
         stop_block(payload, (
             f"Retrospective not run. This session changed product source:\n{sample}{more}\n\n"
             f"but none of its expected outcomes are present — no REQUIREMENTS.md update, no "
-            f"ai/memory/ entry, no framework fix.\n\n"
+            f"ai/memory/ entry (excluding intent_ledger.jsonl), no framework fix.\n\n"
             f"Run the `retrospective` skill (ai/skills/retrospective/SKILL.md) now:\n"
             f"  1. ./scripts/run_tests.sh — and name every ⊘ SKIPPED gate in your summary\n"
             f"  2. sync REQUIREMENTS.md if observable behaviour changed\n"

@@ -59,3 +59,5 @@ products/android/.kotlin/
 # APT GPG private keyring directory
 apt/.gnupg_repo/
 
+# Personal Claude Code settings
+.claude/settings.local.json

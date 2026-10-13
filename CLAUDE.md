@@ -4,6 +4,8 @@ All agent instructions for this repository live in [`AGENTS.md`](AGENTS.md). Rea
 making any changes. Framework documentation: [`ai/README.md`](ai/README.md). Routing:
 [`ai/ROUTING.md`](ai/ROUTING.md).
 
+@AGENTS.md
+
 Key rules (summary — `AGENTS.md` is authoritative):
 
 - **Identify the product first.** Canonical products: Desktop (`products/desktop/src/`, Python),

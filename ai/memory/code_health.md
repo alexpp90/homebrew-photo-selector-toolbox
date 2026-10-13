@@ -258,33 +258,40 @@ Lessons use the standard `ai/memory/` format (Learning/Action).
 **Debt:** The label and description for each `GroupingLevel` are produced by a `when (level)` inside the settings composable, so the enum does not own its own wording. This is the shape that `ScoreMetric` (glyph, label, description, direction) and the new `domain.guidance.SidebarAction` (label, description, meaning) both moved away from, and for the reason recorded in `palette.md` 2026-08-07 as extended: a second mapping of the same concept is invisible to a totality test and drifts from the first. Found by the grep that entry's Action now prescribes — it was the only remaining instance in this product; `ScoreMetricIcon` has exactly one mapping again, and `FilingAction`/`SelectorHint` are already domain-owned.
 **Proposal:** Move `label` and `description` onto `GroupingLevel` as constructor properties and have `SettingsScreen` read them, matching `SidebarAction`. Cheap and mechanical. Worth doing before anything else needs to name a grouping level — the guide is the obvious next caller, and that is exactly how the score glyphs ended up with two vocabularies.
 
-## [OPEN] 2026-10-10 - Local CI Mirror & Test Runner Optimization
+## [DONE] 2026-10-10 - Local CI Mirror & Test Runner Optimization
 **Where:** scripts/run_tests.sh, docs/build/CI_PARITY.md
-**Debt:** Recurring friction detected across 8 sessions (2026-10-06 ('PhotoTok Folder Reload Unscanned Photos & Jump Prompt'), 2026-10-06 ('PhotoTok Filter Mismatch Guidance Hint & One-Tap Remediation'), 2026-10-06 ('PhotoTok RAW+JPEG Prompt Occlusion Fix and Choice Clarification'), 2026-10-06 ('Test Runner Optimization and Headless macOS GUI Test Backgrounding'), 2026-10-06 ('Initial Framework Retrospective Integration'), 2026-10-09 ('macOS Desktop Contrast, Folder Ingestion HUD & Sliding Triplet Focus Alignment'), 2026-10-10 ('Multi-Product v0.5.0 Release Preparation, Legacy Desktop Archival, and CI Parity'), 2026-10-10 ('Comprehensive AI Framework Audit, Remediation & Standardization')). Local test execution blindly runs all products regardless of what changed, introducing multi-minute test latency when working on localized subsystems.
+**Debt:** Recurring friction detected across sessions. Local test execution blindly runs all products regardless of what changed, introducing multi-minute test latency when working on localized subsystems.
 **Proposal:** Maintain path-based change detection in scripts/run_tests.sh matching GitHub Actions path filters, ensuring every CI gate is faithfully mirrored locally. Reference playbook `playbook-ci-parity-and-runner`.
+**Closed 2026-10-13:** Path-based change detection in `scripts/run_tests.sh` now mirrors all four product workflows (`desktop.yml`, `android.yml`, `macos.yml`, `linux.yml`, including `apt/*`), aligns Linux `flake8` flags (`--max-line-length=120 --extend-ignore=E203,W503`), and runs all 5 governance/framework/traceability gates in CI.
 
-## [OPEN] 2026-10-10 - UI Layout Occlusion & Modal Presentation Architecture
+## [DONE] 2026-10-10 - UI Layout Occlusion & Modal Presentation Architecture
 **Where:** products/android/phototok/src/com/phototok/ui/, products/macos-desktop/src/PhotoSelectorApp/
-**Debt:** Recurring friction detected across 5 sessions (2026-10-06 ('PhotoTok Folder Reload Unscanned Photos & Jump Prompt'), 2026-10-06 ('PhotoTok Filter Mismatch Guidance Hint & One-Tap Remediation'), 2026-10-06 ('PhotoTok RAW+JPEG Prompt Occlusion Fix and Choice Clarification'), 2026-10-09 ('macOS Desktop Contrast, Folder Ingestion HUD & Sliding Triplet Focus Alignment'), 2026-10-10 ('Comprehensive AI Framework Audit, Remediation & Standardization')). In-layout notification cards collide with persistent navigation bars or obscure interactive controls, while dark mode palettes risk illegible dark-on-dark text contrast.
+**Debt:** Recurring friction detected across sessions. In-layout notification cards collide with persistent navigation bars or obscure interactive controls, while dark mode palettes risk illegible dark-on-dark text contrast.
 **Proposal:** Migrate multi-choice decision prompts from floating cards to centered, scrim-dimmed Dialog/AlertDialog containers, enforce explicit neutral options, and assert contrast and bounds non-intersection in tests. Reference playbook `playbook-modal-dialogs-and-occlusion`.
+**Closed 2026-10-13:** Modal dialogs use centered scrim-dimmed containers; WCAG 2.1 AA contrast ratios (>= 4.5:1) are enforced and verified by automated unit tests across Desktop (`test_ui_contrast_accessibility.py`), Linux Desktop (`styling.py`), and macOS Desktop.
 
-## [OPEN] 2026-10-10 - Asynchronous Concurrency & Timing Test Standardization
+## [DONE] 2026-10-10 - Asynchronous Concurrency & Timing Test Standardization
 **Where:** products/android/phototok/tests/, products/macos-desktop/tests/PhotoSelectorKitTests/
-**Debt:** Recurring friction detected across 4 sessions (2026-10-07 ('Native macOS Desktop Swift/SwiftUI Application & Culling Overhaul'), 2026-10-09 ('PhotoTok FTUE, Usability & File Safety Improvements'), 2026-10-09 ('macOS Desktop Contrast, Folder Ingestion HUD & Sliding Triplet Focus Alignment'), 2026-10-10 ('Comprehensive AI Framework Audit, Remediation & Standardization')). Asynchronous tests rely on fragile sleep timers, unconfined dispatcher timing assumptions, or lack transactional barriers, causing false test failures under heavy CPU loads.
+**Debt:** Recurring friction detected across sessions. Asynchronous tests rely on fragile sleep timers, unconfined dispatcher timing assumptions, or lack transactional barriers, causing false test failures under heavy CPU loads.
 **Proposal:** Standardize asynchronous test execution using condition polling with SLA budgets rather than fixed sleeps, explicitly mock sequential coroutine launches, and enforce transactional write barriers. Reference playbook `playbook-async-concurrency-testing`.
+**Closed 2026-10-13:** Replaced placeholder/sleep-based tests in `AdversarialTier5HardeningTests.swift` and Desktop `SharpnessTool.delete_async` with deterministic condition barriers and safe UI-thread scheduling.
 
-## [OPEN] 2026-10-10 - Test Isolation & Mock Lifecycle Management
+## [DONE] 2026-10-10 - Test Isolation & Mock Lifecycle Management
 **Where:** products/desktop/tests/unit/gui/, products/android/phototok/tests/
-**Debt:** Recurring friction detected across 4 sessions (2026-10-06 ('Test Runner Optimization and Headless macOS GUI Test Backgrounding'), 2026-10-07 ('macOS Desktop Arrow Navigation, EXIF Extraction & Focus Mode Polish'), 2026-10-07 ('Native macOS Desktop Swift/SwiftUI Application & Culling Overhaul'), 2026-10-09 ('PhotoTok FTUE, Usability & File Safety Improvements')). Tests pollute global module state (sys.modules) or reuse stale mocks during multi-phase state transitions, causing ordering-dependent test failures and unmocked dialog hangs.
+**Debt:** Recurring friction detected across sessions. Tests pollute global module state (sys.modules) or reuse stale mocks during multi-phase state transitions, causing ordering-dependent test failures and unmocked dialog hangs.
 **Proposal:** Enforce strict fixture cleanup, replace whole-module sys.modules mocking with targeted attribute monkeypatching, and configure mock expectations sequentially for multi-step transitions. Reference playbook `playbook-test-isolation-and-mocking`.
+**Closed 2026-10-13:** Eliminated module-level `sys.modules` poisoning in `test_verify_error_paths.py`, isolated `test_validate_framework.py` to temporary directories, and wrapped `ScoreCache` SQLite connections in `contextlib.closing`.
 
-## [OPEN] 2026-10-10 - UI Focus Management & Keyboard Routing Supremacy
+## [DONE] 2026-10-10 - UI Focus Management & Keyboard Routing Supremacy
 **Where:** products/macos-desktop/src/PhotoSelectorApp/, products/desktop/tests/conftest.py
-**Debt:** Recurring friction detected across 3 sessions (2026-10-06 ('Test Runner Optimization and Headless macOS GUI Test Backgrounding'), 2026-10-07 ('macOS Desktop Arrow Navigation, EXIF Extraction & Focus Mode Polish'), 2026-10-10 ('macOS Desktop Keyboard Delivery, One-Over-Two 3-Up, Zoom Hit-Testing & Folder Load')). Native desktop UI controls (SwiftUI buttons, Tkinter windows) hijack arrow keys from viewport containers or steal OS workstation focus during headless test execution.
+**Debt:** Recurring friction detected across sessions. Native desktop UI controls (SwiftUI buttons, Tkinter windows) hijack arrow keys from viewport containers or steal OS workstation focus during headless test execution.
 **Proposal:** Enforce keyboard routing supremacy with .focusable(false) on clickable toolbar controls, route shortcuts via native event monitors (NSEvent), and swizzle Cocoa focus activation in test runners. Reference playbook `playbook-ui-focus-and-key-routing`.
+**Closed 2026-10-13:** Keyboard routing supremacy is enforced across macOS Desktop (`NSEvent` local monitor + `.focusable(false)`) and Linux Desktop (`KeyboardRouter` wired to `CullingWorkspaceViewModel` slot, filmstrip, and sync-lock handlers).
 
-## [OPEN] 2026-10-12 - Filesystem & External Storage Safety Verification
+## [DONE] 2026-10-12 - Filesystem & External Storage Safety Verification
 **Where:** products/macos-desktop/src/PhotoSelectorKit/, products/android/phototok/src/com/phototok/data/
-**Debt:** Recurring friction detected across 2 sessions (2026-10-07 ('Native macOS Desktop Swift/SwiftUI Application & Culling Overhaul'), 2026-10-12 ('Android Desktop Asymmetric System Bar Policy (Preserve Status Bar, Hide Navigation Bar)')). File operations on external media (SD cards, SAF trees) risk race conditions, partial writes, or inadvertent deletion of sibling RAW+JPEG pairs without transactional barriers.
+**Debt:** Recurring friction detected across sessions. File operations on external media (SD cards, SAF trees) risk race conditions, partial writes, or inadvertent deletion of sibling RAW+JPEG pairs without transactional barriers.
 **Proposal:** Establish transactional barriers, confirm sibling pairing rules before dispatching mutations, and verify destructive workflows against rigorous rollback test fixtures. Reference playbook `playbook-storage-safety-and-transactions`.
+**Closed 2026-10-13:** Verified companion/sibling pairing and rollback invariants across macOS Desktop (`AsyncCullingActor`), Linux Desktop (`FileCullingManager`), and Android (`:core` `ExternalStorageDetectorTest` and `MediaStoreReaderTest`).
+
 

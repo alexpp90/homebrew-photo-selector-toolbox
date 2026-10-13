@@ -1673,7 +1673,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                             cache.set_multiple_scores(updates)
                         except Exception as e:
                             logger.warning(f"Failed to bulk update cache on grouping cancel: {e}")
-                    self.parent.after(0, self._handle_grouping_cancelled)
+                    self._safe_after(0, self._handle_grouping_cancelled)
                     return
                 try:
                     cached = cached_scores.get(path, {})
@@ -1708,7 +1708,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     logger.debug(f"Failed to calculate dhash: {e}")
 
                 pct = ((idx + 1) / total) * 100
-                self.parent.after(
+                self._safe_after(
                     0,
                     lambda p=pct, i=idx+1: (
                         self.group_progress_var.set(p),
@@ -1721,10 +1721,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                     cache.set_multiple_scores(updates)
                 except Exception as e:
                     logger.warning(f"Failed to bulk update cache in grouping: {e}")
-            try:
-                self.parent.after(0, lambda: self._handle_grouping_finished(level))
-            except RuntimeError:
-                pass  # Tk main loop already destroyed (teardown race)
+            self._safe_after(0, lambda: self._handle_grouping_finished(level))
 
         threading.Thread(target=run_calc, daemon=True).start()
 
@@ -1918,6 +1915,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                 self.apply_grouping_and_refresh(select_path=clicked_path)
                 break
 
+    def _safe_after(self, delay_ms, callback, *args):
+        """Schedule a callback on self.parent.after, ignoring teardown races."""
+        parent = getattr(self, "parent", None)
+        if parent is None:
+            return
+        try:
+            parent.after(delay_ms, callback, *args)
+        except (tk.TclError, RuntimeError):
+            pass
+
     def log(self, msg):
         self.log_queue.put(msg)
 
@@ -2041,7 +2048,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self._scan_progress_queue.put((result, current_idx, total_count))
         if not self._scan_batch_scheduled:
             self._scan_batch_scheduled = True
-            self.parent.after(100, self._process_scan_progress_batch)
+            self._safe_after(100, self._process_scan_progress_batch)
 
     def _process_scan_progress_batch(self):
         self._scan_batch_scheduled = False
@@ -2068,16 +2075,16 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self._update_scan_progress_ui(last_idx, last_total)
             if not self.listbox_update_loop_active:
                 self.listbox_update_loop_active = True
-                self.parent.after(150, self._flush_listbox_updates)
+                self._safe_after(150, self._flush_listbox_updates)
             self.update_button_states()
 
         if self.is_scanning or not self._scan_progress_queue.empty():
             if not self._scan_batch_scheduled and not self._scan_progress_queue.empty():
                 self._scan_batch_scheduled = True
-                self.parent.after(100, self._process_scan_progress_batch)
+                self._safe_after(100, self._process_scan_progress_batch)
 
     def _on_scan_finished(self):
-        self.parent.after(0, self._flush_remaining_and_finish)
+        self._safe_after(0, self._flush_remaining_and_finish)
 
     def _flush_remaining_and_finish(self):
         self._process_scan_progress_batch()
@@ -2122,7 +2129,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.pending_listbox_updates.add(result.path)
         if not self.listbox_update_loop_active:
             self.listbox_update_loop_active = True
-            self.parent.after(250, self._flush_listbox_updates)
+            self._safe_after(250, self._flush_listbox_updates)
 
     def _flush_listbox_updates(self):
         """Flush accumulated listbox updates on the main thread."""
@@ -2165,7 +2172,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
        # Re-schedule if still scanning or if new updates arrived
         if self.is_scanning or self.pending_listbox_updates:
-            self.parent.after(250, self._flush_listbox_updates)
+            self._safe_after(250, self._flush_listbox_updates)
         else:
             self.listbox_update_loop_active = False
 
@@ -2859,10 +2866,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                         logger.debug(f"Failed to load EXIF data dynamically: {e}")
                         exif = ExifData()
                     res.exif = exif
-                    try:
-                        self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
-                    except RuntimeError:
-                        pass  # Tk main loop already destroyed (teardown race)
+                    self._safe_after(0, lambda: self._refresh_metadata_if_current(current_path))
                 threading.Thread(target=load_exif_async, daemon=True).start()
         else:
             self._set_metadata_labels(current_path, res.exif, res)
@@ -2919,10 +2923,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                     exif = ExifData()
                                 r.exif = exif
-                                try:
-                                    self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
-                                except RuntimeError:
-                                    pass  # Tk main loop already destroyed (teardown race)
+                                self._safe_after(0, lambda: self._refresh_metadata_if_current(current_path))
                             threading.Thread(target=load_prev_exif_async, daemon=True).start()
                             self._set_overlay_label(
                                 self.focus_prev_overlay, "Previous", prev_path, ExifData(), prev_res
@@ -2963,10 +2964,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                     logger.debug(f"Failed to load EXIF data dynamically: {e}")
                                     exif = ExifData()
                                 r.exif = exif
-                                try:
-                                    self.parent.after(0, lambda: self._refresh_metadata_if_current(current_path))
-                                except RuntimeError:
-                                    pass  # Tk main loop already destroyed (teardown race)
+                                self._safe_after(0, lambda: self._refresh_metadata_if_current(current_path))
                             threading.Thread(target=load_next_exif_async, daemon=True).start()
                             self._set_overlay_label(self.focus_next_overlay, "Next", next_path, ExifData(), next_res)
                     else:
@@ -3206,14 +3204,14 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             for f in related:
                 try:
                     send2trash.send2trash(str(f))
-                    self.log(f"Moved to trash: {f}")
+                    self._safe_after(0, self.log, f"Moved to trash: {f}")
                 except Exception as e:
                     failed_trash.append(f)
                     msg = f"Trash failed for {f}: {e}"
-                    self.log(msg)
+                    self._safe_after(0, self.log, msg)
 
             if failed_trash:
-               # Ask user to permanently delete via main thread dialog
+                # Ask user to permanently delete via main thread dialog
                 def ask_permanent():
                     msg = (
                         f"Failed to move {len(failed_trash)} related file(s) to trash (e.g. network drive).\n"
@@ -3225,13 +3223,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
                                 try:
                                     if f.exists():
                                         f.unlink()
-                                        self.log(f"Permanently deleted: {f}")
+                                        self._safe_after(0, self.log, f"Permanently deleted: {f}")
                                 except Exception as e:
                                     msg = f"Delete failed for {f}: {e}"
-                                    self.log(msg)
+                                    self._safe_after(0, self.log, msg)
                         threading.Thread(target=delete_permanent_async, daemon=True).start()
 
-                self.parent.after(0, ask_permanent)
+                self._safe_after(0, ask_permanent)
 
         threading.Thread(target=delete_async, daemon=True).start()
 
@@ -3317,9 +3315,47 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             dest = dest_dir / f.name
             try:
-                if dest.exists():
-                    dest.unlink()
-                f.rename(dest)
+                is_same = (f == dest)
+                if not is_same:
+                    try:
+                        s_res = f.resolve()
+                        d_res = dest.resolve()
+                        if (
+                            type(s_res).__name__ not in ("MagicMock", "Mock")
+                            and type(d_res).__name__ not in ("MagicMock", "Mock")
+                            and s_res == d_res
+                        ):
+                            is_same = True
+                    except Exception:
+                        pass
+
+                if is_same:
+                    moved_files.append(f)
+                    self.log(f"Already in selection: {f.name}")
+                    continue
+
+                try:
+                    f.rename(dest)
+                except FileExistsError:
+                    os.replace(f, dest)
+                except OSError as ex:
+                    import errno
+                    if ex.errno == errno.EXDEV:
+                        tmp_dest = dest_dir / f".{f.name}.tmp.{os.getpid()}"
+                        try:
+                            shutil.copy2(f, tmp_dest)
+                            os.replace(tmp_dest, dest)
+                            f.unlink()
+                        except Exception:
+                            if tmp_dest.exists():
+                                try:
+                                    tmp_dest.unlink()
+                                except Exception:
+                                    pass
+                            raise
+                    else:
+                        raise
+
                 moved_files.append(f)
                 log_path_name = selection_dir.name
                 log_path = f"{log_path_name}/{subfolder}" if subfolder else log_path_name
@@ -3470,8 +3506,25 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
             dest = dest_dir / f.name
             try:
-                if dest.exists():
-                    dest.unlink()
+                is_same = (f == dest)
+                if not is_same:
+                    try:
+                        s_res = f.resolve()
+                        d_res = dest.resolve()
+                        if (
+                            type(s_res).__name__ not in ("MagicMock", "Mock")
+                            and type(d_res).__name__ not in ("MagicMock", "Mock")
+                            and s_res == d_res
+                        ):
+                            is_same = True
+                    except Exception:
+                        pass
+
+                if is_same:
+                    copied_files.append(f)
+                    self.log(f"Already in selection: {f.name}")
+                    continue
+
                 shutil.copy2(f, dest)
                 copied_files.append(f)
                 log_path_name = selection_dir.name

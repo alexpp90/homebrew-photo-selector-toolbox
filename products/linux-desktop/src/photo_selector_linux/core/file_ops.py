@@ -10,11 +10,13 @@ Adheres to:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 import os
 import shutil
 from pathlib import Path
 from typing import List, Optional, Tuple
+from urllib.parse import quote, unquote
 
 from photo_selector_linux.core.models import (
     CandidatePhoto,
@@ -48,8 +50,115 @@ class InsufficientDiskSpaceError(FileCullingError):
 class FileCullingManager:
     """Manages transactional file relocations, copy operations, trash, and undos."""
 
-    def __init__(self, default_selection_folder: str = "Selection"):
+    def __init__(self, default_selection_folder: str = "Selection", trash_dir: Optional[Path] = None):
         self.default_selection_folder = default_selection_folder
+        self._trash_dir = trash_dir
+
+    def _get_trash_dir(self) -> Path:
+        """Return the FreeDesktop.org Trash base directory ($XDG_DATA_HOME/Trash)."""
+        if self._trash_dir is not None:
+            return self._trash_dir
+        xdg_data = os.environ.get("XDG_DATA_HOME")
+        if xdg_data:
+            return Path(xdg_data) / "Trash"
+        return Path.home() / ".local" / "share" / "Trash"
+
+    def _trash_file_freedesktop(self, src: Path) -> Path:
+        """Relocate a file into the FreeDesktop.org Trash specification layout (files/ + info/)."""
+        trash_base = self._get_trash_dir()
+        files_dir = trash_base / "files"
+        info_dir = trash_base / "info"
+        files_dir.mkdir(parents=True, exist_ok=True)
+        info_dir.mkdir(parents=True, exist_ok=True)
+
+        src_resolved = src.resolve()
+        candidate_name = src.name
+        counter = 1
+        while (files_dir / candidate_name).exists() or (info_dir / f"{candidate_name}.trashinfo").exists():
+            counter += 1
+            candidate_name = f"{src.stem}.{counter}{src.suffix}"
+
+        dst_file = files_dir / candidate_name
+        info_file = info_dir / f"{candidate_name}.trashinfo"
+        deletion_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        encoded_path = quote(str(src_resolved), safe="/")
+        info_content = f"[Trash Info]\nPath={encoded_path}\nDeletionDate={deletion_date}\n"
+        info_file.write_text(info_content, encoding="utf-8")
+
+        try:
+            if src_resolved.parent.stat().st_dev == files_dir.stat().st_dev:
+                os.replace(src_resolved, dst_file)
+            else:
+                shutil.copy2(src_resolved, dst_file)
+                src_resolved.unlink()
+        except Exception:
+            if info_file.exists():
+                try:
+                    info_file.unlink()
+                except Exception:
+                    pass
+            raise
+
+        return dst_file
+
+    def _find_trashed_file(self, original_src: Path) -> Optional[Path]:
+        """Locate a trashed file in FreeDesktop.org Trash matching original_src."""
+        trash_base = self._get_trash_dir()
+        files_dir = trash_base / "files"
+        info_dir = trash_base / "info"
+        if not files_dir.is_dir():
+            return None
+
+        target_resolved = str(original_src.resolve())
+        if info_dir.is_dir():
+            matches: List[Tuple[float, Path]] = []
+            for info_file in info_dir.glob("*.trashinfo"):
+                try:
+                    raw = info_file.read_text(encoding="utf-8", errors="replace")
+                    for line in raw.splitlines():
+                        if line.startswith("Path="):
+                            recorded_path = unquote(line.split("=", 1)[1].strip())
+                            if (
+                                recorded_path == target_resolved
+                                or Path(recorded_path).resolve() == Path(target_resolved)
+                            ):
+                                trashed_name = info_file.name[:-len(".trashinfo")]
+                                payload = files_dir / trashed_name
+                                if payload.exists():
+                                    matches.append((info_file.stat().st_mtime, payload))
+                except Exception:
+                    continue
+            if matches:
+                matches.sort(key=lambda item: item[0], reverse=True)
+                return matches[0][1]
+
+        direct = files_dir / original_src.name
+        if direct.exists():
+            return direct
+        return None
+
+    def _restore_from_trash(self, src: Path, dst: Path) -> None:
+        """Restore a single file from FreeDesktop.org Trash back to src and remove its .trashinfo."""
+        trash_file: Optional[Path] = None
+        if not str(dst).startswith("trash://") and dst.exists():
+            trash_file = dst
+        else:
+            trash_file = self._find_trashed_file(src)
+
+        if trash_file is not None and trash_file.exists():
+            src.parent.mkdir(parents=True, exist_ok=True)
+            if src.parent.stat().st_dev == trash_file.stat().st_dev:
+                os.replace(trash_file, src)
+            else:
+                shutil.copy2(trash_file, src)
+                trash_file.unlink()
+
+            info_file = trash_file.parent.parent / "info" / f"{trash_file.name}.trashinfo"
+            if info_file.exists():
+                try:
+                    info_file.unlink()
+                except Exception:
+                    pass
 
     def _get_selection_dir(self, root_dir: Path, custom_folder: Optional[str] = None) -> Path:
         folder_name = custom_folder or self.default_selection_folder
@@ -263,19 +372,25 @@ class FileCullingManager:
         targets = candidate.all_paths
         trashed_paths: List[Tuple[Path, Path]] = []
 
-        for src in targets:
-            if not src.exists():
-                continue
-            if _HAVE_GIO:
-                try:
+        try:
+            for src in targets:
+                if not src.exists():
+                    continue
+                if _HAVE_GIO and self._trash_dir is None and "XDG_DATA_HOME" not in os.environ:
                     gfile = Gio.File.new_for_path(str(src.resolve()))
                     gfile.trash(None)
-                    trashed_paths.append((src, Path(f"trash://{src.name}")))
-                except Exception as e:
-                    raise FileCullingError(f"FreeDesktop trash failed for {src.name}: {e}") from e
-            else:
-                # Fallback / headless mock simulation
-                trashed_paths.append((src, Path(f"trash://{src.name}")))
+                    located = self._find_trashed_file(src)
+                    trashed_paths.append((src, located if located is not None else Path(f"trash://{src.name}")))
+                else:
+                    dst_trash = self._trash_file_freedesktop(src)
+                    trashed_paths.append((src, dst_trash))
+        except Exception as e:
+            for orig_src, trash_dst in reversed(trashed_paths):
+                try:
+                    self._restore_from_trash(orig_src, trash_dst)
+                except Exception:
+                    pass
+            raise FileCullingError(f"FreeDesktop trash failed, rolled back: {e}") from e
 
         candidate.status = PhotoStatus.TRASHED
         return CullingRecord(
@@ -322,6 +437,13 @@ class FileCullingManager:
             return True
 
         elif record.action_type == CullingActionType.TRASH:
+            # === Transactional Trash Undo (R-LINUX-CULL-07) ===
+            # Restore trashed primary image and all companions from FreeDesktop Trash back to original paths
+            for src, dst in record.affected_paths:
+                try:
+                    self._restore_from_trash(src, dst)
+                except Exception as e:
+                    raise FileCullingError(f"Failed to restore trashed file {src.name} during undo: {e}") from e
             if candidate:
                 candidate.status = record.previous_status
             return True

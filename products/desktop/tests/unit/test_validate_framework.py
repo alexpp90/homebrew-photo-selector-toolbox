@@ -57,36 +57,71 @@ class TestValidateFramework(unittest.TestCase):
 
     def test_detects_unowned_product(self):
         """Validator must fail when an untracked product directory with source is added."""
-        with tempfile.TemporaryDirectory(dir=str(REPO_ROOT / "products")) as tmp_dir:
-            tmp_path = Path(tmp_dir)
-            (tmp_path / "src").mkdir(parents=True, exist_ok=True)
-            (tmp_path / "src" / "main.py").write_text("print('rogue product code')\n", encoding="utf-8")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_repo = Path(tmp_dir)
+            rogue_src = tmp_repo / "products" / "rogue-product" / "src"
+            rogue_src.mkdir(parents=True, exist_ok=True)
+            (rogue_src / "main.py").write_text("print('rogue product code')\n", encoding="utf-8")
 
-            proc = subprocess.run(
-                [sys.executable, str(VALIDATE_SCRIPT)],
-                cwd=str(REPO_ROOT),
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(proc.returncode, 1)
-            self.assertIn("unowned product directory discovered", proc.stderr)
+            sys.path.insert(0, str(VALIDATE_SCRIPT.parent))
+            import validate_framework  # type: ignore
+
+            old_repo = validate_framework.REPO
+            old_active = validate_framework.ACTIVE_PRODUCTS
+            old_shared = validate_framework.SHARED_MODULES
+            old_routing = validate_framework.ROUTING
+            try:
+                validate_framework.REPO = tmp_repo
+                validate_framework.ACTIVE_PRODUCTS = {}
+                validate_framework.SHARED_MODULES = {}
+                validate_framework.ROUTING = tmp_repo / "ai" / "ROUTING.md"
+                validate_framework.errors.clear()
+                validate_framework.check_unowned_products(set())
+                self.assertTrue(
+                    any("unowned product directory discovered" in e for e in validate_framework.errors),
+                    f"Expected unowned product error, got {validate_framework.errors}",
+                )
+            finally:
+                validate_framework.REPO = old_repo
+                validate_framework.ACTIVE_PRODUCTS = old_active
+                validate_framework.SHARED_MODULES = old_shared
+                validate_framework.ROUTING = old_routing
+                validate_framework.errors.clear()
 
     def test_detects_boundary_leak_import(self):
         """Validator must fail if a cross-product import is introduced into product source."""
-        test_file = REPO_ROOT / "products" / "desktop" / "src" / "photo_selector_toolbox" / "leak_test_temp.py"
-        try:
-            test_file.write_text("import photo_selector_linux\n", encoding="utf-8")
-            proc = subprocess.run(
-                [sys.executable, str(VALIDATE_SCRIPT)],
-                cwd=str(REPO_ROOT),
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(proc.returncode, 1)
-            self.assertIn("product boundary leak — imports Linux Desktop code", proc.stderr)
-        finally:
-            if test_file.exists():
-                test_file.unlink()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_repo = Path(tmp_dir)
+            desktop_src = tmp_repo / "products" / "desktop" / "src" / "photo_selector_toolbox"
+            desktop_src.mkdir(parents=True, exist_ok=True)
+            (desktop_src / "leak_test_temp.py").write_text("import photo_selector_linux\n", encoding="utf-8")
+
+            sys.path.insert(0, str(VALIDATE_SCRIPT.parent))
+            import validate_framework  # type: ignore
+
+            old_repo = validate_framework.REPO
+            old_active = validate_framework.ACTIVE_PRODUCTS
+            old_forbidden = validate_framework.FORBIDDEN_PRODUCT_IMPORTS
+            try:
+                validate_framework.REPO = tmp_repo
+                validate_framework.ACTIVE_PRODUCTS = {}
+                validate_framework.FORBIDDEN_PRODUCT_IMPORTS = {
+                    "desktop": {
+                        "src": tmp_repo / "products" / "desktop" / "src",
+                        "patterns": old_forbidden["desktop"]["patterns"],
+                    }
+                }
+                validate_framework.errors.clear()
+                validate_framework.check_product_boundary_leaks()
+                self.assertTrue(
+                    any("product boundary leak — imports Linux Desktop code" in e for e in validate_framework.errors),
+                    f"Expected boundary leak error, got {validate_framework.errors}",
+                )
+            finally:
+                validate_framework.REPO = old_repo
+                validate_framework.ACTIVE_PRODUCTS = old_active
+                validate_framework.FORBIDDEN_PRODUCT_IMPORTS = old_forbidden
+                validate_framework.errors.clear()
 
     def test_detects_copy_mode_drift(self):
         """In copy mode, validator must fail if a mirrored file diverges from canonical source."""
@@ -263,64 +298,68 @@ class TestValidateFramework(unittest.TestCase):
                 sync_framework.SYNC_MODE_FILE = old_sync_mode
 
     def test_copy_mode_subprocess_consecutive_runs(self):
-        """sync_framework.py --copy CLI must be idempotent across consecutive runs."""
-        sys.path.insert(0, str(SYNC_SCRIPT.parent))
-        import sync_framework  # type: ignore
-        initial_mode = sync_framework.get_current_sync_mode()
+        """sync_framework.py --copy CLI must be idempotent across consecutive runs in an isolated repo."""
+        import shutil
+        import stat
 
-        try:
-            # 1. First invocation: enter copy mode
-            proc1 = subprocess.run(
-                [sys.executable, str(SYNC_SCRIPT), "--copy"],
-                cwd=str(REPO_ROOT),
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(
-                proc1.returncode,
-                0,
-                f"Initial sync_framework.py --copy failed:\nSTDOUT:\n{proc1.stdout}\nSTDERR:\n{proc1.stderr}",
-            )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_repo = Path(tmp_dir)
+            shutil.copytree(REPO_ROOT / "ai", tmp_repo / "ai")
+            tmp_sync_script = tmp_repo / "ai" / "skills" / "sync-framework" / "scripts" / "sync_framework.py"
 
-            # 2. Second consecutive invocation: must not crash with PermissionError
-            proc2 = subprocess.run(
-                [sys.executable, str(SYNC_SCRIPT), "--copy"],
-                cwd=str(REPO_ROOT),
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(
-                proc2.returncode,
-                0,
-                f"Consecutive sync_framework.py --copy failed:\nSTDOUT:\n{proc2.stdout}\nSTDERR:\n{proc2.stderr}",
-            )
-            self.assertNotIn("PermissionError", proc2.stderr)
+            try:
+                # 1. First invocation: enter copy mode
+                proc1 = subprocess.run(
+                    [sys.executable, str(tmp_sync_script), "--copy"],
+                    cwd=str(tmp_repo),
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    proc1.returncode,
+                    0,
+                    f"Initial sync_framework.py --copy failed:\nSTDOUT:\n{proc1.stdout}\nSTDERR:\n{proc1.stderr}",
+                )
 
-            # 3. Verify sync_framework.py --check passes in copy mode
-            proc_check = subprocess.run(
-                [sys.executable, str(SYNC_SCRIPT), "--check"],
-                cwd=str(REPO_ROOT),
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(
-                proc_check.returncode,
-                0,
-                f"sync_framework.py --check failed in copy mode:\n{proc_check.stderr}",
-            )
-        finally:
-            # Always restore repository to its initial sync mode
-            restore_proc = subprocess.run(
-                [sys.executable, str(SYNC_SCRIPT), f"--mode={initial_mode}"],
-                cwd=str(REPO_ROOT),
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(
-                restore_proc.returncode,
-                0,
-                f"Failed to restore sync mode to {initial_mode}:\n{restore_proc.stderr}",
-            )
+                # 2. Second consecutive invocation: must not crash with PermissionError
+                proc2 = subprocess.run(
+                    [sys.executable, str(tmp_sync_script), "--copy"],
+                    cwd=str(tmp_repo),
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    proc2.returncode,
+                    0,
+                    f"Consecutive sync_framework.py --copy failed:\nSTDOUT:\n{proc2.stdout}\nSTDERR:\n{proc2.stderr}",
+                )
+                self.assertNotIn("PermissionError", proc2.stderr)
+
+                # 3. Verify sync_framework.py --check passes in copy mode
+                proc_check = subprocess.run(
+                    [sys.executable, str(tmp_sync_script), "--check"],
+                    cwd=str(tmp_repo),
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    proc_check.returncode,
+                    0,
+                    f"sync_framework.py --check failed in copy mode:\n{proc_check.stderr}",
+                )
+            finally:
+                # Restore write permissions inside tmp_repo so TemporaryDirectory cleanup succeeds
+                for root, dirs, files in os.walk(tmp_repo):
+                    for d in dirs:
+                        try:
+                            os.chmod(Path(root) / d, stat.S_IRWXU)
+                        except OSError:
+                            pass
+                    for f in files:
+                        try:
+                            os.chmod(Path(root) / f, stat.S_IRUSR | stat.S_IWUSR)
+                        except OSError:
+                            pass
 
     def test_playbooks_pass_on_head(self):
         """All existing playbooks in ai/skills/ must pass check_playbook_schema cleanly."""

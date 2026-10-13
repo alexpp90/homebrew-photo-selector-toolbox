@@ -39,6 +39,7 @@ public actor ThumbnailCache {
     public static let defaultCountLimit: Int = 300
 
     private let cache = NSCache<NSString, CGImageWrapper>()
+    private var trackedKeys = Set<String>()
 
     public init(
         memoryLimitBytes: Int? = nil,
@@ -57,6 +58,11 @@ public actor ThumbnailCache {
         self.cache.countLimit = countLimit
     }
 
+    /// Number of live cached images currently retained by the underlying NSCache.
+    public var count: Int {
+        trackedKeys.filter { cache.object(forKey: $0 as NSString) != nil }.count
+    }
+
     /// Retrieves a cached image if available.
     public func image(for key: ThumbnailCacheKey) -> CGImage? {
         return cache.object(forKey: key.keyString as NSString)?.image
@@ -66,25 +72,29 @@ public actor ThumbnailCache {
     public func setImage(_ image: CGImage, for key: ThumbnailCacheKey) {
         let cost = image.bytesPerRow * image.height
         cache.setObject(CGImageWrapper(image), forKey: key.keyString as NSString, cost: cost)
+        trackedKeys.insert(key.keyString)
     }
 
     /// Removes a specific cached representation.
     public func removeImage(for key: ThumbnailCacheKey) {
         cache.removeObject(forKey: key.keyString as NSString)
+        trackedKeys.remove(key.keyString)
     }
 
     /// Removes all cached tiers for a given photo URL.
     public func removeImages(for url: URL) {
-        let standardSizes = [384, 1024, 1536, 2048]
+        let standardSizes = [320, 384, 1024, 1536, 2048]
         for size in standardSizes {
             let key = ThumbnailCacheKey(url: url, maxPixelSize: size)
             cache.removeObject(forKey: key.keyString as NSString)
+            trackedKeys.remove(key.keyString)
         }
     }
 
     /// Flushes the entire cache.
     public func removeAll() {
         cache.removeAllObjects()
+        trackedKeys.removeAll()
     }
 
     /// Dynamically sets the total cache memory limit in megabytes.

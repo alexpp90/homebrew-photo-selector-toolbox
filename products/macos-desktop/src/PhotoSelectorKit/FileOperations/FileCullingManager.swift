@@ -123,6 +123,7 @@ public final class FileCullingManager: @unchecked Sendable {
 
         let targets = findCompanionFiles(for: photoURL)
         var movedURLs: [URL] = []
+        var movedPairs: [(source: URL, destination: URL, backup: URL?)] = []
 
         for target in targets {
             guard fileManager.fileExists(atPath: target.path) else { continue }
@@ -140,20 +141,47 @@ public final class FileCullingManager: @unchecked Sendable {
                 continue
             }
 
-            // Overwrite existing file at destination if present (collision between different files)
+            // Stage existing file at destination to a temporary backup rather than deleting before move
+            var backupURL: URL? = nil
             if fileManager.fileExists(atPath: destination.path) {
-                try? fileManager.removeItem(at: destination)
+                let candidateBackup = selectionDir.appendingPathComponent(".\(destination.lastPathComponent).bak.\(UUID().uuidString)")
+                try? fileManager.moveItem(at: destination, to: candidateBackup)
+                if fileManager.fileExists(atPath: candidateBackup.path) {
+                    backupURL = candidateBackup
+                } else {
+                    try? fileManager.removeItem(at: destination)
+                }
             }
 
             do {
                 try fileManager.moveItem(at: target, to: destination)
                 movedURLs.append(destination)
+                movedPairs.append((source: target, destination: destination, backup: backupURL))
             } catch {
+                // Restore current backup if present
+                if let bak = backupURL, fileManager.fileExists(atPath: bak.path) {
+                    try? fileManager.moveItem(at: bak, to: destination)
+                }
+                // Roll back all previously moved companion files in this transaction
+                for pair in movedPairs.reversed() {
+                    if fileManager.fileExists(atPath: pair.destination.path) {
+                        try? fileManager.moveItem(at: pair.destination, to: pair.source)
+                    }
+                    if let bak = pair.backup, fileManager.fileExists(atPath: bak.path) {
+                        try? fileManager.moveItem(at: bak, to: pair.destination)
+                    }
+                }
                 throw FileCullingError.moveFailed(
                     source: target,
                     destination: destination,
                     reason: error.localizedDescription
                 )
+            }
+        }
+
+        for pair in movedPairs {
+            if let bak = pair.backup {
+                try? fileManager.removeItem(at: bak)
             }
         }
 
@@ -188,6 +216,7 @@ public final class FileCullingManager: @unchecked Sendable {
 
         let targets = findCompanionFiles(for: photoURL)
         var copiedURLs: [URL] = []
+        var copiedEntries: [(destination: URL, backup: URL?)] = []
 
         for target in targets {
             guard fileManager.fileExists(atPath: target.path) else { continue }
@@ -205,20 +234,48 @@ public final class FileCullingManager: @unchecked Sendable {
                 continue
             }
 
-            // Overwrite existing file at destination if present (collision between different files)
+            // Stage existing file at destination to a temporary backup before copy
+            var backupURL: URL? = nil
             if fileManager.fileExists(atPath: destination.path) {
-                try? fileManager.removeItem(at: destination)
+                let candidateBackup = selectionDir.appendingPathComponent(".\(destination.lastPathComponent).bak.\(UUID().uuidString)")
+                try? fileManager.moveItem(at: destination, to: candidateBackup)
+                if fileManager.fileExists(atPath: candidateBackup.path) {
+                    backupURL = candidateBackup
+                } else {
+                    try? fileManager.removeItem(at: destination)
+                }
             }
 
             do {
                 try fileManager.copyItem(at: target, to: destination)
                 copiedURLs.append(destination)
+                copiedEntries.append((destination: destination, backup: backupURL))
             } catch {
+                if fileManager.fileExists(atPath: destination.path) {
+                    try? fileManager.removeItem(at: destination)
+                }
+                if let bak = backupURL, fileManager.fileExists(atPath: bak.path) {
+                    try? fileManager.moveItem(at: bak, to: destination)
+                }
+                for entry in copiedEntries.reversed() {
+                    if fileManager.fileExists(atPath: entry.destination.path) {
+                        try? fileManager.removeItem(at: entry.destination)
+                    }
+                    if let bak = entry.backup, fileManager.fileExists(atPath: bak.path) {
+                        try? fileManager.moveItem(at: bak, to: entry.destination)
+                    }
+                }
                 throw FileCullingError.copyFailed(
                     source: target,
                     destination: destination,
                     reason: error.localizedDescription
                 )
+            }
+        }
+
+        for entry in copiedEntries {
+            if let bak = entry.backup {
+                try? fileManager.removeItem(at: bak)
             }
         }
 

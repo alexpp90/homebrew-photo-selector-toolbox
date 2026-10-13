@@ -35,7 +35,7 @@ struct E2EIntegrationTests {
         }
     }
 
-    @Test("Feature 3 & 4: R2 Package Manifest and Uniform Product Shape")
+    @Test("REQ-MAC-BREW.01, REQ-MAC-BREW.02: Feature 3 & 4: R2 Package Manifest and Uniform Product Shape")
     func testFeature3And4_PackageManifestAndProductShape() {
         // Verify directory layout of products/macos-desktop/
         var dir = URL(fileURLWithPath: #filePath)
@@ -285,7 +285,7 @@ struct E2EIntegrationTests {
         #expect(vm.photos[0].status == .selected)
     }
 
-    @Test("REQ-MAC-UI.01, REQ-MAC-UI.02: Feature 15: R5 Decluttered Workspace keeps culling interface clean")
+    @Test("REQ-MAC-UI.01, REQ-MAC-UI.02, REQ-MAC-UI.03, REQ-MAC-LAYOUT.05, REQ-MAC-LAYOUT.06: Feature 15: R5 Decluttered Workspace keeps culling interface clean")
     @MainActor
     func testFeature15_DeclutteredWorkspace() {
         let vm = CullingWorkspaceViewModel()

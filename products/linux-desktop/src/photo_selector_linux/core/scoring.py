@@ -10,6 +10,8 @@ Adheres to:
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 import threading
 from typing import Any, Dict, Optional, Tuple
 import numpy as np
@@ -235,16 +237,48 @@ def evaluate_exposure_clipping(
     }
 
 
+def _load_image_array(path_or_image: Any) -> Optional[np.ndarray]:
+    """Load an image file path into an RGB uint8 NumPy array, or return ndarray directly."""
+    if isinstance(path_or_image, np.ndarray):
+        return path_or_image
+    if isinstance(path_or_image, (str, os.PathLike)):
+        p = Path(path_or_image)
+        if not p.is_file():
+            return None
+        try:
+            from PIL import Image
+            with Image.open(p) as img:
+                rgb = img.convert("RGB")
+                w, h = rgb.size
+                if w < 10 or h < 10:
+                    rgb = rgb.resize((max(16, w), max(16, h)))
+                return np.asarray(rgb, dtype=np.uint8)
+        except Exception:
+            return None
+    return None
+
+
 def compute_quality_scores(
-    image: np.ndarray,
+    image: Any,
     crop_to_center: bool = True,
+    sharp_threshold: float = 70.0,
+    blurry_threshold: float = 35.0,
 ) -> Optional[QualityScores]:
     """Evaluate both focus sharpness and exposure clipping metrics into a typed QualityScores object."""
-    focus = evaluate_focus_score(image, crop_to_center=crop_to_center)
+    arr = _load_image_array(image)
+    if arr is None:
+        return None
+
+    focus = evaluate_focus_score(arr, crop_to_center=crop_to_center)
     if focus is None:
         return None
 
-    clipping = evaluate_exposure_clipping(image)
+    clipping = evaluate_exposure_clipping(arr)
+    cat = SharpnessCategory.from_score(
+        focus["score"],
+        blurry_threshold=blurry_threshold,
+        sharp_threshold=sharp_threshold,
+    )
 
     return QualityScores(
         sharpness=focus["score"],
@@ -252,4 +286,5 @@ def compute_quality_scores(
         highlight_clipping=clipping["highlight_clipping"],
         shadow_clipping=clipping["shadow_clipping"],
         raw_variance=focus["raw_variance"],
+        category_override=cat,
     )

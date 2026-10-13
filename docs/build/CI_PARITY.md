@@ -43,11 +43,11 @@ The rule that prevents it:
 | `linux-desktop test` | `linux.yml:test` | ✅ everywhere | Headless unit tests covering metadata, scoring, and file transactions |
 | `debian packaging & apt repo` | `linux.yml:package` | ⚠️ Linux / `dpkg-deb` only | Verifies `.deb` package creation and APT metadata generation |
 | PyInstaller build, release, Play/Firebase publish | `desktop.yml:build`+, `android.yml:build`+, `macos.yml:build` | ❌ credentials-bound | Only runs on pushes to `main` / `v*` tags. Not reproducible locally by design. |
-| `sync_framework.py --check` | — (local CI mirror) | ✅ everywhere | Toolchain synchronization: verifies Cursor, Windsurf, Copilot, Gemini settings, and mirrors match canonical definitions in `ai/` with zero drift. |
-| `validate_framework.py` | — (local CI mirror) | ✅ everywhere | Agent-framework integrity: naming, registration, roster, toolchain parity, unowned product detection, product boundary leaks, and paths referenced by instructions. |
-| `gen_gemini_settings.py --check` | — (local CI mirror) | ✅ everywhere | Fails when `.gemini/settings.json` has drifted from `ai/agents/*.md`. Fix by regenerating, never by hand-editing. |
-| `verify_requirements_traceability.py --check --strict` | — (local CI mirror) | ✅ everywhere | Validates bidirectional requirement-to-test traceability: ensures requirement IDs exist in specs, rejects orphan test references, and strictly isolates multi-product test suite mappings. |
-| `check_readme_parity.py --check` | — (local CI mirror) | ✅ everywhere | Enforces root `README.md` ecosystem completeness, canonical product ordering (PhotoTok -> Android Desktop -> macOS Desktop -> Linux Desktop -> Desktop), asset integrity, and removal of deprecated terms. |
+| `sync_framework.py --check` | `desktop.yml:framework-governance` | ✅ everywhere | Toolchain synchronization: verifies Cursor, Windsurf, Copilot, Gemini settings, and mirrors match canonical definitions in `ai/` with zero drift. |
+| `validate_framework.py` | `desktop.yml:framework-governance` | ✅ everywhere | Agent-framework integrity: naming, registration, roster, toolchain parity, unowned product detection, product boundary leaks, and paths referenced by instructions. |
+| `gen_gemini_settings.py --check` | `desktop.yml:framework-governance` | ✅ everywhere | Fails when `.gemini/settings.json` has drifted from `ai/agents/*.md`. Fix by regenerating, never by hand-editing. |
+| `verify_requirements_traceability.py --check --strict` | `desktop.yml:framework-governance` | ✅ everywhere | Validates bidirectional requirement-to-test traceability: ensures requirement IDs exist in specs, rejects orphan test references, and strictly isolates multi-product test suite mappings. |
+| `check_readme_parity.py --check` | `desktop.yml:framework-governance` | ✅ everywhere | Enforces root `README.md` ecosystem completeness, canonical product ordering (PhotoTok -> Android Desktop -> macOS Desktop -> Linux Desktop -> Desktop), asset integrity, and removal of deprecated terms. |
 
 ---
 
@@ -227,8 +227,8 @@ these four rules removes almost all of that class:
    (which does not exist; the real matcher is `hasTestTag`) survive review and
    reach CI.
 
-Rules 1–3 are also recorded in `.Jules/palette.md`; rule 4 in
-`.Jules/code_health.md`.
+Rules 1–3 are also recorded in `ai/memory/palette.md`; rule 4 in
+`ai/memory/code_health.md`.
 
 ---
 

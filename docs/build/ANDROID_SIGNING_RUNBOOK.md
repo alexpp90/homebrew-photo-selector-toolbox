@@ -12,6 +12,8 @@ Legend of the four places you'll work:
 - ▶️ **Play Console** — https://play.google.com/console
 - 🐙 **GitHub** — your repo → Settings
 
+> **Architecture Update (2026):** Both `:android-desktop` and `:phototok` now operate 100% locally via the Android Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`) with zero runtime permissions. Steps below referencing Google Drive API and OAuth consent screens are preserved for historical reference only and are no longer required.
+
 ---
 
 ## Phase 0 — Gather what you'll need  💻 / ▶️

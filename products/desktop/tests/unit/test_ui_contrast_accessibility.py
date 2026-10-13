@@ -265,6 +265,12 @@ class TestThemeColorsAccessibility:
         cr_disabled = contrast_ratio(colors.bg_dark, colors.fg_muted)
         assert cr_disabled >= 4.5, f"TButton disabled contrast {cr_disabled:.2f}:1 fails WCAG AA"
 
+        # Primary button resting and hover against #FFFFFF
+        cr_primary = contrast_ratio(colors.accent_blue, "#FFFFFF")
+        assert cr_primary >= 4.5, f"Primary.TButton resting contrast {cr_primary:.2f}:1 fails WCAG AA"
+        cr_primary_hover = contrast_ratio(colors.accent_hover, "#FFFFFF")
+        assert cr_primary_hover >= 4.5, f"Primary.TButton hover contrast {cr_primary_hover:.2f}:1 fails WCAG AA"
+
     def test_checkbutton_and_radiobutton_contrast(self):
         """[REQ-DESK-THEME.01] Checkbutton and Radiobutton text contrast."""
         from photo_selector_toolbox.gui.app import ThemeColors
@@ -439,6 +445,13 @@ class TestInteractiveTtkThemeStyles:
         bg_btn = style.lookup("TButton", "background") or "#27272A"
         fg_btn = style.lookup("TButton", "foreground") or "#FAFAFA"
         assert contrast_ratio(bg_btn, fg_btn) >= 4.5
+
+        # Audit Primary.TButton
+        bg_pbtn = style.lookup("Primary.TButton", "background") or "#4F46E5"
+        fg_pbtn = style.lookup("Primary.TButton", "foreground") or "#FFFFFF"
+        assert contrast_ratio(bg_pbtn, fg_pbtn) >= 4.5, (
+            f"Primary.TButton contrast {contrast_ratio(bg_pbtn, fg_pbtn):.2f}:1 fails WCAG AA"
+        )
 
         # Audit Entry field
         bg_entry = style.lookup("TEntry", "fieldbackground") or "#27272A"

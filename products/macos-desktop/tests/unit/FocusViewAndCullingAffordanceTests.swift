@@ -5,7 +5,7 @@ import Foundation
 @Suite("Focus View & Culling Affordance Unit Tests")
 struct FocusViewAndCullingAffordanceTests {
 
-    @Test("REQ-MAC-THEME.01, REQ-MAC-LAYOUT.01: Culling Workspace View Model: Culling counters and undo availability affordances")
+    @Test("REQ-MAC-THEME.01, REQ-MAC-THEME.02, REQ-MAC-THEME.03, REQ-MAC-LAYOUT.01: Culling Workspace View Model: Culling counters and undo availability affordances")
     @MainActor
     func testCullingCountersAndAffordances() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -44,7 +44,7 @@ struct FocusViewAndCullingAffordanceTests {
         #expect(!viewModel.canUndo)
     }
 
-    @Test("Focus 3-Up Mode: Sliding triplet candidate sequence, navigation, and culling")
+    @Test("REQ-MAC-LAYOUT.02, REQ-MAC-LAYOUT.03, REQ-MAC-LAYOUT.04: Focus 3-Up Mode: Sliding triplet candidate sequence, navigation, and culling")
     @MainActor
     func testFocus3UpSlotActivationAndTargetedCulling() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -105,7 +105,7 @@ struct FocusViewAndCullingAffordanceTests {
         #expect(viewModel.currentPhoto?.filename == "IMG_2.JPG")
     }
 
-    @Test("Shortcuts Guide Sheet: ViewModel presentation toggle state")
+    @Test("REQ-MAC-LAYOUT.05, REQ-MAC-LAYOUT.06: Shortcuts Guide Sheet: ViewModel presentation toggle state")
     @MainActor
     func testShortcutsHelpPresentation() async throws {
         let viewModel = CullingWorkspaceViewModel()
@@ -115,7 +115,7 @@ struct FocusViewAndCullingAffordanceTests {
         #expect(viewModel.isShortcutsHelpPresented)
     }
 
-    @Test("2-Up Side-by-Side Mode: Active slot focus switching and culling targeting")
+    @Test("REQ-MAC-LAYOUT.02, REQ-MAC-LAYOUT.04: 2-Up Side-by-Side Mode: Active slot focus switching and culling targeting")
     @MainActor
     func testSideBySideSlotFocusAndActivation() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

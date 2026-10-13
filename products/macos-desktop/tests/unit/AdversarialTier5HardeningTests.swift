@@ -151,28 +151,44 @@ struct AdversarialTier5HardeningTests {
 
     @Test("Adversarial Resource: Rapid navigation memory ceiling respects configured limits")
     func testRapidNavigationMemoryCeiling() async throws {
+        let harness = try createHarness(prefix: "RapidNavCeiling")
+        defer { harness.cleanup() }
+
         // Enforce strict 32 MB cache limit for test verification
         let strictCache = ThumbnailCache(memoryLimitBytes: 32 * 1024 * 1024, countLimit: 20)
         let loader = ThumbnailLoader(cache: strictCache)
 
-        let dummyBaseURL = URL(fileURLWithPath: "/tmp/mock_photos")
-        let totalPhotos = 200
-        let items = (0..<totalPhotos).map { i in
-            PhotoItem(id: UUID(), url: dummyBaseURL.appendingPathComponent("PHOTO_\(i).JPG"), status: .candidate)
+        let pixels = [UInt8](repeating: 140, count: 64 * 64)
+        guard let cgImage = SyntheticImageFactory.createGrayscaleCGImage(width: 64, height: 64, pixels: pixels) else {
+            Issue.record("Failed to create synthetic CGImage")
+            return
         }
 
-        // Rapid forward navigation
-        for idx in stride(from: 0, to: totalPhotos, by: 10) {
+        let totalPhotos = 40
+        var items: [PhotoItem] = []
+        for i in 0..<totalPhotos {
+            let fileURL = harness.rootURL.appendingPathComponent("PHOTO_\(i).JPG")
+            if let dest = CGImageDestinationCreateWithURL(fileURL as CFURL, "public.jpeg" as CFString, 1, nil) {
+                CGImageDestinationAddImage(dest, cgImage, nil)
+                _ = CGImageDestinationFinalize(dest)
+            }
+            items.append(PhotoItem(id: UUID(), url: fileURL, status: .candidate))
+        }
+
+        // Load a sample directly into cache and perform rapid forward/backward window shifts
+        _ = await loader.loadThumbnail(for: items[0].url, maxPixelSize: 384)
+        for idx in stride(from: 0, to: totalPhotos, by: 5) {
             await loader.updatePrefetchWindow(items: items, currentIndex: idx, maxPixelSize: 384)
         }
-
-        // Rapid backward navigation
-        for idx in stride(from: totalPhotos - 1, through: 0, by: -10) {
+        for idx in stride(from: totalPhotos - 1, through: 0, by: -5) {
             await loader.updatePrefetchWindow(items: items, currentIndex: idx, maxPixelSize: 384)
         }
 
         await loader.cancelAll()
-        #expect(Bool(true))
+        let strictCount = await strictCache.count
+        #expect(strictCount >= 0 && strictCount <= 20)
+        let count = await ThumbnailCache.shared.count
+        #expect(count >= 0)
     }
 
     @Test("Adversarial Resource: High-frequency 2048x2048 texture allocations trigger graceful NSCache eviction")
@@ -218,12 +234,26 @@ struct AdversarialTier5HardeningTests {
 
     @Test("Adversarial Resource: Cooperative prefetch cancellation on rapid window shifts")
     func testCooperativePrefetchCancellation() async throws {
+        let harness = try createHarness(prefix: "PrefetchCancel")
+        defer { harness.cleanup() }
+
         let cache = ThumbnailCache()
         let loader = ThumbnailLoader(cache: cache)
 
-        let dummyBaseURL = URL(fileURLWithPath: "/tmp/prefetch_test")
-        let items = (0..<50).map { i in
-            PhotoItem(id: UUID(), url: dummyBaseURL.appendingPathComponent("IMG_\(i).JPG"), status: .candidate)
+        let pixels = [UInt8](repeating: 180, count: 64 * 64)
+        guard let cgImage = SyntheticImageFactory.createGrayscaleCGImage(width: 64, height: 64, pixels: pixels) else {
+            Issue.record("Failed to create synthetic CGImage")
+            return
+        }
+
+        var items: [PhotoItem] = []
+        for i in 0..<30 {
+            let fileURL = harness.rootURL.appendingPathComponent("IMG_\(i).JPG")
+            if let dest = CGImageDestinationCreateWithURL(fileURL as CFURL, "public.jpeg" as CFString, 1, nil) {
+                CGImageDestinationAddImage(dest, cgImage, nil)
+                _ = CGImageDestinationFinalize(dest)
+            }
+            items.append(PhotoItem(id: UUID(), url: fileURL, status: .candidate))
         }
 
         // Rapid shifts
@@ -232,7 +262,10 @@ struct AdversarialTier5HardeningTests {
         await loader.updatePrefetchWindow(items: items, currentIndex: 25, windowBefore: 2, windowAfter: 4)
 
         await loader.cancelAll()
-        #expect(Bool(true))
+        let localCount = await cache.count
+        #expect(localCount >= 0)
+        let count = await ThumbnailCache.shared.count
+        #expect(count >= 0)
     }
 
     // MARK: - 5.3 Filesystem Edge Cases
@@ -317,7 +350,7 @@ struct AdversarialTier5HardeningTests {
 
     // MARK: - 5.4 Performance SLA Verification
 
-    @Test("Adversarial SLA: Focus variance latency SLA (<2.0ms on 1080p frame in release mode)")
+    @Test("REQ-MAC-SCORE.01: Adversarial SLA: Focus variance latency SLA (<2.0ms on 1080p frame in release mode)")
     func testFocusVarianceLatencySLA() {
         let width = 1920
         let height = 1080
@@ -333,8 +366,10 @@ struct AdversarialTier5HardeningTests {
             return
         }
 
-        // Warm up Accelerate pipeline
-        _ = FocusMetricService.evaluateSync(cgImage: cgImage)
+        // Warm up Accelerate pipeline and verify result
+        let result = FocusMetricService.evaluateSync(cgImage: cgImage)
+        #expect(result != nil)
+        #expect((result?.score ?? 0.0) > 0)
 
         let iterations = 10
         let start = CFAbsoluteTimeGetCurrent()
@@ -344,22 +379,36 @@ struct AdversarialTier5HardeningTests {
         let totalElapsed = CFAbsoluteTimeGetCurrent() - start
         let avgMs = (totalElapsed / Double(iterations)) * 1000.0
 
-        #if DEBUG
-        // In debug builds (-Onone), loop vectorization is disabled and suites execute concurrently; allow <30.0ms
-        #expect(avgMs < 30.0, "Debug focus latency per 1080p frame must be < 30.0ms (measured: \(avgMs)ms)")
-        #else
-        // In release builds (-O), raw single-threaded compute is ~1.5ms. Under parallel test runner load, allow <15.0ms wall clock.
-        #expect(avgMs < 15.0, "Release focus latency per 1080p frame under parallel suite contention must be < 15.0ms (measured: \(avgMs)ms)")
-        #endif
+        #expect(avgMs < 10.0, "Focus latency per 1080p frame must be < 10.0ms (measured: \(avgMs)ms)")
     }
 
-    @Test("Adversarial SLA: Test suite total runtime SLA (<2.0s)")
+    @Test("REQ-MAC-STATS.01: Adversarial SLA: LibraryStatisticsEngine 1,000-photo aggregation SLA (<1.0s)")
     func testSuiteRuntimeSLA() {
-        // Validates sub-second execution budget for adversarial checks
+        var items: [PhotoItem] = []
+        items.reserveCapacity(1000)
+        for i in 0..<1000 {
+            let status: PhotoStatus = (i % 4 == 0) ? .selected : ((i % 5 == 0) ? .trashed : .candidate)
+            let scores = QualityScores(
+                sharpness: Double(i % 100),
+                noise: 2.0,
+                highlightClipping: 0.1,
+                shadowClipping: 0.1,
+                aesthetic: 7.5
+            )
+            let item = PhotoItem(
+                id: UUID(),
+                url: URL(fileURLWithPath: "/tmp/SLA_IMG_\(i).JPG"),
+                scores: scores,
+                status: status
+            )
+            items.append(item)
+        }
+
         let start = CFAbsoluteTimeGetCurrent()
-        let dummy = (0..<1000).reduce(0, +)
+        let stats = LibraryStatisticsEngine.calculate(from: items)
         let elapsed = CFAbsoluteTimeGetCurrent() - start
-        #expect(dummy == 499500)
-        #expect(elapsed < 0.05)
+
+        #expect(stats.totalPhotoCount == 1000)
+        #expect(elapsed < 1.0)
     }
 }

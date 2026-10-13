@@ -114,6 +114,8 @@ def extract_antigravity_turns(transcript_path: Path, session_id: str, branch: st
         if step.get("type") == "USER_INPUT":
             step_idx = int(step.get("step_index", 0))
             raw_content = step.get("content", "")
+            if "<USER_REQUEST>" not in raw_content:
+                continue
             prompt_text = clean_prompt_text(raw_content)
             if not prompt_text:
                 continue

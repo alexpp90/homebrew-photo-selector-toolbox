@@ -2,8 +2,9 @@
 #
 # run_tests.sh — CI-parity test runner for Photo Selector Toolbox
 #
-# This script is the LOCAL MIRROR of .github/workflows/desktop.yml and
-# .github/workflows/android.yml. Every gate CI enforces is enforced here, in
+# This script is the LOCAL MIRROR of .github/workflows/desktop.yml,
+# .github/workflows/android.yml, .github/workflows/macos.yml, and
+# .github/workflows/linux.yml. Every gate CI enforces is enforced here, in
 # the same order, with the same flags. If this script is green and it reports
 # no SKIPPED gates, CI is expected to be green.
 #
@@ -116,7 +117,7 @@ if ! $explicit_product; then
                 products/desktop/*|Formula/*|Casks/*|*.spec) has_desktop=true ;;
                 products/android/*) has_android=true ;;
                 products/macos-desktop/*) has_macos=true ;;
-                products/linux-desktop/*) has_linux=true ;;
+                products/linux-desktop/*|apt/*) has_linux=true ;;
                 .github/workflows/*|scripts/run_tests.sh) has_cross=true ;;
             esac
         done
@@ -381,10 +382,10 @@ if $run_linux; then
                 skip "flake8 (linux-desktop)" "linux.yml:lint" "--quick"
             elif py flake8 --version &>/dev/null; then
                 gate "flake8 (products/linux-desktop)" "linux.yml:lint" \
-                    py flake8 src/ tests/ --count --show-source --statistics
+                    py flake8 src/ tests/ --count --show-source --statistics --max-line-length=120 --extend-ignore=E203,W503
             elif have flake8; then
                 gate "flake8 (products/linux-desktop)" "linux.yml:lint" \
-                    flake8 src/ tests/ --count --show-source --statistics
+                    flake8 src/ tests/ --count --show-source --statistics --max-line-length=120 --extend-ignore=E203,W503
             else
                 skip "flake8 (linux-desktop)" "linux.yml:lint" "flake8 not installed in the active environment"
             fi
@@ -422,21 +423,21 @@ elif ! $explicit_product; then
     skip "Linux Desktop gates" "linux.yml" "no changes under products/linux-desktop/ (use --linux or --all to force)" false
 fi
 
-# ── Agent framework gates (no CI equivalent yet — see docs/build/CI_PARITY.md) ──
+# ── Agent framework gates (mirror: desktop.yml `framework-governance`) ──
 # The framework is treated as code: naming, registration, roster and the paths that
 # instructions point at must hold, or agents silently follow stale directions.
 section "Agent framework"
 cd "$ROOT_DIR" || exit 1
 if have python3; then
-    gate "toolchain sync" "ai/skills/sync-framework" \
+    gate "toolchain sync" "desktop.yml:framework-governance" \
         python3 ai/skills/sync-framework/scripts/sync_framework.py --check
-    gate "framework validation" "ai/skills/sync-framework" \
+    gate "framework validation" "desktop.yml:framework-governance" \
         python3 ai/skills/sync-framework/scripts/validate_framework.py
-    gate ".gemini/settings.json in sync" "ai/skills/sync-framework" \
+    gate ".gemini/settings.json in sync" "desktop.yml:framework-governance" \
         python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py --check
-    gate "requirements traceability" "scripts/verify_requirements_traceability.py" \
+    gate "requirements traceability" "desktop.yml:framework-governance" \
         python3 scripts/verify_requirements_traceability.py --check --strict
-    gate "readme parity" "scripts/check_readme_parity.py" \
+    gate "readme parity" "desktop.yml:framework-governance" \
         python3 scripts/check_readme_parity.py --check
 else
     skip "toolchain sync" "" "python3 not found"

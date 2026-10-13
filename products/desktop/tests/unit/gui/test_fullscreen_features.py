@@ -1270,3 +1270,105 @@ def test_fullscreen_destroy_clears_full_res_cache():
 
     parent.cache_manager.clear_full_res.assert_called_once()
 
+
+def test_self_move_and_self_copy_preserve_source_file(tmp_path):
+    """Moving or copying when selection_folder resolves to the source directory must never delete the source photo."""
+    from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
+
+    src_jpg = tmp_path / "PRECIOUS_PHOTO.JPG"
+    src_jpg.write_bytes(b"precious-jpeg-content")
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.setup_focus_ui"),
+    ):
+        tool = SharpnessTool(parent)
+        tool.folder_var = MagicMock()
+        tool.folder_var.get.return_value = str(tmp_path)
+        tool.candidates = [src_jpg]
+        tool.sorted_files = [src_jpg]
+        tool.files_map = {src_jpg: MagicMock()}
+        tool.candidate_listbox = MagicMock()
+        tool.candidate_listbox.curselection.return_value = (0,)
+        tool.candidate_listbox.size.return_value = 1
+        tool.panel_curr = MagicMock()
+        tool.panel_prev = MagicMock()
+        tool.panel_next = MagicMock()
+        tool.meta_lbl = MagicMock()
+
+        with (
+            patch(
+                "photo_selector_toolbox.gui.sharpness_tool.load_config",
+                return_value={"selection_folder": str(tmp_path), "separate_raw_jpeg": False},
+            ),
+            patch(
+                "photo_selector_toolbox.gui.sharpness_tool.find_related_files",
+                return_value=[src_jpg],
+            ),
+        ):
+            tool.execute_copy_to_selection(src_jpg, 0)
+            assert src_jpg.exists()
+            assert src_jpg.read_bytes() == b"precious-jpeg-content"
+
+            tool.execute_move_to_selection(src_jpg, 0)
+            assert src_jpg.exists()
+            assert src_jpg.read_bytes() == b"precious-jpeg-content"
+
+
+def test_cross_filesystem_move_exdev_fallback(tmp_path):
+    """Cross-filesystem move (errno.EXDEV on rename) must stage copy and replace without losing data."""
+    import errno
+    from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
+
+    src_dir = tmp_path / "source"
+    sel_dir = tmp_path / "external_selection"
+    src_dir.mkdir()
+    src_jpg = src_dir / "CROSS_DEV.JPG"
+    src_jpg.write_bytes(b"cross-device-bytes")
+
+    parent = MagicMock()
+    parent.register = MagicMock()
+
+    with (
+        patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.setup_ui"),
+        patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.setup_focus_ui"),
+    ):
+        tool = SharpnessTool(parent)
+        tool.folder_var = MagicMock()
+        tool.folder_var.get.return_value = str(src_dir)
+        tool.candidates = [src_jpg]
+        tool.sorted_files = [src_jpg]
+        tool.files_map = {src_jpg: MagicMock()}
+        tool.candidate_listbox = MagicMock()
+        tool.candidate_listbox.curselection.return_value = (0,)
+        tool.candidate_listbox.size.return_value = 1
+        tool.panel_curr = MagicMock()
+        tool.panel_prev = MagicMock()
+        tool.panel_next = MagicMock()
+        tool.meta_lbl = MagicMock()
+
+        def raise_exdev(self_path, target):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+        with (
+            patch(
+                "photo_selector_toolbox.gui.sharpness_tool.load_config",
+                return_value={"selection_folder": str(sel_dir), "separate_raw_jpeg": False},
+            ),
+            patch(
+                "photo_selector_toolbox.gui.sharpness_tool.find_related_files",
+                return_value=[src_jpg],
+            ),
+            patch.object(Path, "rename", raise_exdev),
+        ):
+            tool.execute_move_to_selection(src_jpg, 0)
+
+    dest_jpg = sel_dir / "CROSS_DEV.JPG"
+    assert dest_jpg.exists()
+    assert dest_jpg.read_bytes() == b"cross-device-bytes"
+    assert not src_jpg.exists()
+
+

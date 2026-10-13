@@ -33,6 +33,8 @@ the single biggest factor in the recommendations below.
 >   profile/email; it stays out of restricted-scope review entirely.
 > - Statements below about "both apps" needing the restricted `drive` scope now
 >   apply to `:android-desktop` (Photo Selector Toolbox) only.
+>
+> **Update 2 (100% Local SAF Migration):** Both `:phototok` and `:android-desktop` have since been migrated to 100% local on-device Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`) with zero runtime permissions and no Google Drive or WebView Picker dependencies. OAuth clients and Drive scopes are no longer used by either app.
 
 ---
 

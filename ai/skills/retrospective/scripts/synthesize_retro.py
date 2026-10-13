@@ -153,7 +153,7 @@ PATTERNS: list[FrictionPatternDef] = [
             "routing supremacy, and suppressing background window activation."
         ),
         keywords=[
-            "focus", "focusable", "arrow key", "key routing",
+            "keyboard focus", "focusable", "arrow key", "key routing",
             "keyboard shortcut", "appkit", "swizzle", "focus stealing",
             "hijacking", "event monitor", "nsapplication"
         ],
@@ -223,8 +223,7 @@ PATTERNS: list[FrictionPatternDef] = [
         ),
         keywords=[
             "path filter", "path-based change detection", "gate mirror",
-            "ci parity", "headless gui", "unnecessary test execution",
-            "ci mirror"
+            "ci parity", "headless gui", "unnecessary test execution"
         ],
         default_where="scripts/run_tests.sh, docs/build/CI_PARITY.md",
         debt_template=(
@@ -450,13 +449,16 @@ def cluster_entries(
 
     for pat in PATTERNS:
         matching_entries: list[RetroEntry] = []
+        kw_patterns = [re.compile(rf"\b{re.escape(kw)}\b", re.I) for kw in pat.keywords]
         for e in entries:
+            if not e.is_friction:
+                continue
             if domain_filter and e.domain.lower() != domain_filter.lower():
                 continue
             friction_text = (
                 e.root_cause + " " + e.actionable_improvement + " " + e.efficiency_obs + " " + e.quality_obs
             ).lower()
-            matched_kws = [kw for kw in pat.keywords if kw in friction_text]
+            matched_kws = [pat.keywords[i] for i, kp in enumerate(kw_patterns) if kp.search(friction_text)]
             if len(matched_kws) >= 1:
                 matching_entries.append(e)
 

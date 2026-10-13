@@ -308,7 +308,9 @@ final class UISelfTestRunner {
         // SwiftUI `.global` is relative to the hosting view, y-down; window coordinates are y-up.
         let point = CGPoint(x: frame.midX, y: contentView.frame.height - frame.midY)
         let hitView = contentView.hitTest(point)
-        FileHandle.standardError.write(Data("[click-debug] id=\(identifier) frame=\(frame) point=\(point) hitView=\(String(describing: hitView))\n".utf8))
+        if ProcessInfo.processInfo.environment["PHOTO_SELECTOR_UI_DEBUG"] == "1" {
+            FileHandle.standardError.write(Data("[click-debug] id=\(identifier) frame=\(frame) point=\(point) hitView=\(String(describing: hitView))\n".utf8))
+        }
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             if let event = NSEvent.mouseEvent(
                 with: type,

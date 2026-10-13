@@ -60,6 +60,8 @@ class OllamaAestheticTool(AnalysisTool):
             if rgb_img is None:
                 raise RuntimeError("load_image_preview returned None")
 
+            if hasattr(rgb_img, "info") and isinstance(rgb_img.info, dict):
+                rgb_img.info.pop("exif", None)
             buffer = io.BytesIO()
             rgb_img.save(buffer, format="JPEG", quality=85)
             img_bytes = buffer.getvalue()
@@ -87,12 +89,10 @@ class OllamaAestheticTool(AnalysisTool):
         def is_forbidden_ip(ip_str):
             try:
                 ip_obj = ipaddress.ip_address(ip_str)
-                if ip_obj.is_link_local:
-                    return True
-                if ip_obj.is_unspecified:
+                if ip_obj.is_link_local or ip_obj.is_unspecified or ip_obj.is_multicast:
                     return True
                 mapped = getattr(ip_obj, "ipv4_mapped", None)
-                if mapped and (mapped.is_link_local or mapped.is_unspecified):
+                if mapped and (mapped.is_link_local or mapped.is_unspecified or mapped.is_multicast):
                     return True
                 return False
             except ValueError:

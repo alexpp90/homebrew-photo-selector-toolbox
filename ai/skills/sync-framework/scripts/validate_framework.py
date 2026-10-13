@@ -532,7 +532,7 @@ def check_unowned_products(agent_names: set[str]) -> None:
     registered.update(m["dir"].resolve() for m in SHARED_MODULES.values())
 
     for unowned in sorted(discovered - registered):
-        rel = unowned.relative_to(REPO)
+        rel = unowned.relative_to(REPO.resolve())
         fail(f"{rel}: unowned product directory discovered — missing specification in ACTIVE_PRODUCTS and owning agent")
 
     for prod_id, spec in ACTIVE_PRODUCTS.items():
@@ -761,6 +761,10 @@ PLANNED = re.compile(
 )
 
 
+DEPRECATED_ROOTS = {"android", ".Jules"}
+STALE_PLANNED_RE = re.compile(r"\(planned(?:\s+for\s+M\d+)?\)", re.I)
+
+
 def check_referenced_paths() -> None:
     docs = sorted(AGENTS.glob("*.md")) + sorted(SKILLS.glob("*/SKILL.md"))
     seen: set[tuple[str, str]] = set()
@@ -773,9 +777,15 @@ def check_referenced_paths() -> None:
                     continue
                 candidate = raw.rstrip("/")
                 head = candidate.split("/", 1)[0]
-                if not (REPO / head).exists():
+                if not (REPO / head).exists() and head not in DEPRECATED_ROOTS:
                     continue
                 if (REPO / candidate).exists():
+                    token_planned = re.search(rf"`{re.escape(raw)}`[^`]*\(planned", line, re.I)
+                    if token_planned:
+                        key = (str(rel), f"stale-planned:{candidate}")
+                        if key not in seen:
+                            seen.add(key)
+                            fail(f"{rel}: '{candidate}' exists on disk but is still marked '(planned)'")
                     continue
                 key = (str(rel), candidate)
                 if key in seen:

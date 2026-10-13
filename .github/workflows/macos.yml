@@ -65,13 +65,8 @@ jobs:
       - name: Build PhotoSelectorKit & PhotoSelectorApp (Release)
         run: swift build -c release
 
-      - name: Run Unit & Adversarial Test Suites (Release)
+      - name: Run Unit, Adversarial & SLA Test Suites (Release)
         run: swift test -c release --no-parallel
-
-      - name: Verify Focus Latency SLA Benchmark (<2.0ms)
-        run: |
-          echo "Verifying FocusMetricService release SLA..."
-          swift test -c release --no-parallel --filter "FocusMetricService"
 
       - name: Upload Test Artifacts
         if: always()
@@ -112,7 +107,7 @@ jobs:
         run: |
           scripts/build_app.sh release
           cd .build/app
-          zip -r -y ../../../photo-selector-macos-apple-silicon.zip PhotoSelector.app
+          zip -r -y ../../../../photo-selector-macos-apple-silicon.zip PhotoSelector.app
 
       - name: Upload Release Archive
         uses: actions/upload-artifact@v4

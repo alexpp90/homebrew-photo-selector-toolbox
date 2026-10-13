@@ -63,12 +63,21 @@ def changed_files() -> list[str]:
 
 
 def scan_transcript(path: str) -> dict:
-    """Tolerantly walk the JSONL transcript for tool_use blocks."""
+    """Tolerantly walk the JSONL transcript for Claude tool_use and Antigravity tool_calls blocks."""
     found = {"subagents": set(), "agent_reads": set(), "skills": set(),
-             "skill_reads": set(), "plan": False}
+             "skill_reads": set(), "plan": False, "parsed": False}
+
+    def check_file_read(fp: str) -> None:
+        m = AGENT_READ.search(fp)
+        if m:
+            found["agent_reads"].add(m.group(1))
+        m = SKILL_READ.search(fp)
+        if m:
+            found["skill_reads"].add(m.group(1))
 
     def walk(node) -> None:
         if isinstance(node, dict):
+            # Claude Code format
             if node.get("type") == "tool_use":
                 name = str(node.get("name", ""))
                 inp = node.get("input") or {}
@@ -81,13 +90,20 @@ def scan_transcript(path: str) -> dict:
                 elif name in PLAN_TOOLS:
                     found["plan"] = True
                 elif name == "Read":
-                    fp = str(inp.get("file_path", ""))
-                    m = AGENT_READ.search(fp)
-                    if m:
-                        found["agent_reads"].add(m.group(1))
-                    m = SKILL_READ.search(fp)
-                    if m:
-                        found["skill_reads"].add(m.group(1))
+                    check_file_read(str(inp.get("file_path", "")))
+            # Antigravity format
+            for tc in node.get("tool_calls") or []:
+                if not isinstance(tc, dict):
+                    continue
+                tname = str(tc.get("name", ""))
+                targs = tc.get("args") or {}
+                if tname == "invoke_subagent":
+                    for sub in targs.get("Subagents") or []:
+                        if isinstance(sub, dict):
+                            role = sub.get("Role") or sub.get("TypeName") or "subagent"
+                            found["subagents"].add(str(role))
+                elif tname in ("view_file", "read_file"):
+                    check_file_read(str(targs.get("AbsolutePath") or targs.get("file_path") or ""))
             for value in node.values():
                 walk(value)
         elif isinstance(node, list):
@@ -96,6 +112,7 @@ def scan_transcript(path: str) -> dict:
 
     try:
         with open(path, encoding="utf-8") as fh:
+            found["parsed"] = True
             for line in fh:
                 try:
                     walk(json.loads(line))
@@ -141,9 +158,9 @@ def build_report(files: list[str], transcript: dict, hooks: Counter,
         lines.append("Changed: " + ", ".join(
             f"{label} ({n} file{'s' if n > 1 else ''})"
             for label, n in per_product.most_common()))
-    if host == ANTIGRAVITY:
-        lines.append("Agents/skills: not observable in this host (no transcript in "
-                     "hook payload) — verify the lifecycle ran per AGENTS.md.")
+    if host == ANTIGRAVITY and not transcript.get("parsed"):
+        lines.append("Agents/skills: not observable in this host (no transcript found) "
+                     "— verify the lifecycle ran per AGENTS.md.")
     else:
         lines.append(f"Agents — subagents invoked: {fmt(transcript['subagents'])}; "
                      f"roles read: {fmt(transcript['agent_reads'])}")
@@ -196,10 +213,18 @@ def main() -> int:
         return 0
 
     files = changed_files()
-    transcript_path = payload.raw.get("transcript_path")
+    transcript_path = payload.raw.get("transcript_path") or payload.raw.get("transcriptPath")
+    if not transcript_path and payload.dialect == ANTIGRAVITY:
+        sid = session_key(payload)
+        candidate_anti = (
+            Path.home() / ".gemini" / "antigravity" / "brain" / sid
+            / ".system_generated" / "logs" / "transcript.jsonl"
+        )
+        if candidate_anti.is_file():
+            transcript_path = str(candidate_anti)
     transcript = scan_transcript(transcript_path) if transcript_path else {
         "subagents": set(), "agent_reads": set(), "skills": set(),
-        "skill_reads": set(), "plan": False}
+        "skill_reads": set(), "plan": False, "parsed": False}
 
     plan = transcript["plan"]
     if payload.dialect == ANTIGRAVITY:

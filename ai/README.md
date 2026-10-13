@@ -2,7 +2,7 @@
 
 Everything that configures AI coding agents in this repository lives under `ai/` and
 nowhere else. Product documentation lives in [`docs/`](../docs/README.md); source code
-lives in `products/desktop/src/`, `products/android/`, `products/macos-desktop/src/`, and `products/linux-desktop/` (planned). Those trees do not mix.
+lives in `products/desktop/src/`, `products/android/`, `products/macos-desktop/src/`, and `products/linux-desktop/src/`. Those trees do not mix.
 
 If you are a human: this directory does not affect the build. Skip it.
 If you are an agent: read this file, then [`ROUTING.md`](ROUTING.md), then your own

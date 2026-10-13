@@ -81,7 +81,7 @@ same shape: `src/` for sources, `tests/` for tests, its own build configuration,
 products/
   desktop/            Desktop product (Python)      — src/ tests/ benchmarks/ scripts/ pyproject.toml
   macos-desktop/      Native macOS Desktop (Swift)  — src/ tests/ Package.swift
-  linux-desktop/      Native Linux Desktop (GNOME)  — src/ tests/ debian/ scripts/ pyproject.toml (planned)
+  linux-desktop/      Native Linux Desktop (GNOME)  — src/ tests/ debian/ scripts/ pyproject.toml
   android/            The Android platform group    — one Gradle build for both Android products
     android-desktop/  Android Desktop product       — src/ tests/ res/ AndroidManifest.xml
     phototok/         PhotoTok product              — src/ tests/ res/ AndroidManifest.xml

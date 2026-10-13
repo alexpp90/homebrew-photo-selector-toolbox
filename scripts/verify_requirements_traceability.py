@@ -94,6 +94,12 @@ PRODUCT_CONFIGS = {
         "test_dirs": [REPO_ROOT / "products" / "macos-desktop" / "tests"],
         "lang": "swift",
     },
+    "linux-desktop": {
+        "code": "LINUX",
+        "doc": REPO_ROOT / "docs" / "products" / "linux-desktop" / "REQUIREMENTS.md",
+        "test_dirs": [REPO_ROOT / "products" / "linux-desktop" / "tests"],
+        "lang": "python",
+    },
 }
 
 SHARED_DOCS = [

@@ -1,6 +1,6 @@
 ---
 name: task-lifecycle
-description: "Pre-work reads for any task in this repository: identify the target product (Desktop, Android Desktop, PhotoTok, or macOS Desktop), read that product's REQUIREMENTS.md, read the matching ai/memory/ lesson file, read the owning agent config, and follow any matching playbook. Use at the START of every coding task, before opening a source file."
+description: "Pre-work reads for any task in this repository: identify the target product (Desktop, Android Desktop, PhotoTok, macOS Desktop, or Linux Desktop), read that product's REQUIREMENTS.md, read the matching ai/memory/ lesson file, read the owning agent config, and follow any matching playbook. Use at the START of every coding task, before opening a source file."
 allowed-tools: Read, Grep, Glob
 ---
 
@@ -18,7 +18,7 @@ expensive mistake available, because it produces code in the wrong place that lo
 |---|---|---|
 | Desktop | `products/desktop/src/photo_selector_toolbox/` | `docs/products/desktop/REQUIREMENTS.md` |
 | macOS Desktop | `products/macos-desktop/` (`PhotoSelectorKit`, `PhotoSelectorApp`) | `docs/products/macos-desktop/REQUIREMENTS.md` |
-| Linux Desktop | `products/linux-desktop/` (`photo_selector_linux`) | `docs/products/linux-desktop/REQUIREMENTS.md` (planned for M2) |
+| Linux Desktop | `products/linux-desktop/` (`photo_selector_linux`) | `docs/products/linux-desktop/REQUIREMENTS.md` |
 | Android Desktop | `products/android/android-desktop/` (`:android-desktop`) | `docs/products/android-desktop/REQUIREMENTS.md` |
 | PhotoTok | `products/android/phototok/` (`:phototok`) | `docs/products/phototok/REQUIREMENTS.md` |
 

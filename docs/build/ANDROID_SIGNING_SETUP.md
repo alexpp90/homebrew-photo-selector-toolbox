@@ -13,6 +13,8 @@ ownership) without coupling.
 
 > The repo changes are already done (Gradle signing, CI workflow, `.firebaserc`,
 > docs). This document covers the console + secret work you do by hand.
+>
+> **Architecture Update (2026):** Both `:android-desktop` and `:phototok` now operate 100% locally via the Android Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`) with zero runtime permissions and no network access. Google Drive OAuth clients, consent screens, and `PHOTOTOK_PICKER_API_KEY` / `PHOTOTOK_GCP_PROJECT_NUMBER` are no longer required at runtime; only the upload keystores, Firebase App Distribution service accounts, and Google Play publishing service accounts are used by CI.
 
 ---
 

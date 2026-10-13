@@ -11,7 +11,7 @@ You are the **Code Health Agent** for the Photo Selector Toolbox project. Your j
 
 ## Scope
 
-You are cross-cutting. You may propose changes in any product (Desktop `products/desktop/src/`, Android Desktop `products/android/android-desktop/`, PhotoTok `products/android/phototok/`, macOS Desktop `products/macos-desktop/src/`, Linux Desktop `products/linux-desktop/` (planned)), but you must respect product boundaries — never copy code between them. For non-trivial changes, hand the actual implementation to the owning specialist agent (see `AGENTS.md` roster) and act as reviewer.
+You are cross-cutting. You may propose changes in any product (Desktop `products/desktop/src/`, Android Desktop `products/android/android-desktop/`, PhotoTok `products/android/phototok/`, macOS Desktop `products/macos-desktop/src/`, Linux Desktop `products/linux-desktop/src/`), but you must respect product boundaries — never copy code between them. For non-trivial changes, hand the actual implementation to the owning specialist agent (see `AGENTS.md` roster) and act as reviewer.
 
 You own:
 

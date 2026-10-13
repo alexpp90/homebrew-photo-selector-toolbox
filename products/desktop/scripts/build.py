@@ -3,6 +3,7 @@ import sys
 import shutil
 import tarfile
 import zipfile
+import hashlib
 import urllib.request
 import platform
 import subprocess
@@ -12,6 +13,11 @@ from generate_notices import generate_notices
 # Constants
 EXIFTOOL_VERSION = "13.59"
 SF_BASE_URL = "https://downloads.sourceforge.net/project/exiftool"
+# Optional pinned SHA-256 checksums for ExifTool archives (override via env EXIFTOOL_SHA256 if needed)
+EXIFTOOL_SHA256 = {
+    f"Image-ExifTool-{EXIFTOOL_VERSION}.tar.gz": os.environ.get("EXIFTOOL_TAR_SHA256", ""),
+    f"exiftool-{EXIFTOOL_VERSION}_64.zip": os.environ.get("EXIFTOOL_ZIP_SHA256", ""),
+}
 
 PROJECT_ROOT = Path(__file__).parent.parent
 BIN_DIR = PROJECT_ROOT / "src" / "photo_selector_toolbox" / "bin"
@@ -56,7 +62,22 @@ def pyobjc_hidden_import_args(target):
         args.extend(["--hidden-import", module])
     return args
 
+
+def verify_sha256(file_path: Path, expected_sha256: str = "") -> str:
+    """Computes and optionally verifies the SHA-256 digest of a downloaded archive."""
+    digest = hashlib.sha256(file_path.read_bytes()).hexdigest().lower()
+    print(f"SHA-256 ({file_path.name}): {digest}")
+    if expected_sha256 and digest != expected_sha256.lower():
+        file_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"SHA-256 mismatch for {file_path.name}: expected {expected_sha256}, got {digest}"
+        )
+    return digest
+
+
 def download_file(url, dest_path):
+    if not str(url).startswith("https://"):
+        raise ValueError(f"Refusing insecure non-HTTPS download URL: {url}")
     print(f"Downloading {url}...")
     try:
         req = urllib.request.Request(
@@ -68,10 +89,11 @@ def download_file(url, dest_path):
     except Exception as e:
         print(f"Error downloading with urllib: {e}")
         try:
-            subprocess.run(["curl", "-L", url, "-o", str(dest_path)], check=True)
+            subprocess.run(["curl", "--proto", "=https", "--tlsv1.2", "-fL", url, "-o", str(dest_path)], check=True)
         except Exception as e2:
             print(f"Download failed with curl too: {e2}")
             sys.exit(1)
+    verify_sha256(Path(dest_path), EXIFTOOL_SHA256.get(Path(dest_path).name, ""))
 
 def setup_exiftool():
     # Clean bin dir first

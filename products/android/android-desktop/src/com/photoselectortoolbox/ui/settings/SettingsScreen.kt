@@ -28,8 +28,10 @@ import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderSpecial
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
@@ -494,7 +496,7 @@ fun SettingsScreen(
                 title = "Source Code",
                 description = "View on GitHub",
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/alexpp90/photo-selector"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.photoselectortoolbox.domain.LegalLinks.SOURCE_CODE))
                     try {
                         context.startActivity(intent)
                     } catch (e: ActivityNotFoundException) {
@@ -502,6 +504,38 @@ fun SettingsScreen(
                     }
                 },
                 icon = Icons.Default.Code,
+            )
+
+            HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
+
+            SettingsClickItem(
+                title = "Privacy Policy",
+                description = "How Photo Selector Toolbox handles your data",
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.photoselectortoolbox.domain.LegalLinks.PRIVACY_POLICY))
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        e.printStackTrace()
+                    }
+                },
+                icon = Icons.Default.PrivacyTip,
+            )
+
+            HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
+
+            SettingsClickItem(
+                title = "Legal Notice (Impressum)",
+                description = "Provider identification",
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.photoselectortoolbox.domain.LegalLinks.IMPRESSUM))
+                    try {
+                        context.startActivity(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        e.printStackTrace()
+                    }
+                },
+                icon = Icons.Default.Gavel,
             )
         }
 
