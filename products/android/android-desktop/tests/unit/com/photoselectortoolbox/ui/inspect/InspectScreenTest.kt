@@ -275,6 +275,54 @@ class InspectScreenTest {
         assertEquals(null, targetScreen)
     }
 
+    @Test
+    fun `handleSelectorKey triggers onDelete for both Delete and Backspace keys`() {
+        var deleteCount = 0
+        val dummyActions = SelectorActions(
+            onMove = {},
+            onCopy = {},
+            onDelete = { deleteCount++ },
+            onFullscreen = {},
+            onToggleDetails = {},
+            onToggleFilmstrip = {},
+            onToggleOverlayValues = {},
+            onShowShortcuts = {},
+        )
+
+        val handledDelete = handleSelectorKey(
+            key = Key.Delete,
+            sheetOpen = false,
+            contextMenuOpen = false,
+            fullscreenOpen = false,
+            maximised = false,
+            actions = dummyActions,
+            onPrevious = {},
+            onNext = {},
+            onMaximise = {},
+            onShowShortcuts = {},
+            onCloseOverlays = {},
+        )
+        assertTrue(handledDelete)
+        assertEquals(1, deleteCount)
+
+        // Key.Backspace (Chromebook keyboards lack dedicated Delete key)
+        val handledBackspace = handleSelectorKey(
+            key = Key.Backspace,
+            sheetOpen = false,
+            contextMenuOpen = false,
+            fullscreenOpen = false,
+            maximised = false,
+            actions = dummyActions,
+            onPrevious = {},
+            onNext = {},
+            onMaximise = {},
+            onShowShortcuts = {},
+            onCloseOverlays = {},
+        )
+        assertTrue(handledBackspace)
+        assertEquals(2, deleteCount)
+    }
+
     // ── 4. Golden Spiral 4-Way Flip Cycling ───────────────────────────────────
 
     @Test

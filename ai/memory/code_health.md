@@ -283,3 +283,8 @@ Lessons use the standard `ai/memory/` format (Learning/Action).
 **Debt:** Recurring friction detected across 3 sessions (2026-10-06 ('Test Runner Optimization and Headless macOS GUI Test Backgrounding'), 2026-10-07 ('macOS Desktop Arrow Navigation, EXIF Extraction & Focus Mode Polish'), 2026-10-10 ('macOS Desktop Keyboard Delivery, One-Over-Two 3-Up, Zoom Hit-Testing & Folder Load')). Native desktop UI controls (SwiftUI buttons, Tkinter windows) hijack arrow keys from viewport containers or steal OS workstation focus during headless test execution.
 **Proposal:** Enforce keyboard routing supremacy with .focusable(false) on clickable toolbar controls, route shortcuts via native event monitors (NSEvent), and swizzle Cocoa focus activation in test runners. Reference playbook `playbook-ui-focus-and-key-routing`.
 
+## [OPEN] 2026-10-12 - Filesystem & External Storage Safety Verification
+**Where:** products/macos-desktop/src/PhotoSelectorKit/, products/android/phototok/src/com/phototok/data/
+**Debt:** Recurring friction detected across 2 sessions (2026-10-07 ('Native macOS Desktop Swift/SwiftUI Application & Culling Overhaul'), 2026-10-12 ('Android Desktop Asymmetric System Bar Policy (Preserve Status Bar, Hide Navigation Bar)')). File operations on external media (SD cards, SAF trees) risk race conditions, partial writes, or inadvertent deletion of sibling RAW+JPEG pairs without transactional barriers.
+**Proposal:** Establish transactional barriers, confirm sibling pairing rules before dispatching mutations, and verify destructive workflows against rigorous rollback test fixtures. Reference playbook `playbook-storage-safety-and-transactions`.
+

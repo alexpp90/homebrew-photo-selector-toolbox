@@ -114,4 +114,37 @@ struct FocusViewAndCullingAffordanceTests {
         viewModel.presentShortcutsHelp()
         #expect(viewModel.isShortcutsHelpPresented)
     }
+
+    @Test("2-Up Side-by-Side Mode: Active slot focus switching and culling targeting")
+    @MainActor
+    func testSideBySideSlotFocusAndActivation() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let photos = (1...4).map { idx -> PhotoItem in
+            let url = tempDir.appendingPathComponent("IMG_\(idx).JPG")
+            FileManager.default.createFile(atPath: url.path, contents: Data([0x01, 0x02]), attributes: nil)
+            return PhotoItem(url: url)
+        }
+
+        let viewModel = CullingWorkspaceViewModel()
+        viewModel.setPhotos(photos, rootURL: tempDir)
+
+        // Switch to Side-by-Side (2-Up)
+        viewModel.setComparisonMode(.sideBySide)
+        #expect(viewModel.comparisonMode == .sideBySide)
+        #expect(viewModel.activeSlotIndex == 0)
+
+        // Select slot 1 (candidate 1)
+        viewModel.setActiveSlot(1)
+        #expect(viewModel.activeSlotIndex == 1)
+
+        // Cycle comparison slot focus (Tab behavior)
+        viewModel.advanceComparisonSlotFocus()
+        #expect(viewModel.activeSlotIndex == 0)
+
+        viewModel.advanceComparisonSlotFocus()
+        #expect(viewModel.activeSlotIndex == 1)
+    }
 }

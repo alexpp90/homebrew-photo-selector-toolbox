@@ -30,11 +30,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.photoselectortoolbox.ui.theme.Indigo200
-import com.photoselectortoolbox.ui.theme.PanelSurface
+import com.photoselectortoolbox.ui.theme.FocusCyanText
+import com.photoselectortoolbox.ui.theme.StudioBorder
+import com.photoselectortoolbox.ui.theme.StudioPanel
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
-import com.photoselectortoolbox.ui.theme.Zinc700
 import com.photoselectortoolbox.viewmodel.SelectorHintUi
 
 /** How long an explanation stays up before it fades on its own. */
@@ -89,8 +89,8 @@ fun SelectorHintCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
-                .background(PanelSurface)
-                .border(1.dp, Zinc700, RoundedCornerShape(10.dp))
+                .background(StudioPanel)
+                .border(1.dp, StudioBorder, RoundedCornerShape(10.dp))
                 .padding(12.dp)
                 .semantics { contentDescription = "${current.title}. ${current.message}" }
                 .testTag("selector_hint_card"),
@@ -107,7 +107,7 @@ fun SelectorHintCard(
                 text = "Got it",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
-                color = Indigo200,
+                color = FocusCyanText,
                 modifier = Modifier
                     .align(Alignment.End)
                     .clip(RoundedCornerShape(6.dp))

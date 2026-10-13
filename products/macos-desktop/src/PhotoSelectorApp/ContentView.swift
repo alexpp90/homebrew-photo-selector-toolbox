@@ -17,8 +17,8 @@ public struct ContentView: View {
     public var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Neutral Dark Studio Canvas
-                Color(red: 0.055, green: 0.055, blue: 0.063)
+                // Neutral Dark Studio Canvas (#0B0B0D)
+                Color(red: 0.043, green: 0.043, blue: 0.051)
                     .ignoresSafeArea()
 
                 if viewModel.isLoading && viewModel.photos.isEmpty {
@@ -146,7 +146,7 @@ public struct ContentView: View {
                                 comparisonIndices: viewModel.comparisonSlotIndices,
                                 onSelectPhoto: { idx in viewModel.selectPhoto(at: idx) }
                             )
-                            .frame(height: min(96, geometry.size.height * 0.12))
+                            .frame(height: min(84, geometry.size.height * 0.12))
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
@@ -158,7 +158,7 @@ public struct ContentView: View {
         }
         .frame(minWidth: 960, minHeight: 640)
         .preferredColorScheme(.dark)
-        .navigationTitle(viewModel.rootDirectoryURL?.lastPathComponent ?? "Photo Selector")
+        .navigationTitle(viewModel.rootDirectoryURL != nil ? "PhotoSelector Studio — \(viewModel.rootDirectoryURL!.lastPathComponent)" : "PhotoSelector Studio")
         .focusable()
         .focusEffectDisabled()
         .focused($isWorkspaceFocused)
@@ -329,33 +329,16 @@ public struct ContentView: View {
                 .clipShape(Capsule())
             }
 
-            // Position Counter Badge
-            if !viewModel.photos.isEmpty {
-                Text("Photo \(viewModel.currentIndex + 1) of \(viewModel.photos.count)")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color.white.opacity(0.9))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.black.opacity(0.5))
-                    .clipShape(Capsule())
-            }
-
             Spacer()
 
-            // Navigation Buttons (Prev / Next)
+            // Integrated Navigation Cluster (Prev / Next & Position)
             HStack(spacing: 6) {
                 Button(action: { viewModel.navigateToPrevious() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                        Text("Prev")
-                        Text("←")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(Color.white.opacity(0.6))
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
@@ -363,18 +346,22 @@ public struct ContentView: View {
                 .uiTestFrame("toolbar_previous")
                 .help("Navigate to previous photo (Left Arrow)")
 
+                if !viewModel.photos.isEmpty {
+                    Text("Photo \(viewModel.currentIndex + 1) of \(viewModel.photos.count)")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color.white.opacity(0.9))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.black.opacity(0.45))
+                        .clipShape(Capsule())
+                }
+
                 Button(action: { viewModel.navigateToNext() }) {
-                    HStack(spacing: 4) {
-                        Text("Next")
-                        Text("→")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(Color.white.opacity(0.6))
-                        Image(systemName: "chevron.right")
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
@@ -402,18 +389,19 @@ public struct ContentView: View {
             // View Toggles
             HStack(spacing: 6) {
                 Button(action: { viewModel.toggleZoom() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: viewModel.zoomState.isZoomed ? "arrow.down.right.and.arrow.up.left" : "viewfinder")
-                        Text(viewModel.zoomState.isZoomed ? "Fit" : "100%")
+                    HStack(spacing: 3) {
+                        Image(systemName: viewModel.zoomState.isZoomed ? "arrow.down.right.and.arrow.up.left" : "magnifyingglass")
+                            .font(.system(size: 11, weight: .medium))
+                        Text(viewModel.zoomState.isZoomed ? "Fit" : "1:1")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
                     }
-                    .font(.system(size: 11, weight: .medium))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
                 .uiTestFrame("toolbar_zoom")
-                .help(viewModel.zoomState.isZoomed ? "Return to Fit (Space or Esc)" : "Zoom to 100% — one image pixel per screen pixel (Space)")
+                .help(viewModel.zoomState.isZoomed ? "Return to Fit (Space or Esc)" : "Zoom to 1:1 (100% pixel-to-pixel, Space)")
 
                 Button(action: {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
@@ -444,13 +432,10 @@ public struct ContentView: View {
                 .help("Toggle EXIF & Scores HUD (I)")
 
                 Button(action: { viewModel.presentShortcutsHelp() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "questionmark.circle.fill")
-                        Text("Guide")
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    Image(systemName: "questionmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.accentColor.opacity(0.85))

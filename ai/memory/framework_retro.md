@@ -31,6 +31,70 @@ Newest entries at the top. Always use the real current date.
 **Actionable Framework Improvement:** Concrete proposal for skills, agents, playbooks, tooling, or docs (or `[OPEN]` backlog item for `@shared-code-health-agent`).
 ```
 
+## 2026-10-13 - Defensive Watchdog Timer Protocol for Subagent Delegation
+**Agents Involved:** `@DeepInvestigator`, `@DeepCoder`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Adequate — While subagents performed domain analysis and code implementation effectively, relying purely on passive reactive wakeup caused a complete session stall when a nested worker process blocked.
+- **Agents:** `@DeepInvestigator` formulated the color science, 3-blade aperture icon, and two-tier naming architecture; `@DeepCoder` coordinated implementation via a nested worker (`DeepCoderWorkerL0`); `@shared-mentor-agent` audited test parity.
+- **Skills:** `task-lifecycle`, `retrospective`, `verify-build`.
+- **Hooks:** Git status and pre-delivery gate ensured tests were executed before completion.
+**Session Efficiency:** Low / Friction
+- **Observations:** Execution stalled completely after `@DeepCoder` delegated to its nested worker (`DeepCoderWorkerL0`). The worker successfully implemented all Android assets, drawables, and themes, and verified `./scripts/run_tests.sh --android`. However, during a subsequent run of the full CI mirror, the macOS UI smoke test (`ui_smoke_test.sh`) was killed by the OS (exit code 137 / SIGKILL 9), and the worker's attempt to run it directly as background task `task-321` blocked without completion or notification. Because the worker never sent a message to the coordinator, and the coordinator never sent a message to the orchestrator, the orchestrator remained dormant waiting for a reactive notification that never fired.
+**Implementation Quality:** High
+- **Observations:** The actual Android implementation was robust on the first pass: all 102 Gradle tasks passed, adaptive vector drawables compiled cleanly, `Color.kt` and `Theme.kt` applied calibrated darkroom tokens, and all 734 Android unit and instrumented tests passed without regressions.
+**Framework Root Cause:** The orchestrator instructions emphasize passive reactive wakeup ("Do NOT poll or check your inbox in a loop. The system will automatically notify you when the subagent sends a message."). This caused the coordinating agent to enter unconditional dormancy without setting a defensive timeout or liveness probe. When a failure occurred two levels down in the subagent hierarchy, the whole pipeline stalled silently.
+**Actionable Framework Improvement:**
+1. Mandate the **Defensive Watchdog Timer Protocol** whenever delegating to subagents: whenever `invoke_subagent` is called, simultaneously schedule a one-shot watchdog timer using `schedule(DurationSeconds=300..600, Prompt="Check subagent status and progress", TimerCondition="any")`. If subagents respond normally, the timer cancels early; if a subagent hangs or crashes silently, the timer wakes the agent to inspect `manage_subagents(Action='list')` and unblock progress.
+2. In multi-product repositories, subagents assigned to one product (e.g. `:android-desktop`) must scope their local verification gates (`./scripts/run_tests.sh --android`) rather than running GUI smoke tests for other platforms (`ui_smoke_test.sh`) that require active windowing sessions.
+
+## 2026-10-12 - Strict Zero-Human Policy for Sample Photos & Promotional Assets
+**Agents Involved:** `@android-phototok-agent`, `@macos-desktop-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — High-precision multimodal inspection (`view_file`) and prompt-based asset generation (`generate_image`) allowed immediate identification and replacement of non-compliant imagery.
+- **Agents:** `@android-phototok-agent` owned `products/android/phototok/` sample assets and screenshot re-rendering; `@macos-desktop-agent` verified native test fixtures and macOS screenshot capture; `@shared-mentor-agent` enforced memory gating.
+- **Skills:** `task-lifecycle`, `retrospective`, `verify-build`.
+- **Hooks:** Git status and CI test runner gates verified complete system integrity across all products.
+**Session Efficiency:** High
+- **Observations:** Audited all image assets across the entire repository. Discovered that while `placeholder_landscape.jpg` and `placeholder_portrait.jpg` were human-free, `placeholder_architecture.jpg` contained a pedestrian walking along the colonnade in the background, which leaked into `phototok_01_landing.png` and `macos_desktop_screenshot.png` filmstrip thumbnails. Generated an uninhabited brutalist concrete architecture replacement using `generate_image`, validated it with `view_file`, updated test fixtures, and re-rendered the dependent assets. Concurrently resolved a main-thread deadlock in `UISelfTestRunner.swift` where `hitView.mouseDown:` blocked on AppKit's modal tracking loop.
+**Implementation Quality:** High
+- **Observations:** 100% human-free verification achieved across all product sample assets and documentation screenshots. Local CI mirror `./scripts/run_tests.sh` passed 15/16 gates with only the expected Linux-only Xvfb visual tests skipped.
+**Framework Root Cause:** Previous asset creation did not conduct a full high-resolution background scan of architectural imagery, missing a distant pedestrian in the corridor.
+**Actionable Framework Improvement:**
+- Ensure all sample photo generators explicitly mandate uninhabited scenes (empty landscape, architecture without pedestrians, or equipment macros) and verify full frame with `view_file`.
+
+## 2026-10-12 - Ecosystem README Parity, Canonical Ordering & Automated CI Enforcement
+**Agents Involved:** `@shared-code-health-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — Cross-product documentation, asset generation, and mechanical gate enforcement aligned repository reality with public presentation.
+- **Agents:** `@shared-code-health-agent` orchestrated root README rewriting and CI gate integration; `@shared-mentor-agent` gated lessons and framework improvements.
+- **Skills:** `task-lifecycle`, `sync-requirements`, `verify-build`, `retrospective`.
+- **Hooks:** PreToolUse hook `guard_commit.py` protected against invalid mirror paths; `run_tests.sh` successfully reproduced all CI gates locally.
+**Session Efficiency:** High
+- **Observations:** Audited root `README.md` and resolved all outdated elements: added missing Linux Desktop product details and APT installation; restructured product presentation to canonical order (1. PhotoTok, 2. Android Desktop, 3. macOS Desktop, 4. Linux Desktop, 5. Legacy Desktop); updated Android Desktop to authentic 1-over-2 layout and pruned deprecated Google Drive references; produced and verified realistic, high-resolution screenshots for all active platforms.
+**Implementation Quality:** High
+- **Observations:** Root-caused why `README.md` drifted: requirements sync skills only audited `REQUIREMENTS.md` and no mechanical gate existed. Created `scripts/check_readme_parity.py` and registered `gate "readme parity"` in `./scripts/run_tests.sh` to permanently prevent future drift. Full CI mirror passed cleanly across all platforms.
+**Framework Root Cause:** `sync-requirements` and `retrospective` skills previously treated `docs/products/*/REQUIREMENTS.md` as the sole documentation artifact, leaving `README.md` unmonitored during major feature additions (Linux Desktop, macOS Desktop, tablet 1-over-2 redesign).
+**Actionable Framework Improvement:**
+1. Updated `ai/skills/sync-requirements/SKILL.md` to mandate root `README.md` synchronization in the same commit whenever observable features, layouts, or product catalogs change.
+2. Updated `ai/skills/retrospective/SKILL.md` checklist item 2 to verify `README.md` parity.
+3. Added `scripts/check_readme_parity.py` to `./scripts/run_tests.sh` as an automated gate.
+
+---
+
+## 2026-10-12 - Android Desktop Asymmetric System Bar Policy (Preserve Status Bar, Hide Navigation Bar)
+**Agents Involved:** `@android-desktop-ui-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — The established product scoping and `FrameGeometry` solver isolated the layout arithmetic cleanly.
+- **Agents:** `@android-desktop-ui-agent` owned the implementation in `products/android/android-desktop/`; `@shared-mentor-agent` gated memory.
+- **Skills:** `task-lifecycle`, `retrospective`, `verify-build`, `sync-requirements`.
+- **Hooks:** Scope guards and `./scripts/run_tests.sh` mirror verified changes without friction.
+**Session Efficiency:** High
+- **Observations:** Root-causing the bug was straightforward: `enableEdgeToEdge()` was paired with horizontal-only insets padding in `SelectorScreen.kt` and `AdaptiveNavigation.kt`, which intentionally drew behind system bars. Implementing `WindowInsetsControllerCompat.hide(navigationBars())` and padding for `safeDrawing.only(Horizontal + Top)` cleanly resolved the issue. Caught an unresolved `dp` reference in the test file before finalizing.
+**Implementation Quality:** High
+- **Observations:** Verified all 734 Android unit and instrumented tests, lint, traceability audit, and readme parity. Full CI mirror `./scripts/run_tests.sh --android` passed all gates.
+**Framework Root Cause:** The previous requirement (REQ-AND-LAYOUT.26) intentionally drew through system bars under an assumption about display ceilings. Re-anchoring to user requirements resolved the user-facing occlusion.
+**Actionable Framework Improvement:** When designing immersive or edge-to-edge layouts on tablets, distinguish between top status bars (which users often want visible without app collision) and bottom navigation bars (which can be hidden to recover scarce vertical space).
+
 ## 2026-10-12 - Android Desktop Learning Workstation Evolution (Star Ratings, Metadata Interop, Overlays, Photo Coach, Inspect Screen)
 **Agents Involved:** `@android-desktop-agent`, `@shared-mentor-agent`
 **Framework Fit & Tooling:**
@@ -250,3 +314,20 @@ Newest entries at the top. Always use the real current date.
 - **Observations:** Evaluated existing gap thoroughly (why process reflections were historically discarded as "task diaries" under `record-lesson`) before drafting the integration schema. Verified against the CI mirror (`scripts/run_tests.sh`).
 **Framework Root Cause:** Previously, all memory files were strictly product/domain-specific (`bolt`, `palette`, `sentinel`, `code_health`), creating an impedance mismatch where agents had no destination to log framework friction or session quality issues.
 **Actionable Framework Improvement:** Establish `ai/memory/framework_retro.md` as the permanent home for AI session efficiency and framework fit evaluations, audited during each task retrospective.
+
+---
+
+## 2026-10-12 - Android Desktop Multi-Mode Ergonomics (Galaxy Tab S11 Ultra, Chromebooks, Touch Gestures)
+**Agents Involved:** `@android-desktop-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — Headless domain separation in `products/android/android-desktop/` and Compose view architecture made targeting the Galaxy Tab S11 Ultra landscape baseline alongside Chromebooks, DeX, and touch-first tablet modes straightforward and test-driven.
+- **Agents:** `@android-desktop-agent` owned layout, manifest, gestures, and test suites.
+- **Skills:** `task-lifecycle`, `retrospective`, `verify-build`, `sync-requirements` guided the end-to-end implementation and verification.
+- **Hooks:** Git status, scope guards, and CI mirror (`./scripts/run_tests.sh --quick`) operated cleanly.
+**Session Efficiency:** High
+- **Observations:** Auditing `FrameGeometry` early confirmed that the primary Galaxy Tab S11 Ultra landscape baseline (1480 × 924 dp logical resolution, 675 × 450 dp 3:2 frames) was already optimal and height-bound. The actual constraints preventing flexible tablet and Chromebook usage were manifest layout bounds (800x600 dp preventing 50/50 split snapping at 740 dp), camera feature declarations filtering clamshell Chromebooks on Google Play, missing horizontal touch swipe detection on the comparison workspace, and fixed 48 dp toggle row width overflowing in narrow split-screen flanks.
+**Implementation Quality:** High
+- **Observations:** Clean implementation across `AndroidManifest.xml`, `ThreeUpSelectorLayout.kt`, and `SelectorControlBlock.kt`. Unit tests and instrumented tests passed without failure on the first full test execution.
+**Framework Root Cause:** The layout bounds in `AndroidManifest.xml` had been configured for large standalone desktop windows without considering 50/50 split-screen snapping on tablets.
+**Actionable Framework Improvement:** When defining desktop window limits in manifests (`<layout>`), always test against 50/50 split-screen dimensions for target reference hardware, not only full-screen maximized windows.
+

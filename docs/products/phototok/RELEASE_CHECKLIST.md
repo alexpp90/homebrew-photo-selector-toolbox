@@ -308,9 +308,9 @@ Categories:
   - Photography
 License: MIT
 AuthorName: Alexander Patz
-SourceCode: https://github.com/alexpp90/homebrew-photo-selector-toolbox
-IssueTracker: https://github.com/alexpp90/homebrew-photo-selector-toolbox/issues
-Changelog: https://github.com/alexpp90/homebrew-photo-selector-toolbox/blob/main/CHANGELOG.md
+SourceCode: https://github.com/alexpp90/photo-selector
+IssueTracker: https://github.com/alexpp90/photo-selector/issues
+Changelog: https://github.com/alexpp90/photo-selector/blob/main/CHANGELOG.md
 
 Name: PhotoTok
 Summary: Lightning-fast offline vertical photo selector and culler
@@ -325,7 +325,7 @@ Description: |
   * 100% offline with zero network permissions or analytics
 
 RepoType: git
-Repo: https://github.com/alexpp90/homebrew-photo-selector-toolbox.git
+Repo: https://github.com/alexpp90/photo-selector.git
 
 AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags

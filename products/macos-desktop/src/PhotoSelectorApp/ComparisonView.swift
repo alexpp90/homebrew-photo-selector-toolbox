@@ -100,7 +100,7 @@ public struct ComparisonView: View {
             }
             .padding(Self.padding)
         }
-        .background(Color(red: 0.055, green: 0.055, blue: 0.063))
+        .background(Color(red: 0.043, green: 0.043, blue: 0.051))
         .preferredColorScheme(.dark)
         .onChange(of: zoomState) { _, newState in
             if !newState.isZoomed { sharedState.sharedPanOffset = .zero }
@@ -228,9 +228,9 @@ public struct BoundarySlotPane: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(red: 0.07, green: 0.07, blue: 0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
         )
     }
@@ -297,8 +297,8 @@ public struct ComparisonSlotPane: View {
 
     public var body: some View {
         ZStack(alignment: .topLeading) {
-            // Neutral Dark Studio Canvas Background
-            Color(red: 0.07, green: 0.07, blue: 0.08)
+            // Neutral Dark Studio Canvas Background (#0B0B0D)
+            Color(red: 0.043, green: 0.043, blue: 0.051)
 
             ZoomableImageViewport(
                 image: imageState.photoID == photo.id ? imageState.image : nil,
@@ -336,13 +336,24 @@ public struct ComparisonSlotPane: View {
             }
             .padding(8)
 
-            // Active Focus Ring Border
+            // Base Slot Frame Border
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(
-                    role == .current ? Color.accentColor : Color.white.opacity(0.12),
-                    lineWidth: role == .current ? 2.5 : 1.0
+                    Color.white.opacity(role == .current ? 0.25 : 0.08),
+                    lineWidth: 1.0
                 )
                 .allowsHitTesting(false)
+
+            // Viewfinder Autofocus Reticle Brackets (Active Focused Photo)
+            if isActive {
+                FocusReticleShape(cornerLength: 28, cornerRadius: 6)
+                    .stroke(
+                        Color(red: 0.22, green: 0.74, blue: 0.97), // #38BDF8 Viewfinder shutter cyan
+                        style: StrokeStyle(lineWidth: 3.0, lineCap: .round, lineJoin: .round)
+                    )
+                    .padding(1.5)
+                    .allowsHitTesting(false)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())
@@ -385,7 +396,7 @@ public struct ComparisonSlotPane: View {
                 HStack(spacing: 3) {
                     Image(systemName: "star.fill")
                         .font(.system(size: 8))
-                        .foregroundStyle(Color.yellow)
+                        .foregroundStyle(Color(red: 251/255.0, green: 191/255.0, blue: 36/255.0)) // #FBBF24
                     Text(String(format: "%.1f", aesthetic))
                         .font(.system(size: 10, weight: .bold).monospacedDigit())
                         .foregroundStyle(Color.white)
@@ -493,15 +504,15 @@ public struct ComparisonSlotPane: View {
 
             case .current:
                 HStack(spacing: 4) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 9))
+                    Image(systemName: "viewfinder")
+                        .font(.system(size: 9, weight: .bold))
                     Text("CURRENT")
                         .font(.system(size: 10, weight: .black, design: .rounded))
                 }
                 .foregroundStyle(Color.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Color.accentColor)
+                .background(Color(red: 0.22, green: 0.74, blue: 0.97)) // #38BDF8
                 .clipShape(Capsule())
 
             case .next:
@@ -536,9 +547,47 @@ public struct ComparisonSlotPane: View {
 
     private func focusColor(for category: SharpnessCategory) -> Color {
         switch category {
-        case .sharp: return Color.green
-        case .acceptable: return Color.orange
-        case .blurry: return Color.red
+        case .sharp: return Color(red: 52/255.0, green: 211/255.0, blue: 153/255.0)      // #34D399
+        case .acceptable: return Color(red: 245/255.0, green: 158/255.0, blue: 11/255.0) // #F59E0B
+        case .blurry: return Color(red: 244/255.0, green: 63/255.0, blue: 94/255.0)      // #F43F5E
         }
+    }
+}
+
+/// Camera viewfinder autofocus reticle corner brackets.
+struct FocusReticleShape: Shape {
+    var cornerLength: CGFloat = 28
+    var cornerRadius: CGFloat = 6
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let cl = min(cornerLength, min(rect.width, rect.height) / 3)
+        let r = min(cornerRadius, cl / 2)
+
+        // Top-Left corner [
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + cl))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.minY), control: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + cl, y: rect.minY))
+
+        // Top-Right corner ]
+        path.move(to: CGPoint(x: rect.maxX - cl, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + r), control: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cl))
+
+        // Bottom-Right corner ]
+        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - cl))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - cl, y: rect.maxY))
+
+        // Bottom-Left corner [
+        path.move(to: CGPoint(x: rect.minX + cl, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r), control: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cl))
+
+        return path
     }
 }

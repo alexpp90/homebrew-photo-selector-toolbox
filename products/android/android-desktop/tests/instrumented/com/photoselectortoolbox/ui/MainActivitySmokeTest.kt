@@ -49,6 +49,20 @@ class MainActivitySmokeTest {
         }
     }
 
+    @Test
+    fun systemBars_navigationBarsAreConfiguredTransient() {
+        composeRule.waitForIdle()
+        val activity = composeRule.activity
+        val insetsController = androidx.core.view.WindowCompat.getInsetsController(
+            activity.window,
+            activity.window.decorView,
+        )
+        org.junit.Assert.assertEquals(
+            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE,
+            insetsController.systemBarsBehavior,
+        )
+    }
+
     private fun dismissGestureTutorialIfShown() {
         if (composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
             composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()

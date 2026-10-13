@@ -42,7 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.activate(ignoringOtherApps: true)
+        let isBackgroundTest = (launchOptions.selfTestFolder != nil || launchOptions.screenshotURL != nil)
+            && ProcessInfo.processInfo.environment["PST_SHOW_GUI"] == nil
+        if !isBackgroundTest {
+            NSApp.activate(ignoringOtherApps: true)
+        }
         DispatchQueue.main.async {
             Self.makeWorkspaceWindowKey()
         }
@@ -61,6 +65,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 NSApp.terminate(passed ? 0 : 1)
                 exit(passed ? 0 : 1)
             }
+        } else if let screenshotURL = launchOptions.screenshotURL {
+            if let folder = launchOptions.openFolder {
+                viewModel.loadFolder(at: folder)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                guard let window = NSApp.windows.first(where: { $0.canBecomeKey && !$0.isSheet }) ?? NSApp.windows.first else {
+                    exit(1)
+                }
+                window.setContentSize(NSSize(width: 1440, height: 900))
+                window.layoutIfNeeded()
+                guard let view = window.contentView,
+                      let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+                    exit(1)
+                }
+                view.cacheDisplay(in: view.bounds, to: rep)
+                if let data = rep.representation(using: .png, properties: [:]) {
+                    try? data.write(to: screenshotURL)
+                    print("WROTE_SCREENSHOT:\(screenshotURL.path)")
+                }
+                NSApp.terminate(nil)
+                exit(0)
+            }
         } else if let folder = launchOptions.openFolder {
             viewModel.loadFolder(at: folder)
         }
@@ -70,16 +97,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         true
     }
 
-    /// Brings the first ordinary (non-panel) window to the front and makes it key.
+    /// Brings the first ordinary (non-panel) window to the front and makes it key,
+    /// or positions it off-screen and invisible during background test execution.
     static func makeWorkspaceWindowKey() {
         guard let window = NSApp.windows.first(where: { $0.canBecomeKey && !$0.isSheet && $0.isVisible })
                 ?? NSApp.windows.first(where: { $0.canBecomeKey && !$0.isSheet }) else { return }
-        window.makeKeyAndOrderFront(nil)
+        let isBackgroundTest = ProcessInfo.processInfo.environment["PST_SHOW_GUI"] == nil
+            && (ProcessInfo.processInfo.arguments.contains("--ui-self-test")
+                || ProcessInfo.processInfo.arguments.contains("--screenshot"))
+        if isBackgroundTest {
+            window.alphaValue = 0.0
+            window.setFrame(NSRect(x: -20000, y: -20000, width: 1280, height: 840), display: false)
+            window.orderBack(nil)
+            window.makeKey()
+        } else {
+            window.makeKeyAndOrderFront(nil)
+        }
     }
 }
 
 /// Command-line options understood by the app (all optional):
 /// `--open <folder>` loads a folder at launch;
+/// `--screenshot <path>` snapshots the workspace after loading;
 /// `--ui-self-test <folder> [--report <json>] [--expect-count N] [--external-key-wait S]`
 /// runs the in-app UI self-test and exits 0 (pass) or 1 (fail).
 struct LaunchOptions {
@@ -88,6 +127,7 @@ struct LaunchOptions {
     var reportURL: URL?
     var expectedCount: Int?
     var externalKeyWait: TimeInterval = 0
+    var screenshotURL: URL?
 
     init(arguments: [String]) {
         var iterator = arguments.dropFirst().makeIterator()
@@ -95,6 +135,8 @@ struct LaunchOptions {
             switch argument {
             case "--open":
                 openFolder = iterator.next().map { URL(fileURLWithPath: $0, isDirectory: true) }
+            case "--screenshot":
+                screenshotURL = iterator.next().map { URL(fileURLWithPath: $0) }
             case "--ui-self-test":
                 selfTestFolder = iterator.next().map { URL(fileURLWithPath: $0, isDirectory: true) }
             case "--report":

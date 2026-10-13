@@ -477,7 +477,7 @@ fun SettingsScreen(
                 title = "Source Code",
                 description = "View on GitHub",
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/alexpp90/homebrew-photo-selector-toolbox"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/alexpp90/photo-selector"))
                     try {
                         context.startActivity(intent)
                     } catch (e: ActivityNotFoundException) {

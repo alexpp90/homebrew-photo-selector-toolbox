@@ -482,7 +482,7 @@ fun SettingsScreen(
         // --- About Section ---
         SettingsSection(title = "About") {
             SettingsClickItem(
-                title = "Photo Selector Toolbox",
+                title = "PhotoSelector Studio",
                 description = "Version ${com.photoselectortoolbox.BuildConfig.VERSION_NAME}",
                 onClick = {},
                 icon = Icons.Default.Info,
@@ -494,7 +494,7 @@ fun SettingsScreen(
                 title = "Source Code",
                 description = "View on GitHub",
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/alexpp90/homebrew-photo-selector-toolbox"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/alexpp90/photo-selector"))
                     try {
                         context.startActivity(intent)
                     } catch (e: ActivityNotFoundException) {

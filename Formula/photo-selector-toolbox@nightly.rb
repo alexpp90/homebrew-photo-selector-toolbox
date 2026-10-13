@@ -1,19 +1,19 @@
 class PhotoSelectorToolboxATNightly < Formula
   desc "Analyze image EXIF metadata, find duplicates, and detect blur (Nightly)"
-  homepage "https://github.com/alexpp90/homebrew-photo-selector-toolbox"
+  homepage "https://github.com/alexpp90/photo-selector"
   version "latest"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/nightly/photo-selector-toolbox-macos-apple-silicon.zip"
-      sha256 "75b06ad524588249b88076e95c2b184a5dc8edde839aa1de02d2b9b9be453a68" # macos_sha256
+      url "https://github.com/alexpp90/photo-selector/releases/download/nightly/photo-selector-toolbox-macos-apple-silicon.zip"
+      sha256 "8f79fe3ca3f3faaf0a5af891d7d2bc944918c756876838799f86f684b1072019" # macos_sha256
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
-      url "https://github.com/alexpp90/homebrew-photo-selector-toolbox/releases/download/nightly/photo-selector-toolbox-linux-x64.zip"
-      sha256 "e0b4e665b9c0b2ab0e3a2922e368c4767b1bfe7c734a3c0b58d1541d781ac521" # linux_sha256
+      url "https://github.com/alexpp90/photo-selector/releases/download/nightly/photo-selector-toolbox-linux-x64.zip"
+      sha256 "b687d9bb878aba5c43e43e22f6446e6136c91f6441203351e70a99b5f9210859" # linux_sha256
     end
   end
 

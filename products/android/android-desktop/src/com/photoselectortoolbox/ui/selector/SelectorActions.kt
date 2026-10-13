@@ -59,14 +59,15 @@ import androidx.compose.ui.unit.sp
 import com.photoselectortoolbox.domain.curation.DeferredDeletion
 import com.photoselectortoolbox.domain.format.SelectionActionLabels
 import com.photoselectortoolbox.domain.interaction.FilingAction
-import com.photoselectortoolbox.ui.theme.Indigo200
-import com.photoselectortoolbox.ui.theme.Indigo500
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.FocusCyanText
 import com.photoselectortoolbox.ui.theme.ScoreBad
+import com.photoselectortoolbox.ui.theme.StudioBorder
+import com.photoselectortoolbox.ui.theme.StudioCard
+import com.photoselectortoolbox.ui.theme.StudioPanel
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
 import com.photoselectortoolbox.ui.theme.Zinc500
-import com.photoselectortoolbox.ui.theme.Zinc700
-import com.photoselectortoolbox.ui.theme.Zinc800
 import kotlinx.coroutines.delay
 
 /**
@@ -108,8 +109,8 @@ fun SelectorContextMenu(
         modifier = modifier
             .width(230.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Zinc800)
-            .border(1.dp, Zinc700, RoundedCornerShape(10.dp))
+            .background(StudioPanel)
+            .border(1.dp, StudioBorder, RoundedCornerShape(10.dp))
             .padding(5.dp)
             .testTag("selector_context_menu"),
     ) {
@@ -221,8 +222,8 @@ fun FirstRunNavigationHint(
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
-                .background(Zinc800)
-                .border(1.dp, Zinc700, RoundedCornerShape(999.dp))
+                .background(StudioCard)
+                .border(1.dp, StudioBorder, RoundedCornerShape(999.dp))
                 .padding(horizontal = 14.dp, vertical = 8.dp)
                 .testTag("first_run_hint"),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -245,7 +246,7 @@ fun FirstRunNavigationHint(
                 text = "Got it",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
-                color = Indigo200,
+                color = FocusCyanText,
                 modifier = Modifier
                     .pointerHoverIcon(PointerIcon.Hand)
                     .clickable(onClick = onDismiss)
@@ -301,8 +302,8 @@ fun SelectorSnackbar(
         modifier = modifier
             .widthIn(min = 340.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Zinc800)
-            .border(1.dp, Zinc700, RoundedCornerShape(10.dp))
+            .background(StudioCard)
+            .border(1.dp, StudioBorder, RoundedCornerShape(10.dp))
             .testTag("selector_snackbar"),
     ) {
         Row(
@@ -321,7 +322,7 @@ fun SelectorSnackbar(
                     text = "UNDO",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Indigo200,
+                    color = FocusCyanText,
                     modifier = Modifier
                         .pointerHoverIcon(PointerIcon.Hand)
                         .clickable { onUndo(); onDismiss() }
@@ -342,7 +343,7 @@ fun SelectorSnackbar(
                     scaleX = remaining.floatValue
                     transformOrigin = TransformOrigin(0f, 0.5f)
                 }
-                .background(Indigo500)
+                .background(FocusCyan)
                 .testTag("snackbar_countdown"),
         )
     }

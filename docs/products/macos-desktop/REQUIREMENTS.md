@@ -41,7 +41,7 @@ The macOS Desktop application is a high-performance native photo culling and sel
 ### 3.1 Studio Dark Mode & Readability Standards
 * **[REQ-MAC-THEME.01] Enforced Dark Scheme:** The application strictly enforces `.preferredColorScheme(.dark)` across all main windows, settings panels, sheets, and modal views.
 * **[REQ-MAC-THEME.02] High-Contrast Text Hierarchy:** Primary labels and headings use pure white (`Color.white` / `#FFFFFF`), and secondary descriptions use high-contrast light gray (`Color(white: 0.85)` / `#D9D9D9`). Black or muted dark text on dark gray backgrounds is strictly forbidden anywhere in the application.
-* **[REQ-MAC-THEME.03] Studio Chrome Backgrounds:** Uses neutral studio dark surfaces (`#141417` and `#1C1C20`) with clean contrasting borders (`#3A3A42`) to highlight photograph colors accurately.
+* **[REQ-MAC-THEME.03] Studio Chrome Backgrounds:** Uses neutral studio dark surfaces (`#0B0B0D` canvas background, `#141417` and `#1C1C20` cards) with clean contrasting borders (`#3A3A42`) to highlight photograph colors accurately without peripheral chromatic fatigue.
 
 ### 3.2 Workspace Layout & Comparison Modes
 * **[REQ-MAC-LAYOUT.01] Viewport Real Estate:** The main culling canvas maximizes preview area directly to image previews while providing persistent, tactile controls.
@@ -52,26 +52,25 @@ The macOS Desktop application is a high-performance native photo culling and sel
 * **[REQ-MAC-LAYOUT.03] Sliding Navigation & Culling Semantics:**
   - In 3-Up Focus Mode, navigating via Left/Right arrow keys, Next/Prev buttons, or the filmstrip slides the entire triplet forward or backward across the album.
   - Culling actions (Move `M`, Copy `C`, Trash `Delete`) target the centered candidate photo and automatically slide the triplet forward to the next candidate.
-* **[REQ-MAC-LAYOUT.04] Slot Roles & Visual Focus Indicators:** The current (top, in 3-Up) / active slot pane is bordered by a prominent 2.5pt blue focus ring with an `ACTIVE / CURRENT` badge and full EXIF optical exposure strip; contextual adjacent slots display subtle dark borders and quick focus affordances.
+* **[REQ-MAC-LAYOUT.04] Slot Roles & Visual Focus Indicators:** The current (top, in 3-Up) / active slot pane is bordered by camera viewfinder autofocus corner brackets in luminous cyan (`#38BDF8`) with an `ACTIVE / CURRENT` badge and full EXIF optical exposure strip; contextual adjacent slots display subtle dark borders and quick focus affordances.
 * **[REQ-MAC-LAYOUT.05] Floating Metadata HUD:** Key EXIF data and quality scores are presented via lightweight, non-intrusive translucent overlays that do not consume structural layout margins.
 * **[REQ-MAC-LAYOUT.06] Zero On-Screen Settings Clutter:** 0 persistent configuration sliders, drawers, or tuning inputs in the main culling workspace (100% R5 compliance).
 
 ### 3.3 Persistent Affordances & Tactile Controls
 * **[REQ-MAC-UI.01] Top Control & Navigation Bar:**
   - `Open Folder… (⌘O)` button and current SD card / folder volume name.
-  - Photo counter badge (`Photo X of Y`) and background scanning progress pill.
-  - Navigation buttons: `◀ Prev (←)` and `Next ▶ (→)`.
+  - Consolidated photo navigation cluster with position counter (`◀ Photo X of Y ▶`).
   - View mode segmented buttons: `[1-Up (1)]`, `[2-Up (2)]`, `[Focus 3-Up (3)]`.
-  - Quick toggles: `100% Zoom (Space)` (reads `Fit` while any zoom is active), `Filmstrip (F)`, `Info HUD (I)`.
-  - `Guide (?)` button opening the interactive Keyboard Shortcuts & User Guide sheet.
-* **[REQ-MAC-UI.02] Prominent Culling Action Bar:**
-  - Always-visible tactile buttons:
-    - **Move to Selection (M)** (Green primary button)
-    - **Copy to Selection (C)** (Blue button)
-    - **Move to Trash (⌫ Del)** (Red button)
-    - **Undo (⌘Z)** (Bordered button with stack state)
-  - Real-time progress counters: `X Selected`, `Y Trashed`, `Z Remaining`.
-  - Bottom hotkeys hint strip listing every essential shortcut.
+  - Zero-truncation compact toggles: `[⌕ 1:1]` toggling to `[Fit]` (Space or Esc), `Filmstrip (F)`, `Info HUD (I)`, and `Guide [?]`.
+* **[REQ-MAC-UI.02] Floating Glassmorphic Culling Action Dock:**
+  - Floating HUD dock (`.ultraThinMaterial`, `RoundedRectangle(cornerRadius: 14)`, `#3A3A42` border) with embedded hotkey badges and Obsidian Studio semantic palette:
+    - **Move to Selection (M)** (Subdued emerald `#082F1E` / `#10B981`)
+    - **Copy to Selection (C)** (Subdued cobalt `#112240` / `#3B82F6`)
+    - **Move to Trash (⌫)** (Subdued crimson `#3B0D11` / `#EF4444`)
+    - **Undo (⌘Z)** (Neutral `#222228` / `#E4E4E7`)
+  - Real-time progress counters HUD: `X Selected · Y Trashed · Z Remaining`.
+  - Replaces redundant 28px bottom hotkeys strip to maximize photographic viewing canvas (>88% of screen).
+* **[REQ-MAC-UI.03] Automated Workspace Snapshot:** Supports `--screenshot <path>` CLI launch option to capture and export a 1440x900 viewport PNG render of the active workspace after progressive loading for documentation and visual regression validation.
 
 ### 3.4 Keyboard Navigation & Shortcuts
 * **[REQ-MAC-KEY.01] Zero-Latency Dispatch via `KeyboardShortcutRouter`:**
@@ -112,3 +111,9 @@ The macOS Desktop application is a high-performance native photo culling and sel
   - **Duplicate Finder (`⌘D`)**: Opens standalone duplicate review studio.
   - **Library Statistics (`⌘L`)**: Opens distribution dashboard with metadata charts.
   - **Clear Cache**: Clears in-memory and thumbnail caches.
+
+## 4. Distribution & Packaging
+
+### 4.1 Homebrew Distribution
+* **[REQ-MAC-BREW.01] Homebrew Cask Distribution:** The native macOS desktop application is distributed as the primary macOS desktop Cask (`photo-selector-toolbox`) via the project tap `alexpp90/photo-selector-toolbox` (or `alexpp90/tap`). It packages the compiled `PhotoSelector.app` bundle inside `photo-selector-macos-apple-silicon.zip` and installs it to `/Applications/PhotoSelector.app`.
+* **[REQ-MAC-BREW.02] Coexistence with Legacy Desktop:** The native macOS Cask is fully isolated from the legacy Python/Tkinter Cask (`photo-selector-toolbox-legacy`), allowing both applications to be installed, launched, and upgraded side-by-side on the same Mac without bundle collisions, binary overwrite, or preferences corruption.

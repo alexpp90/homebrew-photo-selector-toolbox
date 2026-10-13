@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -45,27 +48,28 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.photoselectortoolbox.domain.format.ActionLabel
 import com.photoselectortoolbox.domain.format.SelectionActionLabels
 import com.photoselectortoolbox.domain.format.SelectorLabels
 import com.photoselectortoolbox.domain.interaction.FilingAction
-import com.photoselectortoolbox.ui.theme.Indigo500
-import com.photoselectortoolbox.ui.theme.PanelSurface
+import com.photoselectortoolbox.domain.model.RatingFilter
+import com.photoselectortoolbox.ui.components.StarRatingBar
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.FocusCyanNav
+import com.photoselectortoolbox.ui.theme.FocusCyanText
+import com.photoselectortoolbox.ui.theme.FocusCyanTonal
 import com.photoselectortoolbox.ui.theme.ScoreBad
 import com.photoselectortoolbox.ui.theme.ScoreGood
-import com.photoselectortoolbox.ui.theme.TonalIndigo
+import com.photoselectortoolbox.ui.theme.StudioBorder
+import com.photoselectortoolbox.ui.theme.StudioBorderActive
+import com.photoselectortoolbox.ui.theme.StudioCard
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
 import com.photoselectortoolbox.ui.theme.Zinc600
 import com.photoselectortoolbox.ui.theme.Zinc700
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import com.photoselectortoolbox.domain.model.RatingFilter
-import com.photoselectortoolbox.ui.components.StarRatingBar
-import com.photoselectortoolbox.ui.theme.TonalIndigoHover
-import com.photoselectortoolbox.ui.theme.Zinc800
 
 /**
  * Everything that acts on the current frame, in the letterbox column to its
@@ -101,121 +105,133 @@ fun SelectorControlBlock(
     currentRating: Int = 0,
     onSetRating: (Int) -> Unit = {},
 ) {
-    Column(
-        modifier = modifier.padding(horizontal = 10.dp).testTag("control_block"),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        val labels = SelectionActionLabels.both(filingAction)
+    BoxWithConstraints(modifier = modifier) {
+        val isNarrow = maxWidth < 240.dp
+        val horizontalPadding = if (isNarrow) 4.dp else 10.dp
+        val toggleSize = if (isNarrow) 40.dp else 48.dp
+        val toggleGap = if (isNarrow) 4.dp else 6.dp
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            labels.forEach { label ->
-                FilingButton(
-                    label = label,
-                    onClick = if (label.action == FilingAction.MOVE) {
-                        actions.onMove
-                    } else {
-                        actions.onCopy
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag(
-                            if (label.action == FilingAction.MOVE) {
-                                "move_button_expanded"
-                            } else {
-                                "copy_button_expanded"
-                            }
-                        ),
+        Column(
+            modifier = Modifier
+                .padding(horizontal = horizontalPadding)
+                .testTag("control_block"),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            val labels = SelectionActionLabels.both(filingAction)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                labels.forEach { label ->
+                    FilingButton(
+                        label = label,
+                        onClick = if (label.action == FilingAction.MOVE) {
+                            actions.onMove
+                        } else {
+                            actions.onCopy
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(
+                                if (label.action == FilingAction.MOVE) {
+                                    "move_button_expanded"
+                                } else {
+                                    "copy_button_expanded"
+                                }
+                            ),
+                    )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Delete is diagonally opposite the configured filing button, not
+                // beside it. The two most-used controls on this screen are "file
+                // this" and "destroy this", and they should not be neighbours.
+                WordedButton(
+                    icon = Icons.Default.Delete,
+                    word = "Delete",
+                    keyHint = "Del",
+                    description = "Delete, shortcut Delete or Backspace",
+                    contentColor = ScoreBad,
+                    outlined = true,
+                    onClick = actions.onDelete,
+                    modifier = Modifier.weight(1f).testTag("delete_button_expanded"),
+                )
+                WordedButton(
+                    icon = Icons.Default.Fullscreen,
+                    word = "Full",
+                    keyHint = "F",
+                    description = "Open fullscreen, shortcut F",
+                    onClick = actions.onFullscreen,
+                    modifier = Modifier.weight(1f).testTag("fullscreen_button"),
                 )
             }
-        }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            // Delete is diagonally opposite the configured filing button, not
-            // beside it. The two most-used controls on this screen are "file
-            // this" and "destroy this", and they should not be neighbours.
-            WordedButton(
-                icon = Icons.Default.Delete,
-                word = "Delete",
-                keyHint = "Del",
-                description = "Delete, shortcut Delete",
-                contentColor = ScoreBad,
-                outlined = true,
-                onClick = actions.onDelete,
-                modifier = Modifier.weight(1f).testTag("delete_button_expanded"),
-            )
-            WordedButton(
-                icon = Icons.Default.Fullscreen,
-                word = "Full",
-                keyHint = "F",
-                description = "Open fullscreen, shortcut F",
-                onClick = actions.onFullscreen,
-                modifier = Modifier.weight(1f).testTag("fullscreen_button"),
-            )
-        }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                WordedButton(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    word = "Prev",
+                    keyHint = "←",
+                    description = "Previous image, shortcut left arrow",
+                    enabled = canGoPrevious,
+                    onClick = onNavigatePrevious,
+                    modifier = Modifier.weight(1f).testTag("rail_previous"),
+                )
+                WordedButton(
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    word = "Next",
+                    keyHint = "→",
+                    description = "Next image, shortcut right arrow",
+                    enabled = canGoNext,
+                    onClick = onNavigateNext,
+                    modifier = Modifier.weight(1f).testTag("rail_next"),
+                )
+            }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            WordedButton(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                word = "Prev",
-                keyHint = "←",
-                description = "Previous image, shortcut left arrow",
-                enabled = canGoPrevious,
-                onClick = onNavigatePrevious,
-                modifier = Modifier.weight(1f).testTag("rail_previous"),
-            )
-            WordedButton(
-                icon = Icons.AutoMirrored.Filled.ArrowForward,
-                word = "Next",
-                keyHint = "→",
-                description = "Next image, shortcut right arrow",
-                enabled = canGoNext,
-                onClick = onNavigateNext,
-                modifier = Modifier.weight(1f).testTag("rail_next"),
-            )
-        }
-
-        // View controls. Icon-only is acceptable here and only here: none of
-        // these four changes a file, so a mis-tap costs a glance, not a photo.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-        ) {
-            ViewToggle(
-                icon = Icons.Outlined.Info,
-                description = if (detailsVisible) "Hide photo details" else "Show photo details",
-                active = detailsVisible,
-                onClick = actions.onToggleDetails,
-                modifier = Modifier.testTag("details_toggle"),
-            )
-            ViewToggle(
-                icon = Icons.Default.ViewCarousel,
-                description = if (filmstripVisible) "Hide the filmstrip" else "Show the filmstrip",
-                active = filmstripVisible,
-                onClick = actions.onToggleFilmstrip,
-                modifier = Modifier.testTag("filmstrip_toggle"),
-            )
-            ViewToggle(
-                icon = if (overlayValuesVisible) {
-                    Icons.Default.Visibility
-                } else {
-                    Icons.Default.VisibilityOff
-                },
-                description = if (overlayValuesVisible) {
-                    "Hide the values on Previous and Next"
-                } else {
-                    "Show the values on Previous and Next"
-                },
-                active = overlayValuesVisible,
-                onClick = actions.onToggleOverlayValues,
-                modifier = Modifier.testTag("overlay_values_toggle"),
-            )
-            ViewToggle(
-                icon = Icons.Default.Keyboard,
-                description = "Shortcuts and layout guide",
-                onClick = actions.onShowShortcuts,
-                modifier = Modifier.testTag("shortcuts_button"),
-            )
-        }
+            // View controls. Icon-only is acceptable here and only here: none of
+            // these four changes a file, so a mis-tap costs a glance, not a photo.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(toggleGap, Alignment.CenterHorizontally),
+            ) {
+                ViewToggle(
+                    icon = Icons.Outlined.Info,
+                    description = if (detailsVisible) "Hide photo details" else "Show photo details",
+                    active = detailsVisible,
+                    onClick = actions.onToggleDetails,
+                    size = toggleSize,
+                    modifier = Modifier.testTag("details_toggle"),
+                )
+                ViewToggle(
+                    icon = Icons.Default.ViewCarousel,
+                    description = if (filmstripVisible) "Hide the filmstrip" else "Show the filmstrip",
+                    active = filmstripVisible,
+                    onClick = actions.onToggleFilmstrip,
+                    size = toggleSize,
+                    modifier = Modifier.testTag("filmstrip_toggle"),
+                )
+                ViewToggle(
+                    icon = if (overlayValuesVisible) {
+                        Icons.Default.Visibility
+                    } else {
+                        Icons.Default.VisibilityOff
+                    },
+                    description = if (overlayValuesVisible) {
+                        "Hide the values on Previous and Next"
+                    } else {
+                        "Show the values on Previous and Next"
+                    },
+                    active = overlayValuesVisible,
+                    onClick = actions.onToggleOverlayValues,
+                    size = toggleSize,
+                    modifier = Modifier.testTag("overlay_values_toggle"),
+                )
+                ViewToggle(
+                    icon = Icons.Default.Keyboard,
+                    description = "Shortcuts and layout guide",
+                    onClick = actions.onShowShortcuts,
+                    size = toggleSize,
+                    modifier = Modifier.testTag("shortcuts_button"),
+                )
+            }
 
         // Star rating bar for current image
         if (position > 0) {
@@ -258,6 +274,7 @@ fun SelectorControlBlock(
         )
     }
 }
+}
 
 /**
  * Filter chips allowing rapid selection of rating criteria in the control flank.
@@ -283,8 +300,8 @@ fun RatingFilterSelector(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))
-                    .background(if (isSelected) TonalIndigoHover else Zinc800)
-                    .border(1.dp, if (isSelected) Indigo500 else Zinc700, RoundedCornerShape(4.dp))
+                    .background(if (isSelected) FocusCyanNav else StudioCard)
+                    .border(1.dp, if (isSelected) FocusCyan else StudioBorder, RoundedCornerShape(4.dp))
                     .clickable { onFilterSelected(filter) }
                     .padding(horizontal = 6.dp, vertical = 2.dp)
                     .testTag(tag),
@@ -294,7 +311,7 @@ fun RatingFilterSelector(
                     text = filter.label,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
-                    color = if (isSelected) Zinc50 else Zinc400,
+                    color = if (isSelected) FocusCyanText else Zinc400,
                 )
             }
         }
@@ -350,9 +367,9 @@ private fun WordedButton(
     val background by animateColorAsState(
         targetValue = when {
             !enabled -> Color.Transparent
-            filled -> TonalIndigo
-            hovered -> Zinc800
-            else -> PanelSurface
+            filled -> FocusCyanTonal
+            hovered -> StudioBorderActive
+            else -> StudioCard
         },
         animationSpec = tween(150),
         label = "buttonBackground",
@@ -364,7 +381,7 @@ private fun WordedButton(
             .clip(RoundedCornerShape(8.dp))
             .background(background)
             .then(
-                if (outlined) Modifier.border(1.dp, Zinc800, RoundedCornerShape(8.dp))
+                if (outlined) Modifier.border(1.dp, StudioBorder, RoundedCornerShape(8.dp))
                 else Modifier
             )
             .hoverable(interactionSource, enabled = enabled)
@@ -394,8 +411,9 @@ private fun WordedButton(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text = word, fontSize = 13.sp, color = resolvedContent)
+            val formattedKey = if (keyHint.startsWith("[")) keyHint else "[$keyHint]"
             Text(
-                text = keyHint,
+                text = formattedKey,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
                 color = if (enabled) Zinc600 else Zinc700,
@@ -412,15 +430,16 @@ private fun ViewToggle(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     active: Boolean = false,
+    size: Dp = 48.dp,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
 
     Box(
         modifier = modifier
-            .size(48.dp)
+            .size(size)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (hovered) Zinc800 else Color.Transparent)
+            .background(if (hovered) StudioBorderActive else Color.Transparent)
             .hoverable(interactionSource)
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(onClick = onClick)
@@ -431,7 +450,7 @@ private fun ViewToggle(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
-            tint = if (active) Indigo500 else Zinc400,
+            tint = if (active) FocusCyan else Zinc400,
         )
     }
 }

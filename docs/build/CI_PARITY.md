@@ -47,6 +47,7 @@ The rule that prevents it:
 | `validate_framework.py` | — (local CI mirror) | ✅ everywhere | Agent-framework integrity: naming, registration, roster, toolchain parity, unowned product detection, product boundary leaks, and paths referenced by instructions. |
 | `gen_gemini_settings.py --check` | — (local CI mirror) | ✅ everywhere | Fails when `.gemini/settings.json` has drifted from `ai/agents/*.md`. Fix by regenerating, never by hand-editing. |
 | `verify_requirements_traceability.py --check --strict` | — (local CI mirror) | ✅ everywhere | Validates bidirectional requirement-to-test traceability: ensures requirement IDs exist in specs, rejects orphan test references, and strictly isolates multi-product test suite mappings. |
+| `check_readme_parity.py --check` | — (local CI mirror) | ✅ everywhere | Enforces root `README.md` ecosystem completeness, canonical product ordering (PhotoTok -> Android Desktop -> macOS Desktop -> Linux Desktop -> Desktop), asset integrity, and removal of deprecated terms. |
 
 ---
 

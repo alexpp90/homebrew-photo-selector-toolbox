@@ -16,10 +16,14 @@ set -euo pipefail
 
 PRODUCT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COUNT=120
-EXTERNAL_KEY=1
+EXTERNAL_KEY=0
+if [[ -n "${PST_SHOW_GUI:-}" && "${PST_SHOW_GUI}" != "0" ]]; then
+    EXTERNAL_KEY=1
+fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --count) COUNT="$2"; shift 2 ;;
+        --external-key) EXTERNAL_KEY=1; shift ;;
         --no-external-key) EXTERNAL_KEY=0; shift ;;
         *) echo "unknown option $1" >&2; exit 2 ;;
     esac
@@ -32,7 +36,14 @@ if ! launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
 fi
 
 WORK="$(mktemp -d -t pst-macos-ui)"
-trap 'rm -rf "$WORK"' EXIT
+PREV_APP="$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null || true)"
+cleanup() {
+    rm -rf "$WORK"
+    if [[ -n "${PREV_APP:-}" && "${PREV_APP}" != "PhotoSelectorApp" && "${PREV_APP}" != "PhotoSelector" ]]; then
+        osascript -e 'tell application "'"$PREV_APP"'" to activate' >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT
 FIXTURES="$WORK/fixtures"
 
 echo "• building app bundle (release)…"
@@ -61,6 +72,10 @@ run_self_test() {
             sleep 0.1
         done
         if [[ -f "$report.ready" ]]; then
+            if [[ -n "${PST_SHOW_GUI:-}" && "${PST_SHOW_GUI}" != "0" ]]; then
+                osascript -e 'tell application "System Events" to set frontmost of first process whose unix id is '"$pid"' to true' >/dev/null 2>&1 || true
+                sleep 0.2
+            fi
             if osascript -e 'with timeout of 5 seconds' -e 'tell application "System Events" to key code 124' -e 'end timeout' >/dev/null 2>"$WORK/osascript.err"; then
                 EXTERNAL_RESULT="sent"
             else

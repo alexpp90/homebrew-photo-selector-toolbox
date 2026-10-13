@@ -26,9 +26,16 @@ import com.photoselectortoolbox.domain.guidance.SelectorGuidance
 import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.domain.scoring.ScoreMetric
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import com.photoselectortoolbox.domain.model.RatingFilter
 import com.photoselectortoolbox.ui.components.StarRatingBar
 import com.photoselectortoolbox.viewmodel.SelectorFrame
@@ -131,6 +138,10 @@ fun ThreeUpSelectorLayout(
                 pendingHint = pendingHint,
                 onDismissHint = onDismissHint,
                 onSetRating = onSetRating,
+                canGoPrevious = previous != null,
+                canGoNext = next != null,
+                onNavigatePrevious = onNavigatePrevious,
+                onNavigateNext = onNavigateNext,
                 modifier = Modifier.weight(1f),
             )
             return@Row
@@ -213,6 +224,12 @@ fun ThreeUpSelectorLayout(
                         onLongClick = onLongPressFrame,
                         onMaximise = { onMaximise(SelectorFrame.CURRENT) },
                         testTag = "column_current",
+                        modifier = Modifier.comparisonSwipeNavigation(
+                            canGoPrevious = previous != null,
+                            canGoNext = next != null,
+                            onNavigatePrevious = onNavigatePrevious,
+                            onNavigateNext = onNavigateNext,
+                        ),
                     )
 
                     Spacer(modifier = Modifier.width(FrameGeometry.Gap))
@@ -265,7 +282,15 @@ fun ThreeUpSelectorLayout(
 
                 // ── Row 2: PREVIOUS · NEXT, centred as a pair ───────────
                 Row(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .comparisonSwipeNavigation(
+                            canGoPrevious = previous != null,
+                            canGoNext = next != null,
+                            onNavigatePrevious = onNavigatePrevious,
+                            onNavigateNext = onNavigateNext,
+                        ),
                     horizontalArrangement = Arrangement.spacedBy(
                         FrameGeometry.Gap,
                         Alignment.CenterHorizontally,
@@ -416,6 +441,42 @@ private fun NeighbourFrame(
 }
 
 /**
+ * Enables horizontal touch swipe navigation across the photograph comparison area.
+ *
+ * Swipe left = next photograph; swipe right = previous photograph.
+ * Conforms to REQ-AND-INPUT.01 and REQ-AND-INPUT.02.
+ */
+@Composable
+private fun Modifier.comparisonSwipeNavigation(
+    canGoPrevious: Boolean,
+    canGoNext: Boolean,
+    onNavigatePrevious: () -> Unit,
+    onNavigateNext: () -> Unit,
+): Modifier {
+    val density = LocalDensity.current
+    val thresholdPx = remember(density) { with(density) { 48.dp.toPx() } }
+    var dragAccumulator by remember { mutableFloatStateOf(0f) }
+
+    return this.pointerInput(canGoPrevious, canGoNext, thresholdPx) {
+        detectHorizontalDragGestures(
+            onDragStart = { dragAccumulator = 0f },
+            onDragEnd = {
+                if (dragAccumulator < -thresholdPx && canGoNext) {
+                    onNavigateNext()
+                } else if (dragAccumulator > thresholdPx && canGoPrevious) {
+                    onNavigatePrevious()
+                }
+                dragAccumulator = 0f
+            },
+            onDragCancel = { dragAccumulator = 0f },
+            onHorizontalDrag = { _, dragAmount ->
+                dragAccumulator += dragAmount
+            },
+        )
+    }
+}
+
+/**
  * One frame at exactly [size], with its maximise badge.
  *
  * The size arrives as an explicit [DpSize] rather than as a modifier chain, so
@@ -433,8 +494,9 @@ private fun FrameTile(
     onLongClick: () -> Unit,
     onMaximise: () -> Unit,
     testTag: String,
+    modifier: Modifier = Modifier,
 ) {
-    Box {
+    Box(modifier = modifier) {
         ImageTile(
             image = image,
             isCurrent = isCurrent,
@@ -473,6 +535,10 @@ private fun MaximisedFrame(
     pendingHint: SelectorHintUi?,
     onDismissHint: () -> Unit,
     onSetRating: (Int) -> Unit = {},
+    canGoPrevious: Boolean = false,
+    canGoNext: Boolean = false,
+    onNavigatePrevious: () -> Unit = {},
+    onNavigateNext: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -518,7 +584,14 @@ private fun MaximisedFrame(
                 }
             }
 
-            Box {
+            Box(
+                modifier = Modifier.comparisonSwipeNavigation(
+                    canGoPrevious = canGoPrevious,
+                    canGoNext = canGoNext,
+                    onNavigatePrevious = onNavigatePrevious,
+                    onNavigateNext = onNavigateNext,
+                ),
+            ) {
                 ImageTile(
                     image = image,
                     isCurrent = frame == SelectorFrame.CURRENT,

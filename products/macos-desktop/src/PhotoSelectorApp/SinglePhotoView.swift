@@ -35,7 +35,7 @@ public struct SinglePhotoView: View {
 
     public var body: some View {
         ZStack(alignment: .topLeading) {
-            Color(red: 0.055, green: 0.055, blue: 0.063)
+            Color(red: 0.043, green: 0.043, blue: 0.051)
                 .ignoresSafeArea()
 
             ZoomableImageViewport(
@@ -161,7 +161,7 @@ public struct FloatingInfoPillView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 10))
-                                .foregroundStyle(Color.yellow)
+                                .foregroundStyle(Color(red: 251/255.0, green: 191/255.0, blue: 36/255.0)) // #FBBF24
 
                             Text(String(format: "%.1f", aesthetic))
                                 .font(.system(size: 11, weight: .semibold).monospacedDigit())
@@ -203,9 +203,9 @@ public struct FloatingInfoPillView: View {
 
     private func focusColor(for category: SharpnessCategory) -> Color {
         switch category {
-        case .sharp: return Color.green
-        case .acceptable: return Color.orange
-        case .blurry: return Color.red
+        case .sharp: return Color(red: 52/255.0, green: 211/255.0, blue: 153/255.0)      // #34D399
+        case .acceptable: return Color(red: 245/255.0, green: 158/255.0, blue: 11/255.0) // #F59E0B
+        case .blurry: return Color(red: 244/255.0, green: 63/255.0, blue: 94/255.0)      // #F43F5E
         }
     }
 

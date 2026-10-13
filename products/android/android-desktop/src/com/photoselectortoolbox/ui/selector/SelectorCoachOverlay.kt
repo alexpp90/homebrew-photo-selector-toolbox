@@ -47,13 +47,14 @@ import com.photoselectortoolbox.domain.guidance.TourCallout
 import com.photoselectortoolbox.domain.guidance.TourRegion
 import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.domain.interaction.GestureRow
-import com.photoselectortoolbox.ui.theme.Indigo200
-import com.photoselectortoolbox.ui.theme.Indigo500
-import com.photoselectortoolbox.ui.theme.PanelSurface
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.FocusCyanText
+import com.photoselectortoolbox.ui.theme.StudioBorder
+import com.photoselectortoolbox.ui.theme.StudioCanvas
+import com.photoselectortoolbox.ui.theme.StudioCard
+import com.photoselectortoolbox.ui.theme.StudioPanel
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc50
-import com.photoselectortoolbox.ui.theme.Zinc700
-import com.photoselectortoolbox.ui.theme.Zinc950
 
 /**
  * The guide: the selector, labelled where it actually is.
@@ -123,7 +124,7 @@ fun SelectorCoachOverlay(
                 .fillMaxSize()
                 // A scrim, not an opaque sheet: the controls being explained stay
                 // visible underneath, which is the whole point of a coach mark.
-                .background(Zinc950.copy(alpha = 0.72f))
+                .background(StudioCanvas.copy(alpha = 0.85f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
@@ -314,8 +315,8 @@ private fun Callout(callout: TourCallout, compact: Boolean = false) {
         modifier = Modifier
             .then(if (compact) Modifier.fillMaxWidth() else Modifier)
             .clip(RoundedCornerShape(10.dp))
-            .background(PanelSurface)
-            .border(1.dp, Zinc700, RoundedCornerShape(10.dp))
+            .background(StudioPanel)
+            .border(1.dp, StudioBorder, RoundedCornerShape(10.dp))
             .padding(horizontal = 10.dp, vertical = 8.dp)
             .semantics { contentDescription = "${callout.title}. ${callout.body}" }
             .testTag("coach_callout"),
@@ -390,7 +391,7 @@ private fun Leader() {
         modifier = Modifier
             .width(10.dp)
             .height(1.dp)
-            .background(Indigo500),
+            .background(FocusCyan),
     )
 }
 
@@ -424,8 +425,8 @@ private fun DismissButton(onDismiss: () -> Unit) {
         modifier = Modifier
             .height(48.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(PanelSurface)
-            .border(1.dp, Zinc700, RoundedCornerShape(8.dp))
+            .background(StudioCard)
+            .border(1.dp, StudioBorder, RoundedCornerShape(8.dp))
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(onClick = onDismiss)
             .padding(horizontal = 20.dp)
@@ -436,7 +437,7 @@ private fun DismissButton(onDismiss: () -> Unit) {
             text = "Got it",
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
-            color = Indigo200,
+            color = FocusCyanText,
         )
     }
 }

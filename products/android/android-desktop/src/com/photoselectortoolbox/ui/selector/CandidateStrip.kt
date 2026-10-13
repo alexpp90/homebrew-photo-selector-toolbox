@@ -44,12 +44,12 @@ import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.domain.format.SelectorLabels
 import com.photoselectortoolbox.domain.scoring.ScoreMetric
 import com.photoselectortoolbox.ui.components.goodnessColor
-import com.photoselectortoolbox.ui.theme.Indigo500
-import com.photoselectortoolbox.ui.theme.Indigo600
+import com.photoselectortoolbox.ui.theme.CurationAmber
+import com.photoselectortoolbox.ui.theme.FocusCyan
+import com.photoselectortoolbox.ui.theme.StudioBorder
+import com.photoselectortoolbox.ui.theme.StudioCard
+import com.photoselectortoolbox.ui.theme.StudioPanel
 import com.photoselectortoolbox.ui.theme.Zinc500
-import com.photoselectortoolbox.ui.theme.Zinc700
-import com.photoselectortoolbox.ui.theme.Zinc800
-import com.photoselectortoolbox.ui.theme.Zinc900
 
 /**
  * Width of the strip, decided by the frame solver rather than here.
@@ -143,7 +143,7 @@ fun CandidateStrip(
         modifier = modifier
             .fillMaxHeight()
             .width(FilmstripWidth)
-            .background(Zinc900)
+            .background(StudioPanel)
             .testTag("filmstrip"),
     ) {
         // A 1 dp rule on the leading edge, not a shadow. Surfaces on this screen
@@ -153,7 +153,7 @@ fun CandidateStrip(
             modifier = Modifier
                 .width(1.dp)
                 .fillMaxHeight()
-                .background(Zinc800)
+                .background(StudioBorder)
                 .align(Alignment.TopStart),
         )
 
@@ -240,10 +240,10 @@ private fun CandidateThumbnail(
                 // first, but never so far that their content is unreadable.
                 .alpha(if (isCurrent) 1f else 0.85f)
                 .clip(shape)
-                .background(Zinc800)
+                .background(StudioCard)
                 .border(
                     width = if (isCurrent) 2.dp else 1.dp,
-                    color = if (isCurrent) Indigo500 else Zinc700,
+                    color = if (isCurrent) FocusCyan else StudioBorder,
                     shape = shape,
                 )
                 .pointerHoverIcon(PointerIcon.Hand)
@@ -274,7 +274,7 @@ private fun CandidateThumbnail(
                     if (image.rating in 1..5) {
                         Text(
                             text = "★${image.rating}",
-                            color = Color(0xFFFBBF24),
+                            color = CurationAmber,
                             fontSize = 8.sp,
                             lineHeight = 9.sp,
                             fontFamily = FontFamily.Monospace,
@@ -309,14 +309,14 @@ private fun CandidateThumbnail(
         // one, so a photographer can see the shape of the burst they are inside
         // without reading filenames. It ran under the thumbnails when the strip
         // ran across the screen; down the strip's leading edge it is the same
-        // 2 dp Indigo-600 rule reading the same way — a bracket around a run.
+        // 2 dp FocusCyan rule reading the same way — a bracket around a run.
         if (inCurrentBurst) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .width(2.dp)
                     .height(height)
-                    .background(Indigo600),
+                    .background(FocusCyan),
             )
         }
     }

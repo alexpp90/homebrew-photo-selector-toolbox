@@ -19,6 +19,14 @@ APP="$PRODUCT_DIR/.build/app/PhotoSelector.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/PhotoSelectorApp" "$APP/Contents/MacOS/PhotoSelectorApp"
+if [[ -f "$PRODUCT_DIR/Resources/AppIcon.icns" ]]; then
+    cp "$PRODUCT_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+elif [[ -f "$PRODUCT_DIR/../../assets/logo.icns" ]]; then
+    cp "$PRODUCT_DIR/../../assets/logo.icns" "$APP/Contents/Resources/AppIcon.icns"
+else
+    echo "ERROR: AppIcon.icns not found in $PRODUCT_DIR/Resources or assets/" >&2
+    exit 1
+fi
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -27,9 +35,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundleExecutable</key><string>PhotoSelectorApp</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>com.photoselectortoolbox.macos</string>
-    <key>CFBundleName</key><string>Photo Selector</string>
-    <key>CFBundleDisplayName</key><string>Photo Selector</string>
+    <key>CFBundleName</key><string>PhotoSelector Studio</string>
+    <key>CFBundleDisplayName</key><string>PhotoSelector Studio</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>CFBundleVersion</key><string>1</string>

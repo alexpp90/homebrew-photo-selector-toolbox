@@ -25,6 +25,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.photoselector.core.model.ExifData
 import com.photoselectortoolbox.MainActivity
@@ -318,7 +319,10 @@ class SelectorScreenTest {
         val frame = composeRule.onNodeWithTag("column_current").getUnclippedBoundsInRoot()
         val frameHeight = frame.bottom - frame.top
 
-        val region = FrameGeometry.imageRegion(windowWidth, windowHeight, SidebarWidth)
+        val imageRegionBounds = composeRule.onNodeWithTag("image_region").getUnclippedBoundsInRoot()
+        val statusBarHeight = (imageRegionBounds.top - rootBounds.top).coerceAtLeast(0.dp)
+
+        val region = FrameGeometry.imageRegion(windowWidth, windowHeight, SidebarWidth, statusBarHeight)
         val expected = FrameGeometry.threeUpLayout(
             regionWidth = region.width,
             regionHeight = region.height,
@@ -520,8 +524,10 @@ class SelectorScreenTest {
                 swipeLeft()
             }
         } else {
-            // In expanded layout, click the Next image column's clickable box
-            composeRule.onNodeWithTag("column_next").performClick()
+            // In expanded layout, horizontal swipe across current frame also browses (REQ-AND-INPUT.02)
+            composeRule.onNodeWithTag("column_current").performTouchInput {
+                swipeLeft()
+            }
         }
 
         composeRule.waitForIdle()

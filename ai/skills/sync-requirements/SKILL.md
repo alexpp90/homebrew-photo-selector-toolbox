@@ -13,12 +13,15 @@ build on a false premise. The rule is therefore **same commit, not same branch**
 
 | Change affects | File |
 |---|---|
-| Desktop only | `docs/products/desktop/REQUIREMENTS.md` |
-| Android Desktop only | `docs/products/android-desktop/REQUIREMENTS.md` |
 | PhotoTok only | `docs/products/phototok/REQUIREMENTS.md` |
+| Android Desktop only | `docs/products/android-desktop/REQUIREMENTS.md` |
+| macOS Desktop only | `docs/products/macos-desktop/REQUIREMENTS.md` |
+| Linux Desktop only | `docs/products/linux-desktop/REQUIREMENTS.md` |
+| Legacy Desktop only | `docs/products/desktop/REQUIREMENTS.md` |
 | `products/android/core/` | **both** Android product files |
 | A rule that must hold for more than one product | `docs/shared/` |
 | Visual/UX styling for an Android product | that product's `DESIGN.md` |
+| Ecosystem overview, product roster, installation, visuals | `README.md` (root) |
 
 There is no repository-root `REQUIREMENTS.md`. If an instruction tells you to read one,
 that instruction is stale — fix it via the `sync-framework` skill.
@@ -59,6 +62,19 @@ When a feature lands in one product, evaluate it for the others against
 `docs/shared/FEATURE_PARITY.md` and record the decision — including a decision *not* to port
 it, with the reason. The four products are deliberately different; an unrecorded gap is
 indistinguishable from an oversight.
+
+## Root README.md Synchronization
+
+When observable product changes occur, root `README.md` must be kept in sync in the **same commit**:
+1. **Product additions, redesigns, or deprecations**: Any new native client, layout overhaul (e.g. tablet 1-over-2 layout), or deprecated platform source (e.g. removal of Google Drive) must be updated immediately in the product overview, feature bullets, and sync matrix.
+2. **Canonical Product Ordering**: Product sections and tables in `README.md` must strictly follow the canonical order:
+   1. 📱 **PhotoTok** (Mobile)
+   2. 🖥️ **Android Desktop** (Tablet/DeX)
+   3. 🍎 **macOS Desktop** (macOS)
+   4. 🐧 **Linux Desktop** (Debian/Linux)
+   5. 📦 **Desktop (Legacy)** (Archived Python/Tkinter)
+3. **Realistic Visual Assets**: Every active product must display authentic screenshots in `assets/` accurately reflecting real in-app layouts and capabilities (e.g., Apple Vision HUD on macOS, 1-over-2 layout with optical metrics and star ratings on Android Desktop).
+4. **Mechanical Parity Enforcement**: Tested via `python3 scripts/check_readme_parity.py --check` in `./scripts/run_tests.sh`.
 
 ## Related
 
