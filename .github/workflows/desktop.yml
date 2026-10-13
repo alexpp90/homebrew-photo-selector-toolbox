@@ -248,6 +248,20 @@ jobs:
         env:
           DISPLAY: ':99'
 
+      - name: TEMP regenerate baselines
+        if: always()
+        run: poetry run pytest tests/visual/ -q -m visual
+        env:
+          DISPLAY: ':99'
+          UPDATE_BASELINES: '1'
+
+      - name: TEMP upload baselines
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temp-visual-baselines
+          path: products/desktop/tests/visual/baselines/
+
       - name: Upload visual diffs on failure
         if: failure()
         uses: actions/upload-artifact@v4
