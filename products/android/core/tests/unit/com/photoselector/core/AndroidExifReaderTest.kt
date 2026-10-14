@@ -269,4 +269,25 @@ class AndroidExifReaderTest {
         negBuffer.flip()
         assertNull(BinaryExifRatingReader.parseFromBuffer(negBuffer))
     }
+
+    @Test
+    fun `readExif computes APEX shutter speed and aperture fallbacks when direct tags missing`() = runTest {
+        val jpegFile = tempFolder.newFile("apex_test.jpg")
+        val bmp = android.graphics.Bitmap.createBitmap(16, 16, android.graphics.Bitmap.Config.ARGB_8888)
+        jpegFile.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+
+        val exifInterface = androidx.exifinterface.media.ExifInterface(jpegFile.absolutePath)
+        // Tv = 10 -> 2^-10 = 1/1024s; Av = 4 -> 2^(4/2) = f/4.0
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_SHUTTER_SPEED_VALUE, "10/1")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_APERTURE_VALUE, "4/1")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_STANDARD_OUTPUT_SENSITIVITY, "400")
+        exifInterface.saveAttributes()
+
+        val result = reader.readExif(jpegFile)
+        assertNotNull(result)
+        assertTrue(result!!.isFallback)
+        assertEquals(1.0 / 1024.0, result.shutterSpeed!!, 1e-6)
+        assertEquals(4.0, result.aperture!!, 1e-4)
+        assertEquals(400, result.iso)
+    }
 }

@@ -67,18 +67,20 @@ class MoveToSelectionUseCase @Inject constructor(
     suspend fun invoke(
         images: List<ImageItem>,
         parentDirUri: Uri,
-        copy: Boolean = false
+        copy: Boolean = false,
+        selectionFolderName: String = SELECTION_FOLDER_NAME
     ): List<MoveResult> = withContext(Dispatchers.IO) {
+        val folderName = selectionFolderName.trim().ifEmpty { SELECTION_FOLDER_NAME }
         val parentDir = DocumentFile.fromTreeUri(context, parentDirUri)
             ?: return@withContext images.map { image ->
                 MoveResult(image.uri, null, false, "Cannot access parent directory")
             }
 
         // Create or get Selection folder
-        val selectionDir = parentDir.findFile(SELECTION_FOLDER_NAME)
-            ?: parentDir.createDirectory(SELECTION_FOLDER_NAME)
+        val selectionDir = parentDir.findFile(folderName)
+            ?: parentDir.createDirectory(folderName)
             ?: return@withContext images.map { image ->
-                MoveResult(image.uri, null, false, "Cannot create Selection folder")
+                MoveResult(image.uri, null, false, "Cannot create $folderName folder")
             }
 
         // Create subfolders
@@ -118,12 +120,30 @@ class MoveToSelectionUseCase @Inject constructor(
             val destFile = targetDir.createFile(mimeType, image.fileName)
                 ?: return@withContext MoveResult(image.uri, null, false, "Cannot create destination file")
 
-            // Copy content
-            context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                context.contentResolver.openOutputStream(destFile.uri)?.use { output ->
-                    input.copyTo(output)
+            // Copy content and clean up orphan destination file if streams fail
+            var copied = false
+            try {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    context.contentResolver.openOutputStream(destFile.uri)?.use { output ->
+                        input.copyTo(output)
+                        copied = true
+                    }
                 }
-            } ?: return@withContext MoveResult(image.uri, null, false, "Cannot read source file")
+            } catch (e: Exception) {
+                try {
+                    destFile.delete()
+                } catch (_: Exception) {
+                }
+                throw e
+            }
+
+            if (!copied) {
+                try {
+                    destFile.delete()
+                } catch (_: Exception) {
+                }
+                return@withContext MoveResult(image.uri, null, false, "Cannot read source file")
+            }
 
             // If moving (not copying), delete the source
             if (!copy) {

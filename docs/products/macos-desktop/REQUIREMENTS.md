@@ -76,7 +76,7 @@ The macOS Desktop application is a high-performance native photo culling and sel
 * **[REQ-MAC-KEY.01] Zero-Latency Dispatch via `KeyboardShortcutRouter`:**
   - **Keyboard delivery precondition:** at launch the app forces activation policy `.regular` (`ForegroundActivation.ensureKeyboardCapable`), activates itself and makes the workspace window key. An unbundled SwiftPM binary otherwise starts as `.prohibited`, never becomes the active app, and receives **no key events at all** (the root cause of dead arrow keys while buttons still worked). `scripts/build_app.sh` assembles a proper `PhotoSelector.app`.
   - Sheets (Guide, Duplicate Finder, Statistics) own the keyboard while presented: the router ignores key events from a sheet or from a window presenting one.
-  - Verified end-to-end by `scripts/ui_smoke_test.sh` (in-app `--ui-self-test`), not only by router unit tests.
+  - Verified end-to-end by `scripts/ui_smoke_test.sh` (in-app `--ui-self-test`), which executes completely backgrounded off-screen without stealing window focus unless `PST_SHOW_GUI=1` is explicitly passed.
   - Registered via `NSEvent.addLocalMonitorForEvents(matching: .keyDown)` to intercept key events directly before AppKit first-responder or SwiftUI button-focus routing, preventing arrow keys from being trapped by UI buttons.
   - Supports standard keycodes (123 `←`, 124 `→`, 125 `↓`, 126 `↑`), NSEvent `specialKey` matching, Unicode function keys (`0xF700`–`0xF703`), and Vim keys (`H`/`L`, `J`/`K`).
   - `←` / `K` / `H`: Navigate previous candidate.

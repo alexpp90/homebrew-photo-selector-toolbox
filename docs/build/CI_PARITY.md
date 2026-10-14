@@ -132,14 +132,14 @@ flag (`--python`, `--android`, `--macos`, `--linux`) is given, it inspects git s
 branch diffs against `main`. If only one product has modifications, gates for untouched
 products are reported as skipped due to path filtering rather than executing redundant suites.
 
-### Headless & background GUI execution on macOS
+### Headless & background GUI execution on macOS (All Products)
 
-On macOS, running Tkinter GUI tests natively causes Aqua Tk to invoke `[NSApp activateIgnoringOtherApps:YES]`
-and `[NSWindow makeKeyAndOrderFront:]`, which steals window focus from the user and flashes test windows
-on screen. In `products/desktop/tests/conftest.py`, AppKit activation and window order methods are
-automatically swizzled via ctypes during pytest runs on Darwin. This keeps GUI testing completely
-backgrounded without stealing focus or displaying windows, preserving full test fidelity in memory.
-To disable this and view GUI windows interactively, run with `PST_SHOW_GUI=1`.
+Local automated test runs MUST NEVER force GUI windows into the foreground or steal window focus from the developer. By default, all test suites execute in a completely backgrounded state:
+- **Desktop (Python/Tkinter):** `products/desktop/tests/conftest.py` swizzles AppKit activation (`activateIgnoringOtherApps:`) and window ordering (`makeKeyAndOrderFront:`) methods via ctypes on Darwin during pytest runs, keeping widget testing completely in-memory.
+- **macOS Desktop (Native Swift/SwiftUI):** `PhotoSelectorApp` under `--ui-self-test` (and `--screenshot`) detects background test mode (`PST_SHOW_GUI` unset) and positions the workspace window off-screen at `(-20000, -20000)` with `alphaValue = 0.0`, suppresses `NSApp.activate(ignoringOtherApps: true)`, and avoids calling `osascript ... set frontmost`. Mouse and keyboard events dispatch directly without stealing OS window focus or interrupting the developer's work.
+- **Linux Desktop (Python/GTK4):** `products/linux-desktop/tests/conftest.py` configures `GDK_BACKEND=headless` and `ADW_DISABLE_PORTAL=1`.
+
+To disable background execution and view GUI windows interactively across any desktop suite, set `PST_SHOW_GUI=1` (or pass `--external-key` to `ui_smoke_test.sh`).
 
 ### Instrumented tests genuinely need a device
 

@@ -193,4 +193,3 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
             self.sharpness_meter.set_fraction(self.sharpness_goodness)
         else:
             self.score_box.set_visible(False)
-

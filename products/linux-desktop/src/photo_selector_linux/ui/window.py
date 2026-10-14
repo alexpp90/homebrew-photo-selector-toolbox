@@ -22,6 +22,7 @@ except (ImportError, ValueError):
 from photo_selector_linux.ui.action_bar import ActionBarView
 from photo_selector_linux.ui.canvas import CanvasView
 from photo_selector_linux.ui.keyboard_router import KeyboardRouter
+from photo_selector_linux.ui.styling import APP_BRAND_NAME, APP_ICON_NAME
 from photo_selector_linux.viewmodels.culling_workspace import CullingWorkspaceViewModel
 
 
@@ -29,16 +30,23 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
     """Main window housing the HeaderBar, Multi-View Canvas, and Bottom ActionBar."""
 
     def __init__(self, application=None, **kwargs):
+        self.window_title: str = APP_BRAND_NAME
+        self.icon_name: str = APP_ICON_NAME
         if HAS_GI:
             super().__init__(application=application, **kwargs)
             self.set_default_size(1440, 900)
-            self.set_title("Photo Selector")
+            self.set_title(APP_BRAND_NAME)
+            self.set_icon_name(APP_ICON_NAME)
+            self.add_css_class("studio-dark-surface")
 
         self.viewmodel = CullingWorkspaceViewModel()
         if HAS_GI:
             self._build_ui()
             self._attach_keyboard_router()
             self._bind_viewmodel()
+        else:
+            self.canvas_view = CanvasView(viewmodel=self.viewmodel)
+            self.action_bar = ActionBarView(viewmodel=self.viewmodel)
 
     def _build_ui(self) -> None:
         self.toolbar_view = Adw.ToolbarView()
@@ -48,6 +56,7 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
 
         # HeaderBar
         self.header_bar = Adw.HeaderBar()
+        self.header_bar.add_css_class("studio-headerbar")
         self._build_header_bar()
         self.toolbar_view.add_top_bar(self.header_bar)
 
