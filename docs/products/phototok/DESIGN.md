@@ -99,7 +99,7 @@ The mockup replaces the vertical column of `FolderPickerCard` rows with a center
      - Each card: `Surface` with `surfaceContainer` fill, `outlineVariant` border, `RoundedCornerShape(12.dp)`
      - Content: centered icon (Material Symbol) + label (`labelMedium`)
      - Active state: border → `primary`, background → `primary.copy(alpha=0.1f)`
-     - Cards: `folder_open` / "Local Folder", `sd_card` / "SD Card", `cloud` / "Google Drive"
+     - Cards: `folder_open` / "Local Folder", `sd_card` / "SD Card", `cloud` / "Cloud Storage (SAF)"
    - **Remove** the separate `FolderPickerCard` composable and `externalVolumes` list
    - **Remove** the separate Collection folder picker card — collection is now in Settings
 

@@ -19,7 +19,7 @@ sudo apt install -y curl ca-certificates gpg
 Place the official signing key into the system keyrings directory (`/etc/apt/keyrings/`):
 ```bash
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/KEY.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/photo-selector-archive-keyring.gpg
+curl -fsSL https://alexpp90.github.io/apt/photo-selector-archive-keyring.gpg | sudo tee /etc/apt/keyrings/photo-selector-archive-keyring.gpg > /dev/null
 sudo chmod 0644 /etc/apt/keyrings/photo-selector-archive-keyring.gpg
 ```
 
@@ -28,7 +28,7 @@ Create `/etc/apt/sources.list.d/photo-selector.sources`:
 ```bash
 sudo tee /etc/apt/sources.list.d/photo-selector.sources <<EOF
 Types: deb
-URIs: https://alexanderpatz.github.io/photo-selector/apt/
+URIs: https://alexpp90.github.io/apt/
 Suites: trixie
 Components: main
 Signed-By: /etc/apt/keyrings/photo-selector-archive-keyring.gpg
@@ -55,7 +55,7 @@ photo-selector-linux
 For rapid installation, run our automated configuration script:
 
 ```bash
-curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/setup.sh | sudo bash
+curl -fsSL https://alexpp90.github.io/apt/setup.sh | sudo bash
 sudo apt install -y photo-selector-linux
 ```
 
@@ -68,10 +68,10 @@ If your tooling or configuration management requires the traditional single-line
 ```bash
 # Import key (same as Step 2 above)
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/KEY.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/photo-selector-archive-keyring.gpg
+curl -fsSL https://alexpp90.github.io/apt/KEY.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/photo-selector-archive-keyring.gpg
 
 # Add one-line source entry
-echo "deb [signed-by=/etc/apt/keyrings/photo-selector-archive-keyring.gpg] https://alexanderpatz.github.io/photo-selector/apt/ trixie main" | sudo tee /etc/apt/sources.list.d/photo-selector.list
+echo "deb [signed-by=/etc/apt/keyrings/photo-selector-archive-keyring.gpg] https://alexpp90.github.io/apt/ trixie main" | sudo tee /etc/apt/sources.list.d/photo-selector.list
 
 # Update and install
 sudo apt update
@@ -106,7 +106,8 @@ sudo apt install -y photo-selector-linux
 You can install the `.deb` package directly. `apt` will automatically resolve and install all Debian dependencies from official Debian repositories:
 
 ```bash
-sudo apt install ./apt/pool/main/p/photo-selector-linux/photo-selector-linux_0.1.0_all.deb
+# build it first: products/linux-desktop/scripts/package_debian.sh
+sudo apt install ./products/linux-desktop/dist/photo-selector-linux_0.1.0_all.deb
 ```
 *(Note: The `./` prefix is mandatory so `apt` recognizes it as a local filesystem path).*
 
@@ -166,7 +167,7 @@ sudo apt update
 
 ### Issue 2: `E: The repository '...' does not have a Release file.`
 - **Cause**: The URI or suite path in your source definition is incorrect or unreachable.
-- **Fix**: Verify internet connectivity and confirm the URI matches `https://alexanderpatz.github.io/photo-selector/apt/` and the Suite is `trixie`.
+- **Fix**: Verify internet connectivity and confirm the URI matches `https://alexpp90.github.io/apt/` and the Suite is `trixie`.
 
 ### Issue 3: `E: Unable to locate package photo-selector-linux`
 - **Cause**: `sudo apt update` was not run after creating the sources file, or the repository component `main` is missing.

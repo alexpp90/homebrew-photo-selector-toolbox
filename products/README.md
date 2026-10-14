@@ -42,15 +42,15 @@ them under `products/android/` keeps the build root next to the things it builds
 
 That grouping is a *build* boundary, not a product boundary. The two apps still do not share
 code beyond `core/`, do not share layouts, and are owned by separate agents. See
-[`../ai/ROUTING.md`](../ai/ROUTING.md).
+`../ai/ROUTING.md` (maintainer-private agent framework).
 
 ## What is not here
 
 - **Documentation** — in [`../docs/`](../docs/README.md), organised by the same product slugs.
-- **Agent configuration** — in [`../ai/`](../ai/README.md).
-- **`Formula/` and `Casks/`** — these must stay at the repository root. This repository is a
-  Homebrew tap, and `brew tap` only looks for formulae at the tap root. Moving them into
-  `products/desktop/` would break installation for every existing user.
+- **Agent configuration** — in `../ai/` (maintainer-private agent framework).
+- **Distribution** — Homebrew formulae/casks in [`alexpp90/homebrew-tap`](https://github.com/alexpp90/homebrew-tap),
+  the Debian repository in [`alexpp90/apt`](https://github.com/alexpp90/apt); CI updates both.
+  `tap_migrations.json` at the root forwards users of the old in-repo tap.
 - **`scripts/run_tests.sh`** — cross-product (it drives the Python, Swift SPM, Linux GTK, and Gradle gates),
   so it lives in the root `scripts/`. Desktop's own build scripts are in
   `desktop/scripts/`.

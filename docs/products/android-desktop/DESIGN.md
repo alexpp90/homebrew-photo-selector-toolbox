@@ -1300,12 +1300,12 @@ Short corrections to steer a generated design back on track.
 
 ## Related documents
 
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) §7 — Android application requirements (authoritative)
+- `REQUIREMENTS.md` (maintainer-private) §7 — Android application requirements (authoritative)
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — this product's layers, adaptive layout strategy and theme implementation
-- [`DESIGN_PROMPT.md`](DESIGN_PROMPT.md) — the same material packaged as copy-paste prompt blocks
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) — what this product must do
+- `DESIGN_PROMPT.md` (maintainer-private) — the same material packaged as copy-paste prompt blocks
+- `REQUIREMENTS.md` (maintainer-private) — what this product must do
 - [`../../shared/ANDROID_PLATFORM.md`](../../shared/ANDROID_PLATFORM.md) — the Android baseline shared with PhotoTok
-- [`../../../ai/ROUTING.md`](../../../ai/ROUTING.md) — agent roster and delegation rules
+- `../../../ai/ROUTING.md` (maintainer-private agent framework) — agent roster and delegation rules
 
 > **Keeping this in sync:** if a design decision here changes app behaviour, update
 > `REQUIREMENTS.md` §7 in the same change — it remains the single source of truth.

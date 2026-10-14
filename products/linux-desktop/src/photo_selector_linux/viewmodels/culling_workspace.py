@@ -130,7 +130,8 @@ class CullingWorkspaceViewModel:
         self.copied_count += 1
         self.selected_count += 1
 
-        self.nav_next()
+        if self.current_index < len(self.candidates) - 1:
+            self.current_index += 1
         self._notify(f"Copied {photo.primary_path.name} to {self.selection_folder_name}/")
         self._notify_state_changed()
 

@@ -49,13 +49,32 @@ Photo_Selector_Toolbox_Audit_Report.docx
 # Kotlin compiler sessions/temp files
 products/android/.kotlin/
 
-# Antigravity local symlinks
-.agents/ai
-.agents/teamwork/
+# APT signing keyring created by generate_apt_repo.py — never commit private keys
+**/.gnupg_repo/
 
-# AI framework local synchronization mode
+# ── Maintainer's private overlay ─────────────────────────────────────────
+# The AI-agent framework, requirement specifications, design prompts, audits and agent
+# memory live in a separate private repository checked out at private/ and linked into
+# this tree (private/scripts/link_overlay.py). Patterns without a trailing slash also
+# match the symlinks. scripts/check_private_paths.py enforces this in CI and pre-commit.
+/private
+/ai
+/.claude
+/.agents
+/.gemini
+/CLAUDE.local.md
+/docs/**/REQUIREMENTS.md
+/docs/**/DESIGN_PROMPT.md
+/docs/**/UX_INVESTIGATION.md
+/docs/**/SECURITY_AUDIT.md
+/docs/**/LEGAL_COMPLIANCE.md
+/docs/build/ANDROID_SIGNING_*.md
+# Generated locally by ai/skills/sync-framework/scripts/sync_framework.py
+/.cursor
+/.cursorrules
+/.windsurfrules
+/.github/copilot-instructions.md
+/ROUTING.md
 /.sync_mode
-
-# APT GPG private keyring directory
-apt/.gnupg_repo/
-
+# One-shot migration payload (removed after use)
+/.migration

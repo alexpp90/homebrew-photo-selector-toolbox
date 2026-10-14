@@ -391,3 +391,40 @@ def test_copy_staging_failure_cleans_inflight_and_staged_replicas(tmp_path: Path
     assert not (tmp_path / "Selection" / "DSC_012.ARW").exists()
     assert not (tmp_path / "Selection" / "DSC_012.JPG").exists()
     assert raw.exists() and jpg.exists()
+
+
+def test_trash_and_undo_restores_all_companions(tmp_path: Path):
+    """Verify trash_candidate moves files to FreeDesktop Trash and undo_culling restores them (R-LINUX-CULL-05/07)."""
+    trash_dir = tmp_path / "Trash"
+    raw = tmp_path / "DSC_013.ARW"
+    jpg = tmp_path / "DSC_013.JPG"
+    xmp = tmp_path / "DSC_013.xmp"
+    raw.write_bytes(b"raw-trash-payload")
+    jpg.write_bytes(b"jpg-trash-payload")
+    xmp.write_bytes(b"xmp-trash-payload")
+
+    candidate = CandidatePhoto(primary_path=raw, companion_paths=[jpg, xmp])
+    mgr = FileCullingManager(trash_dir=trash_dir)
+    record = mgr.trash_candidate(candidate)
+
+    assert candidate.status == PhotoStatus.TRASHED
+    assert record.action_type == CullingActionType.TRASH
+    assert not raw.exists()
+    assert not jpg.exists()
+    assert not xmp.exists()
+    assert (trash_dir / "files" / "DSC_013.ARW").exists()
+    assert (trash_dir / "files" / "DSC_013.JPG").exists()
+    assert (trash_dir / "files" / "DSC_013.xmp").exists()
+    assert (trash_dir / "info" / "DSC_013.ARW.trashinfo").exists()
+
+    # Execute Trash Undo
+    undone = mgr.undo_culling(record, candidate)
+    assert undone is True
+    assert candidate.status == PhotoStatus.CANDIDATE
+
+    # Files physically restored to original locations and .trashinfo removed
+    assert raw.exists() and raw.read_bytes() == b"raw-trash-payload"
+    assert jpg.exists() and jpg.read_bytes() == b"jpg-trash-payload"
+    assert xmp.exists() and xmp.read_bytes() == b"xmp-trash-payload"
+    assert not (trash_dir / "files" / "DSC_013.ARW").exists()
+    assert not (trash_dir / "info" / "DSC_013.ARW.trashinfo").exists()

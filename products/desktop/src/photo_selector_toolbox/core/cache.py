@@ -1,3 +1,4 @@
+import contextlib
 import json
 import logging
 import sqlite3
@@ -46,9 +47,16 @@ class ScoreCache:
         self._write_count = 0
         self._init_db()
 
+    def _secure_db_files(self) -> None:
+        _set_secure_permissions(self.db_path)
+        for suffix in ("-wal", "-shm"):
+            side_path = Path(str(self.db_path) + suffix)
+            if side_path.exists():
+                _set_secure_permissions(side_path)
+
     def _init_db(self) -> None:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
                 # WAL mode: allows concurrent reads while writes are in progress
                 conn.execute("PRAGMA journal_mode=WAL")
                 conn.execute("""
@@ -63,13 +71,7 @@ class ScoreCache:
                     "CREATE INDEX IF NOT EXISTS idx_last_used ON image_cache(last_used)"
                 )
                 conn.commit()
-            _set_secure_permissions(self.db_path)
-            wal_path = Path(str(self.db_path) + "-wal")
-            shm_path = Path(str(self.db_path) + "-shm")
-            if wal_path.exists():
-                _set_secure_permissions(wal_path)
-            if shm_path.exists():
-                _set_secure_permissions(shm_path)
+            self._secure_db_files()
         except sqlite3.DatabaseError as e:
             logger.error(
                 f"Score cache database is corrupted or inaccessible: {e}. "
@@ -93,7 +95,7 @@ class ScoreCache:
             # Optimization: os.path.abspath is significantly faster than Path.resolve()
             # because it avoids disk I/O (stat/readlink) for symlink canonicalization.
             filepath_str = os.path.abspath(filepath)
-            with sqlite3.connect(self.db_path) as conn:
+            with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT scores FROM image_cache WHERE filepath = ?",
@@ -113,7 +115,7 @@ class ScoreCache:
             # because it avoids disk I/O (stat/readlink) for symlink canonicalization.
             filepath_str = os.path.abspath(filepath)
             now = int(time.time())
-            with sqlite3.connect(self.db_path) as conn:
+            with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
                 conn.execute(
                     """
                     INSERT INTO image_cache (filepath, last_used, scores)
@@ -129,6 +131,7 @@ class ScoreCache:
                 if self._write_count >= self._PRUNE_INTERVAL:
                     self._write_count = 0
                     self._prune(conn)
+            self._secure_db_files()
         except Exception as e:
             logger.warning(f"Error writing to score cache: {e}")
 
@@ -149,7 +152,7 @@ class ScoreCache:
             path_list = list(path_map.keys())
 
             chunk_size = 500
-            with sqlite3.connect(self.db_path) as conn:
+            with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
                 cursor = conn.cursor()
                 for i in range(0, len(path_list), chunk_size):
                     chunk = path_list[i : i + chunk_size]
@@ -186,7 +189,7 @@ class ScoreCache:
 
         try:
             now = int(time.time())
-            with sqlite3.connect(self.db_path) as conn:
+            with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
                 cursor = conn.cursor()
                 # Optimization: os.path.abspath is significantly faster than Path.resolve()
                 # because it avoids disk I/O (stat/readlink) for symlink canonicalization.
@@ -210,6 +213,7 @@ class ScoreCache:
                 )
                 conn.commit()
                 self._prune(conn)
+            self._secure_db_files()
         except Exception as e:
             logger.warning(f"Error bulk writing to score cache: {e}")
 
@@ -231,7 +235,7 @@ class ScoreCache:
     def clear_cache(self) -> None:
         """Deletes all cached scores from the database."""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
                 conn.execute("DELETE FROM image_cache")
                 conn.commit()
             logger.info("Score cache cleared successfully.")

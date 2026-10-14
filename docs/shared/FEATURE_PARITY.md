@@ -13,7 +13,7 @@
 Sync is **multidirectional**. A feature or pattern proven in any of the five products is
 evaluated for the others — Desktop → Android was the historical direction, but PhotoTok,
 Android Desktop, macOS Desktop, and Linux Desktop originate work too, and it must travel across. The evaluation is a mandatory step of the
-[`retrospective`](../../ai/skills/retrospective/SKILL.md) skill, not an optional courtesy.
+`retrospective` (maintainer-private agent framework) skill, not an optional courtesy.
 
 When a new feature is added to any product, it must be evaluated for inclusion in the others:
 *   **macOS Desktop:** Should implement natively utilizing Swift 6, SwiftUI, Accelerate, and Apple Vision.
@@ -172,7 +172,7 @@ When triggered, the agent must present the user with a structured assessment:
 | **Secondary Tools Access** | macOS Menu Bar "Tools" (`⌘D`, `⌘L`) | GNOME Primary Menu / Shortcuts (`Ctrl+D`, `Ctrl+L`) | Tier 2 | ✅ Platform HIG Idiomatic |
 | **Duplicate Finder** | CryptoKit streaming SHA-256 | Streaming SHA-256 duplicate engine | Tier 2 | ✅ Platform HIG Idiomatic |
 | **Library Statistics** | SwiftUI EXIF distribution charts | Libadwaita EXIF distribution charts | Tier 2 | ✅ Platform HIG Idiomatic |
-| **Distribution Pipeline** | Homebrew Tap (`Cask` & `Formula`) | In-Repo Debian 13 APT Repository (`.deb`) | Tier 2 | ✅ Platform Native Distribution |
+| **Distribution Pipeline** | Homebrew Tap `alexpp90/homebrew-tap` (`Cask` & `Formula`) | Debian 13 APT Repository `alexpp90/apt` (`.deb`) | Tier 2 | ✅ Platform Native Distribution |
 
 ---
 
@@ -213,7 +213,7 @@ model, a data-access fix, a guidance approach — is evaluated for the other pro
 decision recorded here, including a decision not to port.
 
 Ported means **reimplemented in the target's own stack and UX model**. Copying a file between
-products is a defect ([`ai/ROUTING.md`](../../ai/ROUTING.md), the separation rule).
+products is a defect (the separation rule of the maintainer's agent framework, `ai/ROUTING.md`).
 
 | Pattern | Source | Desktop | macOS Desktop | Linux Desktop | Android Desktop | PhotoTok | Decided |
 |---|---|---|---|---|---|---|---|
@@ -236,6 +236,7 @@ products is a defect ([`ai/ROUTING.md`](../../ai/ROUTING.md), the separation rul
 | Zero-latency window-level keyboard shortcut routing | macOS Desktop 2026-10-07 | ◐ partial | ✅ origin | ✅ ported 2026-10-09 | ✅ independent | ❌ N/A | 2026-10-07 |
 | Parent-scoped sibling pairing to prevent data loss | PhotoTok 2026-10-09 | ⬜ evaluate | ✅ ported 2026-10-07 | ✅ ported 2026-10-09 | ⬜ evaluate | ✅ origin | 2026-10-09 |
 | Studio dark theme with pure white text hierarchy | macOS Desktop 2026-10-07 | ⬜ evaluate | ✅ origin | ✅ ported 2026-10-09 | ⬜ evaluate | ⬜ evaluate | 2026-10-07 |
+| Self-move guard, transactional companion rollback & APEX EXIF fallbacks | Cross-product 2026-10-14 | ✅ ported 2026-10-14 | ✅ ported 2026-10-14 | ✅ origin | ✅ ported 2026-10-14 | ✅ ported 2026-10-14 | 2026-10-14 |
 
 ---
 

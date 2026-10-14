@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # ── Native Swift Test Suite (Mirror: scripts/run_tests.sh `macos.yml:swift-test`) ──
@@ -65,13 +65,8 @@ jobs:
       - name: Build PhotoSelectorKit & PhotoSelectorApp (Release)
         run: swift build -c release
 
-      - name: Run Unit & Adversarial Test Suites (Release)
+      - name: Run Unit, Adversarial & SLA Test Suites (Release)
         run: swift test -c release --no-parallel
-
-      - name: Verify Focus Latency SLA Benchmark (<2.0ms)
-        run: |
-          echo "Verifying FocusMetricService release SLA..."
-          swift test -c release --no-parallel --filter "FocusMetricService"
 
       - name: Upload Test Artifacts
         if: always()
@@ -112,7 +107,7 @@ jobs:
         run: |
           scripts/build_app.sh release
           cd .build/app
-          zip -r -y ../../../photo-selector-macos-apple-silicon.zip PhotoSelector.app
+          zip -r -y ../../../../photo-selector-macos-apple-silicon.zip PhotoSelector.app
 
       - name: Upload Release Archive
         uses: actions/upload-artifact@v4
@@ -121,12 +116,14 @@ jobs:
           path: photo-selector-macos-apple-silicon.zip
           if-no-files-found: error
 
-  # ── GitHub Release (Main / Tags / Dispatch Only) ──
+  # ── GitHub Release (Main / Tags Push Only) ──
   release:
     name: Publish macOS Release
     needs: build
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -147,10 +144,13 @@ jobs:
   update-homebrew-taps:
     name: Update Homebrew Taps (Native macOS)
     needs: release
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    env:
+      GH_REF: ${{ github.ref }}
+      GH_REF_NAME: ${{ github.ref_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -165,91 +165,63 @@ jobs:
 
       - name: Download release artifact
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          if [ "${GH_REF}" = "refs/heads/main" ]; then
             TAG_DIR="nightly"
           else
-            TAG_DIR="${{ github.ref_name }}"
+            TAG_DIR="${GH_REF_NAME}"
           fi
-          curl -L -o macos.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-macos-apple-silicon.zip"
+          curl -fsSL -o macos.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-macos-apple-silicon.zip"
 
       - name: Compute SHA256 hash
         id: hashes
         run: |
           echo "macos_sha256=$(shasum -a 256 macos.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
-      - name: Update Homebrew Files
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          update_and_push() {
-            git fetch origin main
-            git checkout main
-            git reset --hard origin/main
-
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              python3 products/desktop/scripts/update_formula.py \
-                --file Casks/photo-selector-toolbox@nightly.rb \
-                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
-
-              git add Casks/photo-selector-toolbox@nightly.rb
-              COMMIT_MSG="Update nightly native macOS Homebrew SHA256 hash"
-            else
-              TAG_NAME="${{ github.ref_name }}"
-              VERSION="${TAG_NAME#v}"
-
-              python3 products/desktop/scripts/update_formula.py \
-                --file Casks/photo-selector-toolbox.rb \
-                --version-val "${VERSION}" \
-                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
-
-              git add Casks/photo-selector-toolbox.rb
-              COMMIT_MSG="Update stable native macOS Homebrew cask to version ${VERSION}"
-            fi
-
-            git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
-            git push origin main
-          }
-
-          for i in {1..5}; do
-            if update_and_push; then
-              echo "Homebrew files updated and pushed successfully."
-              exit 0
-            fi
-            echo "Attempt $i failed. Retrying in 2 seconds..."
-            sleep 2
-          done
-
-          echo "Failed to update and push Homebrew files after 5 attempts."
-          exit 1
-        shell: bash
-
-      - name: Update alexpp90/homebrew-tap Repository
-        if: env.HOMEBREW_TAP_TOKEN != ''
+      - name: Update alexpp90/homebrew-tap
+        # The tap repository is the only home of the casks (the main repository no longer
+        # carries Formula/ or Casks/). HOMEBREW_TAP_TOKEN: fine-grained PAT with
+        # contents:write on alexpp90/homebrew-tap.
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          MACOS_SHA256: ${{ steps.hashes.outputs.macos_sha256 }}
         run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN secret is required to update alexpp90/homebrew-tap"
+            exit 1
+          fi
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          UPDATER="$GITHUB_WORKSPACE/products/desktop/scripts/update_formula.py"
 
-          TAP_DIR="$(mktemp -d)"
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/alexpp90/homebrew-tap.git" "${TAP_DIR}"
-          mkdir -p "${TAP_DIR}/Casks" "${TAP_DIR}/Formula"
-
-          cp Casks/*.rb "${TAP_DIR}/Casks/"
-          cp Formula/*.rb "${TAP_DIR}/Formula/"
-
-          cd "${TAP_DIR}"
-          git add Casks/ Formula/
-          if ! git diff --cached --quiet; then
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              git commit -m "Update nightly native macOS Homebrew SHA256 hash"
+          update_and_push() {
+            TAP_DIR="$(mktemp -d)"
+            git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/alexpp90/homebrew-tap.git" "${TAP_DIR}"
+            cd "${TAP_DIR}"
+            if [ "${GH_REF}" = "refs/heads/main" ]; then
+              python3 "$UPDATER" --file Casks/photo-selector-toolbox@nightly.rb \
+                --macos-sha256 "${MACOS_SHA256}"
+              COMMIT_MSG="Update nightly native macOS cask hash"
             else
-              git commit -m "Update stable native macOS Homebrew files to version ${{ github.ref_name }}"
+              TAG_NAME="${GH_REF_NAME}"
+              VERSION="${TAG_NAME#v}"
+              python3 "$UPDATER" --file Casks/photo-selector-toolbox.rb \
+                --version-val "${VERSION}" \
+                --macos-sha256 "${MACOS_SHA256}"
+              COMMIT_MSG="Update native macOS cask to ${VERSION}"
             fi
-            git push origin main
-            echo "Successfully updated alexpp90/homebrew-tap"
-          else
-            echo "No changes to commit in alexpp90/homebrew-tap"
-          fi
+            git add Casks/
+            git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
+            git push origin HEAD
+          }
+
+          for i in 1 2 3 4 5; do
+            if (update_and_push); then
+              echo "alexpp90/homebrew-tap updated."
+              exit 0
+            fi
+            echo "Attempt $i failed (concurrent tap update?). Retrying in 5 seconds..."
+            sleep 5
+          done
+          echo "::error::Failed to update alexpp90/homebrew-tap after 5 attempts."
+          exit 1
         shell: bash

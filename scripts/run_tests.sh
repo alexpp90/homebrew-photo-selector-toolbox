@@ -2,8 +2,9 @@
 #
 # run_tests.sh — CI-parity test runner for Photo Selector Toolbox
 #
-# This script is the LOCAL MIRROR of .github/workflows/desktop.yml and
-# .github/workflows/android.yml. Every gate CI enforces is enforced here, in
+# This script is the LOCAL MIRROR of .github/workflows/desktop.yml,
+# .github/workflows/android.yml, .github/workflows/macos.yml, and
+# .github/workflows/linux.yml. Every gate CI enforces is enforced here, in
 # the same order, with the same flags. If this script is green and it reports
 # no SKIPPED gates, CI is expected to be green.
 #
@@ -113,7 +114,7 @@ if ! $explicit_product; then
 
         for f in "${CHANGED_FILES[@]}"; do
             case "$f" in
-                products/desktop/*|Formula/*|Casks/*|*.spec) has_desktop=true ;;
+                products/desktop/*|*.spec) has_desktop=true ;;
                 products/android/*) has_android=true ;;
                 products/macos-desktop/*) has_macos=true ;;
                 products/linux-desktop/*) has_linux=true ;;
@@ -381,10 +382,10 @@ if $run_linux; then
                 skip "flake8 (linux-desktop)" "linux.yml:lint" "--quick"
             elif py flake8 --version &>/dev/null; then
                 gate "flake8 (products/linux-desktop)" "linux.yml:lint" \
-                    py flake8 src/ tests/ --count --show-source --statistics
+                    py flake8 src/ tests/ --count --show-source --statistics --max-line-length=120 --extend-ignore=E203,W503
             elif have flake8; then
                 gate "flake8 (products/linux-desktop)" "linux.yml:lint" \
-                    flake8 src/ tests/ --count --show-source --statistics
+                    flake8 src/ tests/ --count --show-source --statistics --max-line-length=120 --extend-ignore=E203,W503
             else
                 skip "flake8 (linux-desktop)" "linux.yml:lint" "flake8 not installed in the active environment"
             fi
@@ -410,9 +411,9 @@ if $run_linux; then
 
         # 3. Debian packaging validation
         section "Linux Desktop packaging & APT validation"
-        if [ -f "$ROOT_DIR/products/linux-desktop/scripts/verify_package.sh" ]; then
-            gate "debian packaging (products/linux-desktop)" "linux.yml:package" \
-                ./scripts/verify_package.sh
+        if [ -f "$ROOT_DIR/products/linux-desktop/scripts/package_debian.sh" ]; then
+            gate "debian packaging & apt repo (products/linux-desktop)" "linux.yml:package" \
+                bash ./scripts/package_debian.sh
         else
             skip "debian packaging (linux-desktop)" "linux.yml:package" "packaging scripts not yet created (planned for M4)" false
         fi
@@ -422,28 +423,50 @@ elif ! $explicit_product; then
     skip "Linux Desktop gates" "linux.yml" "no changes under products/linux-desktop/ (use --linux or --all to force)" false
 fi
 
-# ── Agent framework gates (no CI equivalent yet — see docs/build/CI_PARITY.md) ──
-# The framework is treated as code: naming, registration, roster and the paths that
-# instructions point at must hold, or agents silently follow stale directions.
-section "Agent framework"
+# ── Repository hygiene (mirror: repo-hygiene.yml) ──────────────────
+# Public gates: the README stays true to the products, and nothing from the maintainer's
+# private overlay (AI framework, requirement specs, prompts, memory) is tracked publicly.
+section "Repository hygiene"
 cd "$ROOT_DIR" || exit 1
 if have python3; then
-    gate "toolchain sync" "ai/skills/sync-framework" \
-        python3 ai/skills/sync-framework/scripts/sync_framework.py --check
-    gate "framework validation" "ai/skills/sync-framework" \
-        python3 ai/skills/sync-framework/scripts/validate_framework.py
-    gate ".gemini/settings.json in sync" "ai/skills/sync-framework" \
-        python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py --check
-    gate "requirements traceability" "scripts/verify_requirements_traceability.py" \
-        python3 scripts/verify_requirements_traceability.py --check --strict
-    gate "readme parity" "scripts/check_readme_parity.py" \
+    gate "readme parity" "repo-hygiene.yml:hygiene" \
         python3 scripts/check_readme_parity.py --check
+    gate "no private-overlay material tracked" "repo-hygiene.yml:hygiene" \
+        python3 scripts/check_private_paths.py
 else
-    skip "toolchain sync" "" "python3 not found"
-    skip "framework validation" "" "python3 not found"
-    skip ".gemini/settings.json in sync" "" "python3 not found"
-    skip "requirements traceability" "" "python3 not found"
     skip "readme parity" "" "python3 not found"
+    skip "no private-overlay material tracked" "" "python3 not found"
+fi
+
+# ── Private overlay gates (mirror: photo-selector-private framework.yml) ──
+# The agent framework and the requirement specs live in the private overlay (private/,
+# linked into this tree). Its gates run here when the overlay is checked out, and in the
+# private repository's own CI; a public clone has nothing to check and says so.
+if [ -d "$ROOT_DIR/private/.git" ] || [ -f "$ROOT_DIR/private/.git" ]; then
+    section "Private overlay (agent framework & requirements)"
+    if have python3; then
+        gate "overlay links" "framework.yml:framework" \
+            python3 private/scripts/link_overlay.py --check
+        gate "toolchain sync" "framework.yml:framework" \
+            python3 ai/skills/sync-framework/scripts/sync_framework.py --check
+        gate "framework validation" "framework.yml:framework" \
+            python3 ai/skills/sync-framework/scripts/validate_framework.py
+        gate ".gemini/settings.json in sync" "framework.yml:framework" \
+            python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py --check
+        gate "requirements traceability" "framework.yml:framework" \
+            python3 private/scripts/verify_requirements_traceability.py --check --strict
+        if python3 -c "import pytest" &>/dev/null; then
+            gate "framework & hook tests" "framework.yml:framework" \
+                python3 -m pytest -q -p no:cacheprovider private/tests/framework
+        else
+            skip "framework & hook tests" "framework.yml:framework" "pytest not importable by python3"
+        fi
+    else
+        skip "private overlay gates" "" "python3 not found"
+    fi
+else
+    section "Private overlay (not present)"
+    skip "private overlay gates" "" "no private/ checkout — public clone, nothing to check" false
 fi
 
 # ── Summary ───────────────────────────────────────────────────────

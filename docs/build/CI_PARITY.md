@@ -41,13 +41,13 @@ The rule that prevents it:
 | macOS UI smoke test (running app) | — (local-only) | ⚠️ Darwin + logged-in GUI session | `products/macos-desktop/scripts/ui_smoke_test.sh`: drives the running app (raw binary **and** `.app` bundle) — activation policy, real key events, rendered Focus 3-Up geometry, clicks while zoomed, time-to-first-photo. Window-server key probe needs Accessibility permission, else `⊘ SKIPPED`. See [macOS UI smoke test](#macos-ui-smoke-test-local-only). |
 | `linux-desktop lint` | `linux.yml:lint` | ✅ everywhere | Flake8 static analysis on `products/linux-desktop/` |
 | `linux-desktop test` | `linux.yml:test` | ✅ everywhere | Headless unit tests covering metadata, scoring, and file transactions |
-| `debian packaging & apt repo` | `linux.yml:package` | ⚠️ Linux / `dpkg-deb` only | Verifies `.deb` package creation and APT metadata generation |
+| `debian packaging & apt repo` | `linux.yml:package` | ✅ everywhere (pure-Python builder) | `package_debian.sh`: builds the `.deb`, generates an unsigned APT repository in `products/linux-desktop/dist/apt` and verifies it. |
+| APT publish | `linux.yml:publish-apt` | ❌ credentials-bound | On `v*` tags: builds, signs (`APT_GPG_PRIVATE_KEY`) and pushes the repository to `alexpp90/apt` (GitHub Pages). |
+| Homebrew tap update | `desktop.yml:homebrew`, `macos.yml` release steps | ❌ credentials-bound | Writes formula/cask hashes and versions directly to `alexpp90/homebrew-tap` (`HOMEBREW_TAP_TOKEN`); the main repository holds no Formula/Casks. |
 | PyInstaller build, release, Play/Firebase publish | `desktop.yml:build`+, `android.yml:build`+, `macos.yml:build` | ❌ credentials-bound | Only runs on pushes to `main` / `v*` tags. Not reproducible locally by design. |
-| `sync_framework.py --check` | — (local CI mirror) | ✅ everywhere | Toolchain synchronization: verifies Cursor, Windsurf, Copilot, Gemini settings, and mirrors match canonical definitions in `ai/` with zero drift. |
-| `validate_framework.py` | — (local CI mirror) | ✅ everywhere | Agent-framework integrity: naming, registration, roster, toolchain parity, unowned product detection, product boundary leaks, and paths referenced by instructions. |
-| `gen_gemini_settings.py --check` | — (local CI mirror) | ✅ everywhere | Fails when `.gemini/settings.json` has drifted from `ai/agents/*.md`. Fix by regenerating, never by hand-editing. |
-| `verify_requirements_traceability.py --check --strict` | — (local CI mirror) | ✅ everywhere | Validates bidirectional requirement-to-test traceability: ensures requirement IDs exist in specs, rejects orphan test references, and strictly isolates multi-product test suite mappings. |
-| `check_readme_parity.py --check` | — (local CI mirror) | ✅ everywhere | Enforces root `README.md` ecosystem completeness, canonical product ordering (PhotoTok -> Android Desktop -> macOS Desktop -> Linux Desktop -> Desktop), asset integrity, and removal of deprecated terms. |
+| `check_readme_parity.py --check` | `repo-hygiene.yml:hygiene` | ✅ everywhere | Enforces root `README.md` ecosystem completeness, canonical product ordering (PhotoTok -> Android Desktop -> macOS Desktop -> Linux Desktop -> Desktop), asset integrity, and removal of deprecated terms. |
+| `check_private_paths.py` | `repo-hygiene.yml:hygiene` | ✅ everywhere | Fails if maintainer-private material (`private/`, `ai/`, `.claude/`, `.agents/`, `.gemini/`, requirement specs, prompts, the prompt ledger) is tracked in this public repository. Also runs as the local pre-commit hook installed by the overlay. |
+| Private overlay gates (`link_overlay.py --check`, `sync_framework.py --check`, `validate_framework.py`, `gen_gemini_settings.py --check`, `verify_requirements_traceability.py --check --strict`, framework tests) | private repo `framework.yml` | ⚠️ maintainer checkout only | Run by `run_tests.sh` when `private/` is checked out; `⊘ SKIPPED` (not a risk) in a public clone. The private repository's CI checks out this repository and runs the same gates. |
 
 ---
 
@@ -132,14 +132,14 @@ flag (`--python`, `--android`, `--macos`, `--linux`) is given, it inspects git s
 branch diffs against `main`. If only one product has modifications, gates for untouched
 products are reported as skipped due to path filtering rather than executing redundant suites.
 
-### Headless & background GUI execution on macOS
+### Headless & background GUI execution on macOS (All Products)
 
-On macOS, running Tkinter GUI tests natively causes Aqua Tk to invoke `[NSApp activateIgnoringOtherApps:YES]`
-and `[NSWindow makeKeyAndOrderFront:]`, which steals window focus from the user and flashes test windows
-on screen. In `products/desktop/tests/conftest.py`, AppKit activation and window order methods are
-automatically swizzled via ctypes during pytest runs on Darwin. This keeps GUI testing completely
-backgrounded without stealing focus or displaying windows, preserving full test fidelity in memory.
-To disable this and view GUI windows interactively, run with `PST_SHOW_GUI=1`.
+Local automated test runs MUST NEVER force GUI windows into the foreground or steal window focus from the developer. By default, all test suites execute in a completely backgrounded state:
+- **Desktop (Python/Tkinter):** `products/desktop/tests/conftest.py` swizzles AppKit activation (`activateIgnoringOtherApps:`) and window ordering (`makeKeyAndOrderFront:`) methods via ctypes on Darwin during pytest runs, keeping widget testing completely in-memory.
+- **macOS Desktop (Native Swift/SwiftUI):** `PhotoSelectorApp` under `--ui-self-test` (and `--screenshot`) detects background test mode (`PST_SHOW_GUI` unset) and positions the workspace window off-screen at `(-20000, -20000)` with `alphaValue = 0.0`, suppresses `NSApp.activate(ignoringOtherApps: true)`, and avoids calling `osascript ... set frontmost`. Mouse and keyboard events dispatch directly without stealing OS window focus or interrupting the developer's work.
+- **Linux Desktop (Python/GTK4):** GTK 4 has no headless backend. `products/linux-desktop/tests/conftest.py` sets `ADW_DISABLE_PORTAL=1` and, when PyGObject or a display server is missing, replaces GTK with stubs; CI (`linux.yml:test`) runs the real GTK under `xvfb-run` (`GDK_BACKEND=x11`), which never touches a developer's screen.
+
+To disable background execution and view GUI windows interactively across any desktop suite, set `PST_SHOW_GUI=1` (or pass `--external-key` to `ui_smoke_test.sh`).
 
 ### Instrumented tests genuinely need a device
 
@@ -194,7 +194,7 @@ satisfy five adversarial verification gates prior to delivery:
    must be validated against adversarial burst inputs, out-of-order undo actions, and
    cooperative task cancellation without memory leaks or state corruption.
 4. **Bidirectional Requirements Traceability**:
-   `scripts/verify_requirements_traceability.py --check --strict` validates that every
+   `private/scripts/verify_requirements_traceability.py --check --strict` (maintainer overlay) validates that every
    observable requirement identifier exists in product specifications, is mapped to automated
    tests, and contains zero orphan test references.
 5. **Pre-Delivery Intent Gate**:
@@ -227,8 +227,8 @@ these four rules removes almost all of that class:
    (which does not exist; the real matcher is `hasTestTag`) survive review and
    reach CI.
 
-Rules 1–3 are also recorded in `.Jules/palette.md`; rule 4 in
-`.Jules/code_health.md`.
+These rules are also part of the Android UI agent definitions in the maintainer's agent
+framework.
 
 ---
 

@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -200,7 +201,7 @@ def build_control_file(
             "Architecture": "all",
             "Section": "graphics",
             "Priority": "optional",
-            "Maintainer": "Alexander Patz <alexander.patz@example.com>",
+            "Maintainer": "Alexander Patz <alexpp90@users.noreply.github.com>",
             "Depends": "python3 (>= 3.12), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, "
                        "gir1.2-gexiv2-0.10, python3-numpy, python3-pil",
         }
@@ -215,7 +216,7 @@ def build_control_file(
         f"Package: {fields.get('Package', 'photo-selector-linux')}",
         f"Version: {version}",
         f"Architecture: {fields.get('Architecture', 'all')}",
-        f"Maintainer: {fields.get('Maintainer', 'Alexander Patz <alexander.patz@example.com>')}",
+        f"Maintainer: {fields.get('Maintainer', 'Alexander Patz <alexpp90@users.noreply.github.com>')}",
         f"Installed-Size: {installed_kib}",
     ]
     if fields.get("Depends"):
@@ -366,7 +367,9 @@ def build_deb_native(
     )
     (debian_dir / "control").write_text(control_content, encoding="utf-8")
 
-    cmd = ["dpkg-deb", "--build", "--root-owner-group", str(staging_root), str(output_deb)]
+    # -Zxz: recent dpkg defaults to zstd, which Python's tarfile (generate_apt_repo.py,
+    # verify_package.py) cannot read; xz is universally supported by apt.
+    cmd = ["dpkg-deb", "-Zxz", "--build", "--root-owner-group", str(staging_root), str(output_deb)]
     subprocess.run(cmd, check=True)
 
 
@@ -386,20 +389,13 @@ def main() -> int:
     filename = args.output_filename or f"photo-selector-linux_{args.version}_all.deb"
     output_deb = output_dir / filename
 
-    staging_root = product_dir / "build" / "staged_deb"
-    if staging_root.exists():
-        shutil.rmtree(staging_root)
-    staging_root.mkdir(parents=True, exist_ok=True)
-
-    try:
+    with tempfile.TemporaryDirectory(prefix="staged_deb_") as tmp_dir:
+        staging_root = Path(tmp_dir)
         if args.mode == "native" and shutil.which("dpkg-deb"):
             build_deb_native(product_dir, staging_root, output_deb, args.version)
         else:
             build_deb_pure_python(product_dir, staging_root, output_deb, args.version)
         print(f"Generated Debian package: {output_deb} ({output_deb.stat().st_size} bytes)")
-    finally:
-        if staging_root.exists():
-            shutil.rmtree(staging_root)
 
     return 0
 

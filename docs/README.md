@@ -23,7 +23,6 @@ docs/                       This tree — product documentation
 ai/                         Agent framework: routing, agents, skills, memory
 scripts/                    Cross-product tooling (run_tests.sh — the local CI mirror)
 assets/                     Shared branding
-Formula/  Casks/            Homebrew tap definitions (must stay at the root)
 .github/                    CI workflows
 ```
 
@@ -48,25 +47,25 @@ docs/
   products/
     desktop/           Desktop — Python + Tkinter
       README.md          What it is, how to run it, where the code lives
-      REQUIREMENTS.md    Authoritative behaviour spec
+      REQUIREMENTS.md    Authoritative behaviour spec  [private]
       ARCHITECTURE.md    Package layout and layering rules
     macos-desktop/     Native macOS Desktop — Swift 6 + SwiftUI
       README.md          What it is, how to build/run it, where the code lives
-      REQUIREMENTS.md    Authoritative behaviour spec
+      REQUIREMENTS.md    Authoritative behaviour spec  [private]
       ARCHITECTURE.md    Layering rules, concurrency models, and service interfaces
     linux-desktop/     Native Linux Desktop — GNOME HIG / Libadwaita (planned)
       README.md          What it is, how to test it, where the code lives
-      REQUIREMENTS.md    Authoritative behaviour spec
+      REQUIREMENTS.md    Authoritative behaviour spec  [private]
       ARCHITECTURE.md    Layering rules and GNOME HIG conventions (planned)
     android-desktop/   Android Desktop — :android-desktop, tablets and DeX
       README.md
-      REQUIREMENTS.md    Authoritative behaviour spec
+      REQUIREMENTS.md    Authoritative behaviour spec  [private]
       ARCHITECTURE.md    Layers, adaptive layout, performance, theme implementation
       DESIGN.md          Visual specification (layout maths, tokens, component sheet)
-      DESIGN_PROMPT.md   Design-tool brief derived from DESIGN.md
+      DESIGN_PROMPT.md   Design-tool brief derived from DESIGN.md  [private]
     phototok/          PhotoTok — :phototok, phones
       README.md
-      REQUIREMENTS.md    Authoritative behaviour spec, incl. architecture conventions
+      REQUIREMENTS.md    Authoritative behaviour spec, incl. architecture conventions  [private]
       ARCHITECTURE.md    Theme and structural notes
       DESIGN.md          Visual specification
 
@@ -78,13 +77,17 @@ docs/
   build/               How the products are built, signed and shipped
     CI_PARITY.md                 What runs where and why; local mirror vs GitHub Actions
     ANDROID_BUILD_AND_RELEASE.md Gradle, CI, artifacts, distribution
-    ANDROID_SIGNING_PLAN.md      Rationale for per-app cloud/signing isolation
-    ANDROID_SIGNING_SETUP.md     Step-by-step setup instructions
-    ANDROID_SIGNING_RUNBOOK.md   Operational runbook for the isolation migration
+    ANDROID_SIGNING_PLAN.md      Rationale for per-app cloud/signing isolation  [private]
+    ANDROID_SIGNING_SETUP.md     Step-by-step setup instructions  [private]
+    ANDROID_SIGNING_RUNBOOK.md   Operational runbook for the isolation migration  [private]
 ```
 
-The agent framework is **not** documentation and does not live here — it is in
-[`../ai/`](../ai/README.md).
+Files marked **[private]** — requirement specifications, design prompts, audits and the
+signing runbooks — are kept in the maintainer's private overlay repository and are linked
+into this tree only in the maintainer's checkout; a public clone does not contain them. The
+same holds for the AI-agent framework (`ai/`). The public documents here (READMEs,
+architecture, design specs, CI parity, shared rules) describe the products completely
+enough to build, test and contribute.
 
 ## Which file do I edit?
 
@@ -103,7 +106,6 @@ The agent framework is **not** documentation and does not live here — it is in
 | Whether a feature crosses products | `shared/FEATURE_PARITY.md` |
 | A CI gate | `build/CI_PARITY.md` **and** `scripts/run_tests.sh` **and** the workflow, in one commit |
 | Signing, secrets, store publishing | `build/ANDROID_BUILD_AND_RELEASE.md` |
-| How agents are routed | `../ai/ROUTING.md` |
 | The directory layout itself | `../products/README.md` (the rules) and this file (the map) |
 
 ## Known gaps

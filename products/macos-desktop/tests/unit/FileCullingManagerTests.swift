@@ -5,7 +5,7 @@ import Foundation
 @Suite("FileCullingManager Unit Tests")
 struct FileCullingManagerTests {
 
-    @Test("Companion file discovery finds RAW+JPEG, XMP sidecars, and Lightroom edits")
+    @Test("REQ-MAC-EXIF.05, REQ-MAC-CULL.05: Companion file discovery finds RAW+JPEG, XMP sidecars, and Lightroom edits")
     func testCompanionFileDiscovery() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("CullingTest_\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -41,7 +41,7 @@ struct FileCullingManagerTests {
         #expect(!companions.contains(unrelatedURL))
     }
 
-    @Test("Copy to Selection copies primary and companion files preserving originals")
+    @Test("REQ-MAC-CULL.04, REQ-MAC-CULL.05: Copy to Selection copies primary and companion files preserving originals")
     func testCopyToSelection() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("CopyTest_\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -66,7 +66,7 @@ struct FileCullingManagerTests {
         #expect(FileManager.default.fileExists(atPath: companionURL.path))
     }
 
-    @Test("Move to Selection moves primary and companion files into Selection folder")
+    @Test("REQ-MAC-CULL.05: Move to Selection moves primary and companion files into Selection folder")
     func testMoveToSelection() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("MoveTest_\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -91,7 +91,7 @@ struct FileCullingManagerTests {
         #expect(!FileManager.default.fileExists(atPath: companionURL.path))
     }
 
-    @Test("Move to Trash trashes primary and companion files")
+    @Test("REQ-MAC-CULL.05: Move to Trash trashes primary and companion files")
     func testMoveToTrash() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("TrashTest_\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -187,4 +187,92 @@ struct FileCullingManagerTests {
         #expect(FileManager.default.fileExists(atPath: rawURL.path))
         #expect(FileManager.default.fileExists(atPath: xmpURL.path))
     }
+
+    @Test("Move to Selection rolls back already-moved primary file when companion move fails")
+    func testMoveToSelectionTransactionalRollbackOnCompanionFailure() throws {
+        final class FailingSecondMoveFileManager: FileManager {
+            var moveTargetCallCount = 0
+            var failOnFilename: String = ""
+
+            override func moveItem(at srcURL: URL, to dstURL: URL) throws {
+                if srcURL.lastPathComponent == failOnFilename {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError, userInfo: [NSLocalizedDescriptionKey: "Simulated companion move error"])
+                }
+                try super.moveItem(at: srcURL, to: dstURL)
+            }
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MoveRollbackTest_\(UUID().uuidString)")
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let rawURL = tempDir.appendingPathComponent("ROLLBACK_01.CR3")
+        let jpgURL = tempDir.appendingPathComponent("ROLLBACK_01.JPG")
+        try "RAW_BYTES".data(using: .utf8)!.write(to: rawURL)
+        try "JPG_BYTES".data(using: .utf8)!.write(to: jpgURL)
+
+        let fm = FailingSecondMoveFileManager()
+        fm.failOnFilename = "ROLLBACK_01.JPG"
+        let manager = FileCullingManager(fileManager: fm)
+
+        #expect(throws: FileCullingError.self) {
+            try manager.moveToSelection(photoURL: rawURL, rootURL: tempDir)
+        }
+
+        // Primary file must be rolled back to its source location
+        #expect(FileManager.default.fileExists(atPath: rawURL.path))
+        #expect(FileManager.default.fileExists(atPath: jpgURL.path))
+        let selectionRaw = tempDir.appendingPathComponent("Selection/ROLLBACK_01.CR3")
+        #expect(!FileManager.default.fileExists(atPath: selectionRaw.path))
+    }
+
+    @Test("Copy to Selection removes newly copied primary file and restores overwritten destination when companion copy fails")
+    func testCopyToSelectionTransactionalRollbackOnCompanionFailure() throws {
+        final class FailingSecondCopyFileManager: FileManager {
+            var failOnFilename: String = ""
+
+            override func copyItem(at srcURL: URL, to dstURL: URL) throws {
+                if srcURL.lastPathComponent == failOnFilename {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError, userInfo: [NSLocalizedDescriptionKey: "Simulated companion copy error"])
+                }
+                try super.copyItem(at: srcURL, to: dstURL)
+            }
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CopyRollbackTest_\(UUID().uuidString)")
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let rawURL = tempDir.appendingPathComponent("ROLLBACK_02.CR3")
+        let jpgURL = tempDir.appendingPathComponent("ROLLBACK_02.JPG")
+        try "NEW_RAW_BYTES".data(using: .utf8)!.write(to: rawURL)
+        try "NEW_JPG_BYTES".data(using: .utf8)!.write(to: jpgURL)
+
+        let selectionDir = tempDir.appendingPathComponent("Selection", isDirectory: true)
+        try FileManager.default.createDirectory(at: selectionDir, withIntermediateDirectories: true)
+        let preExistingRaw = selectionDir.appendingPathComponent("ROLLBACK_02.CR3")
+        let oldContent = "EXISTING_DESTINATION_RAW".data(using: .utf8)!
+        try oldContent.write(to: preExistingRaw)
+
+        let fm = FailingSecondCopyFileManager()
+        fm.failOnFilename = "ROLLBACK_02.JPG"
+        let manager = FileCullingManager(fileManager: fm)
+
+        #expect(throws: FileCullingError.self) {
+            try manager.copyToSelection(photoURL: rawURL, rootURL: tempDir)
+        }
+
+        // Source files remain intact, and pre-existing Selection file is restored from backup
+        #expect(FileManager.default.fileExists(atPath: rawURL.path))
+        #expect(FileManager.default.fileExists(atPath: jpgURL.path))
+        #expect(FileManager.default.fileExists(atPath: preExistingRaw.path))
+        #expect(try Data(contentsOf: preExistingRaw) == oldContent)
+    }
 }
+

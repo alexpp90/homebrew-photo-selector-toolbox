@@ -6,7 +6,7 @@
 > rather than a comparison workspace.
 > Architecture conventions that are enforced (typed settings, pure domain logic, image
 > source abstraction, progressive discovery) are specified in
-> [`REQUIREMENTS.md`](REQUIREMENTS.md) § 3.
+> `REQUIREMENTS.md` (maintainer-private) § 3.
 > Visual design: [`DESIGN.md`](DESIGN.md).
 
 ## Theme Implementation

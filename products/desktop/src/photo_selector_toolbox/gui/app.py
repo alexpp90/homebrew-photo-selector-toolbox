@@ -48,8 +48,8 @@ class ThemeColors:
     bg_hover: str = "#3F3F46"
     fg_light: str = "#FAFAFA"
     fg_muted: str = "#A1A1AA"
-    accent_blue: str = "#6366F1"
-    accent_hover: str = "#4F46E5"
+    accent_blue: str = "#4F46E5"
+    accent_hover: str = "#4338CA"
     accent_text: str = "#818CF8"  # Accessible accent text on dark backgrounds
     border_color: str = "#3F3F46"
 

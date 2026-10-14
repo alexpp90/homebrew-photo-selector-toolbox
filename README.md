@@ -25,7 +25,7 @@
 
 **Photo Selector Toolbox** is a privacy-first, high-velocity photo culling and metadata analysis suite designed for professional photographers, enthusiasts, and creators. Whether sorting on the go on your phone, reviewing burst sequences on a tablet, or performing intensive multi-thousand RAW triage at your desktop workstation, every product is built natively for its platform.
 
-> 🔒 **100% Private & Strictly Offline:** Your photos never leave your device. All EXIF parsing, duplicate detection, and optical/aesthetic quality scoring (including Apple Neural Engine and local TFLite models) execute strictly on-device. Zero cloud uploads, zero subscriptions, and zero telemetry.
+> 🔒 **100% Private & Strictly Offline:** Your photos never leave your device. All EXIF parsing, duplicate detection, and optical/aesthetic quality scoring (including Apple Neural Engine and local TFLite models) execute strictly on-device. Zero cloud uploads, zero telemetry, and no account required.
 
 ---
 
@@ -60,10 +60,8 @@ products/
   linux-desktop/             Native Linux Desktop   — src/ tests/ debian/ scripts/ pyproject.toml
   desktop/                   Archived Legacy Desktop— src/ tests/ benchmarks/ scripts/ pyproject.toml
 docs/                        Product documentation, per product -> docs/README.md
-ai/                          AI agent framework: routing, agents, skills, memory -> ai/README.md
 scripts/                     Cross-product tooling — run_tests.sh (local CI mirror)
 assets/                      Shared visual branding and screenshots
-Formula/  Casks/             Homebrew tap definitions (root-level for brew tap discovery)
 ```
 
 ---
@@ -131,16 +129,18 @@ A high-performance native macOS photo selection and comparison culling suite bui
 A native GNOME photograph culling and selection suite targeting Debian 13 (Trixie) and modern Linux desktop environments adhering strictly to GNOME Human Interface Guidelines (HIG).
 
 <div align="center">
+  <img src="assets/linux_desktop_logo.svg" alt="Photo Selector Linux — Optical Cobalt Lens Logo" width="96" style="margin-bottom: 10px;" />
+  <br />
   <img src="assets/linux_desktop_screenshot.png" alt="Linux Desktop Culling Workspace" width="750" style="border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); margin-bottom: 12px;" />
-  <p><em>Native GNOME 46 / Libadwaita dark studio workspace with segmented comparison controls, floating HUD, and bottom action bar</em></p>
+  <p><em>Native GNOME 46 / Libadwaita Obsidian Darkroom &amp; Optical Cobalt workspace with segmented comparison controls, glassmorphic optical HUD with sharpness goodness bar, and semantic bottom action bar</em></p>
 </div>
 
 ### Key Features
-* **Native GNOME Architecture:** Built with Python 3.12+, PyGObject, GTK4, and Libadwaita with Studio dark palette (`#141417`), responsive `Adw.HeaderBar`, and view switcher.
-* **Vectorized NumPy Focus Engine:** 2D discrete Laplacian convolution with 3x3 Gaussian smoothing and strided Median Absolute Deviation (MAD) noise floor subtraction, achieving <2.0 ms compute latency.
-* **Responsive Canvas Viewports:** Seamlessly switch between 1-Up (1:1 actual-pixel zoom toggle on `Space`), 2-Up side-by-side comparison, and 3-Up Focus Mode (sliding triplet) with boundary slot indicators.
-* **Tactile Action Bar:** Bottom `Gtk.ActionBar` with `Move (M)`, `Copy (C)`, `Trash (Del)` via FreeDesktop Trash (`Gio.File.trash()`), and atomic reversal (`Ctrl+Z`).
-* **Debian 13 APT Distribution:** Packaged as a native Debian `.deb` hosted via an in-repo APT repository for seamless updates.
+* **Obsidian Darkroom & Optical Cobalt Theme:** Built with Python 3.12+, PyGObject, GTK4, and Libadwaita featuring a color-neutral Obsidian Darkroom surface (`#141417` / `#181920`), Optical Cobalt (`#3584E4`) & Optical Cyan (`#06B6D4`) focus accents, and $\ge 7:1$ AAA contrast tokens.
+* **Vectorized NumPy Focus Engine & Goodness HUD:** 2D discrete Laplacian convolution with 3x3 Gaussian smoothing and strided Median Absolute Deviation (MAD) noise floor subtraction (<2.0 ms compute latency), paired with a glassmorphic HUD (`I`) displaying a normalized sharpness goodness meter, semantic quality badges (`Sharp` / `Acceptable` / `Blurry`), and `RAW+JPG` / `XMP` companion pills.
+* **Responsive Canvas Viewports:** Seamlessly switch between 1-Up (1:1 actual-pixel zoom toggle on `Space`), 2-Up side-by-side comparison (`CHAMPION` / `CHALLENGER`), and 3-Up Focus Mode (`PREVIOUS` / `ACTIVE` / `NEXT` sliding triplet) with boundary slot indicators.
+* **Semantic Action Bar:** Bottom `Gtk.ActionBar` with semantic status counter pills (`Selected`, `Trashed`, `Remaining`), tactile `Move (M)`, `Copy (C)`, `Trash (Del)` via FreeDesktop Trash (`Gio.File.trash()`), and atomic reversal (`Ctrl+Z`).
+* **Debian 13 APT Distribution:** Packaged as a native Debian `.deb` with GNOME HIG squircle SVG/PNG icons and AppStream branding, in a signed APT repository ([alexpp90/apt](https://github.com/alexpp90/apt)) for seamless updates.
 
 ---
 
@@ -212,17 +212,24 @@ Download the pre-compiled `photo-selector-macos-apple-silicon.zip` from [GitHub 
 
 ### 🐧 Linux Desktop Installation (Debian 13 Trixie)
 
-Add the in-repo APT repository keyring and deb822 source:
+One line (adds the signed APT repository, then installs):
+
+```bash
+curl -fsSL https://alexpp90.github.io/apt/setup.sh | sudo bash
+sudo apt install photo-selector-linux
+```
+
+Or add the repository keyring and deb822 source by hand:
 
 ```bash
 # 1. Install repository keyring
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/photo-selector-archive-keyring.gpg | sudo tee /etc/apt/keyrings/photo-selector-archive-keyring.gpg > /dev/null
+curl -fsSL https://alexpp90.github.io/apt/photo-selector-archive-keyring.gpg | sudo tee /etc/apt/keyrings/photo-selector-archive-keyring.gpg > /dev/null
 
 # 2. Add repository source
 sudo tee /etc/apt/sources.list.d/photo-selector.sources << EOF
 Types: deb
-URIs: https://alexanderpatz.github.io/photo-selector/apt
+URIs: https://alexpp90.github.io/apt
 Suites: trixie
 Components: main
 Signed-By: /etc/apt/keyrings/photo-selector-archive-keyring.gpg
@@ -336,5 +343,7 @@ To verify all products against the exact gates CI enforces:
 ---
 
 ## 📄 License
-This project is licensed under the terms of the [MIT License](LICENSE).
+The source code is open source under the [MIT License](LICENSE).
+The names **Photo Selector Toolbox** and **PhotoTok** and the logos are not covered by that license — see [TRADEMARKS.md](TRADEMARKS.md) before distributing a modified build.
+Contributions are accepted under the [Contributor License Agreement](CLA.md), signed once with a PR comment.
 Third-party notices and licenses are detailed in [THIRDPARTY_NOTICES.txt](THIRDPARTY_NOTICES.txt).

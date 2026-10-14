@@ -3,7 +3,7 @@
 > Product: **Android Desktop** (`products/android/android-desktop/`, `:android-desktop`, `com.photoselectortoolbox`).
 > How the app is built internally: layers, adaptive layout strategy, interaction model,
 > performance strategy and theme implementation.
-> What it must do: [`REQUIREMENTS.md`](REQUIREMENTS.md). What it looks like:
+> What it must do: `REQUIREMENTS.md` (maintainer-private). What it looks like:
 > [`DESIGN.md`](DESIGN.md). Platform baseline shared with PhotoTok:
 > [`../../shared/ANDROID_PLATFORM.md`](../../shared/ANDROID_PLATFORM.md).
 

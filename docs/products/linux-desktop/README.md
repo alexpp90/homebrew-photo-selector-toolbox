@@ -11,12 +11,12 @@ and seamless Debian APT package distribution.
 | Modules | `photo_selector_linux` (domain, optical metadata, UI) |
 | Tests | `products/linux-desktop/tests/` (unit and integration tests) |
 | Target | Debian 13 (Trixie), GNOME 46+ workstations |
-| Packaging | Debian `.deb` package, in-repo APT repository |
+| Packaging | Debian `.deb` package, signed APT repository published to [`alexpp90/apt`](https://github.com/alexpp90/apt) by `linux.yml` |
 | Entry point | `python3 -m photo_selector_linux` |
 
 ## Documents
 
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) — Authoritative behaviour specification
+- `REQUIREMENTS.md` (maintainer-private) — Authoritative behaviour specification
 - `ARCHITECTURE.md` — Modular architecture and packaging (planned for M2)
 - Cross-product feature policy: [`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md)
 - CI: [`../../build/CI_PARITY.md`](../../build/CI_PARITY.md)

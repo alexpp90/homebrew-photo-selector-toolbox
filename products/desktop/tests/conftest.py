@@ -58,7 +58,8 @@ def _suppress_macos_gui_focus():
     using ctypes to make them no-ops during pytest execution, keeping test execution
     completely backgrounded with zero loss of test quality.
     """
-    if sys.platform != "darwin" or os.environ.get("PST_SHOW_GUI"):
+    show_gui = os.environ.get("PST_SHOW_GUI")
+    if sys.platform != "darwin" or (show_gui and show_gui != "0"):
         return
     try:
         import ctypes

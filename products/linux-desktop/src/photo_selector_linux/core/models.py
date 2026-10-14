@@ -26,11 +26,18 @@ class SharpnessCategory(str, Enum):
     SHARP = "sharp"
 
     @classmethod
-    def from_score(cls, score: float) -> SharpnessCategory:
+    def from_score(
+        cls,
+        score: float,
+        blurry_threshold: float = 35.0,
+        sharp_threshold: float = 70.0,
+    ) -> SharpnessCategory:
         """Derive category from normalized 0.0–100.0 sharpness score."""
-        if score < 35.0:
+        eff_sharp = 70.0 if sharp_threshold >= 100.0 else float(sharp_threshold)
+        eff_blurry = min(float(blurry_threshold), eff_sharp)
+        if score < eff_blurry:
             return cls.BLURRY
-        elif score < 70.0:
+        elif score < eff_sharp:
             return cls.ACCEPTABLE
         else:
             return cls.SHARP
@@ -131,10 +138,12 @@ class QualityScores:
     highlight_clipping: float
     shadow_clipping: float
     raw_variance: Optional[float] = None
+    category_override: Optional[SharpnessCategory] = field(default=None, repr=False, compare=False)
     focus_category: SharpnessCategory = field(init=False)
 
     def __post_init__(self):
-        object.__setattr__(self, "focus_category", SharpnessCategory.from_score(self.sharpness))
+        cat = self.category_override or SharpnessCategory.from_score(self.sharpness)
+        object.__setattr__(self, "focus_category", cat)
 
     @property
     def formatted_sharpness(self) -> str:
@@ -163,6 +172,11 @@ class CandidatePhoto:
     scores: Optional[QualityScores] = None
     status: PhotoStatus = PhotoStatus.CANDIDATE
     _file_size: Optional[int] = field(default=None, repr=False)
+
+    @property
+    def path(self) -> Path:
+        """Primary path alias for candidate photo."""
+        return self.primary_path
 
     @property
     def filename(self) -> str:

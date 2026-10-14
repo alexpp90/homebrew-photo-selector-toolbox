@@ -659,7 +659,10 @@ class SelectorViewModel @Inject constructor(
                     uri.path != null && File(uri.path!!).exists() -> File(uri.path!!)
                     else -> File(photo.uri)
                 }
-                metadataWriter.writeRating(file, rating)
+                val res = metadataWriter.writeRating(file, rating)
+                if (res.isFailure && uri.scheme == "content") {
+                    metadataWriter.writeRating(context, uri, rating)
+                }
             } catch (e: Exception) {
                 Log.e("SelectorViewModel", "Failed to write rating metadata to disk for ${photo.uri}", e)
             }

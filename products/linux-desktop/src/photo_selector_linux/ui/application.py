@@ -55,11 +55,15 @@ class PhotoSelectorApplication(Adw.Application if HAS_GI else object):
                 self.window.open_directory(target_path)
 
     def _setup_theme_and_styling(self) -> None:
+        from photo_selector_linux.ui.styling import APP_ICON_NAME, STUDIO_DARK_CSS
+
+        if hasattr(Gtk.Window, "set_default_icon_name"):
+            Gtk.Window.set_default_icon_name(APP_ICON_NAME)
+
         style_mgr = Adw.StyleManager.get_default()
         style_mgr.set_color_scheme(Adw.ColorScheme.FORCE_DARK)
 
         css_provider = Gtk.CssProvider()
-        from photo_selector_linux.ui.styling import STUDIO_DARK_CSS
         css_provider.load_from_data(STUDIO_DARK_CSS.encode("utf-8"))
 
         display = Gdk.Display.get_default()

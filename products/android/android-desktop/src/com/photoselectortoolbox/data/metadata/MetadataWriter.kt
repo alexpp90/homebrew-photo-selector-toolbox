@@ -1,5 +1,7 @@
 package com.photoselectortoolbox.data.metadata
 
+import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +23,16 @@ import javax.inject.Singleton
  */
 interface MetadataWriter {
     suspend fun writeRating(imageFile: File, rating: Int): Result<Unit>
+
+    suspend fun writeRating(context: Context, imageUri: Uri, rating: Int): Result<Unit> {
+        val file = when {
+            imageUri.scheme == "file" -> imageUri.path?.let { File(it) } ?: File(imageUri.toString())
+            imageUri.scheme == null -> File(imageUri.toString())
+            imageUri.path != null && File(imageUri.path!!).exists() -> File(imageUri.path!!)
+            else -> File(imageUri.toString())
+        }
+        return writeRating(file, rating)
+    }
 }
 
 @Singleton
@@ -34,6 +46,33 @@ class MetadataWriterImpl @Inject constructor() : MetadataWriter {
         )
         private val JPEG_EXTENSIONS = setOf("jpg", "jpeg")
     }
+
+    override suspend fun writeRating(context: Context, imageUri: Uri, rating: Int): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val directFile = when {
+                imageUri.scheme == "file" -> imageUri.path?.let { File(it) }
+                imageUri.scheme == null && imageUri.path != null -> File(imageUri.path!!)
+                else -> imageUri.path?.let { p -> val f = File(p); if (f.exists()) f else null }
+            }
+            if (directFile != null && directFile.exists()) {
+                return@withContext writeRating(directFile, rating)
+            }
+
+            try {
+                context.contentResolver.openFileDescriptor(imageUri, "rw")?.use { pfd ->
+                    val exif = ExifInterface(pfd.fileDescriptor)
+                    val currentXmp = exif.getAttribute(ExifInterface.TAG_XMP)
+                    val updatedXmp = XmpSidecarWriter.injectOrUpdateRating(currentXmp, rating)
+                    exif.setAttribute(ExifInterface.TAG_XMP, updatedXmp)
+                    exif.saveAttributes()
+                    return@withContext Result.success(Unit)
+                }
+                Result.failure(IOException("Unable to open read-write descriptor for $imageUri"))
+            } catch (e: Exception) {
+                Log.w(TAG, "SAF descriptor rating write skipped/failed for $imageUri", e)
+                Result.failure(e)
+            }
+        }
 
     override suspend fun writeRating(imageFile: File, rating: Int): Result<Unit> =
         withContext(Dispatchers.IO) {

@@ -36,14 +36,17 @@ if ! launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
 fi
 
 WORK="$(mktemp -d -t pst-macos-ui)"
-PREV_APP="$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null || true)"
 cleanup() {
     rm -rf "$WORK"
-    if [[ -n "${PREV_APP:-}" && "${PREV_APP}" != "PhotoSelectorApp" && "${PREV_APP}" != "PhotoSelector" ]]; then
-        osascript -e 'tell application "'"$PREV_APP"'" to activate' >/dev/null 2>&1 || true
+    if [[ "$EXTERNAL_KEY" -eq 1 && -n "${PREV_APP:-}" && "${PREV_APP}" != "PhotoSelectorApp" && "${PREV_APP}" != "PhotoSelector" ]]; then
+        osascript -e 'with timeout of 1 second' -e 'tell application "'"$PREV_APP"'" to activate' -e 'end timeout' >/dev/null 2>&1 || true
     fi
 }
 trap cleanup EXIT
+PREV_APP=""
+if [[ "$EXTERNAL_KEY" -eq 1 ]]; then
+    PREV_APP="$(osascript -e 'with timeout of 1 second' -e 'tell application "System Events" to get name of first process whose frontmost is true' -e 'end timeout' 2>/dev/null || true)"
+fi
 FIXTURES="$WORK/fixtures"
 
 echo "• building app bundle (release)…"

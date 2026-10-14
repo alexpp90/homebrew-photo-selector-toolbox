@@ -1,1 +1,0 @@
-../../ai/agents/macos-desktop-agent.md

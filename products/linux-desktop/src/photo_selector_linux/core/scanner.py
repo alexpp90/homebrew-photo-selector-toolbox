@@ -47,7 +47,9 @@ class DirectoryScanner:
         self,
         custom_selection_folder: Optional[str] = None,
         default_exclusions: Optional[Set[str]] = None,
+        handle_companions: bool = True,
     ):
+        self.handle_companions: bool = bool(handle_companions)
         self.excluded_names: Set[str] = set(default_exclusions or DEFAULT_EXCLUDED_FOLDERS)
         if custom_selection_folder:
             cleaned = str(custom_selection_folder).strip().rstrip("/\\").strip()
@@ -71,6 +73,8 @@ class DirectoryScanner:
 
     def find_companion_files(self, primary_path: Path) -> List[Path]:
         """Find all bound companion files (RAW, JPEG, XMP, -Edit) in the same directory (R-LINUX-META-04)."""
+        if not self.handle_companions:
+            return [primary_path]
         parent = primary_path.parent
         if not parent.is_dir():
             return [primary_path]
@@ -137,11 +141,17 @@ class DirectoryScanner:
         root_path: Path,
         recursive: bool = True,
         batch_size: int = 30,
+        first_batch_size: Optional[int] = None,
     ) -> Generator[List[CandidatePhoto], None, None]:
         """Progressively stream CandidatePhoto batches (R-LINUX-CULL-01)."""
         root_path = root_path.resolve()
+        if not root_path.exists():
+            return
+
         claimed_paths: Set[Path] = set()
         current_batch: List[CandidatePhoto] = []
+        yielded_first = False
+        target_size = max(1, first_batch_size) if first_batch_size is not None else max(1, batch_size)
 
         if recursive:
             walk_gen = os.walk(root_path, followlinks=False)
@@ -181,15 +191,16 @@ class DirectoryScanner:
 
                 # Check if this is an Edit file whose base capture exists in same folder
                 search_target = file_path
-                stem_lower = file_path.stem.lower()
-                for edit_marker in ("-edit", "_edit", "-enhanced-nr"):
-                    if edit_marker in stem_lower:
-                        base_stem = stem_lower.split(edit_marker)[0]
-                        for candidate_base in valid_files:
-                            if candidate_base.stem.lower() == base_stem:
-                                search_target = candidate_base
-                                break
-                        break
+                if self.handle_companions:
+                    stem_lower = file_path.stem.lower()
+                    for edit_marker in ("-edit", "_edit", "-enhanced-nr"):
+                        if edit_marker in stem_lower:
+                            base_stem = stem_lower.split(edit_marker)[0]
+                            for candidate_base in valid_files:
+                                if candidate_base.stem.lower() == base_stem:
+                                    search_target = candidate_base
+                                    break
+                            break
 
                 all_companions = self.find_companion_files(search_target)
                 for comp in all_companions:
@@ -208,12 +219,30 @@ class DirectoryScanner:
                 )
 
                 current_batch.append(candidate)
-                if len(current_batch) >= batch_size:
+                if len(current_batch) >= target_size:
                     yield current_batch
                     current_batch = []
+                    if not yielded_first:
+                        yielded_first = True
+                        target_size = max(1, batch_size)
 
         if current_batch:
             yield current_batch
+
+    def scan_directory_stream(
+        self,
+        root_path: Path,
+        recursive: bool = True,
+        first_batch_size: int = 1,
+        batch_size: int = 30,
+    ) -> Generator[List[CandidatePhoto], None, None]:
+        """Yield first candidate batch immediately (first_batch_size=1), then subsequent batches (REQ-LINUX-CULL.01)."""
+        yield from self.scan_stream(
+            root_path,
+            recursive=recursive,
+            batch_size=batch_size,
+            first_batch_size=first_batch_size,
+        )
 
     def scan_directory(self, root_path: Path, recursive: bool = True) -> List[CandidatePhoto]:
         """Enumerate and return all candidates sorted naturally by primary filename (R-LINUX-CULL-02)."""

@@ -1,9 +1,9 @@
-"""Unit tests for Linux Desktop Debian packaging and in-repo APT repository.
+"""Unit tests for Linux Desktop Debian packaging and the generated APT repository.
 
 Adheres to:
 - R-LINUX-PKG-01: Debian 13 (Trixie) packaging metadata (control, rules, changelog)
 - R-LINUX-PKG-02: DFSG compliance and machine-readable copyright (DEP-5)
-- R-LINUX-PKG-03: In-repo APT repository architecture (dists/trixie/..., pool/main/...)
+- R-LINUX-PKG-03: APT repository architecture (dists/trixie/..., pool/main/...), published to alexpp90/apt
 - R-LINUX-PKG-04: Modern deb822 repository source format
 - R-LINUX-PKG-05: Automated packaging and distribution tooling
 """
@@ -16,6 +16,8 @@ import re
 import subprocess
 import sys
 import tarfile
+
+import pytest
 from pathlib import Path
 
 
@@ -110,8 +112,9 @@ def test_debian_changelog_format():
 
 
 def test_desktop_integration_files():
-    """Verify desktop entry, AppStream metainfo, and icon assets (R-LINUX-PKG-01)."""
+    """Verify desktop entry, AppStream metainfo branding, and icon assets (R-LINUX-PKG-01)."""
     product_dir = get_product_root()
+    repo_root = get_repo_root()
     data_dir = product_dir / "data"
 
     desktop_file = data_dir / "org.photoselector.Linux.desktop"
@@ -121,17 +124,35 @@ def test_desktop_integration_files():
     assert "Exec=photo-selector-linux %F" in desktop_text
     assert "Icon=org.photoselector.Linux" in desktop_text
     assert "StartupWMClass=org.photoselector.Linux" in desktop_text
+    assert "StartupNotify=true" in desktop_text
 
     meta_file = data_dir / "org.photoselector.Linux.metainfo.xml"
     assert meta_file.is_file(), "Missing org.photoselector.Linux.metainfo.xml"
     meta_text = meta_file.read_text(encoding="utf-8")
     assert "<id>org.photoselector.Linux</id>" in meta_text
     assert "<binary>photo-selector-linux</binary>" in meta_text
+    assert "<branding>" in meta_text
+    assert "#3584e4" in meta_text.lower()
+    assert "#181920" in meta_text.lower()
 
     svg_icon = data_dir / "icons" / "hicolor" / "scalable" / "apps" / "org.photoselector.Linux.svg"
     png_icon = data_dir / "icons" / "hicolor" / "128x128" / "apps" / "org.photoselector.Linux.png"
+    shared_logo = repo_root / "assets" / "linux_desktop_logo.svg"
     assert svg_icon.is_file(), "Missing scalable SVG icon"
     assert png_icon.is_file(), "Missing 128x128 PNG icon"
+    assert shared_logo.is_file(), "Missing assets/linux_desktop_logo.svg"
+
+    svg_text = svg_icon.read_text(encoding="utf-8")
+    assert svg_text == shared_logo.read_text(encoding="utf-8"), "App SVG icon and shared logo must match"
+    for brand_hex in ("#3584E4", "#06B6D4", "#2EC27E", "#1C1C20", "#3A3A42"):
+        assert brand_hex in svg_text, f"Missing brand hex {brand_hex} in SVG icon"
+
+    # Verify PNG header dimensions (128x128)
+    png_bytes = png_icon.read_bytes()
+    assert png_bytes[:8] == b"\x89PNG\r\n\x1a\n", "Invalid PNG signature"
+    width = int.from_bytes(png_bytes[16:20], "big")
+    height = int.from_bytes(png_bytes[20:24], "big")
+    assert (width, height) == (128, 128), f"Expected 128x128 PNG icon, got {width}x{height}"
 
 
 def test_package_deb_builder(tmp_path):
@@ -197,11 +218,23 @@ def test_package_deb_builder(tmp_path):
         assert any(n.startswith("data.tar") for n in member_names)
 
 
-def test_apt_repository_structure():
-    """Verify in-repo APT repository tree structure and packages (R-LINUX-PKG-03)."""
-    repo_root = get_repo_root()
-    apt_dir = repo_root / "apt"
-    assert apt_dir.is_dir(), f"apt/ directory missing at {apt_dir}"
+@pytest.fixture(scope="module")
+def apt_repo(tmp_path_factory) -> Path:
+    """Build a complete APT repository the way CI does (package_debian.sh, unsigned).
+
+    The repository is no longer committed here — CI publishes it to alexpp90/apt — so the
+    tests build one from the current sources into a temporary directory.
+    """
+    apt_dir = tmp_path_factory.mktemp("apt")
+    script = get_product_root() / "scripts" / "package_debian.sh"
+    res = subprocess.run(["bash", str(script), "--apt-dir", str(apt_dir)], capture_output=True, text=True)
+    assert res.returncode == 0, f"package_debian.sh failed:\n{res.stdout}\n{res.stderr}"
+    return apt_dir
+
+
+def test_apt_repository_structure(apt_repo):
+    """Verify the generated APT repository tree structure and packages (R-LINUX-PKG-03)."""
+    apt_dir = apt_repo
 
     release_file = apt_dir / "dists" / "trixie" / "Release"
     inrelease_file = apt_dir / "dists" / "trixie" / "InRelease"
@@ -223,33 +256,35 @@ def test_apt_repository_structure():
         decompressed = gzip.decompress(gz_data).decode("utf-8")
         assert decompressed == text, "Packages.gz content mismatch"
 
-    pool_pkg = apt_dir / "pool" / "main" / "p" / "photo-selector-linux" / "photo-selector-linux_0.1.0_all.deb"
-    assert pool_pkg.is_file(), f"Expected pool package missing: {pool_pkg}"
+    pool = apt_dir / "pool" / "main" / "p" / "photo-selector-linux"
+    assert list(pool.glob("photo-selector-linux_*_all.deb")), f"No package in pool: {pool}"
 
 
-def test_deb822_sources_format():
-    """Verify modern deb822 sources file syntax and setup.sh (R-LINUX-PKG-04)."""
-    repo_root = get_repo_root()
-    apt_dir = repo_root / "apt"
+def test_deb822_sources_format(apt_repo):
+    """Verify deb822 sources, setup.sh and the published URL (R-LINUX-PKG-04)."""
+    template_dir = get_product_root() / "packaging" / "apt"
+    for apt_dir in (template_dir, apt_repo):
+        sources_file = apt_dir / "photo-selector.sources"
+        assert sources_file.is_file(), f"Missing sources file at {sources_file}"
+        text = sources_file.read_text(encoding="utf-8")
 
-    sources_file = apt_dir / "photo-selector.sources"
-    assert sources_file.is_file(), f"Missing sources file at {sources_file}"
-    text = sources_file.read_text(encoding="utf-8")
+        assert "Types: deb" in text
+        assert "URIs: https://alexpp90.github.io/apt/" in text
+        assert "Suites: trixie" in text
+        assert "Components: main" in text
+        assert "Signed-By: /etc/apt/keyrings/photo-selector-archive-keyring.gpg" in text
 
-    assert "Types: deb" in text
-    assert "Suites: trixie" in text
-    assert "Components: main" in text
-    assert "Signed-By: /etc/apt/keyrings/photo-selector-archive-keyring.gpg" in text
-
-    setup_file = apt_dir / "setup.sh"
-    assert setup_file.is_file(), f"Missing setup script at {setup_file}"
-    assert os.access(setup_file, os.X_OK), "setup.sh must be executable"
+        setup_file = apt_dir / "setup.sh"
+        assert setup_file.is_file(), f"Missing setup script at {setup_file}"
+        assert os.access(setup_file, os.X_OK), "setup.sh must be executable"
+        setup = setup_file.read_text(encoding="utf-8")
+        assert "https://alexpp90.github.io/apt/" in setup
+        assert "alexanderpatz.github.io" not in setup
 
 
-def test_release_checksum_integrity():
+def test_release_checksum_integrity(apt_repo):
     """Verify cryptographic integrity of Release manifest hashes (R-LINUX-PKG-03)."""
-    repo_root = get_repo_root()
-    trixie_dir = repo_root / "apt" / "dists" / "trixie"
+    trixie_dir = apt_repo / "dists" / "trixie"
     release_path = trixie_dir / "Release"
     assert release_path.is_file()
 
@@ -274,3 +309,10 @@ def test_release_checksum_integrity():
 
         actual_sha = hashlib.sha256(disk_path.read_bytes()).hexdigest().lower()
         assert actual_sha == expected_sha, f"SHA256 mismatch for {rel_path}"
+
+
+def test_no_signing_keys_in_templates():
+    """Private signing material must never live in the product tree (R-LINUX-PKG-05)."""
+    product = get_product_root()
+    leaked = [p for p in product.rglob("*") if p.name in (".gnupg_repo",) or p.suffix in (".key",)]
+    assert not leaked, f"Signing material in product tree: {leaked}"

@@ -2,7 +2,8 @@ name: Desktop CI
 
 # Single pipeline for the Python/Tkinter desktop solution: lint + tests always
 # run; the 3-OS PyInstaller builds, GitHub release, and Homebrew tap update
-# only happen on pushes to main or v* tags (and manual dispatch). Builds
+# only happen on pushes to main or v* tags (and manual dispatch). Homebrew formulae live
+# only in alexpp90/homebrew-tap, which the last job updates. Builds
 # depend on tests via `needs:` — no cross-workflow polling gate needed.
 
 on:
@@ -11,17 +12,15 @@ on:
     tags: ["v*"]
     paths:
       - 'products/desktop/**'
-      - 'Formula/**'
-      - 'Casks/**'
       - '*.spec'
+      - 'scripts/**'
       - '.github/workflows/desktop.yml'
   pull_request:
     branches: [main]
     paths:
       - 'products/desktop/**'
-      - 'Formula/**'
-      - 'Casks/**'
       - '*.spec'
+      - 'scripts/**'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
 
@@ -32,7 +31,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # ── Fast lint gate (< 30s) ──────────────────────────────────────
@@ -297,6 +296,8 @@ jobs:
     needs: build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -322,7 +323,10 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    env:
+      GH_REF: ${{ github.ref }}
+      GH_REF_NAME: ${{ github.ref_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -337,13 +341,13 @@ jobs:
 
       - name: Download release artifacts
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          if [ "${GH_REF}" = "refs/heads/main" ]; then
             TAG_DIR="nightly"
           else
-            TAG_DIR="${{ github.ref_name }}"
+            TAG_DIR="${GH_REF_NAME}"
           fi
-          curl -L -o macos.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-toolbox-macos-apple-silicon.zip"
-          curl -L -o linux.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-toolbox-linux-x64.zip"
+          curl -fsSL -o macos.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-toolbox-macos-apple-silicon.zip"
+          curl -fsSL -o linux.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-toolbox-linux-x64.zip"
 
       - name: Compute SHA256 hashes
         id: hashes
@@ -351,90 +355,59 @@ jobs:
           echo "macos_sha256=$(shasum -a 256 macos.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "linux_sha256=$(shasum -a 256 linux.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
-      - name: Update Homebrew Files
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          update_and_push() {
-            git fetch origin main
-            git checkout main
-            git reset --hard origin/main
-
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              python3 products/desktop/scripts/update_formula.py \
-                --file Casks/photo-selector-toolbox-legacy@nightly.rb \
-                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
-
-              python3 products/desktop/scripts/update_formula.py \
-                --file Formula/photo-selector-toolbox@nightly.rb \
-                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
-                --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
-
-              git add Casks/photo-selector-toolbox-legacy@nightly.rb Formula/photo-selector-toolbox@nightly.rb
-              COMMIT_MSG="Update nightly Homebrew SHA256 hashes"
-            else
-              TAG_NAME="${{ github.ref_name }}"
-              VERSION="${TAG_NAME#v}"
-
-              python3 products/desktop/scripts/update_formula.py \
-                --file Casks/photo-selector-toolbox-legacy.rb \
-                --version-val "${VERSION}" \
-                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
-
-              python3 products/desktop/scripts/update_formula.py \
-                --file Formula/photo-selector-toolbox.rb \
-                --version-val "${VERSION}" \
-                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}" \
-                --linux-sha256 "${{ steps.hashes.outputs.linux_sha256 }}"
-
-              git add Casks/photo-selector-toolbox-legacy.rb Formula/photo-selector-toolbox.rb
-              COMMIT_MSG="Update stable Homebrew files to version ${VERSION}"
-            fi
-
-            git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
-            git push origin main
-          }
-
-          for i in {1..5}; do
-            if update_and_push; then
-              echo "Homebrew files updated and pushed successfully."
-              exit 0
-            fi
-            echo "Attempt $i failed. Retrying in 2 seconds..."
-            sleep 2
-          done
-
-          echo "Failed to update and push Homebrew files after 5 attempts."
-          exit 1
-        shell: bash
-
-      - name: Update alexpp90/homebrew-tap Repository
-        if: env.HOMEBREW_TAP_TOKEN != ''
+      - name: Update alexpp90/homebrew-tap
+        # The tap repository is the only home of the formulae and casks (the main repository no longer
+        # carries Formula/ or Casks/). HOMEBREW_TAP_TOKEN: fine-grained PAT with
+        # contents:write on alexpp90/homebrew-tap.
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          MACOS_SHA256: ${{ steps.hashes.outputs.macos_sha256 }}
+          LINUX_SHA256: ${{ steps.hashes.outputs.linux_sha256 }}
         run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN secret is required to update alexpp90/homebrew-tap"
+            exit 1
+          fi
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          UPDATER="$GITHUB_WORKSPACE/products/desktop/scripts/update_formula.py"
 
-          TAP_DIR="$(mktemp -d)"
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/alexpp90/homebrew-tap.git" "${TAP_DIR}"
-          mkdir -p "${TAP_DIR}/Casks" "${TAP_DIR}/Formula"
-
-          cp Casks/*.rb "${TAP_DIR}/Casks/"
-          cp Formula/*.rb "${TAP_DIR}/Formula/"
-
-          cd "${TAP_DIR}"
-          git add Casks/ Formula/
-          if ! git diff --cached --quiet; then
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              git commit -m "Update nightly Homebrew SHA256 hashes"
+          update_and_push() {
+            TAP_DIR="$(mktemp -d)"
+            git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/alexpp90/homebrew-tap.git" "${TAP_DIR}"
+            cd "${TAP_DIR}"
+            if [ "${GH_REF}" = "refs/heads/main" ]; then
+              python3 "$UPDATER" --file Casks/photo-selector-toolbox-legacy@nightly.rb \
+                --macos-sha256 "${MACOS_SHA256}"
+              python3 "$UPDATER" --file Formula/photo-selector-toolbox@nightly.rb \
+                --macos-sha256 "${MACOS_SHA256}" \
+                --linux-sha256 "${LINUX_SHA256}"
+              COMMIT_MSG="Update nightly legacy Desktop hashes"
             else
-              git commit -m "Update stable Homebrew files to version ${{ github.ref_name }}"
+              TAG_NAME="${GH_REF_NAME}"
+              VERSION="${TAG_NAME#v}"
+              python3 "$UPDATER" --file Casks/photo-selector-toolbox-legacy.rb \
+                --version-val "${VERSION}" \
+                --macos-sha256 "${MACOS_SHA256}"
+              python3 "$UPDATER" --file Formula/photo-selector-toolbox.rb \
+                --version-val "${VERSION}" \
+                --macos-sha256 "${MACOS_SHA256}" \
+                --linux-sha256 "${LINUX_SHA256}"
+              COMMIT_MSG="Update legacy Desktop to ${VERSION}"
             fi
-            git push origin main
-            echo "Successfully updated alexpp90/homebrew-tap"
-          else
-            echo "No changes to commit in alexpp90/homebrew-tap"
-          fi
+            git add Casks/ Formula/
+            git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
+            git push origin HEAD
+          }
+
+          for i in 1 2 3 4 5; do
+            if (update_and_push); then
+              echo "alexpp90/homebrew-tap updated."
+              exit 0
+            fi
+            echo "Attempt $i failed (concurrent tap update?). Retrying in 5 seconds..."
+            sleep 5
+          done
+          echo "::error::Failed to update alexpp90/homebrew-tap after 5 attempts."
+          exit 1
         shell: bash

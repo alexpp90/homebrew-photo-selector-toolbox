@@ -91,6 +91,9 @@ vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", ve
 # OpenCV
 opencv-android = { group = "org.opencv", name = "opencv", version.ref = "opencvAndroid" }
 
+# TensorFlow Lite
+tensorflow-lite = { group = "org.tensorflow", name = "tensorflow-lite", version = "2.14.0" }
+
 # Testing — JVM unit tests
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }

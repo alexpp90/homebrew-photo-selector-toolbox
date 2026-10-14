@@ -1,0 +1,40 @@
+name: Repository Hygiene
+
+# Cheap, product-independent gates that guard the public repository itself:
+#   - README parity: every product section present, canonical order, no broken images.
+#   - Private-overlay guard: the maintainer's AI framework, requirement specs, prompts and
+#     agent memory live in a separate private repository (checked out at private/ and
+#     linked in locally). Nothing from it may ever be tracked here.
+# Mirror: scripts/run_tests.sh "Repository hygiene" section.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hygiene-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: README parity & private-path guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: No private-overlay material tracked
+        run: python3 scripts/check_private_paths.py
+
+      - name: Verify README parity
+        run: python3 scripts/check_readme_parity.py --check

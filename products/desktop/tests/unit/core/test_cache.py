@@ -68,9 +68,10 @@ def test_score_cache_pruning(tmp_path):
     # Since executing 10k inserts might be slow, let's use a smaller mock prune or a batch insert to speed it up.
     # Actually, we can batch insert 10005 items using executemany, and then call self._prune()!
     # Let's write a batch inserter to test pruning directly.
+    import contextlib
     import sqlite3
 
-    with sqlite3.connect(db_file) as conn:
+    with contextlib.closing(sqlite3.connect(db_file)) as conn, conn:
         data = []
         for i in range(10010):
             # We vary last_used so we can test LRU order
@@ -86,7 +87,7 @@ def test_score_cache_pruning(tmp_path):
         cache._prune(conn)
 
     # Now verify total count is 10,000
-    with sqlite3.connect(db_file) as conn:
+    with contextlib.closing(sqlite3.connect(db_file)) as conn, conn:
         cursor = conn.cursor()
         cursor.execute("SELECT count(*) FROM image_cache")
         count = cursor.fetchone()[0]

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy / Datenschutzerklärung — Photo Selector Toolbox (Android Desktop)</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #555555;
+      --border: #e0e0e0;
+      --accent: #0b57d0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --fg: #eaeaea;
+        --muted: #a0a0a0;
+        --border: #2c2c2c;
+        --accent: #8ab4f8;
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    h1, h2, h3 { line-height: 1.3; }
+    hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+    .meta { color: var(--muted); font-size: 0.95rem; }
+    a { color: var(--accent); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy — Photo Selector Toolbox (Android Desktop)</h1>
+  <p class="meta">Last updated: October 2026 &middot; <a href="#de">Deutsche Version unten</a></p>
+
+  <h2>1. Summary</h2>
+  <p>
+    <strong>Photo Selector Toolbox</strong> (Android package <code>com.photoselectortoolbox</code>) is a free, open-source, 100% on-device photo culling and quality analysis application for Android tablets and desktop mode (Samsung DeX).
+    <strong>Your photos, EXIF metadata, quality scores, and usage data never leave your device.</strong>
+    The application requests zero runtime permissions, contains no analytics, no advertising SDKs, no crash-reporting telemetry, and no cloud backend.
+  </p>
+
+  <h2>2. Controller (Art. 4(7) GDPR)</h2>
+  <p>
+    Alexander Patz<br>
+    Contact: see <a href="impressum.html">Legal Notice (Impressum)</a> or via GitHub at
+    <a href="https://github.com/alexpp90/homebrew-photo-selector-toolbox/issues">github.com/alexpp90/homebrew-photo-selector-toolbox</a>.
+  </p>
+
+  <h2>3. Data Processed by the Application</h2>
+  <ul>
+    <li>
+      <strong>Photos, EXIF Metadata &amp; On-Device Analysis (Local Only):</strong>
+      You select folders explicitly using the Android System Storage Access Framework (SAF) folder picker (<code>ACTION_OPEN_DOCUMENT_TREE</code>).
+      All sharpness, noise, exposure, aesthetic (TFLite NIMA), composition (OpenCV), and duplicate analyses run strictly locally on your device.
+      No images, thumbnails, file paths, GPS coordinates, or EXIF tags are ever transmitted over a network.
+    </li>
+    <li>
+      <strong>Local Score Cache &amp; Preferences (Room &amp; DataStore):</strong>
+      Calculated image quality scores and star ratings are cached locally in an internal SQLite (Room) database so folders re-open quickly, and user preferences are stored in Android Jetpack DataStore.
+      You can clear the local score cache at any time in <strong>Settings &rarr; Cache Management &rarr; Clear Cache</strong>.
+      Cloud auto-backup of the local score database and SAF folder grants is disabled so local file URIs and metadata are never uploaded to cloud backup services.
+    </li>
+  </ul>
+
+  <h2>4. Legal Basis (Art. 6 GDPR)</h2>
+  <p>
+    Because all processing takes place strictly locally on your device at your initiative and no personal data is transmitted to the developer or any third party, no external processing of personal data occurs. Local storage access occurs solely to provide the features explicitly requested by you (Art. 6(1)(b) GDPR / § 25(2) No. 2 TDDDG).
+  </p>
+
+  <h2>5. Data Retention &amp; Deletion</h2>
+  <p>
+    Cached scores can be cleared within the app's Settings screen at any time. Uninstalling the app immediately deletes all locally cached scores, preferences, and SAF folder access grants.
+  </p>
+
+  <h2>6. Your Rights under GDPR</h2>
+  <p>
+    Under the General Data Protection Regulation (Arts. 15–21, 77 GDPR), you have the right to access, rectification, erasure, restriction of processing, data portability, and to lodge a complaint with a supervisory authority. Because the developer receives or stores no personal data from your use of Photo Selector Toolbox, you retain full technical control over all data directly on your device.
+  </p>
+
+  <hr id="de">
+
+  <h1>Datenschutzerklärung — Photo Selector Toolbox (Deutsch)</h1>
+  <p class="meta">Stand: Oktober 2026</p>
+
+  <h2>1. Überblick</h2>
+  <p>
+    <strong>Photo Selector Toolbox</strong> (Android-Paket <code>com.photoselectortoolbox</code>) ist eine kostenlose, quelloffene Anwendung zur Fotoauswahl und Bildqualitätsanalyse, die ausschließlich lokal auf Ihrem Endgerät arbeitet.
+    <strong>Ihre Fotos, EXIF-Metadaten, Qualitätsbewertungen und Nutzungsdaten verlassen zu keinem Zeitpunkt Ihr Gerät.</strong>
+    Die App fordert keinerlei Laufzeitberechtigungen an und enthält weder Analyse-Tools noch Werbe-SDKs, Absturzberichte oder Cloud-Server.
+  </p>
+
+  <h2>2. Verantwortlicher (Art. 4 Nr. 7 DSGVO)</h2>
+  <p>
+    Alexander Patz<br>
+    Kontakt: siehe <a href="impressum.html">Impressum</a> oder über GitHub unter
+    <a href="https://github.com/alexpp90/homebrew-photo-selector-toolbox/issues">github.com/alexpp90/homebrew-photo-selector-toolbox</a>.
+  </p>
+
+  <h2>3. Verarbeitete Daten auf dem Endgerät</h2>
+  <ul>
+    <li>
+      <strong>Fotos, EXIF-Metadaten &amp; Bildanalyse (ausschließlich lokal):</strong>
+      Der Zugriff auf Fotoordner erfolgt ausschließlich über die vom Nutzer explizit im Android Storage Access Framework (SAF, <code>ACTION_OPEN_DOCUMENT_TREE</code>) ausgewählten Verzeichnisse.
+      Sämtliche Berechnungen (Schärfe, Bildrauschen, Belichtung, lokale KI-Ästhetikbewertung mittels TensorFlow Lite, Bildkomposition mittels OpenCV sowie Duplikaterkennung) finden vollständig lokal auf Ihrem Gerät statt.
+    </li>
+    <li>
+      <strong>Lokaler Bewertungs-Cache &amp; Einstellungen (Room &amp; DataStore):</strong>
+      Berechnete Qualitätswerte und Sternebewertungen werden lokal in einer internen SQLite-Datenbank (Room) zwischengespeichert; Einstellungen liegen lokal im Jetpack DataStore. Sie können den Cache jederzeit in den App-Einstellungen (<strong>Settings &rarr; Clear Cache</strong>) löschen. Ein Cloud-Auto-Backup dieser Datenbanken ist deaktiviert.
+    </li>
+  </ul>
+
+  <h2>4. Rechtsgrundlage, Speicherdauer &amp; Ihre Rechte</h2>
+  <p>
+    Alle Verarbeitungsschritte erfolgen ausschließlich lokal auf Ihrem Gerät zur Bereitstellung der von Ihnen genutzten Funktionen (Art. 6 Abs. 1 lit. b DSGVO bzw. § 25 Abs. 2 Nr. 2 TDDDG). Durch das Leeren des Caches oder die Deinstallation der App werden sämtliche lokalen Daten vollständig gelöscht. Da keinerlei personenbezogene Daten an den Entwickler übermittelt werden, behalten Sie jederzeit die vollständige Kontrolle über Ihre Daten direkt auf Ihrem Endgerät.
+  </p>
+</body>
+</html>

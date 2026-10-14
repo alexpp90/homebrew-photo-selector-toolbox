@@ -9,6 +9,7 @@ Adheres to:
 
 from __future__ import annotations
 
+import math
 from typing import Dict, List, Tuple
 
 APP_BRAND_NAME: str = "Photo Selector"
@@ -46,7 +47,10 @@ STUDIO_PALETTE: Dict[str, str] = {
 
 def compute_sharpness_goodness(sharpness_score: float) -> float:
     """Normalize a 0..100 sharpness score to a [GOODNESS_BAR_FLOOR, 1.0] visual bar fraction."""
-    clamped = max(0.0, min(100.0, float(sharpness_score)))
+    score = float(sharpness_score)
+    if not math.isfinite(score):
+        return GOODNESS_BAR_FLOOR if math.isnan(score) or score < 0.0 else 1.0
+    clamped = max(0.0, min(100.0, score))
     normalized = clamped / 100.0
     return round(GOODNESS_BAR_FLOOR + (1.0 - GOODNESS_BAR_FLOOR) * normalized, 4)
 
@@ -75,6 +79,27 @@ def format_companion_badges(
     if has_xmp_sidecar:
         badges.append(("XMP", "companion-badge-xmp"))
     return badges
+
+
+def get_candidate_companion_badges(candidate: object) -> List[Tuple[str, str]]:
+    """Inspect a CandidatePhoto's bound paths and return accurate companion badges.
+
+    Emits RAW+JPG only when the candidate bundle contains both a RAW file and a
+    bitmap/JPEG file (preventing false positives on JPEG-only '-Edit' derivatives).
+    """
+    from photo_selector_linux.core.scanner import BITMAP_EXTENSIONS, RAW_EXTENSIONS
+
+    primary = getattr(candidate, "primary_path", None)
+    companions = getattr(candidate, "companion_paths", None) or []
+    all_paths = ([primary] if primary is not None else []) + list(companions)
+
+    exts = {p.suffix.lstrip(".").lower() for p in all_paths if p is not None and p.suffix}
+    has_raw_jpeg_pair = bool(exts & RAW_EXTENSIONS) and bool(exts & BITMAP_EXTENSIONS)
+    has_xmp_sidecar = getattr(candidate, "sidecar_path", None) is not None or ("xmp" in exts)
+    return format_companion_badges(
+        has_raw_jpeg_pair=has_raw_jpeg_pair,
+        has_xmp_sidecar=has_xmp_sidecar,
+    )
 
 
 STUDIO_DARK_CSS: str = """
@@ -251,11 +276,30 @@ window, .studio-dark-surface {
 }
 
 /* Optical Sharpness Goodness Meter */
-.sharpness-meter-track {
+.sharpness-meter-track,
+.sharpness-meter-track trough {
     background-color: #262730;
     border: 1px solid #3A3A42;
     border-radius: 4px;
     min-height: 6px;
+}
+
+.sharpness-meter-track progress {
+    background-color: #3584E4;
+    border-radius: 3px;
+    min-height: 6px;
+}
+
+.sharpness-meter-sharp progress {
+    background-color: #2EC27E;
+}
+
+.sharpness-meter-acceptable progress {
+    background-color: #E5A50A;
+}
+
+.sharpness-meter-blurry progress {
+    background-color: #E01B24;
 }
 
 /* Bottom Action Bar Buttons */

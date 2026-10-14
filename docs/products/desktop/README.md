@@ -17,12 +17,12 @@ local-VLM aesthetic scoring.
 | Code | `products/desktop/src/photo_selector_toolbox/` |
 | Tests | `products/desktop/tests/` (mirrors the package layout) |
 | Benchmarks | `products/desktop/benchmarks/` |
-| Build | `scripts/`, `.github/workflows/desktop.yml`, `Formula/`, `Casks/` |
+| Build | `scripts/`, `.github/workflows/desktop.yml`; Homebrew formula/cask in [`alexpp90/homebrew-tap`](https://github.com/alexpp90/homebrew-tap) |
 | Entry points | `photo-selector-toolbox` (CLI), `photo-selector-gui` (GUI) |
 
 ## Documents
 
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) — authoritative behaviour specification
+- `REQUIREMENTS.md` (maintainer-private) — authoritative behaviour specification
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — package layout and the rules that keep it layered
 - Cross-product feature policy: [`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md)
 - CI: [`../../build/CI_PARITY.md`](../../build/CI_PARITY.md)

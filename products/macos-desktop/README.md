@@ -97,12 +97,12 @@ under `--macos` / `--all`):
 
 ## Documentation
 
-- [`../../docs/products/macos-desktop/REQUIREMENTS.md`](../../docs/products/macos-desktop/REQUIREMENTS.md) — Authoritative behaviour specification.
+- `../../docs/products/macos-desktop/REQUIREMENTS.md` (maintainer-private) — Authoritative behaviour specification.
 - [`../../docs/products/macos-desktop/ARCHITECTURE.md`](../../docs/products/macos-desktop/ARCHITECTURE.md) — Layering rules, concurrency models, and service interfaces.
 
 ## Things That Deliberately Live Elsewhere
 
 - **`docs/products/macos-desktop/`** — Product requirements and architectural specifications.
 - **`assets/`** — Shared branding assets, icons, and logos at the repository root.
-- **`Formula/` and `Casks/`** — Homebrew distribution tap manifests at the repository root.
+- **Homebrew cask** — in [`alexpp90/homebrew-tap`](https://github.com/alexpp90/homebrew-tap), updated by `macos.yml` on release.
 - **Legacy Python Desktop** — Archived at Git tag/branch `archive/legacy-desktop` and retained in `products/desktop/`.

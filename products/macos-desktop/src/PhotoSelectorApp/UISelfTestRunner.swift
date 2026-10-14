@@ -58,7 +58,8 @@ final class UISelfTestRunner {
     // MARK: - Run
 
     func run() async -> Bool {
-        let isBackground = ProcessInfo.processInfo.environment["PST_SHOW_GUI"] == nil
+        let showGUI = ProcessInfo.processInfo.environment["PST_SHOW_GUI"]
+        let isBackground = showGUI == nil || showGUI == "0" || showGUI!.isEmpty
         await waitUntil(timeout: 5) { self.workspaceWindow != nil && (isBackground || NSApp.isActive) }
         await activationChecks(isBackground: isBackground)
         await loadingChecks()
@@ -308,20 +309,46 @@ final class UISelfTestRunner {
         // SwiftUI `.global` is relative to the hosting view, y-down; window coordinates are y-up.
         let point = CGPoint(x: frame.midX, y: contentView.frame.height - frame.midY)
         let hitView = contentView.hitTest(point)
-        FileHandle.standardError.write(Data("[click-debug] id=\(identifier) frame=\(frame) point=\(point) hitView=\(String(describing: hitView))\n".utf8))
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            if let event = NSEvent.mouseEvent(
-                with: type,
-                location: point,
-                modifierFlags: [],
-                timestamp: ProcessInfo.processInfo.systemUptime,
-                windowNumber: window.windowNumber,
-                context: nil,
-                eventNumber: 0,
-                clickCount: 1,
-                pressure: type == .leftMouseDown ? 1 : 0
-            ) {
-                NSApp.postEvent(event, atStart: false)
+        if ProcessInfo.processInfo.environment["PHOTO_SELECTOR_UI_DEBUG"] == "1" {
+            FileHandle.standardError.write(Data("[click-debug] id=\(identifier) frame=\(frame) point=\(point) hitView=\(String(describing: hitView))\n".utf8))
+        }
+        if NSApp.isActive {
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                if let event = NSEvent.mouseEvent(
+                    with: type,
+                    location: point,
+                    modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber,
+                    context: nil,
+                    eventNumber: 0,
+                    clickCount: 1,
+                    pressure: type == .leftMouseDown ? 1 : 0
+                ) {
+                    NSApp.postEvent(event, atStart: false)
+                }
+            }
+        } else if let button = hitView?.nearestButton() {
+            button.performClick(nil)
+        } else if let hitView {
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                if let event = NSEvent.mouseEvent(
+                    with: type,
+                    location: point,
+                    modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber,
+                    context: nil,
+                    eventNumber: 0,
+                    clickCount: 1,
+                    pressure: type == .leftMouseDown ? 1 : 0
+                ) {
+                    if type == .leftMouseDown {
+                        hitView.mouseDown(with: event)
+                    } else {
+                        hitView.mouseUp(with: event)
+                    }
+                }
             }
         }
         await settle()
@@ -375,5 +402,18 @@ private extension JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return encoder
+    }
+}
+
+private extension NSView {
+    func nearestButton() -> NSButton? {
+        var current: NSView? = self
+        while let view = current {
+            if let button = view as? NSButton {
+                return button
+            }
+            current = view.superview
+        }
+        return nil
     }
 }

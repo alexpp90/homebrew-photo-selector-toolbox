@@ -15,6 +15,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.withContext
 
@@ -23,6 +24,7 @@ class ImageRepositoryImpl @Inject constructor(
     private val localImageSource: LocalImageSource,
     private val androidExifReader: AndroidExifReader,
     private val mediaStoreReader: MediaStoreReader,
+    private val settingsRepository: SettingsRepository,
 ) : ImageRepository {
 
     companion object {
@@ -122,7 +124,9 @@ class ImageRepositoryImpl @Inject constructor(
     ): FileOperationResult = withContext(Dispatchers.IO) {
         val source = sourceUri.toString()
         try {
-            val destination = copyImageInternal(context, sourceUri, destFolderUri, sorting)
+            val folderName = settingsRepository.selectionFolderName.first()
+                .trim().ifEmpty { SELECTION_FOLDER_NAME }
+            val destination = copyImageInternal(context, sourceUri, destFolderUri, sorting, folderName)
                 ?: return@withContext FileOperationResult.failure(source, "Copy step failed")
             if (deleteImage(context, sourceUri)) {
                 FileOperationResult.success(source, destination)
@@ -151,11 +155,13 @@ class ImageRepositoryImpl @Inject constructor(
     ): FileOperationResult = withContext(Dispatchers.IO) {
         val source = sourceUri.toString()
         try {
-            val destination = copyImageInternal(context, sourceUri, destFolderUri, sorting)
+            val folderName = settingsRepository.selectionFolderName.first()
+                .trim().ifEmpty { SELECTION_FOLDER_NAME }
+            val destination = copyImageInternal(context, sourceUri, destFolderUri, sorting, folderName)
             if (destination != null) {
                 FileOperationResult.success(source, destination)
             } else {
-                FileOperationResult.failure(source, "Could not write to the Selection folder")
+                FileOperationResult.failure(source, "Could not write to the $folderName folder")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy image: $sourceUri", e)
@@ -186,7 +192,8 @@ class ImageRepositoryImpl @Inject constructor(
         context: Context,
         sourceUri: Uri,
         destFolderUri: Uri,
-        sorting: Boolean
+        sorting: Boolean,
+        selectionFolderName: String = SELECTION_FOLDER_NAME,
     ): String? {
         val sourceDoc = DocumentFile.fromSingleUri(context, sourceUri) ?: return null
         val fileName = sourceDoc.name ?: return null
@@ -195,9 +202,9 @@ class ImageRepositoryImpl @Inject constructor(
         val destFolder = DocumentFile.fromTreeUri(context, destFolderUri) ?: return null
 
         val targetFolder = if (sorting) {
-            // Create Selection folder
-            val selectionDir = destFolder.findFile(SELECTION_FOLDER_NAME)
-                ?: destFolder.createDirectory(SELECTION_FOLDER_NAME)
+            // Create Selection folder using the user's configured selectionFolderName
+            val selectionDir = destFolder.findFile(selectionFolderName)
+                ?: destFolder.createDirectory(selectionFolderName)
                 ?: return null
 
             // Determine the correct subfolder based on file extension
