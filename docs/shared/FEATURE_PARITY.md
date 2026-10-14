@@ -13,7 +13,7 @@
 Sync is **multidirectional**. A feature or pattern proven in any of the five products is
 evaluated for the others — Desktop → Android was the historical direction, but PhotoTok,
 Android Desktop, macOS Desktop, and Linux Desktop originate work too, and it must travel across. The evaluation is a mandatory step of the
-[`retrospective`](../../ai/skills/retrospective/SKILL.md) skill, not an optional courtesy.
+`retrospective` (maintainer-private agent framework) skill, not an optional courtesy.
 
 When a new feature is added to any product, it must be evaluated for inclusion in the others:
 *   **macOS Desktop:** Should implement natively utilizing Swift 6, SwiftUI, Accelerate, and Apple Vision.
@@ -213,7 +213,7 @@ model, a data-access fix, a guidance approach — is evaluated for the other pro
 decision recorded here, including a decision not to port.
 
 Ported means **reimplemented in the target's own stack and UX model**. Copying a file between
-products is a defect ([`ai/ROUTING.md`](../../ai/ROUTING.md), the separation rule).
+products is a defect (the separation rule of the maintainer's agent framework, `ai/ROUTING.md`).
 
 | Pattern | Source | Desktop | macOS Desktop | Linux Desktop | Android Desktop | PhotoTok | Decided |
 |---|---|---|---|---|---|---|---|

@@ -4,7 +4,7 @@
 > How the native macOS application is structured internally: Swift Package Manager (SPM) layering,
 > actor-isolated concurrency model, image decoding pipeline, hardware-accelerated scoring engines,
 > transactional file culling, zero-latency keyboard routing, and automated test organization.
-> Authoritative behaviour specification: [`REQUIREMENTS.md`](REQUIREMENTS.md).
+> Authoritative behaviour specification: `REQUIREMENTS.md` (maintainer-private).
 > Terminology & taxonomy: [`../../GLOSSARY.md`](../../GLOSSARY.md).
 > Cross-product feature sync: [`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md).
 

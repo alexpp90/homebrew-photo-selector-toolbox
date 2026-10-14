@@ -6,9 +6,11 @@ Summarize the changes proposed in this Pull Request and provide any relevant con
 
 Please select which independent solution(s) this PR modifies:
 
-- [ ] **Desktop** (Python/Tkinter, files under `products/desktop/src/` or `products/desktop/tests/`)
+- [ ] **PhotoTok** (Kotlin/Compose, files under `products/android/phototok/`)
 - [ ] **Android Desktop** (Kotlin/Compose, files under `products/android/android-desktop/`)
-- [ ] **Android Phone** (Kotlin/Compose, files under `products/android/phototok/`)
+- [ ] **macOS Desktop** (Swift/SwiftUI, files under `products/macos-desktop/`)
+- [ ] **Linux Desktop** (Python/GTK4, files under `products/linux-desktop/`)
+- [ ] **Desktop (legacy)** (Python/Tkinter, files under `products/desktop/`)
 
 ## Verification and Testing
 
@@ -25,9 +27,9 @@ Describe any manual testing performed (especially for UI/UX changes, hardware in
 
 ## Checklist
 
-- [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md) and the target product's requirements under [docs/products/](../docs/README.md).
-- [ ] I named the target product (Desktop / Android Desktop / PhotoTok) in the description, and did not change the others.
-- [ ] If my changes introduce new requirements or modify existing ones, I updated that product's `docs/products/<product>/REQUIREMENTS.md` (or `docs/shared/` if it crosses products).
+- [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md) and the target product's documentation under [docs/products/](../docs/README.md).
+- [ ] I named the target product in the description, and did not change the others.
+- [ ] If my changes alter observable behaviour, I described the new behaviour precisely above (and updated `docs/shared/` if it crosses products).
 - [ ] I have added/updated unit tests to cover my changes.
 - [ ] All automated tests pass successfully.
 - [ ] I have formatted my code using the project's style guidelines (e.g. Flake8, Kotlin style guides).

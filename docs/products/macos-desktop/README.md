@@ -16,7 +16,7 @@ aesthetic scoring, and instant zero-latency decision making.
 
 ## Documents
 
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) — Authoritative behaviour specification
+- `REQUIREMENTS.md` (maintainer-private) — Authoritative behaviour specification
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — SPM target layering, concurrency model, and service interfaces
 - Cross-product feature policy: [`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md)
 - CI: [`../../build/CI_PARITY.md`](../../build/CI_PARITY.md)

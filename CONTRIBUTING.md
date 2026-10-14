@@ -104,36 +104,23 @@ Commit any updated schema files located under `products/android/android-desktop/
 
 ## Working with AI coding agents
 
-This repository ships an agent framework under [`ai/`](ai/README.md) — agent definitions,
-skills, hooks and commands — used by Claude Code, Antigravity, Gemini CLI and Jules. Two
-things affect you even if you never invoke an agent:
+AI coding agents are welcome. [`AGENTS.md`](AGENTS.md) is the entry point every common agent
+reads (Claude Code via `CLAUDE.md`, Gemini/Antigravity via `GEMINI.md`, Jules, Copilot,
+Cursor): it names the five products, the rule that code never crosses product boundaries,
+and the definition of done (`./scripts/run_tests.sh`).
 
-**Symlinks.** `.claude/`, `.gemini/` and `.agents/` are symlinks into `ai/`. Cloning needs
-`core.symlinks=true` — the default on macOS and Linux. On Windows, enable Developer Mode or
-run `git config core.symlinks true` before cloning. **Always edit the canonical file under
-`ai/`,** never through the mirrored directories.
-
-**Blocking hooks.** When you work through an agent, `ai/hooks/` refuses writes that break the
-repository's structural rules: scratch files and report dumps, writes through the mirrored
-directories, hand-edits of the generated `.gemini/settings.json`, and code at the repository
-root. It also blocks committing staged scratch artifacts and pushing a chain of speculative
-`fix(ci)` commits. Each denial explains the alternative. In a genuine emergency,
-`PST_SKIP_HOOKS=1` bypasses all of them.
-
-Framework changes have their own definition of done:
-
-```bash
-python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py
-python3 ai/skills/sync-framework/scripts/validate_framework.py
-```
-
-Both run as gates inside `./scripts/run_tests.sh`.
+The maintainer additionally uses a private agent framework, requirement specifications and
+design prompts that are kept in a separate private repository and linked into his checkout
+under `private/`. They are not needed to build, test or contribute. Paths such as `ai/`,
+`.claude/`, `.agents/`, `.gemini/`, `private/` and `docs/**/REQUIREMENTS.md` are therefore
+ignored by `.gitignore`, and `scripts/check_private_paths.py` fails CI if one of them is
+committed — please do not add files there.
 
 ---
 
 ## Submitting Pull Requests
 
-1. **Check the Requirements**: Always check the owning product's `docs/products/<product>/REQUIREMENTS.md` before making changes (there is no repository-root `REQUIREMENTS.md`). If your change alters existing requirements or behavior, update that file in the same commit. Cross-product policy lives in `docs/shared/`.
+1. **Describe the Behaviour Change**: Read the owning product's `README.md` and `docs/products/<product>/` documentation before making changes. If your change alters observable behaviour, describe it precisely in the pull request — the maintainer keeps the requirement specifications in sync. Cross-product policy lives in `docs/shared/`.
 2. **Branch Naming**: Use descriptive branch names: `feature/your-feature` or `fix/your-fix`.
 3. **Commit Messages**: Use clean, descriptive commit messages adhering to conventional commits (e.g., `feat(android): add picture randomization settings`).
 4. **Run Tests**: Run `./scripts/run_tests.sh` — the local mirror of every gate CI enforces. Bare `pytest` or `gradlew testDebugUnitTest` is a strict subset and is not sufficient evidence. See [`docs/build/CI_PARITY.md`](docs/build/CI_PARITY.md).

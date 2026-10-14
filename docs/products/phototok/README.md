@@ -123,10 +123,10 @@ Or from the repository root using the CI mirror:
 
 ## 📚 Documentation Index
 
-*   [`REQUIREMENTS.md`](REQUIREMENTS.md) — Authoritative behavioral requirements and architecture contracts.
+*   `REQUIREMENTS.md` (maintainer-private) — Authoritative behavioral requirements and architecture contracts.
 *   [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — Authoritative release checklist covering CI gates, local reproducible builds, and Play Console / F-Droid submission.
-*   [`LEGAL_COMPLIANCE.md`](LEGAL_COMPLIANCE.md) — German § 5 DDG Impressum, EU DSA Non-Trader, and GDPR compliance documentation.
+*   `LEGAL_COMPLIANCE.md` (maintainer-private) — German § 5 DDG Impressum, EU DSA Non-Trader, and GDPR compliance documentation.
 *   [`ARCHITECTURE.md`](ARCHITECTURE.md) — Structural architecture, themes, and DataStore key specifications.
 *   [`DESIGN.md`](DESIGN.md) — Visual design, M3 color tokens, component metrics, and gesture animations.
-*   [`UX_INVESTIGATION_REPORT.md`](UX_INVESTIGATION_REPORT.md) — Heuristic usability audit and persona evaluations.
+*   `UX_INVESTIGATION_REPORT.md` (maintainer-private) — Heuristic usability audit and persona evaluations.
 *   [`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md) — Cross-product feature mapping across all 5 products.

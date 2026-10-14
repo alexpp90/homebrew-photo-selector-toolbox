@@ -14,10 +14,10 @@ charts and a duplicate finder.
 
 ## Documents
 
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) — authoritative behaviour specification
+- `REQUIREMENTS.md` (maintainer-private) — authoritative behaviour specification
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — layers, adaptive layout strategy, performance, theme implementation
 - [`DESIGN.md`](DESIGN.md) — the visual specification: layout maths, tokens, screens, component sheet
-- [`DESIGN_PROMPT.md`](DESIGN_PROMPT.md) — the same design expressed as a brief for a design tool
+- `DESIGN_PROMPT.md` (maintainer-private) — the same design expressed as a brief for a design tool
 - Shared with PhotoTok: [`../../shared/ANDROID_PLATFORM.md`](../../shared/ANDROID_PLATFORM.md)
 - Build & release: [`../../build/ANDROID_BUILD_AND_RELEASE.md`](../../build/ANDROID_BUILD_AND_RELEASE.md)
 

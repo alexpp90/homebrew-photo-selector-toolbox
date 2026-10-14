@@ -22,7 +22,7 @@ local-VLM aesthetic scoring.
 
 ## Documents
 
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) — authoritative behaviour specification
+- `REQUIREMENTS.md` (maintainer-private) — authoritative behaviour specification
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — package layout and the rules that keep it layered
 - Cross-product feature policy: [`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md)
 - CI: [`../../build/CI_PARITY.md`](../../build/CI_PARITY.md)

@@ -16,7 +16,7 @@ and seamless Debian APT package distribution.
 
 ## Documents
 
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) — Authoritative behaviour specification
+- `REQUIREMENTS.md` (maintainer-private) — Authoritative behaviour specification
 - `ARCHITECTURE.md` — Modular architecture and packaging (planned for M2)
 - Cross-product feature policy: [`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md)
 - CI: [`../../build/CI_PARITY.md`](../../build/CI_PARITY.md)

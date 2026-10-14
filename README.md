@@ -60,7 +60,6 @@ products/
   linux-desktop/             Native Linux Desktop   — src/ tests/ debian/ scripts/ pyproject.toml
   desktop/                   Archived Legacy Desktop— src/ tests/ benchmarks/ scripts/ pyproject.toml
 docs/                        Product documentation, per product -> docs/README.md
-ai/                          AI agent framework: routing, agents, skills, memory -> ai/README.md
 scripts/                     Cross-product tooling — run_tests.sh (local CI mirror)
 assets/                      Shared visual branding and screenshots
 Formula/  Casks/             Homebrew tap definitions (root-level for brew tap discovery)

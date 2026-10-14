@@ -42,12 +42,12 @@ them under `products/android/` keeps the build root next to the things it builds
 
 That grouping is a *build* boundary, not a product boundary. The two apps still do not share
 code beyond `core/`, do not share layouts, and are owned by separate agents. See
-[`../ai/ROUTING.md`](../ai/ROUTING.md).
+`../ai/ROUTING.md` (maintainer-private agent framework).
 
 ## What is not here
 
 - **Documentation** — in [`../docs/`](../docs/README.md), organised by the same product slugs.
-- **Agent configuration** — in [`../ai/`](../ai/README.md).
+- **Agent configuration** — in `../ai/` (maintainer-private agent framework).
 - **`Formula/` and `Casks/`** — these must stay at the repository root. This repository is a
   Homebrew tap, and `brew tap` only looks for formulae at the tap root. Moving them into
   `products/desktop/` would break installation for every existing user.

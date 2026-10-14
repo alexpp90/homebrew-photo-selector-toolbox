@@ -97,7 +97,7 @@ under `--macos` / `--all`):
 
 ## Documentation
 
-- [`../../docs/products/macos-desktop/REQUIREMENTS.md`](../../docs/products/macos-desktop/REQUIREMENTS.md) — Authoritative behaviour specification.
+- `../../docs/products/macos-desktop/REQUIREMENTS.md` (maintainer-private) — Authoritative behaviour specification.
 - [`../../docs/products/macos-desktop/ARCHITECTURE.md`](../../docs/products/macos-desktop/ARCHITECTURE.md) — Layering rules, concurrency models, and service interfaces.
 
 ## Things That Deliberately Live Elsewhere

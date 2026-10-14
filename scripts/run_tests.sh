@@ -114,10 +114,10 @@ if ! $explicit_product; then
 
         for f in "${CHANGED_FILES[@]}"; do
             case "$f" in
-                products/desktop/*|Formula/*|Casks/*|*.spec) has_desktop=true ;;
+                products/desktop/*|*.spec) has_desktop=true ;;
                 products/android/*) has_android=true ;;
                 products/macos-desktop/*) has_macos=true ;;
-                products/linux-desktop/*|apt/*) has_linux=true ;;
+                products/linux-desktop/*) has_linux=true ;;
                 .github/workflows/*|scripts/run_tests.sh) has_cross=true ;;
             esac
         done
@@ -423,28 +423,50 @@ elif ! $explicit_product; then
     skip "Linux Desktop gates" "linux.yml" "no changes under products/linux-desktop/ (use --linux or --all to force)" false
 fi
 
-# ── Agent framework gates (mirror: desktop.yml `framework-governance`) ──
-# The framework is treated as code: naming, registration, roster and the paths that
-# instructions point at must hold, or agents silently follow stale directions.
-section "Agent framework"
+# ── Repository hygiene (mirror: repo-hygiene.yml) ──────────────────
+# Public gates: the README stays true to the products, and nothing from the maintainer's
+# private overlay (AI framework, requirement specs, prompts, memory) is tracked publicly.
+section "Repository hygiene"
 cd "$ROOT_DIR" || exit 1
 if have python3; then
-    gate "toolchain sync" "desktop.yml:framework-governance" \
-        python3 ai/skills/sync-framework/scripts/sync_framework.py --check
-    gate "framework validation" "desktop.yml:framework-governance" \
-        python3 ai/skills/sync-framework/scripts/validate_framework.py
-    gate ".gemini/settings.json in sync" "desktop.yml:framework-governance" \
-        python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py --check
-    gate "requirements traceability" "desktop.yml:framework-governance" \
-        python3 scripts/verify_requirements_traceability.py --check --strict
-    gate "readme parity" "desktop.yml:framework-governance" \
+    gate "readme parity" "repo-hygiene.yml:hygiene" \
         python3 scripts/check_readme_parity.py --check
+    gate "no private-overlay material tracked" "repo-hygiene.yml:hygiene" \
+        python3 scripts/check_private_paths.py
 else
-    skip "toolchain sync" "" "python3 not found"
-    skip "framework validation" "" "python3 not found"
-    skip ".gemini/settings.json in sync" "" "python3 not found"
-    skip "requirements traceability" "" "python3 not found"
     skip "readme parity" "" "python3 not found"
+    skip "no private-overlay material tracked" "" "python3 not found"
+fi
+
+# ── Private overlay gates (mirror: photo-selector-private framework.yml) ──
+# The agent framework and the requirement specs live in the private overlay (private/,
+# linked into this tree). Its gates run here when the overlay is checked out, and in the
+# private repository's own CI; a public clone has nothing to check and says so.
+if [ -d "$ROOT_DIR/private/.git" ] || [ -f "$ROOT_DIR/private/.git" ]; then
+    section "Private overlay (agent framework & requirements)"
+    if have python3; then
+        gate "overlay links" "framework.yml:framework" \
+            python3 private/scripts/link_overlay.py --check
+        gate "toolchain sync" "framework.yml:framework" \
+            python3 ai/skills/sync-framework/scripts/sync_framework.py --check
+        gate "framework validation" "framework.yml:framework" \
+            python3 ai/skills/sync-framework/scripts/validate_framework.py
+        gate ".gemini/settings.json in sync" "framework.yml:framework" \
+            python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py --check
+        gate "requirements traceability" "framework.yml:framework" \
+            python3 private/scripts/verify_requirements_traceability.py --check --strict
+        if python3 -c "import pytest" &>/dev/null; then
+            gate "framework & hook tests" "framework.yml:framework" \
+                python3 -m pytest -q -p no:cacheprovider private/tests/framework
+        else
+            skip "framework & hook tests" "framework.yml:framework" "pytest not importable by python3"
+        fi
+    else
+        skip "private overlay gates" "" "python3 not found"
+    fi
+else
+    section "Private overlay (not present)"
+    skip "private overlay gates" "" "no private/ checkout — public clone, nothing to check" false
 fi
 
 # ── Summary ───────────────────────────────────────────────────────

@@ -43,11 +43,9 @@ The rule that prevents it:
 | `linux-desktop test` | `linux.yml:test` | ✅ everywhere | Headless unit tests covering metadata, scoring, and file transactions |
 | `debian packaging & apt repo` | `linux.yml:package` | ⚠️ Linux / `dpkg-deb` only | Verifies `.deb` package creation and APT metadata generation |
 | PyInstaller build, release, Play/Firebase publish | `desktop.yml:build`+, `android.yml:build`+, `macos.yml:build` | ❌ credentials-bound | Only runs on pushes to `main` / `v*` tags. Not reproducible locally by design. |
-| `sync_framework.py --check` | `desktop.yml:framework-governance` | ✅ everywhere | Toolchain synchronization: verifies Cursor, Windsurf, Copilot, Gemini settings, and mirrors match canonical definitions in `ai/` with zero drift. |
-| `validate_framework.py` | `desktop.yml:framework-governance` | ✅ everywhere | Agent-framework integrity: naming, registration, roster, toolchain parity, unowned product detection, product boundary leaks, and paths referenced by instructions. |
-| `gen_gemini_settings.py --check` | `desktop.yml:framework-governance` | ✅ everywhere | Fails when `.gemini/settings.json` has drifted from `ai/agents/*.md`. Fix by regenerating, never by hand-editing. |
-| `verify_requirements_traceability.py --check --strict` | `desktop.yml:framework-governance` | ✅ everywhere | Validates bidirectional requirement-to-test traceability: ensures requirement IDs exist in specs, rejects orphan test references, and strictly isolates multi-product test suite mappings. |
-| `check_readme_parity.py --check` | `desktop.yml:framework-governance` | ✅ everywhere | Enforces root `README.md` ecosystem completeness, canonical product ordering (PhotoTok -> Android Desktop -> macOS Desktop -> Linux Desktop -> Desktop), asset integrity, and removal of deprecated terms. |
+| `check_readme_parity.py --check` | `repo-hygiene.yml:hygiene` | ✅ everywhere | Enforces root `README.md` ecosystem completeness, canonical product ordering (PhotoTok -> Android Desktop -> macOS Desktop -> Linux Desktop -> Desktop), asset integrity, and removal of deprecated terms. |
+| `check_private_paths.py` | `repo-hygiene.yml:hygiene` | ✅ everywhere | Fails if maintainer-private material (`private/`, `ai/`, `.claude/`, `.agents/`, `.gemini/`, requirement specs, prompts, the prompt ledger) is tracked in this public repository. Also runs as the local pre-commit hook installed by the overlay. |
+| Private overlay gates (`link_overlay.py --check`, `sync_framework.py --check`, `validate_framework.py`, `gen_gemini_settings.py --check`, `verify_requirements_traceability.py --check --strict`, framework tests) | private repo `framework.yml` | ⚠️ maintainer checkout only | Run by `run_tests.sh` when `private/` is checked out; `⊘ SKIPPED` (not a risk) in a public clone. The private repository's CI checks out this repository and runs the same gates. |
 
 ---
 
@@ -194,7 +192,7 @@ satisfy five adversarial verification gates prior to delivery:
    must be validated against adversarial burst inputs, out-of-order undo actions, and
    cooperative task cancellation without memory leaks or state corruption.
 4. **Bidirectional Requirements Traceability**:
-   `scripts/verify_requirements_traceability.py --check --strict` validates that every
+   `private/scripts/verify_requirements_traceability.py --check --strict` (maintainer overlay) validates that every
    observable requirement identifier exists in product specifications, is mapped to automated
    tests, and contains zero orphan test references.
 5. **Pre-Delivery Intent Gate**:
@@ -227,8 +225,8 @@ these four rules removes almost all of that class:
    (which does not exist; the real matcher is `hasTestTag`) survive review and
    reach CI.
 
-Rules 1–3 are also recorded in `ai/memory/palette.md`; rule 4 in
-`ai/memory/code_health.md`.
+These rules are also part of the Android UI agent definitions in the maintainer's agent
+framework.
 
 ---
 

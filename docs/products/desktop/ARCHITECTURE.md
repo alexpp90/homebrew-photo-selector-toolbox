@@ -65,7 +65,7 @@ the top level and visual regression tests in `products/desktop/tests/visual/`.
    `AnalysisTool` protocol and register with `ToolRegistry`.
 5. **Long work goes through a controller.** GUI code must not block the UI thread; scanning and
    image loading go through `gui/controllers.py`. Thread-pool sizing conventions are in
-   [`../../../ai/skills/refactoring-guide/SKILL.md`](../../../ai/skills/refactoring-guide/SKILL.md).
+   `../../../ai/skills/refactoring-guide/SKILL.md` (maintainer-private agent framework).
 6. **Constants are centralised.** Extensions, thresholds and theme values live with the module
    that owns them, not inlined at call sites.
 
@@ -75,4 +75,4 @@ the top level and visual regression tests in `products/desktop/tests/visual/`.
 where they should be split into feature modules. This overhaul moved them without splitting
 them, deliberately: relocating a file is verifiable, carving up a 3 300-line Tkinter class is
 not, and mixing the two would make the whole change unreviewable. The split is filed in
-[`../../../ai/memory/code_health.md`](../../../ai/memory/code_health.md).
+`../../../ai/memory/code_health.md` (maintainer-private agent framework).

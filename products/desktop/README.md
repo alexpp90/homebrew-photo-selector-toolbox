@@ -15,7 +15,7 @@ products/desktop/
 ```
 
 Package layout and the layering rules: [`../../docs/products/desktop/ARCHITECTURE.md`](../../docs/products/desktop/ARCHITECTURE.md).
-Behaviour specification: [`../../docs/products/desktop/REQUIREMENTS.md`](../../docs/products/desktop/REQUIREMENTS.md).
+Behaviour specification: `../../docs/products/desktop/REQUIREMENTS.md` (maintainer-private).
 
 ## Run
 

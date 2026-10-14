@@ -14,13 +14,7 @@ on:
       - 'Formula/**'
       - 'Casks/**'
       - '*.spec'
-      - 'ai/**'
-      - 'docs/**'
       - 'scripts/**'
-      - 'README.md'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - 'GEMINI.md'
       - '.github/workflows/desktop.yml'
   pull_request:
     branches: [main]
@@ -29,13 +23,7 @@ on:
       - 'Formula/**'
       - 'Casks/**'
       - '*.spec'
-      - 'ai/**'
-      - 'docs/**'
       - 'scripts/**'
-      - 'README.md'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - 'GEMINI.md'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
 
@@ -49,33 +37,6 @@ permissions:
   contents: read
 
 jobs:
-  # ── Agent framework, traceability & README parity gate (< 15s) ──
-  framework-governance:
-    name: Framework & Traceability Governance
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Verify toolchain sync
-        run: python3 ai/skills/sync-framework/scripts/sync_framework.py --check
-
-      - name: Validate agent framework
-        run: python3 ai/skills/sync-framework/scripts/validate_framework.py
-
-      - name: Verify .gemini/settings.json sync
-        run: python3 ai/skills/sync-framework/scripts/gen_gemini_settings.py --check
-
-      - name: Verify requirements traceability
-        run: python3 scripts/verify_requirements_traceability.py --check --strict
-
-      - name: Verify README parity
-        run: python3 scripts/check_readme_parity.py --check
-
   # ── Fast lint gate (< 30s) ──────────────────────────────────────
   lint:
     name: Lint
