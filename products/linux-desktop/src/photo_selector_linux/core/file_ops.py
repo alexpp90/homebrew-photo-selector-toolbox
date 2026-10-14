@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from urllib.parse import quote, unquote
 
+from photo_selector_linux.core.gvfs_names import DisplayNameResolver, default_resolver
 from photo_selector_linux.core.models import (
     CandidatePhoto,
     CullingActionType,
@@ -50,9 +51,15 @@ class InsufficientDiskSpaceError(FileCullingError):
 class FileCullingManager:
     """Manages transactional file relocations, copy operations, trash, and undos."""
 
-    def __init__(self, default_selection_folder: str = "Selection", trash_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        default_selection_folder: str = "Selection",
+        trash_dir: Optional[Path] = None,
+        name_resolver: Optional[DisplayNameResolver] = None,
+    ):
         self.default_selection_folder = default_selection_folder
         self._trash_dir = trash_dir
+        self.name_resolver: DisplayNameResolver = name_resolver or default_resolver()
 
     def _get_trash_dir(self) -> Path:
         """Return the FreeDesktop.org Trash base directory ($XDG_DATA_HOME/Trash)."""
@@ -163,6 +170,11 @@ class FileCullingManager:
     def _get_selection_dir(self, root_dir: Path, custom_folder: Optional[str] = None) -> Path:
         folder_name = custom_folder or self.default_selection_folder
         folder_name = str(folder_name).strip().rstrip("/\\").strip() or "Selection"
+        # On GVFS cloud mounts an existing folder is listed under an opaque ID, not its name:
+        # reuse it instead of creating a duplicate "Selection" on every cull.
+        for on_disk, display in self.name_resolver.names_in(root_dir).items():
+            if display == folder_name and (root_dir / on_disk).is_dir():
+                return (root_dir / on_disk).resolve()
         sel_dir = (root_dir / folder_name).resolve()
         sel_dir.mkdir(parents=True, exist_ok=True)
         return sel_dir
@@ -209,7 +221,7 @@ class FileCullingManager:
                 for src in targets:
                     if not src.exists():
                         continue
-                    dst = (sel_dir / src.name).resolve()
+                    dst = (sel_dir / candidate.name_of(src)).resolve()
                     src_res = src.resolve()
 
                     # Self-Move Guard: Idempotent no-op
@@ -240,7 +252,7 @@ class FileCullingManager:
                 for src in targets:
                     if not src.exists():
                         continue
-                    dst = (sel_dir / src.name).resolve()
+                    dst = (sel_dir / candidate.name_of(src)).resolve()
                     src_res = src.resolve()
 
                     # Self-Move Guard
@@ -326,7 +338,7 @@ class FileCullingManager:
             for src in targets:
                 if not src.exists():
                     continue
-                dst = (sel_dir / src.name).resolve()
+                dst = (sel_dir / candidate.name_of(src)).resolve()
                 src_res = src.resolve()
 
                 # Self-Copy Guard: Idempotent no-op

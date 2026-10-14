@@ -144,7 +144,7 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
         self.lbl_counter.set_label(f"Photo {current} of {total}")
 
         if vm.current_folder:
-            self.lbl_path.set_label(vm.current_folder.name)
+            self.lbl_path.set_label(vm.current_folder_name or vm.current_folder.name)
         else:
             self.lbl_path.set_label("No folder loaded")
 

@@ -24,6 +24,7 @@ except (ImportError, ValueError):
 
 from photo_selector_linux.ui.boundary_slot import BoundarySlotPane
 from photo_selector_linux.ui.info_hud import InfoHUD
+from photo_selector_linux.ui.photo_loader import PhotoTextureLoader
 from photo_selector_linux.ui.styling import (
     APP_BRAND_NAME,
     APP_BRAND_TAGLINE,
@@ -42,6 +43,8 @@ class CanvasView(Gtk.Box if HAS_GI else object):
         self.hud_enabled: bool = True
         self.rendered_slots: List[Dict[str, Any]] = []
         self.hud = InfoHUD(viewmodel=self.viewmodel)
+        self.loader = PhotoTextureLoader() if HAS_GI else None
+        self._loaded_folder = None
 
         if HAS_GI:
             super().__init__(orientation=Gtk.Orientation.VERTICAL)
@@ -89,7 +92,20 @@ class CanvasView(Gtk.Box if HAS_GI else object):
     def _on_state_changed(self, vm) -> None:
         if vm.comparison_mode != 1 and self.is_1to1_zoom:
             self.is_1to1_zoom = False
+        if self.loader is not None and vm.current_folder != self._loaded_folder:
+            # A new folder invalidates every decoded texture of the previous one.
+            self._loaded_folder = vm.current_folder
+            self.loader.clear()
         self._render_view()
+        self._prefetch_neighbours()
+
+    def _prefetch_neighbours(self) -> None:
+        if self.loader is None:
+            return
+        candidates = self.viewmodel.candidates
+        idx = self.viewmodel.current_index
+        window = range(max(0, idx - 1), min(len(candidates), idx + 3))
+        self.loader.prefetch(candidates[i] for i in window)
 
     def _build_slot_descriptor(
         self,
@@ -109,7 +125,7 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             "role": role,
             "is_active": is_active,
             "slot_offset": slot_offset,
-            "filename": candidate.primary_path.name,
+            "filename": candidate.filename,
             "badges": badges,
             "zoom_1to1": allow_1to1,
             "css_classes": ["card-pane", "accent-border"] if is_active else ["card-pane", "card-pane-inactive"],
@@ -298,12 +314,22 @@ class CanvasView(Gtk.Box if HAS_GI else object):
 
         frame.append(badge_box)
 
-        # Image view
-        picture = Gtk.Picture.new_for_filename(str(candidate.primary_path))
+        # Image view — decoded off the main loop (RAW via its embedded preview)
+        picture = Gtk.Picture()
         picture.set_hexpand(True)
         picture.set_vexpand(True)
         picture.set_can_shrink(True)
         picture.set_keep_aspect_ratio(True)
+
+        image_area = Gtk.Overlay()
+        image_area.set_hexpand(True)
+        image_area.set_vexpand(True)
+        status = Gtk.Spinner()
+        status.set_halign(Gtk.Align.CENTER)
+        status.set_valign(Gtk.Align.CENTER)
+        status.set_size_request(32, 32)
+        status.start()
+        image_area.add_overlay(status)
 
         if allow_1to1:
             scrolled = Gtk.ScrolledWindow()
@@ -311,15 +337,22 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             scrolled.set_vexpand(True)
             picture.set_can_shrink(False)
             scrolled.set_child(picture)
-            frame.append(scrolled)
+            image_area.set_child(scrolled)
         else:
-            frame.append(picture)
+            image_area.set_child(picture)
+        frame.append(image_area)
+
+        self.loader.request(
+            candidate,
+            lambda texture: self._on_texture_ready(candidate, picture, image_area, status, texture),
+            full_size=allow_1to1,
+        )
 
         # Footer row: File name label + compact score badge (if computed)
         footer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         footer_box.set_halign(Gtk.Align.CENTER)
 
-        lbl = Gtk.Label(label=candidate.primary_path.name)
+        lbl = Gtk.Label(label=candidate.filename)
         lbl.set_ellipsize(3)  # PANGO_ELLIPSIZE_MIDDLE
         lbl.set_max_width_chars(36)
         lbl.add_css_class("optical-strip-secondary")
@@ -334,3 +367,18 @@ class CanvasView(Gtk.Box if HAS_GI else object):
         frame.append(footer_box)
 
         return frame
+
+    def _on_texture_ready(self, candidate, picture, image_area, status, texture) -> None:
+        status.stop()
+        image_area.remove_overlay(status)
+        if texture is not None:
+            picture.set_paintable(texture)
+        else:
+            unavailable = Gtk.Label(label=f"Cannot display {candidate.filename}")
+            unavailable.add_css_class("optical-strip-secondary")
+            unavailable.set_halign(Gtk.Align.CENTER)
+            unavailable.set_valign(Gtk.Align.CENTER)
+            image_area.add_overlay(unavailable)
+        # EXIF is read during the first decode; refresh the HUD once it is known.
+        if candidate is self.viewmodel.current_photo:
+            self.hud.update_photo(candidate)

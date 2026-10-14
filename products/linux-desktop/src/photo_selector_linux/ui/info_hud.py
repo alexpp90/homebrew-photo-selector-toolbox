@@ -142,7 +142,7 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
             return
 
         self.is_hud_visible = bool(self.hud_enabled)
-        self.filename_text = photo.primary_path.name
+        self.filename_text = photo.filename
         self.companion_badges = get_candidate_companion_badges(photo)
 
         # Optical EXIF Summary (Zero-Placeholder Invariant R-LINUX-META-03)
