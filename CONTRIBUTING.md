@@ -102,6 +102,16 @@ Commit any updated schema files located under `products/android/android-desktop/
 
 ---
 
+## Licensing of contributions
+
+The code is published under the [MIT License](LICENSE). Before your first pull request can be
+merged, you sign the [Contributor License Agreement](CLA.md) once, by posting the comment the
+CLA bot asks for. It lets the maintainer keep publishing your contribution under MIT **and**
+under other terms in the future (for example store builds), while you keep your copyright.
+The project's names and logos are covered separately by [TRADEMARKS.md](TRADEMARKS.md).
+
+---
+
 ## Working with AI coding agents
 
 AI coding agents are welcome. [`AGENTS.md`](AGENTS.md) is the entry point every common agent

@@ -25,7 +25,7 @@
 
 **Photo Selector Toolbox** is a privacy-first, high-velocity photo culling and metadata analysis suite designed for professional photographers, enthusiasts, and creators. Whether sorting on the go on your phone, reviewing burst sequences on a tablet, or performing intensive multi-thousand RAW triage at your desktop workstation, every product is built natively for its platform.
 
-> 🔒 **100% Private & Strictly Offline:** Your photos never leave your device. All EXIF parsing, duplicate detection, and optical/aesthetic quality scoring (including Apple Neural Engine and local TFLite models) execute strictly on-device. Zero cloud uploads, zero subscriptions, and zero telemetry.
+> 🔒 **100% Private & Strictly Offline:** Your photos never leave your device. All EXIF parsing, duplicate detection, and optical/aesthetic quality scoring (including Apple Neural Engine and local TFLite models) execute strictly on-device. Zero cloud uploads, zero telemetry, and no account required.
 
 ---
 
@@ -337,5 +337,7 @@ To verify all products against the exact gates CI enforces:
 ---
 
 ## 📄 License
-This project is licensed under the terms of the [MIT License](LICENSE).
+The source code is open source under the [MIT License](LICENSE).
+The names **Photo Selector Toolbox** and **PhotoTok** and the logos are not covered by that license — see [TRADEMARKS.md](TRADEMARKS.md) before distributing a modified build.
+Contributions are accepted under the [Contributor License Agreement](CLA.md), signed once with a PR comment.
 Third-party notices and licenses are detailed in [THIRDPARTY_NOTICES.txt](THIRDPARTY_NOTICES.txt).
