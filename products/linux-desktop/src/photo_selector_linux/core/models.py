@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class SharpnessCategory(str, Enum):
@@ -172,6 +172,13 @@ class CandidatePhoto:
     scores: Optional[QualityScores] = None
     status: PhotoStatus = PhotoStatus.CANDIDATE
     _file_size: Optional[int] = field(default=None, repr=False)
+    # Human-readable names for paths whose on-disk name differs, e.g. Google Drive mounted
+    # through GVFS exposes files under opaque IDs ("1aW85w…") without an extension.
+    display_names: Dict[Path, str] = field(default_factory=dict, repr=False)
+
+    def name_of(self, path: Path) -> str:
+        """User-facing filename of one of this candidate's files."""
+        return self.display_names.get(path, path.name)
 
     @property
     def path(self) -> Path:
@@ -180,11 +187,16 @@ class CandidatePhoto:
 
     @property
     def filename(self) -> str:
-        return self.primary_path.name
+        return self.name_of(self.primary_path)
 
     @property
     def stem(self) -> str:
-        return self.primary_path.stem
+        return Path(self.filename).stem
+
+    @property
+    def extension(self) -> str:
+        """Lower-case extension of the user-facing filename, without the dot."""
+        return Path(self.filename).suffix.lstrip(".").lower()
 
     @property
     def all_paths(self) -> List[Path]:
@@ -203,7 +215,7 @@ class CandidatePhoto:
     def sidecar_path(self) -> Optional[Path]:
         """Bound .xmp sidecar metadata file if present."""
         for p in self.companion_paths:
-            if p.suffix.lower() == ".xmp":
+            if Path(self.name_of(p)).suffix.lower() == ".xmp":
                 return p
         return None
 

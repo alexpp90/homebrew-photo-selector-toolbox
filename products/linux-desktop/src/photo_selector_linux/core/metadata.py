@@ -8,6 +8,7 @@ Adheres to:
 
 from __future__ import annotations
 
+import io
 import math
 from pathlib import Path
 from typing import Any, Optional
@@ -63,14 +64,20 @@ def _safe_float(val: Any) -> Optional[float]:
         return None
 
 
-def read_metadata_gexiv2(path: Path) -> Optional[ExposureMetadata]:
-    """Read EXIF using native GExiv2 C++ library (R-LINUX-META-02)."""
+def read_metadata_gexiv2(path: Path, data: Optional[bytes] = None) -> Optional[ExposureMetadata]:
+    """Read EXIF using native GExiv2 C++ library (R-LINUX-META-02).
+
+    ``data`` is the file's content when already in memory (parsed instead of reopening ``path``).
+    """
     if not _HAVE_GEXIV2:
         return None
 
     try:
         meta = GExiv2.Metadata()
-        meta.open_path(str(path))
+        if data is not None:
+            meta.open_buf(data)
+        else:
+            meta.open_path(str(path))
     except (GLib.Error, Exception):
         return None
 
@@ -153,13 +160,13 @@ def read_metadata_gexiv2(path: Path) -> Optional[ExposureMetadata]:
     )
 
 
-def read_metadata_pil(path: Path) -> Optional[ExposureMetadata]:
+def read_metadata_pil(path: Path, data: Optional[bytes] = None) -> Optional[ExposureMetadata]:
     """Fallback EXIF reader using Pillow for headless/unit testing environments."""
     if not _HAVE_PIL:
         return None
 
     try:
-        with Image.open(path) as img:
+        with Image.open(io.BytesIO(data) if data is not None else path) as img:
             exif_raw = img.getexif()
             if not exif_raw:
                 return ExposureMetadata()
@@ -249,15 +256,19 @@ def read_metadata_pil(path: Path) -> Optional[ExposureMetadata]:
     )
 
 
-def read_metadata(path: Path) -> ExposureMetadata:
-    """Read EXIF metadata from file using GExiv2 with Pillow fallback."""
+def read_metadata(path: Path, data: Optional[bytes] = None) -> ExposureMetadata:
+    """Read EXIF metadata from file using GExiv2 with Pillow fallback.
+
+    Pass ``data`` when the file's bytes are already in memory, e.g. downloaded once from a
+    GVFS cloud mount where every seek of a path-based parser is a network round trip.
+    """
     if _HAVE_GEXIV2:
-        meta = read_metadata_gexiv2(path)
+        meta = read_metadata_gexiv2(path, data)
         if meta is not None:
             return meta
 
     if _HAVE_PIL:
-        meta = read_metadata_pil(path)
+        meta = read_metadata_pil(path, data)
         if meta is not None:
             return meta
 

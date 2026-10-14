@@ -27,6 +27,7 @@ class CullingWorkspaceViewModel:
         self.current_index: int = 0
         self.comparison_mode: int = 1  # 1: 1-Up, 2: 2-Up, 3: 3-Up Focus Mode
         self.current_folder: Optional[Path] = None
+        self.current_folder_name: str = ""
         self.selection_folder_name: str = "Selection"
 
         self.selected_count: int = 0
@@ -111,7 +112,7 @@ class CullingWorkspaceViewModel:
         if self.current_index >= len(self.candidates) and self.current_index > 0:
             self.current_index -= 1
 
-        self._notify(f"Moved {photo.primary_path.name} to {self.selection_folder_name}/")
+        self._notify(f"Moved {photo.filename} to {self.selection_folder_name}/")
         self._notify_state_changed()
 
     def cull_copy(self) -> None:
@@ -132,7 +133,7 @@ class CullingWorkspaceViewModel:
 
         if self.current_index < len(self.candidates) - 1:
             self.current_index += 1
-        self._notify(f"Copied {photo.primary_path.name} to {self.selection_folder_name}/")
+        self._notify(f"Copied {photo.filename} to {self.selection_folder_name}/")
         self._notify_state_changed()
 
     def cull_trash(self) -> None:
@@ -150,7 +151,7 @@ class CullingWorkspaceViewModel:
         if self.current_index >= len(self.candidates) and self.current_index > 0:
             self.current_index -= 1
 
-        self._notify(f"Moved {photo.primary_path.name} to Trash")
+        self._notify(f"Moved {photo.filename} to Trash")
         self._notify_state_changed()
 
     def undo(self) -> bool:
@@ -177,7 +178,7 @@ class CullingWorkspaceViewModel:
             self.current_index = insert_pos
             self.trashed_count = max(0, self.trashed_count - 1)
 
-        self._notify(f"Undid {record.action_type.value} for {photo.primary_path.name}")
+        self._notify(f"Undid {record.action_type.value} for {photo.filename}")
         self._notify_state_changed()
         return True
 
@@ -185,11 +186,14 @@ class CullingWorkspaceViewModel:
         """Load and sort photographs from folder."""
         self.current_folder = folder.resolve()
         scanner = DirectoryScanner(custom_selection_folder=self.selection_folder_name)
+        # GVFS cloud mounts list folders under opaque IDs; show the folder's real name.
+        parent_names = scanner.name_resolver.names_in(self.current_folder.parent)
+        self.current_folder_name = parent_names.get(self.current_folder.name, self.current_folder.name)
         self.candidates = scanner.scan_directory(self.current_folder)
         self.current_index = 0
         self.undo_stack.clear()
         self.selected_count = 0
         self.copied_count = 0
         self.trashed_count = 0
-        self._notify(f"Loaded {len(self.candidates)} photographs from {self.current_folder.name}")
+        self._notify(f"Loaded {len(self.candidates)} photographs from {self.current_folder_name}")
         self._notify_state_changed()

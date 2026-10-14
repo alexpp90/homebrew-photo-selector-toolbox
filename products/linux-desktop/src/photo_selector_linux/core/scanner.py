@@ -13,8 +13,9 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Generator, Iterable, List, Optional, Set, Tuple, Union
+from typing import Dict, Generator, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
+from photo_selector_linux.core.gvfs_names import DisplayNameResolver, default_resolver
 from photo_selector_linux.core.models import CandidatePhoto
 
 RAW_EXTENSIONS: Set[str] = {
@@ -35,6 +36,23 @@ DEFAULT_EXCLUDED_FOLDERS: Set[str] = {
 }
 
 
+def _extension_of(name: str) -> str:
+    """Lower-case extension of a filename, without the dot ("" when there is none)."""
+    return name.rsplit(".", 1)[-1].lower() if "." in name else ""
+
+
+def _is_file_entry(entry: os.DirEntry) -> bool:
+    """``DirEntry.is_file`` that treats unstat-able entries as non-files.
+
+    Google Drive shortcuts under GVFS fail ``stat`` with ENOSYS; one such entry must not abort
+    the listing of its whole directory.
+    """
+    try:
+        return entry.is_file()
+    except OSError:
+        return False
+
+
 def natural_sort_key(s: str) -> List[Union[int, str]]:
     """Produce natural alphanumeric sort key (e.g. DSC_0002 before DSC_0010)."""
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", s)]
@@ -48,8 +66,10 @@ class DirectoryScanner:
         custom_selection_folder: Optional[str] = None,
         default_exclusions: Optional[Set[str]] = None,
         handle_companions: bool = True,
+        name_resolver: Optional[DisplayNameResolver] = None,
     ):
         self.handle_companions: bool = bool(handle_companions)
+        self.name_resolver: DisplayNameResolver = name_resolver or default_resolver()
         self.excluded_names: Set[str] = set(default_exclusions or DEFAULT_EXCLUDED_FOLDERS)
         if custom_selection_folder:
             cleaned = str(custom_selection_folder).strip().rstrip("/\\").strip()
@@ -76,64 +96,64 @@ class DirectoryScanner:
         if not self.handle_companions:
             return [primary_path]
         parent = primary_path.parent
-        if not parent.is_dir():
-            return [primary_path]
-
-        stem_lower = primary_path.stem.lower()
-        full_lower = primary_path.name.lower()
-        dot_xmp = f"{full_lower}.xmp"
-        edit_hyphen = f"{stem_lower}-edit"
-        edit_underscore = f"{stem_lower}_edit"
-        nr_suffix = f"{stem_lower}-enhanced-nr"
-
-        companions: Set[Path] = {primary_path}
-
         try:
-            for entry in os.scandir(parent):
-                if not entry.is_file() or entry.name.startswith("."):
-                    continue
+            entries = [(Path(e.path), e.name) for e in os.scandir(parent) if _is_file_entry(e)]
+        except OSError:
+            return [primary_path]
+        return self._companions_in_listing(primary_path, primary_path.name, entries)
 
-                entry_path = Path(entry.path)
-                entry_name_lower = entry.name.lower()
-                entry_stem_lower = entry_path.stem.lower()
-                entry_ext_lower = entry_path.suffix.lstrip(".").lower()
+    @staticmethod
+    def _companions_in_listing(
+        target: Path,
+        target_name: str,
+        entries: Sequence[Tuple[Path, str]],
+    ) -> List[Path]:
+        """Group ``target`` with its companions from one directory listing of ``(path, display_name)``.
 
-                # 1. Exact stem match (e.g. DSC0001.ARW <-> DSC0001.JPG or DSC0001.xmp)
-                if entry_stem_lower == stem_lower:
-                    if entry_ext_lower in SUPPORTED_EXTENSIONS or entry_ext_lower == "xmp":
-                        companions.add(entry_path)
-                    continue
+        Matching uses display names, so it works where on-disk names are opaque IDs (GVFS).
+        """
+        target_lower = target_name.lower()
+        stem_lower = Path(target_lower).stem
+        dot_xmp = f"{target_lower}.xmp"
+        edit_prefixes = (f"{stem_lower}-edit", f"{stem_lower}_edit", f"{stem_lower}-enhanced-nr")
 
-                # 2. Direct filename sidecar (e.g. DSC0001.ARW.xmp)
-                if entry_name_lower == dot_xmp:
-                    companions.add(entry_path)
-                    continue
+        companions: Dict[Path, str] = {target: target_name}
+        for entry_path, entry_name in entries:
+            entry_name_lower = entry_name.lower()
+            if entry_name_lower.startswith("."):
+                continue
+            entry_stem_lower = Path(entry_name_lower).stem
+            entry_ext_lower = _extension_of(entry_name_lower)
 
-                # 3. Lightroom derivatives (-Edit.*, _Edit.*, -Enhanced-NR.*)
-                if (
-                    entry_stem_lower.startswith(edit_hyphen)
-                    or entry_stem_lower.startswith(edit_underscore)
-                    or entry_stem_lower.startswith(nr_suffix)
-                ):
-                    companions.add(entry_path)
-                    continue
-        except (OSError, PermissionError):
-            pass
+            # 1. Exact stem match (e.g. DSC0001.ARW <-> DSC0001.JPG or DSC0001.xmp)
+            if entry_stem_lower == stem_lower:
+                if entry_ext_lower in SUPPORTED_EXTENSIONS or entry_ext_lower == "xmp":
+                    companions[entry_path] = entry_name
+                continue
 
-        return sorted(list(companions), key=lambda p: natural_sort_key(p.name))
+            # 2. Direct filename sidecar (e.g. DSC0001.ARW.xmp)
+            # 3. Lightroom derivatives (-Edit.*, _Edit.*, -Enhanced-NR.*)
+            if entry_name_lower == dot_xmp or entry_stem_lower.startswith(edit_prefixes):
+                companions[entry_path] = entry_name
 
-    def _resolve_primary_and_companions(self, group: Iterable[Path]) -> Tuple[Path, List[Path]]:
+        return sorted(companions, key=lambda p: natural_sort_key(companions[p]))
+
+    def _resolve_primary_and_companions(
+        self,
+        group: Iterable[Path],
+        names: Optional[Dict[Path, str]] = None,
+    ) -> Tuple[Path, List[Path]]:
         """Select RAW as primary if present, otherwise sort alphabetically (R-LINUX-META-04)."""
-        paths = list(group)
-        raws = [p for p in paths if p.suffix.lstrip(".").lower() in RAW_EXTENSIONS]
-        if raws:
-            raws.sort(key=lambda p: natural_sort_key(p.name))
-            primary = raws[0]
-        else:
-            paths.sort(key=lambda p: natural_sort_key(p.name))
-            primary = paths[0]
+        names = names or {}
 
-        companions = [p for p in paths if p.resolve() != primary.resolve()]
+        def name_of(p: Path) -> str:
+            return names.get(p, p.name)
+
+        paths = list(group)
+        raws = [p for p in paths if _extension_of(name_of(p)) in RAW_EXTENSIONS]
+        pool = raws if raws else paths
+        primary = sorted(pool, key=lambda p: natural_sort_key(name_of(p)))[0]
+        companions = [p for p in paths if p != primary]
         return primary, companions
 
     def scan_stream(
@@ -143,12 +163,14 @@ class DirectoryScanner:
         batch_size: int = 30,
         first_batch_size: Optional[int] = None,
     ) -> Generator[List[CandidatePhoto], None, None]:
-        """Progressively stream CandidatePhoto batches (R-LINUX-CULL-01)."""
+        """Progressively stream CandidatePhoto batches (R-LINUX-CULL-01).
+
+        Each directory is listed once; companions are grouped from that listing in memory.
+        """
         root_path = root_path.resolve()
         if not root_path.exists():
             return
 
-        claimed_paths: Set[Path] = set()
         current_batch: List[CandidatePhoto] = []
         yielded_first = False
         target_size = max(1, first_batch_size) if first_batch_size is not None else max(1, batch_size)
@@ -156,57 +178,65 @@ class DirectoryScanner:
         if recursive:
             walk_gen = os.walk(root_path, followlinks=False)
         else:
-            walk_gen = [(str(root_path), [], [f.name for f in os.scandir(root_path) if f.is_file()])]
+            try:
+                top_files = [e.name for e in os.scandir(root_path) if _is_file_entry(e)]
+            except OSError:
+                top_files = []
+            walk_gen = [(str(root_path), [], top_files)]
 
         for root_str, dirnames, filenames in walk_gen:
-            curr_dir = Path(root_str).resolve()
+            curr_dir = Path(root_str)
 
             # Dynamic Selection Subfolder Exclusion (R-LINUX-META-05)
             if curr_dir != root_path and self.is_path_excluded(curr_dir, root_path):
                 dirnames.clear()  # Prune subtree
                 continue
 
+            # Real names for opaque on-disk names (Google Drive via GVFS); empty when local.
+            display = self.name_resolver.names_in(curr_dir)
+
             # Prune child directories that match exclusions before walking into them
             dirnames[:] = [
                 d for d in dirnames
-                if not self.is_path_excluded(curr_dir / d, root_path)
+                if display.get(d, d).strip().lower() not in self.excluded_names
+                and not self.is_path_excluded(curr_dir / d, root_path)
             ]
+            entries: List[Tuple[Path, str]] = [
+                (curr_dir / fname, display.get(fname, fname)) for fname in filenames
+            ]
+            names: Dict[Path, str] = dict(entries)
 
-            # Filter valid candidate files in current directory
-            valid_files: List[Path] = []
-            for fname in filenames:
-                if fname.startswith("."):
+            # Filter valid candidate files in current directory, sorted naturally by name
+            valid_files = [
+                (path, name) for path, name in entries
+                if not name.startswith(".") and _extension_of(name) in SUPPORTED_EXTENSIONS
+            ]
+            valid_files.sort(key=lambda item: natural_sort_key(item[1]))
+
+            claimed_paths: Set[Path] = set()
+            for file_path, file_name in valid_files:
+                if file_path in claimed_paths:
                     continue
-                ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
-                if ext in SUPPORTED_EXTENSIONS:
-                    valid_files.append(curr_dir / fname)
 
-            # Sort files naturally within folder
-            valid_files.sort(key=lambda p: natural_sort_key(p.name))
-
-            for file_path in valid_files:
-                resolved_file = file_path.resolve()
-                if resolved_file in claimed_paths:
-                    continue
-
-                # Check if this is an Edit file whose base capture exists in same folder
-                search_target = file_path
+                # An Edit file whose base capture exists in the same folder groups with that base
+                search_target, search_name = file_path, file_name
                 if self.handle_companions:
-                    stem_lower = file_path.stem.lower()
+                    stem_lower = Path(file_name).stem.lower()
                     for edit_marker in ("-edit", "_edit", "-enhanced-nr"):
                         if edit_marker in stem_lower:
                             base_stem = stem_lower.split(edit_marker)[0]
-                            for candidate_base in valid_files:
-                                if candidate_base.stem.lower() == base_stem:
-                                    search_target = candidate_base
+                            for base_path, base_name in valid_files:
+                                if Path(base_name).stem.lower() == base_stem:
+                                    search_target, search_name = base_path, base_name
                                     break
                             break
+                    group = self._companions_in_listing(search_target, search_name, entries)
+                else:
+                    group = [file_path]
+                group = [p for p in group if p not in claimed_paths]
+                claimed_paths.update(group)
 
-                all_companions = self.find_companion_files(search_target)
-                for comp in all_companions:
-                    claimed_paths.add(comp.resolve())
-
-                primary, companions = self._resolve_primary_and_companions(all_companions)
+                primary, companions = self._resolve_primary_and_companions(group, names)
                 try:
                     file_size = primary.stat().st_size
                 except OSError:
@@ -216,6 +246,7 @@ class DirectoryScanner:
                     primary_path=primary,
                     companion_paths=companions,
                     _file_size=file_size,
+                    display_names={p: names[p] for p in group if names.get(p, p.name) != p.name},
                 )
 
                 current_batch.append(candidate)
@@ -257,7 +288,7 @@ class DirectoryScanner:
                 except OSError:
                     candidate._file_size = 0
 
-        candidates.sort(key=lambda c: natural_sort_key(c.primary_path.name))
+        candidates.sort(key=lambda c: natural_sort_key(c.filename))
         return candidates
 
 

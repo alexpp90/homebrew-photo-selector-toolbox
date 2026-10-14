@@ -8,6 +8,7 @@ Adheres to:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 CANONICAL_FORMAT_NAMES: Dict[str, str] = {
@@ -147,7 +148,9 @@ def calculate_library_statistics(photos: List[Any]) -> LibraryStatistics:
 
         # 3. Format
         ext = ""
-        if hasattr(photo, "primary_path"):
+        if hasattr(photo, "filename"):
+            ext = Path(photo.filename).suffix.lower()
+        elif hasattr(photo, "primary_path"):
             ext = photo.primary_path.suffix.lower()
         elif hasattr(photo, "extension"):
             ext = photo.extension.lower()

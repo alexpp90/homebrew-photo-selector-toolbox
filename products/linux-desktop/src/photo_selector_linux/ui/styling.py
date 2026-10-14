@@ -10,6 +10,7 @@ Adheres to:
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 APP_BRAND_NAME: str = "Photo Selector"
@@ -93,7 +94,9 @@ def get_candidate_companion_badges(candidate: object) -> List[Tuple[str, str]]:
     companions = getattr(candidate, "companion_paths", None) or []
     all_paths = ([primary] if primary is not None else []) + list(companions)
 
-    exts = {p.suffix.lstrip(".").lower() for p in all_paths if p is not None and p.suffix}
+    name_of = getattr(candidate, "name_of", lambda p: p.name)
+    exts = {Path(name_of(p)).suffix.lstrip(".").lower() for p in all_paths if p is not None}
+    exts.discard("")
     has_raw_jpeg_pair = bool(exts & RAW_EXTENSIONS) and bool(exts & BITMAP_EXTENSIONS)
     has_xmp_sidecar = getattr(candidate, "sidecar_path", None) is not None or ("xmp" in exts)
     return format_companion_badges(
