@@ -255,3 +255,18 @@ def test_set_secure_permissions_file_not_found(tmp_path):
     test_file = tmp_path / "does_not_exist.txt"
     # This should not raise an exception, testing the OSError catch block
     _set_secure_permissions(test_file)
+
+
+def test_update_config_preserves_untouched_keys(mock_config_paths):
+    from photo_selector_toolbox.core.config import update_config, load_config
+    initial = load_config()
+    initial_folder = initial["selection_folder"]
+
+    updated = update_config(separate_raw_jpeg=False)
+
+    assert updated["separate_raw_jpeg"] is False
+    assert updated["selection_folder"] == initial_folder
+
+    reloaded = load_config()
+    assert reloaded["separate_raw_jpeg"] is False
+    assert reloaded["selection_folder"] == initial_folder

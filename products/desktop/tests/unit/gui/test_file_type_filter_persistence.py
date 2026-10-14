@@ -164,23 +164,21 @@ def test_file_type_and_sort_persisted_to_config():
     """Verify on_file_type_change and on_sort_change persist settings to config."""
     tool = _create_mock_tool()
 
-    with patch("photo_selector_toolbox.gui.sharpness_tool.save_config") as mock_save:
-        with patch("photo_selector_toolbox.gui.sharpness_tool.load_config", return_value={}):
-            tool.file_type_var.set(".NEF")
-            tool.on_file_type_change()
+    with patch("photo_selector_toolbox.gui.sharpness_tool.update_config") as mock_update:
+        tool.file_type_var.set(".NEF")
+        tool.on_file_type_change()
 
-            mock_save.assert_called_with({"file_type_filter": ".NEF"})
+        mock_update.assert_called_with(file_type_filter=".NEF")
 
-    with patch("photo_selector_toolbox.gui.sharpness_tool.save_config") as mock_save:
-        with patch("photo_selector_toolbox.gui.sharpness_tool.load_config", return_value={}):
-            tool.sort_by_var.set("Noise Level")
-            tool.sort_order_var.set("Descending")
-            tool.on_sort_change()
+    with patch("photo_selector_toolbox.gui.sharpness_tool.update_config") as mock_update:
+        tool.sort_by_var.set("Noise Level")
+        tool.sort_order_var.set("Descending")
+        tool.on_sort_change()
 
-            mock_save.assert_called_with({
-                "sort_by": "Noise Level",
-                "sort_order": "Descending",
-            })
+        mock_update.assert_called_with(
+            sort_by="Noise Level",
+            sort_order="Descending",
+        )
 
 
 def test_tool_initializes_with_saved_preferences():

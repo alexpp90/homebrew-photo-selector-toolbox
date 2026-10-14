@@ -16,7 +16,7 @@ from photo_selector_toolbox.core.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.core.formatting import format_score, format_meta
-from photo_selector_toolbox.core.config import load_config, save_config
+from photo_selector_toolbox.core.config import load_config, save_config, update_config
 from photo_selector_toolbox.core.utils import (
     is_excluded_subfolder,
     get_excluded_folder_names,
@@ -1347,9 +1347,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
     def on_file_type_change(self, event=None):
         new_filter = self.file_type_var.get()
         try:
-            cfg = load_config()
-            cfg["file_type_filter"] = new_filter
-            save_config(cfg)
+            update_config(file_type_filter=new_filter)
             if hasattr(self, "app_config") and isinstance(self.app_config, dict):
                 self.app_config["file_type_filter"] = new_filter
         except Exception as e:
@@ -1381,10 +1379,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         sort_by = self.sort_by_var.get()
         sort_order = self.sort_order_var.get()
         try:
-            cfg = load_config()
-            cfg["sort_by"] = sort_by
-            cfg["sort_order"] = sort_order
-            save_config(cfg)
+            update_config(sort_by=sort_by, sort_order=sort_order)
             if hasattr(self, "app_config") and isinstance(self.app_config, dict):
                 self.app_config["sort_by"] = sort_by
                 self.app_config["sort_order"] = sort_order
@@ -1608,10 +1603,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         if not self._is_grouping_enabled():
            # Save settings
-            config = load_config()
-            config["group_similar"] = False
-            config["group_level"] = self.group_level_var.get()
-            save_config(config)
+            update_config(
+                group_similar=False,
+                group_level=self.group_level_var.get(),
+            )
 
             self._last_applied_group_similar = False
             self.apply_grouping_and_refresh()
@@ -1624,10 +1619,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.start_grouping_analysis(missing, level)
         else:
            # Save settings
-            config = load_config()
-            config["group_similar"] = True
-            config["group_level"] = level
-            save_config(config)
+            update_config(
+                group_similar=True,
+                group_level=level,
+            )
 
             self._last_applied_group_similar = True
             self._last_applied_group_level = level
@@ -1756,10 +1751,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.scan_options_btn.state(["!disabled"])
 
        # Save settings
-        config = load_config()
-        config["group_similar"] = True
-        config["group_level"] = level
-        save_config(config)
+        update_config(
+            group_similar=True,
+            group_level=level,
+        )
 
         self._last_applied_group_similar = True
         self._last_applied_group_level = level
@@ -1787,10 +1782,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.group_level_var.set(self._last_applied_group_level)
 
        # Re-save config to last applied state
-        config = load_config()
-        config["group_similar"] = self._last_applied_group_similar
-        config["group_level"] = self._last_applied_group_level
-        save_config(config)
+        update_config(
+            group_similar=self._last_applied_group_similar,
+            group_level=self._last_applied_group_level,
+        )
 
         self.log("Similarity analysis cancelled.")
         self.apply_grouping_and_refresh()
