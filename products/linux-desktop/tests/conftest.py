@@ -27,22 +27,66 @@ if "gi" not in sys.modules:
 
         class MockGtkWidget:
             def __init__(self, *args, **kwargs):
-                pass
+                self._visible = True
+                self._css_classes = []
+                self._children = []
+                self._label = str(kwargs.get("label", ""))
+                self._sensitive = True
+                self._fraction = 0.0
+
+            @classmethod
+            def new_from_icon_name(cls, *args, **kwargs):
+                return cls()
 
             def connect(self, *args, **kwargs):
                 pass
 
-            def set_visible(self, *args, **kwargs):
-                pass
+            def set_visible(self, visible: bool = True, *args, **kwargs):
+                self._visible = bool(visible)
 
             def get_visible(self):
-                return True
+                return getattr(self, "_visible", True)
 
-            def add_css_class(self, *args, **kwargs):
+            def set_label(self, label: str, *args, **kwargs):
+                self._label = str(label)
+
+            def get_label(self):
+                return getattr(self, "_label", "")
+
+            def set_sensitive(self, sensitive: bool = True, *args, **kwargs):
+                self._sensitive = bool(sensitive)
+
+            def get_sensitive(self):
+                return getattr(self, "_sensitive", True)
+
+            def set_fraction(self, fraction: float = 0.0, *args, **kwargs):
+                self._fraction = float(fraction)
+
+            def get_fraction(self):
+                return getattr(self, "_fraction", 0.0)
+
+            def set_tooltip_text(self, *args, **kwargs):
                 pass
 
-            def set_css_classes(self, *args, **kwargs):
+            def set_action_name(self, *args, **kwargs):
                 pass
+
+            def set_pixel_size(self, *args, **kwargs):
+                pass
+
+            def add_css_class(self, cls_name: str, *args, **kwargs):
+                classes = getattr(self, "_css_classes", None)
+                if classes is None:
+                    classes = []
+                    self._css_classes = classes
+                if cls_name not in classes:
+                    classes.append(cls_name)
+
+            def set_css_classes(self, classes, *args, **kwargs):
+                self._css_classes = list(classes)
+
+            def get_css_classes(self):
+                return list(getattr(self, "_css_classes", []))
 
             def set_halign(self, *args, **kwargs):
                 pass
@@ -56,14 +100,27 @@ if "gi" not in sys.modules:
             def set_vexpand(self, *args, **kwargs):
                 pass
 
-            def append(self, *args, **kwargs):
+            def set_ellipsize(self, *args, **kwargs):
                 pass
 
-            def remove(self, *args, **kwargs):
+            def set_max_width_chars(self, *args, **kwargs):
                 pass
+
+            def append(self, child, *args, **kwargs):
+                children = getattr(self, "_children", None)
+                if children is None:
+                    children = []
+                    self._children = children
+                children.append(child)
+
+            def remove(self, child, *args, **kwargs):
+                children = getattr(self, "_children", None)
+                if children and child in children:
+                    children.remove(child)
 
             def get_first_child(self):
-                return None
+                children = getattr(self, "_children", None)
+                return children[0] if children else None
 
             def set_size_request(self, *args, **kwargs):
                 pass
@@ -112,6 +169,9 @@ if "gi" not in sys.modules:
         mock_gtk.Box = MockGtkWidget
         mock_gtk.ActionBar = MockGtkWidget
         mock_gtk.Widget = MockGtkWidget
+        mock_gtk.Button = MockGtkWidget
+        mock_gtk.Label = MockGtkWidget
+        mock_gtk.ProgressBar = MockGtkWidget
         mock_gtk.Orientation.HORIZONTAL = 0
         mock_gtk.Orientation.VERTICAL = 1
         mock_gtk.Align.START = 1

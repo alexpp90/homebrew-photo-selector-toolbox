@@ -28,7 +28,7 @@ from photo_selector_linux.ui.styling import (
     APP_BRAND_NAME,
     APP_BRAND_TAGLINE,
     APP_ICON_NAME,
-    format_companion_badges,
+    get_candidate_companion_badges,
     get_slot_role_label,
 )
 
@@ -83,8 +83,8 @@ class CanvasView(Gtk.Box if HAS_GI else object):
     def toggle_hud(self) -> None:
         """Toggle floating Info HUD visibility (I) (R-LINUX-UI-09)."""
         self.hud_enabled = not self.hud_enabled
-        if HAS_GI and hasattr(self, "hud"):
-            self.hud.set_visible(self.hud_enabled and self.viewmodel.current_photo is not None)
+        if hasattr(self, "hud"):
+            self.hud.set_hud_enabled(self.hud_enabled)
 
     def _on_state_changed(self, vm) -> None:
         if vm.comparison_mode != 1 and self.is_1to1_zoom:
@@ -103,15 +103,7 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             slot_offset,
             is_active=is_active,
         )
-        has_raw_jpeg = any(
-            p.suffix.lower() != ".xmp" and p.resolve() != candidate.primary_path.resolve()
-            for p in candidate.companion_paths
-        )
-        has_xmp = candidate.sidecar_path is not None
-        badges = format_companion_badges(
-            has_raw_jpeg_pair=has_raw_jpeg,
-            has_xmp_sidecar=has_xmp,
-        )
+        badges = get_candidate_companion_badges(candidate)
         return {
             "type": "photo",
             "role": role,
@@ -328,6 +320,8 @@ class CanvasView(Gtk.Box if HAS_GI else object):
         footer_box.set_halign(Gtk.Align.CENTER)
 
         lbl = Gtk.Label(label=candidate.primary_path.name)
+        lbl.set_ellipsize(3)  # PANGO_ELLIPSIZE_MIDDLE
+        lbl.set_max_width_chars(36)
         lbl.add_css_class("optical-strip-secondary")
         footer_box.append(lbl)
 

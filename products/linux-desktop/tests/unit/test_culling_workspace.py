@@ -38,6 +38,7 @@ from photo_selector_linux.ui.styling import (
     STUDIO_PALETTE,
     compute_sharpness_goodness,
     format_companion_badges,
+    get_candidate_companion_badges,
     get_slot_role_label,
 )
 from photo_selector_linux.ui.window import MainWindow
@@ -57,6 +58,11 @@ def test_libadwaita_components():
     assert win.icon_name == APP_ICON_NAME == "org.photoselector.Linux"
     assert win.canvas_view is not None
     assert win.action_bar is not None
+    assert "studio-dark-surface" in win.get_css_classes()
+    assert win.btn_mode_1.get_css_classes() == ["suggested-action"]
+    assert win.btn_mode_2.get_css_classes() == []
+    assert win.btn_mode_3.get_css_classes() == []
+    assert win.lbl_counter.get_label() == "Photo 0 of 0"
 
 
 def test_studio_dark_palette():
@@ -84,6 +90,11 @@ def test_studio_dark_palette():
         ".accent-border",
         ".floating-hud",
         ".sharpness-meter-track",
+        ".sharpness-meter-track trough",
+        ".sharpness-meter-track progress",
+        ".sharpness-meter-sharp progress",
+        ".sharpness-meter-acceptable progress",
+        ".sharpness-meter-blurry progress",
         ".active-pill",
         ".slot-role-pill",
         ".zoom-indicator-pill",
@@ -105,11 +116,11 @@ def test_canvas_area_allocation():
     # Empty state when no candidates are loaded
     assert canvas.rendered_slots == []
 
-    # Populate candidates with RAW and XMP companions
+    # Populate candidates with RAW+JPG+XMP, RAW+JPG, and JPEG-only -Edit derivative
     vm.candidates = [
         make_candidate("DSC_0001.JPG", ["DSC_0001.ARW", "DSC_0001.xmp"]),
         make_candidate("DSC_0002.JPG", ["DSC_0002.CR3"]),
-        make_candidate("DSC_0003.JPG"),
+        make_candidate("DSC_0003.JPG", ["DSC_0003-Edit.JPG"]),
     ]
     vm.current_index = 0
     canvas._render_view()
@@ -152,6 +163,8 @@ def test_canvas_area_allocation():
     vm.nav_next()
     assert vm.current_index == 1
     assert [s.get("role") for s in canvas.rendered_slots] == ["PREVIOUS", "ACTIVE", "NEXT"]
+    # Right slot (DSC_0003.JPG + DSC_0003-Edit.JPG) has no RAW file, so no false RAW+JPG badge
+    assert canvas.rendered_slots[2]["badges"] == []
 
     # 3-Up mode at last index 2: PREVIOUS + ACTIVE + right boundary card
     vm.nav_next()
@@ -164,18 +177,40 @@ def test_canvas_area_allocation():
 def test_info_hud_goodness_and_metric_omission():
     """Verify InfoHUD sharpness goodness bar and strict Metric Omission Rule (R-LINUX-UI-09, R-LINUX-SCORE-05)."""
     vm = CullingWorkspaceViewModel()
+    vm.candidates = [
+        make_candidate("IMG_4021.JPG", ["IMG_4021.CR3", "IMG_4021.XMP"]),
+        make_candidate("IMG_4022.JPG"),
+    ]
     canvas = CanvasView(viewmodel=vm)
-    hud = InfoHUD(viewmodel=vm)
+    hud = canvas.hud
+    assert isinstance(hud, InfoHUD)
 
-    # Toggle HUD visibility via I hotkey handler
+    # Verify HUD is initially visible for loaded candidate
+    vm._notify_state_changed()
     assert canvas.hud_enabled is True
+    assert hud.is_hud_visible is True
+    assert hud.get_visible() is True
+
+    # Toggle HUD off via I hotkey handler and verify it stays hidden across navigation
     canvas.toggle_hud()
     assert canvas.hud_enabled is False
+    assert hud.is_hud_visible is False
+    assert hud.get_visible() is False
+
+    vm.nav_next()
+    assert vm.current_index == 1
+    assert hud.filename_text == "IMG_4022.JPG"
+    assert hud.is_hud_visible is False
+    assert hud.get_visible() is False
+
+    # Toggle HUD back on
     canvas.toggle_hud()
     assert canvas.hud_enabled is True
+    assert hud.is_hud_visible is True
+    assert hud.get_visible() is True
 
     # Candidate with full optical metadata, companions, and sharp focus score
-    cand_sharp = make_candidate("IMG_4021.JPG", ["IMG_4021.CR3", "IMG_4021.XMP"])
+    cand_sharp = vm.candidates[0]
     cand_sharp.exif = ExposureMetadata(
         shutter_speed=1.0 / 500.0,
         aperture=2.8,
@@ -203,8 +238,31 @@ def test_info_hud_goodness_and_metric_omission():
     assert hud.score_visible is True
     assert hud.score_badge_text == "Focus: 90.0 (Sharp)"
     assert hud.score_css_class == "score-badge-sharp"
+    assert hud.meter_css_class == "sharpness-meter-sharp"
+    assert hud.sharpness_meter.get_css_classes() == ["sharpness-meter-track", "sharpness-meter-sharp"]
     assert hud.sharpness_goodness == pytest.approx(compute_sharpness_goodness(90.0))
+    assert hud.sharpness_meter.get_fraction() == pytest.approx(compute_sharpness_goodness(90.0))
     assert hud.clipping_text == "HL: 1.5% · SH: 0.2%"
+
+    # Candidate with separate camera_make and camera_model + acceptable score
+    cand_acc = make_candidate("IMG_4023.CR3", ["IMG_4023.JPG"])
+    cand_acc.exif = ExposureMetadata(
+        camera_make="Canon",
+        camera_model="EOS R5",
+        lens="RF 50mm F1.2 L USM",
+    )
+    cand_acc.scores = QualityScores(
+        sharpness=52.0,
+        noise=1.8,
+        highlight_clipping=0.0,
+        shadow_clipping=0.0,
+    )
+    hud.update_photo(cand_acc)
+    assert hud.camera_text == "Canon EOS R5 · RF 50mm F1.2 L USM"
+    assert hud.score_badge_text == "Focus: 52.0 (Acceptable)"
+    assert hud.score_css_class == "score-badge-acceptable"
+    assert hud.meter_css_class == "sharpness-meter-acceptable"
+    assert hud.sharpness_meter.get_css_classes() == ["sharpness-meter-track", "sharpness-meter-acceptable"]
 
     # Candidate with missing EXIF and missing scores -> strict Metric Omission Rule (no N/A or --)
     cand_bare = make_candidate("SCAN_001.PNG")
@@ -218,6 +276,7 @@ def test_info_hud_goodness_and_metric_omission():
     assert hud.camera_text == ""
     assert hud.score_visible is False
     assert hud.score_badge_text == ""
+    assert hud.meter_css_class == ""
     assert hud.sharpness_goodness is None
     assert hud.clipping_text == ""
 
@@ -233,6 +292,8 @@ def test_info_hud_goodness_and_metric_omission():
     assert hud.score_visible is True
     assert hud.score_badge_text == "Focus: 18.4 (Blurry)"
     assert hud.score_css_class == "score-badge-blurry"
+    assert hud.meter_css_class == "sharpness-meter-blurry"
+    assert hud.sharpness_meter.get_css_classes() == ["sharpness-meter-track", "sharpness-meter-blurry"]
     assert hud.sharpness_goodness == pytest.approx(compute_sharpness_goodness(18.4))
 
     # Reset HUD with None
@@ -259,6 +320,7 @@ def test_action_bar_semantic_status_counters():
     assert bar.remaining_css_class == "status-counter-remaining"
     assert bar.undo_label_text == "Undo (Ctrl+Z)"
     assert bar.undo_sensitive is False
+    assert bar.btn_undo.get_sensitive() is False
 
     # Perform Move and Trash to verify semantic counter pills update
     c0 = vm.candidates[0]
@@ -286,6 +348,12 @@ def test_action_bar_semantic_status_counters():
     assert bar.trashed_css_class == "status-counter-trashed"
     assert bar.undo_label_text == "Undo (2) (Ctrl+Z)"
     assert bar.undo_sensitive is True
+    assert bar.lbl_selected.get_label() == "1 Selected"
+    assert bar.lbl_selected.get_css_classes() == ["status-counter-selected"]
+    assert bar.lbl_trashed.get_label() == "1 Trashed"
+    assert bar.lbl_trashed.get_css_classes() == ["status-counter-trashed"]
+    assert bar.btn_undo.get_sensitive() is True
+    assert bar.btn_undo.get_label() == "Undo (2) (Ctrl+Z)"
 
 
 def test_styling_helper_edge_cases():
@@ -312,6 +380,16 @@ def test_styling_helper_edge_cases():
     assert format_companion_badges(True, True) == [
         ("RAW+JPG", "companion-badge-raw"),
         ("XMP", "companion-badge-xmp"),
+    ]
+
+    # Candidate companion badge extraction edge cases
+    assert get_candidate_companion_badges(make_candidate("DSC_0001.ARW", ["DSC_0001.JPG"])) == [
+        ("RAW+JPG", "companion-badge-raw")
+    ]
+    assert get_candidate_companion_badges(make_candidate("DSC_0001.JPG", ["DSC_0001-Edit.JPG"])) == []
+    assert get_candidate_companion_badges(make_candidate("DSC_0001.ARW", ["DSC_0001-Enhanced-NR.DNG"])) == []
+    assert get_candidate_companion_badges(make_candidate("DSC_0001.JPG", ["DSC_0001-Edit.JPG", "DSC_0001.xmp"])) == [
+        ("XMP", "companion-badge-xmp")
     ]
 
 
@@ -376,6 +454,30 @@ def test_transactional_undo_stack():
     vm.current_folder = Path("/tmp/test_dir")
     vm.current_index = 0
 
+    state_events = []
+    vm.connect("state-changed", lambda _vm: state_events.append(_vm.current_index))
+
+    # Copy operation emits state-changed exactly once
+    fake_copy_rec = CullingRecord(
+        photo_id=c1.id,
+        action_type=CullingActionType.COPY,
+        original_primary_path=c1.primary_path,
+        affected_paths=[(c1.primary_path, Path("/tmp/test_dir/Selection/photo_1.jpg"))],
+    )
+    mock_file_mgr.copy_candidate.return_value = fake_copy_rec
+    mock_file_mgr.undo_culling.return_value = True
+
+    vm.cull_copy()
+    assert len(state_events) == 1
+    assert vm.current_index == 1
+    assert vm.selected_count == 1
+    assert vm.copied_count == 1
+
+    assert vm.undo() is True
+    assert vm.selected_count == 0
+    assert vm.copied_count == 0
+    vm.current_index = 0
+
     # Move operation
     fake_move_rec = CullingRecord(
         photo_id=c1.id,
@@ -384,7 +486,6 @@ def test_transactional_undo_stack():
         affected_paths=[(c1.primary_path, Path("/tmp/test_dir/Selection/photo_1.jpg"))],
     )
     mock_file_mgr.move_candidate.return_value = fake_move_rec
-    mock_file_mgr.undo_culling.return_value = True
 
     vm.cull_move()
     assert vm.selected_count == 1

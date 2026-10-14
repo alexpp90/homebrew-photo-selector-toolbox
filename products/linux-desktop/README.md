@@ -22,7 +22,7 @@ The codebase enforces strict separation of concerns:
   - `application`: `Adw.Application` lifecycle controller with `org.photoselector.Linux` application icon registration and CSS provider injection.
   - `window`: `Adw.ApplicationWindow` with `.studio-headerbar` (`Adw.HeaderBar`), segmented view switcher, and toast notifications.
   - `canvas`: Maximized viewport (>85% area) supporting 1-Up (1:1 actual-pixel zoom toggle on `Space`), 2-Up side-by-side comparison, and 3-Up Focus Mode (sliding triplet), with contextual slot role pills (`ACTIVE`, `CHAMPION`/`CHALLENGER`, `PREVIOUS`/`ACTIVE`/`NEXT`), companion badges (`RAW+JPG`, `XMP`), and an Obsidian Darkroom empty-state hero card.
-  - `info_hud`: Glassmorphic top-left optical metadata HUD (`InfoHUD`) with companion badges, camera/lens model line, normalized sharpness goodness meter bar, semantic quality badges (`Sharp` / `Acceptable` / `Soft`), and strict Metric Omission Rule compliance.
+  - `info_hud`: Glassmorphic top-left optical metadata HUD (`InfoHUD`) with companion badges, camera/lens model line, normalized sharpness goodness meter bar, semantic quality badges (`Sharp` / `Acceptable` / `Blurry`), and strict Metric Omission Rule compliance.
   - `boundary_slot`: `BoundarySlotPane` indicators for start/end album bounds (`First Photograph` / `Last Photograph`).
   - `action_bar`: Persistent bottom `Gtk.ActionBar` (`.studio-actionbar`) with semantic status counter pills (`Selected`, `Trashed`, `Remaining`) and tactile Move, Copy, Trash, and Undo buttons.
   - `preferences`: Modal `Adw.PreferencesWindow` (`Ctrl+,`).

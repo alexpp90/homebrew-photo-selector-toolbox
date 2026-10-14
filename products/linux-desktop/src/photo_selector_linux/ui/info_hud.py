@@ -21,7 +21,7 @@ except (ImportError, ValueError):
 from photo_selector_linux.core.models import CandidatePhoto
 from photo_selector_linux.ui.styling import (
     compute_sharpness_goodness,
-    format_companion_badges,
+    get_candidate_companion_badges,
 )
 
 
@@ -30,7 +30,9 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
 
     def __init__(self, viewmodel=None):
         self.viewmodel = viewmodel
+        self.hud_enabled: bool = True
         self.is_hud_visible: bool = False
+        self._current_photo: Optional[CandidatePhoto] = None
         self.filename_text: str = ""
         self.companion_badges: List[Tuple[str, str]] = []
         self.exif_text: str = ""
@@ -38,6 +40,7 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
         self.score_visible: bool = False
         self.score_badge_text: str = ""
         self.score_css_class: str = ""
+        self.meter_css_class: str = ""
         self.clipping_text: str = ""
         self.sharpness_goodness: Optional[float] = None
 
@@ -64,6 +67,8 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
 
         self.lbl_filename = Gtk.Label(label="")
         self.lbl_filename.set_halign(Gtk.Align.START)
+        self.lbl_filename.set_ellipsize(3)  # PANGO_ELLIPSIZE_MIDDLE
+        self.lbl_filename.set_max_width_chars(36)
         self.lbl_filename.add_css_class("optical-strip-primary")
         self.header_row.append(self.lbl_filename)
 
@@ -80,6 +85,8 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
         # Camera & Lens strip (Sony Alpha 7 IV · FE 24-70mm F2.8 GM II)
         self.lbl_camera = Gtk.Label(label="")
         self.lbl_camera.set_halign(Gtk.Align.START)
+        self.lbl_camera.set_ellipsize(3)  # PANGO_ELLIPSIZE_MIDDLE
+        self.lbl_camera.set_max_width_chars(48)
         self.lbl_camera.add_css_class("optical-strip-secondary")
         self.append(self.lbl_camera)
 
@@ -105,11 +112,19 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
 
         self.append(self.score_box)
 
+    def set_hud_enabled(self, enabled: bool) -> None:
+        """Enable or disable HUD visibility while preserving underlying photo state."""
+        self.hud_enabled = bool(enabled)
+        self.is_hud_visible = self.hud_enabled and (self._current_photo is not None)
+        if HAS_GI:
+            self.set_visible(self.is_hud_visible)
+
     def _on_state_changed(self, vm) -> None:
         self.update_photo(vm.current_photo)
 
     def update_photo(self, photo: Optional[CandidatePhoto]) -> None:
         """Update displayed metadata and scores according to Metric Omission Rule."""
+        self._current_photo = photo
         if not photo:
             self.is_hud_visible = False
             self.filename_text = ""
@@ -119,31 +134,27 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
             self.score_visible = False
             self.score_badge_text = ""
             self.score_css_class = ""
+            self.meter_css_class = ""
             self.clipping_text = ""
             self.sharpness_goodness = None
             if HAS_GI:
                 self.set_visible(False)
             return
 
-        self.is_hud_visible = True
+        self.is_hud_visible = bool(self.hud_enabled)
         self.filename_text = photo.primary_path.name
-
-        has_raw_jpeg = any(
-            p.suffix.lower() != ".xmp" and p.resolve() != photo.primary_path.resolve()
-            for p in photo.companion_paths
-        )
-        has_xmp = photo.sidecar_path is not None
-        self.companion_badges = format_companion_badges(
-            has_raw_jpeg_pair=has_raw_jpeg,
-            has_xmp_sidecar=has_xmp,
-        )
+        self.companion_badges = get_candidate_companion_badges(photo)
 
         # Optical EXIF Summary (Zero-Placeholder Invariant R-LINUX-META-03)
         exif_text = ""
         camera_text = ""
         if photo.exif:
             exif_text = photo.exif.formatted_summary
-            cam_parts = [p for p in (photo.exif.camera_model, photo.exif.lens) if p]
+            camera_body = photo.exif.camera_model or photo.exif.camera_make
+            if photo.exif.camera_make and photo.exif.camera_model:
+                if not photo.exif.camera_model.lower().startswith(photo.exif.camera_make.lower()):
+                    camera_body = f"{photo.exif.camera_make} {photo.exif.camera_model}"
+            cam_parts = [p for p in (camera_body, photo.exif.lens) if p]
             camera_text = " · ".join(cam_parts)
         self.exif_text = exif_text
         self.camera_text = camera_text
@@ -154,6 +165,7 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
             category = photo.scores.focus_category.value
             self.score_badge_text = f"Focus: {photo.scores.formatted_sharpness} ({category.capitalize()})"
             self.score_css_class = f"score-badge-{category}"
+            self.meter_css_class = f"sharpness-meter-{category}"
             self.clipping_text = (
                 f"HL: {photo.scores.formatted_highlight_clipping} · "
                 f"SH: {photo.scores.formatted_shadow_clipping}"
@@ -163,13 +175,14 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
             self.score_visible = False
             self.score_badge_text = ""
             self.score_css_class = ""
+            self.meter_css_class = ""
             self.clipping_text = ""
             self.sharpness_goodness = None
 
         if not HAS_GI:
             return
 
-        self.set_visible(True)
+        self.set_visible(self.is_hud_visible)
         self.lbl_filename.set_label(self.filename_text)
 
         while child := self.companion_box.get_first_child():
@@ -190,6 +203,7 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
             self.lbl_score_badge.set_label(self.score_badge_text)
             self.lbl_score_badge.set_css_classes([self.score_css_class])
             self.lbl_clipping.set_label(self.clipping_text)
+            self.sharpness_meter.set_css_classes(["sharpness-meter-track", self.meter_css_class])
             self.sharpness_meter.set_fraction(self.sharpness_goodness)
         else:
             self.score_box.set_visible(False)

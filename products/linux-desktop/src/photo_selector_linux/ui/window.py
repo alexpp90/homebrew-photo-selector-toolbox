@@ -101,7 +101,7 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
         title_box.append(mode_box)
 
         # Counter pill
-        self.lbl_counter = Gtk.Label(label="0 / 0")
+        self.lbl_counter = Gtk.Label(label="Photo 0 of 0")
         self.lbl_counter.add_css_class("photo-counter-pill")
         title_box.append(self.lbl_counter)
 
@@ -133,6 +133,7 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
     def _bind_viewmodel(self) -> None:
         self.viewmodel.connect("state-changed", self._on_viewmodel_state_changed)
         self.viewmodel.connect("notification", self._on_viewmodel_notification)
+        self._on_viewmodel_state_changed(self.viewmodel)
 
     def _on_viewmodel_state_changed(self, vm) -> None:
         if not HAS_GI:
