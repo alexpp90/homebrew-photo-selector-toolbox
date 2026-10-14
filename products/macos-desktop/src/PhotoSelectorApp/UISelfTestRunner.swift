@@ -58,7 +58,8 @@ final class UISelfTestRunner {
     // MARK: - Run
 
     func run() async -> Bool {
-        let isBackground = ProcessInfo.processInfo.environment["PST_SHOW_GUI"] == nil
+        let showGUI = ProcessInfo.processInfo.environment["PST_SHOW_GUI"]
+        let isBackground = showGUI == nil || showGUI == "0" || showGUI!.isEmpty
         await waitUntil(timeout: 5) { self.workspaceWindow != nil && (isBackground || NSApp.isActive) }
         await activationChecks(isBackground: isBackground)
         await loadingChecks()

@@ -10,15 +10,16 @@
 
 *   **Primary Reader:** AndroidX ExifInterface — supports JPEG, DNG, CR2, NEF, ARW, RAF, ORF, RW2, PEF, SRW, WebP, HEIF. Employs `ParcelFileDescriptor` for local files to enable random seek access, falling back to sequential stream reads when PFD is unavailable.
 *   **Fallback Reader:** MediaStore columns for basic metadata when ExifInterface fails.
-*   **Standardized Keys:** Output uses the same standardized `ExifData` data class as desktop (shutter speed, aperture, focal length, focal length 35mm, ISO, lens, isFallback).
+*   **Standardized Keys & APEX Fallbacks:** Output uses the same standardized `ExifData` data class as desktop (shutter speed, aperture, focal length, focal length 35mm, ISO, lens, isFallback). When direct `TAG_EXPOSURE_TIME` or `TAG_F_NUMBER` tags are missing, `AndroidExifReader` computes optical values from APEX tags (`TAG_SHUTTER_SPEED_VALUE` $\to 2^{-T_v}$, `TAG_APERTURE_VALUE` $\to 2^{A_v/2}$) and `TAG_STANDARD_OUTPUT_SENSITIVITY`, setting `isFallback = true`.
 *   **Asynchronous Loading:** EXIF data for the current image and its immediate neighbors (previous/next) must be loaded dynamically and asynchronously in the background as the user navigates, updating the UI reactively on completion.
 
-## 2. Storage & File Access
+## 2. Storage, Privacy & File Access
 
 *   **Primary Access:** Storage Access Framework (SAF) via `Intent.ACTION_OPEN_DOCUMENT_TREE`. To comply with Google Play permissions policies, the application declares no global storage permissions (such as `MANAGE_EXTERNAL_STORAGE` or `READ_EXTERNAL_STORAGE`) in the manifest.
+*   **Zero Cloud Backup of Local Paths:** Both `:android-desktop` and `:phototok` enforce `android:allowBackup="false"` and declare explicit `dataExtractionRules` (`res/xml/data_extraction_rules.xml`) and `fullBackupContent` (`res/xml/backup_rules.xml`) excluding `database`, `sharedpref`, `file`, and `external` domains so local folder URIs and cached scores never leave the device.
 *   **Permission Persistence:** URI permissions are persisted across restarts using `ContentResolver.takePersistableUriPermission`. ViewModels must handle `SecurityException` gracefully and clear any persisted folder URI if access has been revoked or the directory is deleted.
 *   **File Discovery:** `DocumentFile` API for folder traversal. Same exclusion rules as desktop: skip "Selection" and "Selected" subfolders (case-insensitive) unless specifically selected as root.
-*   **Selection Destination:** Configurable subfolder name (default "Selection"). RAW/JPEG/XMP sorting into subfolders follows desktop logic. Lightroom edit files (*-Edit.*) sorted to RAW subfolder.
+*   **Selection Destination:** Configurable subfolder name (default "Selection"). RAW/JPEG/XMP sorting into subfolders follows desktop logic. Lightroom edit files (*-Edit.*) sorted to RAW subfolder. Failed stream copies clean up any newly created 0-byte destination `DocumentFile`.
 *   **Deletion:** Use `MediaStore.createTrashRequest()` on Android 11+ for recoverable deletion. Fall back to `DocumentFile.delete()`.
 
 ## 3. Tech Stack (both apps)

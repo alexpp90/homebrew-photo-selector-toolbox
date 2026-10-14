@@ -9,6 +9,7 @@ Adheres to:
 
 from __future__ import annotations
 
+import math
 from typing import Dict, List, Tuple
 
 APP_BRAND_NAME: str = "Photo Selector"
@@ -46,7 +47,10 @@ STUDIO_PALETTE: Dict[str, str] = {
 
 def compute_sharpness_goodness(sharpness_score: float) -> float:
     """Normalize a 0..100 sharpness score to a [GOODNESS_BAR_FLOOR, 1.0] visual bar fraction."""
-    clamped = max(0.0, min(100.0, float(sharpness_score)))
+    score = float(sharpness_score)
+    if not math.isfinite(score):
+        return GOODNESS_BAR_FLOOR if math.isnan(score) or score < 0.0 else 1.0
+    clamped = max(0.0, min(100.0, score))
     normalized = clamped / 100.0
     return round(GOODNESS_BAR_FLOOR + (1.0 - GOODNESS_BAR_FLOOR) * normalized, 4)
 

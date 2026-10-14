@@ -110,8 +110,9 @@ def test_debian_changelog_format():
 
 
 def test_desktop_integration_files():
-    """Verify desktop entry, AppStream metainfo, and icon assets (R-LINUX-PKG-01)."""
+    """Verify desktop entry, AppStream metainfo branding, and icon assets (R-LINUX-PKG-01)."""
     product_dir = get_product_root()
+    repo_root = get_repo_root()
     data_dir = product_dir / "data"
 
     desktop_file = data_dir / "org.photoselector.Linux.desktop"
@@ -121,17 +122,35 @@ def test_desktop_integration_files():
     assert "Exec=photo-selector-linux %F" in desktop_text
     assert "Icon=org.photoselector.Linux" in desktop_text
     assert "StartupWMClass=org.photoselector.Linux" in desktop_text
+    assert "StartupNotify=true" in desktop_text
 
     meta_file = data_dir / "org.photoselector.Linux.metainfo.xml"
     assert meta_file.is_file(), "Missing org.photoselector.Linux.metainfo.xml"
     meta_text = meta_file.read_text(encoding="utf-8")
     assert "<id>org.photoselector.Linux</id>" in meta_text
     assert "<binary>photo-selector-linux</binary>" in meta_text
+    assert "<branding>" in meta_text
+    assert "#3584e4" in meta_text.lower()
+    assert "#181920" in meta_text.lower()
 
     svg_icon = data_dir / "icons" / "hicolor" / "scalable" / "apps" / "org.photoselector.Linux.svg"
     png_icon = data_dir / "icons" / "hicolor" / "128x128" / "apps" / "org.photoselector.Linux.png"
+    shared_logo = repo_root / "assets" / "linux_desktop_logo.svg"
     assert svg_icon.is_file(), "Missing scalable SVG icon"
     assert png_icon.is_file(), "Missing 128x128 PNG icon"
+    assert shared_logo.is_file(), "Missing assets/linux_desktop_logo.svg"
+
+    svg_text = svg_icon.read_text(encoding="utf-8")
+    assert svg_text == shared_logo.read_text(encoding="utf-8"), "App SVG icon and shared logo must match"
+    for brand_hex in ("#3584E4", "#06B6D4", "#2EC27E", "#1C1C20", "#3A3A42"):
+        assert brand_hex in svg_text, f"Missing brand hex {brand_hex} in SVG icon"
+
+    # Verify PNG header dimensions (128x128)
+    png_bytes = png_icon.read_bytes()
+    assert png_bytes[:8] == b"\x89PNG\r\n\x1a\n", "Invalid PNG signature"
+    width = int.from_bytes(png_bytes[16:20], "big")
+    height = int.from_bytes(png_bytes[20:24], "big")
+    assert (width, height) == (128, 128), f"Expected 128x128 PNG icon, got {width}x{height}"
 
 
 def test_package_deb_builder(tmp_path):

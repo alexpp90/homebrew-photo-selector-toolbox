@@ -19,14 +19,15 @@ The codebase enforces strict separation of concerns:
   - `duplicate_finder`: Two-stage duplicate detection using byte size pre-filtering and chunked 64 KB streaming SHA-256 hashing.
   - `statistics`: Linear single-pass $O(N)$ library metadata aggregator.
 - `photo_selector_linux.ui`:
-  - `application`: `Adw.Application` lifecycle controller.
-  - `window`: `Adw.ApplicationWindow` with `Adw.HeaderBar`, view switcher, and toast notifications.
-  - `canvas`: Maximized viewport (>85% area) supporting 1-Up (1:1 actual-pixel zoom toggle on `Space`), 2-Up side-by-side comparison, and 3-Up Focus Mode (sliding triplet).
-  - `boundary_slot`: `BoundarySlotPane` indicators for start/end album bounds.
-  - `action_bar`: Persistent bottom `Gtk.ActionBar` with tactile Move, Copy, Trash, and Undo buttons.
+  - `application`: `Adw.Application` lifecycle controller with `org.photoselector.Linux` application icon registration and CSS provider injection.
+  - `window`: `Adw.ApplicationWindow` with `.studio-headerbar` (`Adw.HeaderBar`), segmented view switcher, and toast notifications.
+  - `canvas`: Maximized viewport (>85% area) supporting 1-Up (1:1 actual-pixel zoom toggle on `Space`), 2-Up side-by-side comparison, and 3-Up Focus Mode (sliding triplet), with contextual slot role pills (`ACTIVE`, `CHAMPION`/`CHALLENGER`, `PREVIOUS`/`ACTIVE`/`NEXT`), companion badges (`RAW+JPG`, `XMP`), and an Obsidian Darkroom empty-state hero card.
+  - `info_hud`: Glassmorphic top-left optical metadata HUD (`InfoHUD`) with companion badges, camera/lens model line, normalized sharpness goodness meter bar, semantic quality badges (`Sharp` / `Acceptable` / `Soft`), and strict Metric Omission Rule compliance.
+  - `boundary_slot`: `BoundarySlotPane` indicators for start/end album bounds (`First Photograph` / `Last Photograph`).
+  - `action_bar`: Persistent bottom `Gtk.ActionBar` (`.studio-actionbar`) with semantic status counter pills (`Selected`, `Trashed`, `Remaining`) and tactile Move, Copy, Trash, and Undo buttons.
   - `preferences`: Modal `Adw.PreferencesWindow` (`Ctrl+,`).
   - `keyboard_router`: Root window `Gtk.EventControllerKey` in `CAPTURE` phase with modifier lock masking (`state & ~(LOCK_MASK | MOD2_MASK)`) and text entry bypass.
-  - `styling`: Studio dark CSS palette with high-contrast tokens (`#141417`, `#1C1C20`, `#3A3A42`, `#FFFFFF`, `#D9D9D9`).
+  - `styling`: Obsidian Darkroom & Optical Cobalt CSS palette (`#141417` surface, `#181920` elevated chrome, `#1C1C20` cards, `#3584E4` / `#06B6D4` Optical Cobalt & Cyan accents, `#6366F1` Iris Indigo, `#2EC27E` Emerald Keeper, `#E5A50A` Amber Optical, `#E01B24` Crimson Cull) enforcing $\ge 7:1$ AAA contrast.
 
 ## Keyboard Shortcuts
 

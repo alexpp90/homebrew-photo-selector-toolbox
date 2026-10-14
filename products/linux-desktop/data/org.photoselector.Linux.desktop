@@ -12,3 +12,4 @@ MimeType=image/jpeg;image/png;image/tiff;image/x-sony-arw;image/x-canon-cr2;imag
 Keywords=photo;photography;cull;culling;raw;exif;selector;comparison;darkroom;optical;sharpness;
 StartupNotify=true
 StartupWMClass=org.photoselector.Linux
+X-GNOME-UsesNotifications=true

@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -386,20 +387,13 @@ def main() -> int:
     filename = args.output_filename or f"photo-selector-linux_{args.version}_all.deb"
     output_deb = output_dir / filename
 
-    staging_root = product_dir / "build" / "staged_deb"
-    if staging_root.exists():
-        shutil.rmtree(staging_root)
-    staging_root.mkdir(parents=True, exist_ok=True)
-
-    try:
+    with tempfile.TemporaryDirectory(prefix="staged_deb_") as tmp_dir:
+        staging_root = Path(tmp_dir)
         if args.mode == "native" and shutil.which("dpkg-deb"):
             build_deb_native(product_dir, staging_root, output_deb, args.version)
         else:
             build_deb_pure_python(product_dir, staging_root, output_deb, args.version)
         print(f"Generated Debian package: {output_deb} ({output_deb.stat().st_size} bytes)")
-    finally:
-        if staging_root.exists():
-            shutil.rmtree(staging_root)
 
     return 0
 

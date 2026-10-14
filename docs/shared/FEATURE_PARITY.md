@@ -236,6 +236,7 @@ products is a defect ([`ai/ROUTING.md`](../../ai/ROUTING.md), the separation rul
 | Zero-latency window-level keyboard shortcut routing | macOS Desktop 2026-10-07 | ◐ partial | ✅ origin | ✅ ported 2026-10-09 | ✅ independent | ❌ N/A | 2026-10-07 |
 | Parent-scoped sibling pairing to prevent data loss | PhotoTok 2026-10-09 | ⬜ evaluate | ✅ ported 2026-10-07 | ✅ ported 2026-10-09 | ⬜ evaluate | ✅ origin | 2026-10-09 |
 | Studio dark theme with pure white text hierarchy | macOS Desktop 2026-10-07 | ⬜ evaluate | ✅ origin | ✅ ported 2026-10-09 | ⬜ evaluate | ⬜ evaluate | 2026-10-07 |
+| Self-move guard, transactional companion rollback & APEX EXIF fallbacks | Cross-product 2026-10-14 | ✅ ported 2026-10-14 | ✅ ported 2026-10-14 | ✅ origin | ✅ ported 2026-10-14 | ✅ ported 2026-10-14 | 2026-10-14 |
 
 ---
 

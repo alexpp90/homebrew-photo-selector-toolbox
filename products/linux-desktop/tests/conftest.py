@@ -25,7 +25,6 @@ if "gi" not in sys.modules:
         mock_gi = MagicMock()
         mock_gi.require_version = mock_require_version
 
-        # Mock base widget classes that can be inherited from
         class MockGtkWidget:
             def __init__(self, *args, **kwargs):
                 pass
@@ -70,6 +69,42 @@ if "gi" not in sys.modules:
                 pass
 
             def set_homogeneous(self, *args, **kwargs):
+                pass
+
+            def set_default_size(self, *args, **kwargs):
+                pass
+
+            def set_title(self, *args, **kwargs):
+                pass
+
+            def set_icon_name(self, *args, **kwargs):
+                pass
+
+            def set_content(self, *args, **kwargs):
+                pass
+
+            def set_margin_top(self, *args, **kwargs):
+                pass
+
+            def set_margin_bottom(self, *args, **kwargs):
+                pass
+
+            def set_margin_start(self, *args, **kwargs):
+                pass
+
+            def set_margin_end(self, *args, **kwargs):
+                pass
+
+            def pack_start(self, *args, **kwargs):
+                pass
+
+            def pack_end(self, *args, **kwargs):
+                pass
+
+            def set_center_widget(self, *args, **kwargs):
+                pass
+
+            def add_controller(self, *args, **kwargs):
                 pass
 
         # Mock Gtk

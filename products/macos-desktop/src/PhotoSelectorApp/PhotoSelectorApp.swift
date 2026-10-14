@@ -41,9 +41,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
     }
 
+    private static var isGUIRequested: Bool {
+        guard let value = ProcessInfo.processInfo.environment["PST_SHOW_GUI"] else { return false }
+        return value != "0" && !value.isEmpty
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let isBackgroundTest = (launchOptions.selfTestFolder != nil || launchOptions.screenshotURL != nil)
-            && ProcessInfo.processInfo.environment["PST_SHOW_GUI"] == nil
+            && !Self.isGUIRequested
         if !isBackgroundTest {
             NSApp.activate(ignoringOtherApps: true)
         }
@@ -102,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     static func makeWorkspaceWindowKey() {
         guard let window = NSApp.windows.first(where: { $0.canBecomeKey && !$0.isSheet && $0.isVisible })
                 ?? NSApp.windows.first(where: { $0.canBecomeKey && !$0.isSheet }) else { return }
-        let isBackgroundTest = ProcessInfo.processInfo.environment["PST_SHOW_GUI"] == nil
+        let isBackgroundTest = !Self.isGUIRequested
             && (ProcessInfo.processInfo.arguments.contains("--ui-self-test")
                 || ProcessInfo.processInfo.arguments.contains("--screenshot"))
         if isBackgroundTest {

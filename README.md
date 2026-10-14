@@ -131,16 +131,18 @@ A high-performance native macOS photo selection and comparison culling suite bui
 A native GNOME photograph culling and selection suite targeting Debian 13 (Trixie) and modern Linux desktop environments adhering strictly to GNOME Human Interface Guidelines (HIG).
 
 <div align="center">
+  <img src="assets/linux_desktop_logo.svg" alt="Photo Selector Linux — Optical Cobalt Lens Logo" width="96" style="margin-bottom: 10px;" />
+  <br />
   <img src="assets/linux_desktop_screenshot.png" alt="Linux Desktop Culling Workspace" width="750" style="border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); margin-bottom: 12px;" />
-  <p><em>Native GNOME 46 / Libadwaita dark studio workspace with segmented comparison controls, floating HUD, and bottom action bar</em></p>
+  <p><em>Native GNOME 46 / Libadwaita Obsidian Darkroom &amp; Optical Cobalt workspace with segmented comparison controls, glassmorphic optical HUD with sharpness goodness bar, and semantic bottom action bar</em></p>
 </div>
 
 ### Key Features
-* **Native GNOME Architecture:** Built with Python 3.12+, PyGObject, GTK4, and Libadwaita with Studio dark palette (`#141417`), responsive `Adw.HeaderBar`, and view switcher.
-* **Vectorized NumPy Focus Engine:** 2D discrete Laplacian convolution with 3x3 Gaussian smoothing and strided Median Absolute Deviation (MAD) noise floor subtraction, achieving <2.0 ms compute latency.
-* **Responsive Canvas Viewports:** Seamlessly switch between 1-Up (1:1 actual-pixel zoom toggle on `Space`), 2-Up side-by-side comparison, and 3-Up Focus Mode (sliding triplet) with boundary slot indicators.
-* **Tactile Action Bar:** Bottom `Gtk.ActionBar` with `Move (M)`, `Copy (C)`, `Trash (Del)` via FreeDesktop Trash (`Gio.File.trash()`), and atomic reversal (`Ctrl+Z`).
-* **Debian 13 APT Distribution:** Packaged as a native Debian `.deb` hosted via an in-repo APT repository for seamless updates.
+* **Obsidian Darkroom & Optical Cobalt Theme:** Built with Python 3.12+, PyGObject, GTK4, and Libadwaita featuring a color-neutral Obsidian Darkroom surface (`#141417` / `#181920`), Optical Cobalt (`#3584E4`) & Optical Cyan (`#06B6D4`) focus accents, and $\ge 7:1$ AAA contrast tokens.
+* **Vectorized NumPy Focus Engine & Goodness HUD:** 2D discrete Laplacian convolution with 3x3 Gaussian smoothing and strided Median Absolute Deviation (MAD) noise floor subtraction (<2.0 ms compute latency), paired with a glassmorphic HUD (`I`) displaying a normalized sharpness goodness meter, semantic quality badges (`Sharp` / `Acceptable` / `Blurry`), and `RAW+JPG` / `XMP` companion pills.
+* **Responsive Canvas Viewports:** Seamlessly switch between 1-Up (1:1 actual-pixel zoom toggle on `Space`), 2-Up side-by-side comparison (`CHAMPION` / `CHALLENGER`), and 3-Up Focus Mode (`PREVIOUS` / `ACTIVE` / `NEXT` sliding triplet) with boundary slot indicators.
+* **Semantic Action Bar:** Bottom `Gtk.ActionBar` with semantic status counter pills (`Selected`, `Trashed`, `Remaining`), tactile `Move (M)`, `Copy (C)`, `Trash (Del)` via FreeDesktop Trash (`Gio.File.trash()`), and atomic reversal (`Ctrl+Z`).
+* **Debian 13 APT Distribution:** Packaged as a native Debian `.deb` with GNOME HIG squircle SVG/PNG icons and AppStream branding hosted via an in-repo APT repository.
 
 ---
 

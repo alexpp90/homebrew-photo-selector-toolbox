@@ -31,6 +31,20 @@ Newest entries at the top. Always use the real current date.
 **Actionable Framework Improvement:** Concrete proposal for skills, agents, playbooks, tooling, or docs (or `[OPEN]` backlog item for `@shared-code-health-agent`).
 ```
 
+## 2026-10-14 - Cross-Product Quality, Security & Data Protection Audit Resolution
+**Agents Involved:** `@shared-publish-agent`, `@desktop-backend-agent`, `@desktop-gui-agent`, `@desktop-build-agent`, `@macos-desktop-agent`, `@linux-desktop-agent`, `@android-desktop-core-agent`, `@android-desktop-ui-agent`, `@phototok-core-agent`, `@android-shared-build-agent`, `@shared-code-health-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — Product-scoped routing (`ai/ROUTING.md`) and the `release-compliance` skill provided crisp boundaries for auditing and resolving findings across all 5 products, packaging, legal compliance, and CI workflows.
+- **Agents:** 3 parallel `research` subagents performed the initial read-only audit across Desktop/Linux, macOS Desktop, and Android/Compliance; product and shared agents then executed the fixes in their respective scopes.
+- **Skills:** `task-lifecycle`, `release-compliance`, `sync-requirements`, `sync-framework`, `record-lesson`, `verify-build`, and `retrospective`.
+- **Hooks:** PreToolUse and Stop hooks (`guard_paths.py`, `verify_intent_delivery.py`, `check_retrospective.py`) enforced test execution and retrospective completion.
+**Session Efficiency:** High
+- **Observations:** Parallelizing the initial read-only audit across 3 domain-scoped `research` subagents covered all 5 products rapidly without context bloat, and grouping the 22 findings into 7 self-contained work items enabled clean sequential resolution.
+**Implementation Quality:** High
+- **Observations:** All 22 audit findings were resolved with unit test coverage across Python (`pytest`), Swift (`swift test`), and Kotlin/Android (`gradlew testDebugUnitTest` + `assembleDebugAndroidTest`), and verified via the full `./scripts/run_tests.sh` CI mirror.
+**Framework Root Cause:** `release-compliance` and `@shared-publish-agent` previously referenced the retired Google Drive OAuth flow for PhotoTok while lacking in-repo HTML legal documents (`privacy-policy.html`, `impressum.html`) for both Android apps.
+**Actionable Framework Improvement:** Updated `ai/skills/release-compliance/SKILL.md` and `ai/agents/shared-publish-agent.md` to codify the zero-permission SAF architecture and explicit cloud-backup exclusion rules (`data_extraction_rules.xml` / `backup_rules.xml`) across both Android products.
+
 ## 2026-10-13 - Defensive Watchdog Timer Protocol for Subagent Delegation
 **Agents Involved:** `@DeepInvestigator`, `@DeepCoder`, `@shared-mentor-agent`
 **Framework Fit & Tooling:**
@@ -346,3 +360,20 @@ Newest entries at the top. Always use the real current date.
 - **Observations:** Implemented `ThumbnailCache` & `PrefetchManager` in Linux Desktop, closed SQLite connection leaks and background Tkinter thread exceptions in Desktop, added unit tests for macOS `QualityScoringService` and Android `:core` readers (`MediaStoreReader`, `ExternalStorageDetector`, `AndroidExifReader` CR3), and wired `framework-governance` into `.github/workflows/desktop.yml`.
 **Framework Root Cause:** Passive hooks (`record_intent.py`) previously dirtied `ai/memory/intent_ledger.jsonl` on every prompt, which satisfied `f.startswith("ai/memory/")` in `check_retrospective.py`, and `validate_framework.py` skipped paths under deleted top-level roots (`android/`).
 **Actionable Framework Improvement:** `check_retrospective.py` now explicitly excludes `ai/memory/intent_ledger.jsonl`, `validate_framework.py` enforces `DEPRECATED_ROOTS` and stale `(planned)` detection, and `desktop.yml` runs the `framework-governance` job in CI.
+
+---
+
+## 2026-10-14 - Background GUI Execution for Local Automated Tests
+**Agents Involved:** `@macos-desktop-agent`, `@desktop-gui-agent`, `@shared-mentor-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — The repository's product separation allowed solving background GUI execution natively per product (ctypes swizzle in Desktop Tkinter, headless backend in Linux GTK4, and off-screen window placement with suppressed activation in macOS SwiftUI/AppKit).
+- **Agents:** `@macos-desktop-agent` owned `PhotoSelectorApp.swift`, `UISelfTestRunner.swift`, and `ui_smoke_test.sh`; `@desktop-gui-agent` verified `products/desktop/tests/conftest.py`.
+- **Skills:** `task-lifecycle`, `retrospective`, `verify-build`, `sync-requirements` ensured full verification and documentation parity.
+- **Hooks:** Pre-commit and retrospective checks verified cleanly.
+**Session Efficiency:** High
+- **Observations:** Identified the exact mechanisms causing GUI windows to pop up and steal focus during local test runs (`NSApp.activate(ignoringOtherApps: true)`, `makeKeyAndOrderFront:`, and `osascript` AppleScript activation). In background mode (`PST_SHOW_GUI` unset), positioning the window off-screen at `(-20000, -20000)` with `alphaValue = 0.0`, disabling `NSApp.activate`, and dispatching clicks via `nearestButton()?.performClick(nil)` completely eliminates OS focus disruption while preserving 100% test fidelity across all 24 in-app self-test checks.
+**Implementation Quality:** High
+- **Observations:** All test suites (Python 608 tests, Linux Desktop 92 tests, macOS Desktop 234 unit tests + 24 in-app UI self-test checks, and Android unit tests) run completely silently without windows popping up or stealing focus from the developer.
+**Framework Root Cause:** Local automated test scripts previously ran UI smoke tests in the foreground by default, stealing focus from the developer's active workspace.
+**Actionable Framework Improvement:** Standardized background GUI execution across all products: automated tests run off-screen/headless by default unless `PST_SHOW_GUI=1` is explicitly provided.
+

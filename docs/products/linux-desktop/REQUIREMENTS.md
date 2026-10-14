@@ -144,48 +144,56 @@ The application is distributed as a native Debian `.deb` package hosted via an i
 
 ## 3. User Interface (UI/UX) & GNOME HIG Libadwaita Compliance
 
-### 3.1 Studio Dark Styling & Readability (`R-LINUX-UI`)
+### 3.1 Obsidian Darkroom & Optical Cobalt Styling (`R-LINUX-UI`)
 
 *   **R-LINUX-UI-01: GNOME HIG Libadwaita Architecture**  
-    The user interface must be constructed entirely using native Libadwaita and GTK4 widgets (`AdwApplicationWindow`, `AdwHeaderBar`, `AdwToolbarView`, `AdwPreferencesWindow`, `AdwToast`).
-*   **R-LINUX-UI-02: Studio Dark Scheme & High-Contrast Typography**  
-    The application must enforce a studio dark color palette (`AdwColorScheme.FORCE_DARK` or system dark style via `AdwStyleManager`):
+    The user interface must be constructed entirely using native Libadwaita and GTK4 widgets (`AdwApplicationWindow`, `AdwHeaderBar`, `AdwToolbarView`, `AdwPreferencesWindow`, `AdwToast`) and register the GNOME HIG squircle lens/aperture emblem (`org.photoselector.Linux`) as the application icon.
+*   **R-LINUX-UI-02: Obsidian Darkroom & Optical Cobalt Palette & High-Contrast Typography**  
+    The application must enforce the **Obsidian Darkroom & Optical Cobalt** studio dark color palette (`AdwColorScheme.FORCE_DARK` via `AdwStyleManager`):
+    - Deep canvas abyss: `#0E0F13`
     - Surface background: `#141417`
-    - Card / Pane background: `#1C1C20`
+    - Header & ActionBar chrome: `#181920` (with `#2A2B32` subtle divider stroke)
+    - Card / Pane background: `#1C1C20` (`#18181C` resting inactive slot)
     - Separator / Border stroke: `#3A3A42`
-    - Primary typography: `#FFFFFF` (pure white for headings and active indicators)
-    - Secondary typography: `#D9D9D9` (high-contrast light gray for optical metadata)
+    - Primary typography: `#FFFFFF` (pure white for headings, filenames, and active indicators)
+    - Secondary typography: `#D9D9D9` (high-contrast light gray for optical EXIF metadata)
+    - Semantic Optical Accents:
+      - Optical Cobalt (`#3584E4`) & Optical Cyan (`#06B6D4`) for active focus borders, mode selection, and `Copy` actions
+      - Iris Indigo (`#6366F1`) for `RAW+JPG` companion pair badges
+      - Emerald Keeper (`#2EC27E`) for `Move to Selection` actions and `Sharp` focus badges
+      - Amber Optical (`#E5A50A`) for `Acceptable` focus badges
+      - Crimson Cull (`#E01B24`) for `Move to Trash` actions and `Blurry` focus badges
     - **Prohibition**: Low-contrast dark-on-dark text (e.g. `#555555` on `#1C1C20`) is strictly prohibited anywhere in the interface.
 *   **R-LINUX-UI-03: Viewport Canvas Allocation**  
-    The main window must dedicate $> 80–85\%$ of its total window area directly to photograph previews. Persistent settings panels, tuning drawers, or configuration sliders are strictly prohibited in the culling workspace.
+    The main window must dedicate $> 80–85\%$ of its total window area directly to photograph previews. Persistent settings panels, tuning drawers, or configuration sliders are strictly prohibited in the culling workspace. When no directory is loaded, the canvas renders a branded Obsidian Darkroom empty-state hero card with quick-reference shortcut pills.
 
 ---
 
 ### 3.2 Comparison Modes & Focus Viewports
 
 *   **R-LINUX-UI-04: 1-Up Mode (Single View)**  
-    Displays the active candidate photo filling the maximum viewport canvas for broad composition, exposure, and color evaluation.
+    Displays the active candidate photo filling the maximum viewport canvas for broad composition, exposure, and color evaluation, crowned with an `ACTIVE` role pill and bound companion format badges (`RAW+JPG`, `XMP`).
 *   **R-LINUX-UI-05: 2-Up Mode (Side-by-Side Comparison)**  
-    Splits the viewport into a 50/50 horizontal side-by-side comparison between the Champion photo (left) and Challenger photo (right) for pairwise elimination.
+    Splits the viewport into a 50/50 horizontal side-by-side comparison between the Champion photo (left, labeled `CHAMPION` with `.active-pill`) and Challenger photo (right, labeled `CHALLENGER` with `.slot-role-pill`) for pairwise elimination.
 *   **R-LINUX-UI-06: 3-Up Focus Mode (Sliding Triplet)**  
     Presents three horizontal comparison slots:
-    - Left slot: Previous candidate (`currentIndex - 1`).
-    - Center slot: Active candidate (`currentIndex`), highlighted with a prominent 2.5px blue focus border (`.accent-border`), an `ACTIVE` pill, and the optical exposure strip.
-    - Right slot: Next candidate (`currentIndex + 1`).
+    - Left slot: Previous candidate (`currentIndex - 1`), labeled `PREVIOUS`.
+    - Center slot: Active candidate (`currentIndex`), highlighted with a prominent 2.5px Optical Cobalt focus border (`#3584E4`, `.accent-border`) with subtle ambient glow, an `ACTIVE` pill, and bound companion badges.
+    - Right slot: Next candidate (`currentIndex + 1`), labeled `NEXT`.
     - Navigating slides the entire triplet forward or backward across the album. Culling actions (M, C, Delete) operate directly on the center candidate and auto-advance.
 *   **R-LINUX-UI-07: BoundarySlotPane Indicators**  
     In 3-Up Focus Mode, when the active candidate is at album boundary index 0 or index $N-1$, outer slots must render dedicated `BoundarySlotPane` indicator cards ("First Photograph" / "Last Photograph") with clean iconography, preventing index out-of-bounds errors or blank slots.
 *   **R-LINUX-UI-08: 1:1 Actual-Pixel Zoom Inspection**  
-    Pressing `Space` must toggle between Fit-to-Window scaling and actual-pixel 1:1 (100%) zoom centered at the cursor position. Pressing `Space` again or `Escape` must instantly reset the view to Fit-to-Window.
-*   **R-LINUX-UI-09: Floating Translucent Metadata & Score HUD**  
-    Key optical EXIF metadata (`1/2000s · f/1.4 · ISO 100 · 85mm`) and computed quality scores must be rendered as a lightweight, translucent floating HUD card anchored to the active preview pane without displacing layout margins. Toggled via `I`.
+    Pressing `Space` must toggle between Fit-to-Window scaling and actual-pixel 1:1 (100%) zoom (displaying a `1:1 PIXEL ZOOM` cyan indicator pill). Pressing `Space` again or `Escape` must instantly reset the view to Fit-to-Window.
+*   **R-LINUX-UI-09: Floating Translucent Metadata, Companion Badges & Normalized Goodness HUD**  
+    Key optical EXIF metadata (`1/250s · f/8.0 · ISO 100 · 24mm`), camera/lens model strings, companion format badges (`RAW+JPG`, `XMP`), and computed quality scores must be rendered as a lightweight, translucent glassmorphic floating HUD card (`rgba(20, 20, 23, 0.88)`) anchored to the active preview pane without displacing layout margins. When quality scores are present, the HUD renders a semantic focus badge (`Focus: <score> (<Category>)`), highlight/shadow clipping readouts, and a normalized Optical Sharpness Goodness Meter bar mapping scores $0\dots 100$ onto $[0.06, 1.0]$ (`GOODNESS_BAR_FLOOR = 0.06`). Toggled via `I`.
 *   **R-LINUX-UI-10: Tactile Bottom Action Bar**  
-    A persistent bottom `GtkActionBar` must display tactile, high-contrast action buttons:
-    - **Move to Selection (M)**: Styled with `.suggested-action` (green).
-    - **Copy to Selection (C)**: Styled with primary accent (blue).
-    - **Move to Trash (Delete)**: Styled with `.destructive-action` (red).
-    - **Undo (Ctrl+Z)**: Styled with action counter pill.
-    - Status counters: `X Selected · Y Trashed · Z Remaining`.
+    A persistent bottom `GtkActionBar` (`.studio-actionbar`) must display tactile, high-contrast action buttons and semantic status counter pills:
+    - **Move to Selection (M)**: Styled with `.action-btn-move` and `.suggested-action` (Emerald Keeper `#2EC27E`).
+    - **Copy to Selection (C)**: Styled with `.action-btn-copy` (Optical Cobalt `#3584E4`).
+    - **Move to Trash (Del)**: Styled with `.action-btn-trash` and `.destructive-action` (Crimson Cull `#E01B24`).
+    - **Undo (Ctrl+Z)**: Styled with action depth counter (`Undo (N) (Ctrl+Z)`).
+    - Semantic status counters: `X Selected` (`.status-counter-selected` when $X > 0$), `Y Trashed` (`.status-counter-trashed` when $Y > 0$), and `Z Remaining` (`.status-counter-remaining`).
 
 ---
 
@@ -285,24 +293,24 @@ Every requirement ID maps to its implementation module and verification test sui
 | `R-LINUX-CULL-02` | Natural Alphanumeric Sorting | `src/core/scanner.py` | `tests/unit/test_scanner.py::test_natural_alphanumeric_sorting` |
 | `R-LINUX-CULL-03` | Atomic Move & Cross-Mount Rollback | `src/core/file_ops.py` | `tests/unit/test_file_ops.py::test_cross_filesystem_two_phase_staging_and_rollback` |
 | `R-LINUX-CULL-04` | Atomic Copy & Rollback | `src/core/file_ops.py` | `tests/unit/test_file_ops.py::test_atomic_copy_to_selection` |
-| `R-LINUX-CULL-05` | FreeDesktop Safe Trash | `src/core/file_ops.py` | `Planned (Milestone 4: tests/unit/test_file_ops.py::test_freedesktop_trash)` |
+| `R-LINUX-CULL-05` | FreeDesktop Safe Trash | `src/core/file_ops.py` | `tests/unit/test_file_ops.py::test_trash_and_undo_restores_all_companions` |
 | `R-LINUX-CULL-06` | Transactional Copy-Undo Safety | `src/core/file_ops.py` | `tests/unit/test_file_ops.py::test_copy_undo_source_preservation_invariant` |
-| `R-LINUX-CULL-07` | Transactional Move & Trash Undo | `src/core/file_ops.py` | `tests/unit/test_file_ops.py::test_move_undo_restores_all_companions` |
+| `R-LINUX-CULL-07` | Transactional Move & Trash Undo | `src/core/file_ops.py` | `tests/unit/test_file_ops.py::test_move_undo_restores_all_companions`, `tests/unit/test_file_ops.py::test_trash_and_undo_restores_all_companions` |
 | `R-LINUX-CACHE-01` | Bounded In-Memory LRU Cache | `src/core/cache.py` | `Planned (Milestone 4: tests/unit/test_cache.py::test_lru_cache_eviction)` |
 | `R-LINUX-CACHE-02` | Sliding Prefetch Window | `src/core/cache.py` | `Planned (Milestone 4: tests/unit/test_cache.py::test_sliding_prefetch_window)` |
 | `R-LINUX-CACHE-03` | Memory Ceiling Reclamation | `src/core/cache.py` | `Planned (Milestone 4: tests/unit/test_cache.py::test_cache_teardown_reclamation)` |
 | `R-LINUX-TOOLS-01` | Cryptographic Duplicate Finder | `src/core/duplicate_finder.py` | `tests/unit/test_duplicate_finder.py::test_duplicate_detection_by_content` |
 | `R-LINUX-TOOLS-02` | Library Statistics Engine | `src/core/statistics.py` | `tests/unit/test_statistics.py::test_optical_exif_histograms` |
-| `R-LINUX-UI-01` | Libadwaita Architecture | `src/ui/window.py` | `Planned (Milestone 4: tests/unit/test_culling_workspace.py::test_libadwaita_components)` |
-| `R-LINUX-UI-02` | Studio Dark Scheme & Palette | `data/style.css` | `Planned (Milestone 4: tests/unit/test_culling_workspace.py::test_studio_dark_palette)` |
-| `R-LINUX-UI-03` | Viewport Canvas Allocation | `src/ui/canvas.py` | `Planned (Milestone 4: tests/unit/test_culling_workspace.py::test_canvas_area_allocation)` |
+| `R-LINUX-UI-01` | Libadwaita Architecture & Branding | `src/ui/window.py` | `tests/unit/test_culling_workspace.py::test_libadwaita_components` |
+| `R-LINUX-UI-02` | Obsidian Darkroom & Optical Cobalt Palette | `src/ui/styling.py` | `tests/unit/test_culling_workspace.py::test_studio_dark_palette` |
+| `R-LINUX-UI-03` | Viewport Canvas Allocation & Empty Hero | `src/ui/canvas.py` | `tests/unit/test_culling_workspace.py::test_canvas_area_allocation` |
 | `R-LINUX-UI-04` | 1-Up Single View Mode | `src/ui/canvas.py` | `tests/unit/test_culling_workspace.py::test_comparison_mode_transitions` |
 | `R-LINUX-UI-05` | 2-Up Side-by-Side Mode | `src/ui/canvas.py` | `tests/unit/test_culling_workspace.py::test_comparison_mode_transitions` |
 | `R-LINUX-UI-06` | 3-Up Focus Mode Triplet | `src/ui/canvas.py` | `tests/unit/test_culling_workspace.py::test_comparison_mode_transitions` |
 | `R-LINUX-UI-07` | BoundarySlotPane Indicators | `src/ui/boundary_slot.py` | `tests/unit/test_culling_workspace.py::test_boundary_slot_conditions` |
 | `R-LINUX-UI-08` | 1:1 Actual-Pixel Zoom Toggle | `src/ui/canvas.py` | `tests/unit/test_keyboard_router.py::test_inspection_hotkeys` |
-| `R-LINUX-UI-09` | Floating Metadata & Score HUD | `src/ui/info_hud.py` | `tests/unit/test_scoring.py::test_uncomputed_score_omission` |
-| `R-LINUX-UI-10` | Tactile Bottom Action Bar | `src/ui/action_bar.py` | `tests/unit/test_keyboard_router.py::test_culling_hotkeys_case_insensitivity_and_locks` |
+| `R-LINUX-UI-09` | Floating Metadata, Badges & Goodness HUD | `src/ui/info_hud.py` | `tests/unit/test_culling_workspace.py::test_info_hud_goodness_and_metric_omission` |
+| `R-LINUX-UI-10` | Tactile Bottom Action Bar & Counters | `src/ui/action_bar.py` | `tests/unit/test_culling_workspace.py::test_action_bar_semantic_status_counters` |
 | `R-LINUX-KEY-01` | Root Key Capture & Modifier Masking | `src/ui/keyboard_router.py` | `tests/unit/test_keyboard_router.py::test_root_key_capture_and_modifier_masking` |
 | `R-LINUX-KEY-02` | Navigation Hotkeys | `src/ui/keyboard_router.py` | `tests/unit/test_keyboard_router.py::test_navigation_hotkeys_case_insensitivity` |
 | `R-LINUX-KEY-03` | Culling Hotkeys (M, C, Del) | `src/ui/keyboard_router.py` | `tests/unit/test_keyboard_router.py::test_culling_hotkeys_case_insensitivity_and_locks` |

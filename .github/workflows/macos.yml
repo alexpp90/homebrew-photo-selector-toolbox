@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # ── Native Swift Test Suite (Mirror: scripts/run_tests.sh `macos.yml:swift-test`) ──
@@ -116,12 +116,14 @@ jobs:
           path: photo-selector-macos-apple-silicon.zip
           if-no-files-found: error
 
-  # ── GitHub Release (Main / Tags / Dispatch Only) ──
+  # ── GitHub Release (Main / Tags Push Only) ──
   release:
     name: Publish macOS Release
     needs: build
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -142,10 +144,13 @@ jobs:
   update-homebrew-taps:
     name: Update Homebrew Taps (Native macOS)
     needs: release
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_REF: ${{ github.ref }}
+      GH_REF_NAME: ${{ github.ref_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -160,12 +165,12 @@ jobs:
 
       - name: Download release artifact
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          if [ "${GH_REF}" = "refs/heads/main" ]; then
             TAG_DIR="nightly"
           else
-            TAG_DIR="${{ github.ref_name }}"
+            TAG_DIR="${GH_REF_NAME}"
           fi
-          curl -L -o macos.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-macos-apple-silicon.zip"
+          curl -fsSL -o macos.zip "https://github.com/alexpp90/photo-selector/releases/download/${TAG_DIR}/photo-selector-macos-apple-silicon.zip"
 
       - name: Compute SHA256 hash
         id: hashes
@@ -173,6 +178,8 @@ jobs:
           echo "macos_sha256=$(shasum -a 256 macos.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Update Homebrew Files
+        env:
+          MACOS_SHA256: ${{ steps.hashes.outputs.macos_sha256 }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -182,21 +189,21 @@ jobs:
             git checkout main
             git reset --hard origin/main
 
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            if [ "${GH_REF}" = "refs/heads/main" ]; then
               python3 products/desktop/scripts/update_formula.py \
                 --file Casks/photo-selector-toolbox@nightly.rb \
-                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
+                --macos-sha256 "${MACOS_SHA256}"
 
               git add Casks/photo-selector-toolbox@nightly.rb
               COMMIT_MSG="Update nightly native macOS Homebrew SHA256 hash"
             else
-              TAG_NAME="${{ github.ref_name }}"
+              TAG_NAME="${GH_REF_NAME}"
               VERSION="${TAG_NAME#v}"
 
               python3 products/desktop/scripts/update_formula.py \
                 --file Casks/photo-selector-toolbox.rb \
                 --version-val "${VERSION}" \
-                --macos-sha256 "${{ steps.hashes.outputs.macos_sha256 }}"
+                --macos-sha256 "${MACOS_SHA256}"
 
               git add Casks/photo-selector-toolbox.rb
               COMMIT_MSG="Update stable native macOS Homebrew cask to version ${VERSION}"
@@ -237,10 +244,10 @@ jobs:
           cd "${TAP_DIR}"
           git add Casks/ Formula/
           if ! git diff --cached --quiet; then
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            if [ "${GH_REF}" = "refs/heads/main" ]; then
               git commit -m "Update nightly native macOS Homebrew SHA256 hash"
             else
-              git commit -m "Update stable native macOS Homebrew files to version ${{ github.ref_name }}"
+              git commit -m "Update stable native macOS Homebrew files to version ${GH_REF_NAME}"
             fi
             git push origin main
             echo "Successfully updated alexpp90/homebrew-tap"
