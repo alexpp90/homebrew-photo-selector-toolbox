@@ -185,14 +185,46 @@ if have poetry && [ -f "$ROOT_DIR/products/desktop/poetry.lock" ]; then
     PY_RUNNER=(poetry run)
     VENV_BIN="$(poetry --directory "$ROOT_DIR/products/desktop" env info -p 2>/dev/null)/bin"
 fi
-py() {
+PY_ARGV=()
+py_resolve() {
     if [ -n "$VENV_BIN" ] && [ -x "$VENV_BIN/$1" ]; then
-        "$VENV_BIN/$@"
+        local tool="$1"; shift
+        PY_ARGV=("$VENV_BIN/$tool" "$@")
     elif [ ${#PY_RUNNER[@]} -gt 0 ]; then
-        "${PY_RUNNER[@]}" "$@"
+        PY_ARGV=("${PY_RUNNER[@]}" "$@")
     else
-        "$@"
+        PY_ARGV=("$@")
     fi
+}
+py() {
+    py_resolve "$@"
+    "${PY_ARGV[@]}"
+}
+
+# GUI suites run on a private Xvfb display, never the developer's screen.
+#
+# CI renders every Tk and GTK test on a throwaway X server — desktop.yml starts
+# `Xvfb :99 -screen 0 1280x1024x24` for both its `test` and `visual` jobs, and
+# linux.yml wraps pytest in `xvfb-run -a`. Running the same tests against the
+# ambient DISPLAY instead is not the same gate: window-manager decorations, the
+# desktop's font stack and its DPI all feed into measured widget geometry, so
+# `test_ui_control_occlusion.py` fails on a 96-dpi GNOME session with Cantarell
+# 11 while passing in CI. It also violates the standing rule that a local test
+# run never disturbs the developer's desktop (ai/rules/engineering-invariants.md).
+#
+# The geometry is CI's, verbatim, for both products: the visual baselines in
+# products/desktop/tests/visual/baselines/ were rendered at 1280x1024x24, and
+# comparing them against anything else produces false diffs.
+XVFB_PREFIX=()
+if [ "$(uname -s)" = "Linux" ] && have xvfb-run; then
+    XVFB_PREFIX=(xvfb-run -a -s "-screen 0 1280x1024x24")
+fi
+# Like py(), but on its own X server. Use for any gate that renders widgets.
+# The ${arr[@]+...} guard keeps an empty prefix expandable under `set -u` on
+# macOS's bash 3.2, where a bare "${empty[@]}" aborts the script.
+pyx() {
+    py_resolve "$@"
+    ${XVFB_PREFIX[@]+"${XVFB_PREFIX[@]}"} "${PY_ARGV[@]}"
 }
 
 # ── Python gates (mirror: desktop.yml `lint`, `test`, `visual`) ────
@@ -224,14 +256,14 @@ if $run_python; then
         section "Python tests"
         if $quick; then
             gate "pytest (quick, no coverage gate)" "desktop.yml:test (partial)" \
-                py pytest --tb=short -q -m "not visual"
+                pyx pytest --tb=short -q -m "not visual"
         else
             # The coverage gate is authoritative on Linux (CI enforces it there
             # only, because linux_only/mac_only/windows_only markers skip
             # different tests per platform). Running it here still catches
             # genuine coverage regressions early.
             gate "pytest -m 'not visual' --cov-fail-under=$COV_FAIL_UNDER" "desktop.yml:test" \
-                py pytest --tb=short -q \
+                pyx pytest --tb=short -q \
                     --cov=photo_selector_toolbox \
                     --cov-report=term-missing:skip-covered \
                     --cov-fail-under="$COV_FAIL_UNDER" \
@@ -248,11 +280,11 @@ if $run_python; then
             skip "visual tests" "" "--quick"
         elif [ "$(uname -s)" != "Linux" ]; then
             skip "visual tests" "" "linux_only — baselines are Xvfb-rendered; CI job 'Visual regression tests' covers this"
-        elif [ -z "${DISPLAY:-}" ]; then
-            skip "visual tests" "" "no DISPLAY; start Xvfb: Xvfb :99 & export DISPLAY=:99"
+        elif [ ${#XVFB_PREFIX[@]} -eq 0 ] && [ -z "${DISPLAY:-}" ]; then
+            skip "visual tests" "" "no Xvfb and no DISPLAY (apt install xvfb)"
         else
             gate "pytest tests/visual/ -m visual" "desktop.yml:visual" \
-                py pytest tests/visual/ --tb=short -q -m visual
+                pyx pytest tests/visual/ --tb=short -q -m visual
         fi
     fi
 elif ! $explicit_product; then
@@ -398,10 +430,10 @@ if $run_linux; then
                 skip "pytest (linux-desktop)" "linux.yml:test" "neither poetry nor pytest found"
             elif py pytest --version &>/dev/null; then
                 gate "pytest (products/linux-desktop)" "linux.yml:test" \
-                    py pytest tests/ --tb=short -q
+                    pyx pytest tests/ --tb=short -q
             elif have pytest; then
                 gate "pytest (products/linux-desktop)" "linux.yml:test" \
-                    pytest tests/ --tb=short -q
+                    pyx pytest tests/ --tb=short -q
             else
                 skip "pytest (linux-desktop)" "linux.yml:test" "pytest runner not found"
             fi
