@@ -104,5 +104,5 @@ under `--macos` / `--all`):
 
 - **`docs/products/macos-desktop/`** — Product requirements and architectural specifications.
 - **`assets/`** — Shared branding assets, icons, and logos at the repository root.
-- **`Formula/` and `Casks/`** — Homebrew distribution tap manifests at the repository root.
+- **Homebrew cask** — in [`alexpp90/homebrew-tap`](https://github.com/alexpp90/homebrew-tap), updated by `macos.yml` on release.
 - **Legacy Python Desktop** — Archived at Git tag/branch `archive/legacy-desktop` and retained in `products/desktop/`.

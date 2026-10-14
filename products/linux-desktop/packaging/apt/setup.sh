@@ -17,7 +17,7 @@ apt-get install -y -qq curl ca-certificates gpg >/dev/null 2>&1 || true
 install -m 0755 -d /etc/apt/keyrings
 
 # 3. Import repository public key
-KEYRING_URL="https://alexpp90.github.io/homebrew-photo-selector-toolbox/apt/photo-selector-archive-keyring.gpg"
+KEYRING_URL="https://alexpp90.github.io/apt/photo-selector-archive-keyring.gpg"
 KEYRING_DST="/etc/apt/keyrings/photo-selector-archive-keyring.gpg"
 if curl -fsSL --proto '=https' --tlsv1.2 "$KEYRING_URL" -o "$KEYRING_DST" 2>/dev/null && [ -s "$KEYRING_DST" ]; then
     chmod 0644 "$KEYRING_DST"
@@ -36,13 +36,13 @@ else
 fi
 
 # 4. Install deb822 sources file
-SOURCES_URL="https://alexpp90.github.io/homebrew-photo-selector-toolbox/apt/photo-selector.sources"
+SOURCES_URL="https://alexpp90.github.io/apt/photo-selector.sources"
 if curl -fsSL --proto '=https' --tlsv1.2 "$SOURCES_URL" -o /etc/apt/sources.list.d/photo-selector.sources 2>/dev/null; then
     chmod 0644 /etc/apt/sources.list.d/photo-selector.sources
 else
     cat <<'EOF' > /etc/apt/sources.list.d/photo-selector.sources
 Types: deb
-URIs: https://alexpp90.github.io/homebrew-photo-selector-toolbox/apt/
+URIs: https://alexpp90.github.io/apt/
 Suites: trixie
 Components: main
 Architectures: amd64 all

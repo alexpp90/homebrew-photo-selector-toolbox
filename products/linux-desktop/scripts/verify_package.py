@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""verify_package.py — Packaging and in-repo APT repository verification engine.
+"""verify_package.py — Packaging and APT repository verification engine.
 
 Verifies:
 1. debian/ packaging definitions (control, changelog, rules, copyright, install).
@@ -260,12 +260,14 @@ def verify_version_synchronization(product_dir: Path, deb_path: Path) -> None:
     log_pass(f"Version synchronization verified (package {deb_version} matches python {py_version})")
 
 
-# ── Check 4: In-Repo APT Repository Structure ───────────────────────────
+# ── Check 4: APT Repository Structure ───────────────────────────────────
+# The repository is built by package_debian.sh into dist/apt (validation) or into a
+# checkout of alexpp90/apt (publish job); it is no longer committed to this repository.
 
-def verify_apt_structure(repo_root: Path) -> Path:
-    apt_dir = repo_root / "apt"
+def verify_apt_structure(apt_dir: Path) -> Path:
     if not apt_dir.is_dir():
-        raise VerificationFailure(f"apt/ repository directory not found: {apt_dir}")
+        raise VerificationFailure(
+            f"APT repository directory not found: {apt_dir} — build it with scripts/package_debian.sh")
 
     # Check dists structure
     release_path = apt_dir / "dists" / "trixie" / "Release"
@@ -311,14 +313,18 @@ def verify_apt_structure(repo_root: Path) -> Path:
     if not os.access(setup_file, os.X_OK):
         raise VerificationFailure(f"setup.sh is not executable: {setup_file}")
 
-    log_pass("In-repo APT repository directory structure and configuration verified")
+    sources_text = sources_file.read_text(encoding="utf-8")
+    if "https://alexpp90.github.io/apt/" not in sources_text:
+        raise VerificationFailure(f"{sources_file} does not point at https://alexpp90.github.io/apt/")
+
+    log_pass("APT repository directory structure and configuration verified")
     return debs[0]
 
 
 # ── Check 5: Release Checksum Integrity ─────────────────────────────────
 
-def verify_release_checksums(repo_root: Path) -> None:
-    trixie_dir = repo_root / "apt" / "dists" / "trixie"
+def verify_release_checksums(apt_dir: Path) -> None:
+    trixie_dir = apt_dir / "dists" / "trixie"
     release_path = trixie_dir / "Release"
     rel_text = release_path.read_text(encoding="utf-8")
 
@@ -360,20 +366,21 @@ def verify_release_checksums(repo_root: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify Linux Desktop packaging & APT repository integrity")
     parser.add_argument("--product-dir", type=Path, default=None, help="Path to products/linux-desktop")
-    parser.add_argument("--repo-root", type=Path, default=None, help="Path to repository root")
+    parser.add_argument("--apt-dir", type=Path, default=None,
+                        help="APT repository to verify (default: products/linux-desktop/dist/apt)")
     args = parser.parse_args()
 
     script_path = Path(__file__).resolve()
     product_dir = args.product_dir.resolve() if args.product_dir else script_path.parents[1]
-    repo_root = args.repo_root.resolve() if args.repo_root else product_dir.parents[1]
+    apt_dir = args.apt_dir.resolve() if args.apt_dir else product_dir / "dist" / "apt"
 
     print("━━━ Linux Desktop Debian Packaging & APT Verification ━━━")
     try:
         verify_debian_definitions(product_dir)
-        target_deb = verify_apt_structure(repo_root)
+        target_deb = verify_apt_structure(apt_dir)
         verify_deb_archive(target_deb)
         verify_version_synchronization(product_dir, target_deb)
-        verify_release_checksums(repo_root)
+        verify_release_checksums(apt_dir)
         print("✔ ALL PACKAGING & APT VERIFICATION GATES PASSED")
         return 0
     except VerificationFailure as e:

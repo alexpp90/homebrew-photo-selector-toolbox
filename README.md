@@ -62,7 +62,6 @@ products/
 docs/                        Product documentation, per product -> docs/README.md
 scripts/                     Cross-product tooling — run_tests.sh (local CI mirror)
 assets/                      Shared visual branding and screenshots
-Formula/  Casks/             Homebrew tap definitions (root-level for brew tap discovery)
 ```
 
 ---
@@ -141,7 +140,7 @@ A native GNOME photograph culling and selection suite targeting Debian 13 (Trixi
 * **Vectorized NumPy Focus Engine & Goodness HUD:** 2D discrete Laplacian convolution with 3x3 Gaussian smoothing and strided Median Absolute Deviation (MAD) noise floor subtraction (<2.0 ms compute latency), paired with a glassmorphic HUD (`I`) displaying a normalized sharpness goodness meter, semantic quality badges (`Sharp` / `Acceptable` / `Blurry`), and `RAW+JPG` / `XMP` companion pills.
 * **Responsive Canvas Viewports:** Seamlessly switch between 1-Up (1:1 actual-pixel zoom toggle on `Space`), 2-Up side-by-side comparison (`CHAMPION` / `CHALLENGER`), and 3-Up Focus Mode (`PREVIOUS` / `ACTIVE` / `NEXT` sliding triplet) with boundary slot indicators.
 * **Semantic Action Bar:** Bottom `Gtk.ActionBar` with semantic status counter pills (`Selected`, `Trashed`, `Remaining`), tactile `Move (M)`, `Copy (C)`, `Trash (Del)` via FreeDesktop Trash (`Gio.File.trash()`), and atomic reversal (`Ctrl+Z`).
-* **Debian 13 APT Distribution:** Packaged as a native Debian `.deb` with GNOME HIG squircle SVG/PNG icons and AppStream branding hosted via an in-repo APT repository.
+* **Debian 13 APT Distribution:** Packaged as a native Debian `.deb` with GNOME HIG squircle SVG/PNG icons and AppStream branding, in a signed APT repository ([alexpp90/apt](https://github.com/alexpp90/apt)) for seamless updates.
 
 ---
 
@@ -213,17 +212,24 @@ Download the pre-compiled `photo-selector-macos-apple-silicon.zip` from [GitHub 
 
 ### 🐧 Linux Desktop Installation (Debian 13 Trixie)
 
-Add the in-repo APT repository keyring and deb822 source:
+One line (adds the signed APT repository, then installs):
+
+```bash
+curl -fsSL https://alexpp90.github.io/apt/setup.sh | sudo bash
+sudo apt install photo-selector-linux
+```
+
+Or add the repository keyring and deb822 source by hand:
 
 ```bash
 # 1. Install repository keyring
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/photo-selector-archive-keyring.gpg | sudo tee /etc/apt/keyrings/photo-selector-archive-keyring.gpg > /dev/null
+curl -fsSL https://alexpp90.github.io/apt/photo-selector-archive-keyring.gpg | sudo tee /etc/apt/keyrings/photo-selector-archive-keyring.gpg > /dev/null
 
 # 2. Add repository source
 sudo tee /etc/apt/sources.list.d/photo-selector.sources << EOF
 Types: deb
-URIs: https://alexanderpatz.github.io/photo-selector/apt
+URIs: https://alexpp90.github.io/apt
 Suites: trixie
 Components: main
 Signed-By: /etc/apt/keyrings/photo-selector-archive-keyring.gpg

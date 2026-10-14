@@ -4,11 +4,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PRODUCT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO_ROOT="$(cd "$PRODUCT_DIR/../.." && pwd)"
 
 # Default settings
-OUTPUT_DIR="${REPO_ROOT}/apt/pool/main/p/photo-selector-linux"
 DIST_DIR="${PRODUCT_DIR}/dist"
+OUTPUT_DIR="${DIST_DIR}"
 FORCE_PYTHON=false
 VERSION=""
 OUTPUT_FILENAME=""
@@ -20,7 +19,7 @@ Usage: $(basename "$0") [OPTIONS]
 Build the Debian package (.deb) for Photo Selector Linux.
 
 Options:
-  -o, --output-dir DIR   Destination directory for the .deb file (default: apt/pool/main/p/photo-selector-linux)
+  -o, --output-dir DIR   Destination directory for the .deb file (default: products/linux-desktop/dist)
   -v, --version VER      Override package version (default: from photo_selector_linux.__version__)
   -f, --filename NAME    Override output .deb filename (e.g. photo-selector-linux_0.1.0_all.deb)
   -p, --pure-python      Force cross-platform pure Python packager (skip dpkg-deb)
@@ -72,7 +71,9 @@ python3 "$SCRIPT_DIR/package_deb.py" \
 
 DEB_FILE="${OUTPUT_DIR}/${OUTPUT_FILENAME}"
 if [[ -f "$DEB_FILE" ]]; then
-    cp -f "$DEB_FILE" "${DIST_DIR}/"
+    if [[ "$(cd "$OUTPUT_DIR" && pwd)" != "$(cd "$DIST_DIR" && pwd)" ]]; then
+        cp -f "$DEB_FILE" "${DIST_DIR}/"
+    fi
     echo "✔ Successfully generated: $DEB_FILE"
     echo "✔ Mirrored to: ${DIST_DIR}/${OUTPUT_FILENAME}"
     ls -lh "$DEB_FILE"

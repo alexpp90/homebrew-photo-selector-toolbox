@@ -147,7 +147,7 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     env:
       GH_REF: ${{ github.ref }}
       GH_REF_NAME: ${{ github.ref_name }}
@@ -177,81 +177,51 @@ jobs:
         run: |
           echo "macos_sha256=$(shasum -a 256 macos.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
-      - name: Update Homebrew Files
+      - name: Update alexpp90/homebrew-tap
+        # The tap repository is the only home of the casks (the main repository no longer
+        # carries Formula/ or Casks/). HOMEBREW_TAP_TOKEN: fine-grained PAT with
+        # contents:write on alexpp90/homebrew-tap.
         env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           MACOS_SHA256: ${{ steps.hashes.outputs.macos_sha256 }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN secret is required to update alexpp90/homebrew-tap"
+            exit 1
+          fi
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          UPDATER="$GITHUB_WORKSPACE/products/desktop/scripts/update_formula.py"
 
           update_and_push() {
-            git fetch origin main
-            git checkout main
-            git reset --hard origin/main
-
+            TAP_DIR="$(mktemp -d)"
+            git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/alexpp90/homebrew-tap.git" "${TAP_DIR}"
+            cd "${TAP_DIR}"
             if [ "${GH_REF}" = "refs/heads/main" ]; then
-              python3 products/desktop/scripts/update_formula.py \
-                --file Casks/photo-selector-toolbox@nightly.rb \
+              python3 "$UPDATER" --file Casks/photo-selector-toolbox@nightly.rb \
                 --macos-sha256 "${MACOS_SHA256}"
-
-              git add Casks/photo-selector-toolbox@nightly.rb
-              COMMIT_MSG="Update nightly native macOS Homebrew SHA256 hash"
+              COMMIT_MSG="Update nightly native macOS cask hash"
             else
               TAG_NAME="${GH_REF_NAME}"
               VERSION="${TAG_NAME#v}"
-
-              python3 products/desktop/scripts/update_formula.py \
-                --file Casks/photo-selector-toolbox.rb \
+              python3 "$UPDATER" --file Casks/photo-selector-toolbox.rb \
                 --version-val "${VERSION}" \
                 --macos-sha256 "${MACOS_SHA256}"
-
-              git add Casks/photo-selector-toolbox.rb
-              COMMIT_MSG="Update stable native macOS Homebrew cask to version ${VERSION}"
+              COMMIT_MSG="Update native macOS cask to ${VERSION}"
             fi
-
+            git add Casks/
             git diff --cached --quiet || git commit -m "${COMMIT_MSG}"
-            git push origin main
+            git push origin HEAD
           }
 
-          for i in {1..5}; do
-            if update_and_push; then
-              echo "Homebrew files updated and pushed successfully."
+          for i in 1 2 3 4 5; do
+            if (update_and_push); then
+              echo "alexpp90/homebrew-tap updated."
               exit 0
             fi
-            echo "Attempt $i failed. Retrying in 2 seconds..."
-            sleep 2
+            echo "Attempt $i failed (concurrent tap update?). Retrying in 5 seconds..."
+            sleep 5
           done
-
-          echo "Failed to update and push Homebrew files after 5 attempts."
+          echo "::error::Failed to update alexpp90/homebrew-tap after 5 attempts."
           exit 1
-        shell: bash
-
-      - name: Update alexpp90/homebrew-tap Repository
-        if: env.HOMEBREW_TAP_TOKEN != ''
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          TAP_DIR="$(mktemp -d)"
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/alexpp90/homebrew-tap.git" "${TAP_DIR}"
-          mkdir -p "${TAP_DIR}/Casks" "${TAP_DIR}/Formula"
-
-          cp Casks/*.rb "${TAP_DIR}/Casks/"
-          cp Formula/*.rb "${TAP_DIR}/Formula/"
-
-          cd "${TAP_DIR}"
-          git add Casks/ Formula/
-          if ! git diff --cached --quiet; then
-            if [ "${GH_REF}" = "refs/heads/main" ]; then
-              git commit -m "Update nightly native macOS Homebrew SHA256 hash"
-            else
-              git commit -m "Update stable native macOS Homebrew files to version ${GH_REF_NAME}"
-            fi
-            git push origin main
-            echo "Successfully updated alexpp90/homebrew-tap"
-          else
-            echo "No changes to commit in alexpp90/homebrew-tap"
-          fi
         shell: bash

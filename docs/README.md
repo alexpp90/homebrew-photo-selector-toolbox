@@ -23,7 +23,6 @@ docs/                       This tree — product documentation
 ai/                         Agent framework: routing, agents, skills, memory
 scripts/                    Cross-product tooling (run_tests.sh — the local CI mirror)
 assets/                     Shared branding
-Formula/  Casks/            Homebrew tap definitions (must stay at the root)
 .github/                    CI workflows
 ```
 

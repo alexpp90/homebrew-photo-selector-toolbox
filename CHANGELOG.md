@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Homebrew:** formulae and casks now live only in [`alexpp90/homebrew-tap`](https://github.com/alexpp90/homebrew-tap) (`brew tap alexpp90/tap`). Users of the old in-repo tap are forwarded automatically (`tap_migrations.json`).
+- **Debian/APT:** the Linux Desktop repository moved to [`alexpp90/apt`](https://github.com/alexpp90/apt), served at `https://alexpp90.github.io/apt/` and signed by CI on every release. Re-run `curl -fsSL https://alexpp90.github.io/apt/setup.sh | sudo bash` to switch.
+- **Licensing:** the code stays MIT; added [`TRADEMARKS.md`](TRADEMARKS.md) for the names and logos and a [Contributor License Agreement](CLA.md) for outside contributions.
+- **Repository:** the maintainer's AI-agent framework, requirement specifications and design prompts are no longer part of the public repository; `AGENTS.md` keeps the public instructions for AI coding agents.
+
 ## [0.5.0] - 2026-10-10
 
 ### Added

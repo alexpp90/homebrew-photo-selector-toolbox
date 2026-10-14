@@ -1,7 +1,8 @@
 name: Linux Desktop CI
 
 # Single pipeline for the native Linux Desktop product (photo_selector_linux).
-# Lint, headless unit tests, and Debian packaging & in-repo APT verification.
+# Lint, headless unit tests, Debian packaging & APT verification, and — on v* tags — publishing
+# the signed APT repository to alexpp90/apt (GitHub Pages: https://alexpp90.github.io/apt/).
 
 on:
   push:
@@ -9,13 +10,11 @@ on:
     tags: ["v*"]
     paths:
       - 'products/linux-desktop/**'
-      - 'apt/**'
       - '.github/workflows/linux.yml'
   pull_request:
     branches: [main]
     paths:
       - 'products/linux-desktop/**'
-      - 'apt/**'
       - '.github/workflows/linux.yml'
   workflow_dispatch:
 
@@ -98,5 +97,71 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y dpkg-dev binutils
 
-      - name: Verify package & repository integrity
-        run: python3 products/linux-desktop/scripts/verify_package.py
+      - name: Build package, generate APT repository (unsigned) & verify
+        run: bash products/linux-desktop/scripts/package_debian.sh
+
+  # ── Publish the signed APT repository to alexpp90/apt (release tags only) ──
+  # Needs secrets: APT_REPO_TOKEN (fine-grained PAT, contents:write on alexpp90/apt) and
+  # APT_GPG_PRIVATE_KEY (ASCII-armoured private signing key). Local mirror: none — publishing
+  # is credentials-bound by design (docs/build/CI_PARITY.md).
+  publish-apt:
+    name: Publish APT repository
+    needs: [lint, test, package]
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check publishing secrets
+        env:
+          APT_REPO_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APT_REPO_TOKEN" ] || [ -z "$APT_GPG_PRIVATE_KEY" ]; then
+            echo "::error::APT_REPO_TOKEN and APT_GPG_PRIVATE_KEY secrets are required to publish to alexpp90/apt"
+            exit 1
+          fi
+
+      - name: Import signing key
+        id: gpg
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          echo "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')
+          echo "key_id=$KEY_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Check out alexpp90/apt
+        uses: actions/checkout@v4
+        with:
+          repository: alexpp90/apt
+          token: ${{ secrets.APT_REPO_TOKEN }}
+          path: apt-repo
+
+      - name: Build, generate and sign repository
+        env:
+          GPG_KEY_ID: ${{ steps.gpg.outputs.key_id }}
+        run: |
+          bash products/linux-desktop/scripts/package_debian.sh --apt-dir apt-repo --sign
+          gpg --export "$GPG_KEY_ID" > apt-repo/photo-selector-archive-keyring.gpg
+          gpg --armor --export "$GPG_KEY_ID" > apt-repo/photo-selector-archive-keyring.asc
+
+      - name: Commit and push
+        working-directory: apt-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "APT repository already up to date"
+            exit 0
+          fi
+          git commit -m "Publish photo-selector-linux for ${GITHUB_REF_NAME}"
+          git push origin HEAD

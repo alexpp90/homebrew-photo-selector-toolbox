@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """generate_apt_repo.py — Pure Python Debian APT repository generator.
 
-Scans debian packages in apt/pool/, generates Packages and Packages.gz indexes,
+Scans debian packages in <repo-root>/pool/, generates Packages and Packages.gz indexes,
 and creates the Release, InRelease, and Release.gpg manifests for Debian 13 (Trixie).
 Requires zero external tools (pure Python standard library), with optional GPG signing.
+The published repository is alexpp90/apt (GitHub Pages); see scripts/package_debian.sh.
 """
 
 from __future__ import annotations
@@ -206,8 +207,13 @@ def generate_repository(
     suite: str = "trixie",
     component: str = "main",
     gpg_key_id: Optional[str] = None,
+    sign: bool = True,
 ) -> None:
-    """Build complete APT repository tree, metadata, and indexes."""
+    """Build complete APT repository tree, metadata, and indexes.
+
+    With sign=False (validation builds) no key is generated or used and InRelease is the
+    unsigned Release text — CI's publish job signs with the key from its secrets.
+    """
     repo_root = repo_root.resolve()
     pool_dir = repo_root / "pool" / component
     dist_dir = repo_root / "dists" / suite
@@ -338,7 +344,7 @@ def generate_repository(
     inrelease_path = dist_dir / "InRelease"
     release_gpg_path = dist_dir / "Release.gpg"
 
-    gpg_bin = shutil.which("gpg")
+    gpg_bin = shutil.which("gpg") if sign else None
     signed = False
 
     if gpg_bin:
@@ -399,14 +405,18 @@ def generate_repository(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate Debian APT repository metadata")
-    parser.add_argument("--repo-root", type=Path, default=Path("apt"), help="Path to apt/ directory")
+    parser.add_argument("--repo-root", type=Path, required=True,
+                        help="APT repository directory (a checkout of alexpp90/apt, or a staging dir)")
     parser.add_argument("--suite", default="trixie", help="Distribution suite (default: trixie)")
     parser.add_argument("--component", default="main", help="Component (default: main)")
     parser.add_argument("--gpg-key-id", default=os.getenv("GPG_KEY_ID"), help="GPG Key ID to sign Release")
+    parser.add_argument("--unsigned", action="store_true",
+                        help="do not sign (and never generate a key) — for validation builds")
     args = parser.parse_args()
 
     try:
-        generate_repository(args.repo_root, args.suite, args.component, args.gpg_key_id)
+        generate_repository(args.repo_root, args.suite, args.component, args.gpg_key_id,
+                            sign=not args.unsigned)
         return 0
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

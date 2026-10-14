@@ -38,8 +38,9 @@ GUI tests need a display; on headless Linux use `xvfb-run`. Visual regression te
 
 ## Things that deliberately live elsewhere
 
-- **`Formula/` and `Casks/` are at the repository root**, not here. This repository is a
-  Homebrew tap and `brew tap` only looks for formulae at the tap root; moving them would break
-  installation for existing users. `scripts/update_formula.py` here is what edits them.
+- **Homebrew formulae and casks live in [`alexpp90/homebrew-tap`](https://github.com/alexpp90/homebrew-tap)**
+  (`brew tap alexpp90/tap`). CI updates them on every release with `scripts/update_formula.py`
+  from here. `tap_migrations.json` at the repository root forwards users of the old in-repo
+  tap to `alexpp90/tap`.
 - **`assets/` is at the repository root** — the logo and screenshots are shared with the
   top-level README, and `scripts/generate_icons.py` reads them from there.

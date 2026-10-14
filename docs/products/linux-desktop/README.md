@@ -11,7 +11,7 @@ and seamless Debian APT package distribution.
 | Modules | `photo_selector_linux` (domain, optical metadata, UI) |
 | Tests | `products/linux-desktop/tests/` (unit and integration tests) |
 | Target | Debian 13 (Trixie), GNOME 46+ workstations |
-| Packaging | Debian `.deb` package, in-repo APT repository |
+| Packaging | Debian `.deb` package, signed APT repository published to [`alexpp90/apt`](https://github.com/alexpp90/apt) by `linux.yml` |
 | Entry point | `python3 -m photo_selector_linux` |
 
 ## Documents

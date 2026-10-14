@@ -54,11 +54,11 @@ Add the repository keyring and `deb822` source:
 
 ```bash
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://alexanderpatz.github.io/photo-selector/apt/photo-selector-archive-keyring.gpg | sudo tee /etc/apt/keyrings/photo-selector-archive-keyring.gpg > /dev/null
+curl -fsSL https://alexpp90.github.io/apt/photo-selector-archive-keyring.gpg | sudo tee /etc/apt/keyrings/photo-selector-archive-keyring.gpg > /dev/null
 
 sudo tee /etc/apt/sources.list.d/photo-selector.sources << EOF
 Types: deb
-URIs: https://alexanderpatz.github.io/photo-selector/apt
+URIs: https://alexpp90.github.io/apt
 Suites: trixie
 Components: main
 Signed-By: /etc/apt/keyrings/photo-selector-archive-keyring.gpg

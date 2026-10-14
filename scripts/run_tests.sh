@@ -411,9 +411,9 @@ if $run_linux; then
 
         # 3. Debian packaging validation
         section "Linux Desktop packaging & APT validation"
-        if [ -f "$ROOT_DIR/products/linux-desktop/scripts/verify_package.sh" ]; then
-            gate "debian packaging (products/linux-desktop)" "linux.yml:package" \
-                ./scripts/verify_package.sh
+        if [ -f "$ROOT_DIR/products/linux-desktop/scripts/package_debian.sh" ]; then
+            gate "debian packaging & apt repo (products/linux-desktop)" "linux.yml:package" \
+                bash ./scripts/package_debian.sh
         else
             skip "debian packaging (linux-desktop)" "linux.yml:package" "packaging scripts not yet created (planned for M4)" false
         fi

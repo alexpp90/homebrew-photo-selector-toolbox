@@ -17,7 +17,7 @@ local-VLM aesthetic scoring.
 | Code | `products/desktop/src/photo_selector_toolbox/` |
 | Tests | `products/desktop/tests/` (mirrors the package layout) |
 | Benchmarks | `products/desktop/benchmarks/` |
-| Build | `scripts/`, `.github/workflows/desktop.yml`, `Formula/`, `Casks/` |
+| Build | `scripts/`, `.github/workflows/desktop.yml`; Homebrew formula/cask in [`alexpp90/homebrew-tap`](https://github.com/alexpp90/homebrew-tap) |
 | Entry points | `photo-selector-toolbox` (CLI), `photo-selector-gui` (GUI) |
 
 ## Documents

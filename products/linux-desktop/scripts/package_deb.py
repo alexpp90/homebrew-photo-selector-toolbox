@@ -367,7 +367,9 @@ def build_deb_native(
     )
     (debian_dir / "control").write_text(control_content, encoding="utf-8")
 
-    cmd = ["dpkg-deb", "--build", "--root-owner-group", str(staging_root), str(output_deb)]
+    # -Zxz: recent dpkg defaults to zstd, which Python's tarfile (generate_apt_repo.py,
+    # verify_package.py) cannot read; xz is universally supported by apt.
+    cmd = ["dpkg-deb", "-Zxz", "--build", "--root-owner-group", str(staging_root), str(output_deb)]
     subprocess.run(cmd, check=True)
 
 

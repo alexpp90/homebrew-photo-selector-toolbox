@@ -172,7 +172,7 @@ When triggered, the agent must present the user with a structured assessment:
 | **Secondary Tools Access** | macOS Menu Bar "Tools" (`⌘D`, `⌘L`) | GNOME Primary Menu / Shortcuts (`Ctrl+D`, `Ctrl+L`) | Tier 2 | ✅ Platform HIG Idiomatic |
 | **Duplicate Finder** | CryptoKit streaming SHA-256 | Streaming SHA-256 duplicate engine | Tier 2 | ✅ Platform HIG Idiomatic |
 | **Library Statistics** | SwiftUI EXIF distribution charts | Libadwaita EXIF distribution charts | Tier 2 | ✅ Platform HIG Idiomatic |
-| **Distribution Pipeline** | Homebrew Tap (`Cask` & `Formula`) | In-Repo Debian 13 APT Repository (`.deb`) | Tier 2 | ✅ Platform Native Distribution |
+| **Distribution Pipeline** | Homebrew Tap `alexpp90/homebrew-tap` (`Cask` & `Formula`) | Debian 13 APT Repository `alexpp90/apt` (`.deb`) | Tier 2 | ✅ Platform Native Distribution |
 
 ---
 
