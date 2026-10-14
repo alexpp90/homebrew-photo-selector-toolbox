@@ -1,7 +1,7 @@
 Source: photo-selector-linux
 Section: graphics
 Priority: optional
-Maintainer: Alexander Patz <alexander.patz@example.com>
+Maintainer: Alexander Patz <alexpp90@users.noreply.github.com>
 Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-python3,
@@ -9,9 +9,9 @@ Build-Depends:
  python3-poetry-core,
  pybuild-plugin-pyproject
 Standards-Version: 4.7.0
-Homepage: https://github.com/alexpp90/photo-selector
-Vcs-Git: https://github.com/alexpp90/photo-selector.git
-Vcs-Browser: https://github.com/alexpp90/photo-selector
+Homepage: https://github.com/alexpp90/homebrew-photo-selector-toolbox
+Vcs-Git: https://github.com/alexpp90/homebrew-photo-selector-toolbox.git
+Vcs-Browser: https://github.com/alexpp90/homebrew-photo-selector-toolbox
 Rules-Requires-Root: no
 
 Package: photo-selector-linux

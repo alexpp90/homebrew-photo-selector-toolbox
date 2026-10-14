@@ -28,7 +28,7 @@ This repository ships **five independent products** sharing photographic concept
 |---|---|
 | `@shared-photo-researcher-agent` | Photographic science, optical formulas, EXIF APEX standards (Tv, Av, Sv), sharpness metrics, color science. |
 | `@shared-ux-agent` | Multi-device ergonomics, Nielsen Norman heuristics, touch targets, contrast (WCAG >= 4.5:1), keyboard navigation. |
-| `@shared-publish-agent` | Google Play policies, OAuth scopes (drive.file only), privacy policies, DSGVO/GDPR, German DDG/Impressum. |
+| `@shared-publish-agent` | Google Play policies, zero-permission SAF compliance, privacy policies, DSGVO/GDPR, German DDG/Impressum. |
 | `@shared-code-health-agent` | Architectural refactoring, tech debt remediation, framework maintenance, dead code removal. |
 | `@shared-mentor-agent` | Mandatory gate before writing to ai/memory/ (record-lesson), playbook creation (create-playbook). |
 
@@ -41,7 +41,7 @@ This repository ships **five independent products** sharing photographic concept
 | `playbook-verify-android-desktop-on-reference-device` | Run the :android-desktop instrumented suite at the reference tablet geometry (1480x924 dp, the Galaxy Tab S11 Ultra in landscape) and read the result honestly: configure the AVD, confirm the rotation, baseline against unmodified HEAD before believing any failure. Use whenever an instrumented test fails, a layout or frame-size change needs proving, or a task touches ui/selector/. |
 | `record-lesson` | Write an approved lesson into ai/memory/ (bolt=performance, palette=UI/a11y, sentinel=security, code_health=debt) in the dated Learning/Action format, after the mandatory shared-mentor-agent gate. Use when a task produced a generalizable lesson worth keeping. |
 | `refactoring-guide` | Refactoring patterns and conventions for the Photo Selector Toolbox project. Read this before performing any refactoring work. |
-| `release-compliance` | Check a change for Google Play, DSGVO/GDPR, German DDG/Impressum and EU DSA impact: OAuth scope policy (drive.file only), privacy-policy-to-code sync, Data Safety answers, target-API deadlines, non-trader status. Use before any release and for any change touching permissions, endpoints, SDKs or data flow. |
+| `release-compliance` | Check a change for Google Play, DSGVO/GDPR, German DDG/Impressum and EU DSA impact: zero-permission SAF policy, privacy-policy-to-code sync, Data Safety answers, target-API deadlines, non-trader status. Use before any release and for any change touching permissions, endpoints, SDKs or data flow. |
 | `retrospective` | Post-work close-out for any change in this repository: verify the full CI mirror passed, sync REQUIREMENTS.md, consult the mentor before writing memory, file refactoring debt, fix framework drift, and check hygiene. Use BEFORE finalizing any task that changed files. |
 | `sync-framework` | Add or change an agent, skill, playbook or routing rule and regenerate everything downstream: .gemini/settings.json, the symlink trees, and the ROUTING.md roster. Use whenever ai/agents/ or ai/skills/ is edited, and whenever an instruction is found stale mid-task. |
 | `sync-requirements` | Decide whether a change alters observable behaviour and, if so, update the owning product's docs/products/<product>/REQUIREMENTS.md (or docs/shared/ for cross-product policy) in the same commit. Use after any behaviour change and during the retrospective. |

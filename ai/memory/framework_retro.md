@@ -331,3 +331,18 @@ Newest entries at the top. Always use the real current date.
 **Framework Root Cause:** The layout bounds in `AndroidManifest.xml` had been configured for large standalone desktop windows without considering 50/50 split-screen snapping on tablets.
 **Actionable Framework Improvement:** When defining desktop window limits in manifests (`<layout>`), always test against 50/50 split-screen dimensions for target reference hardware, not only full-screen maximized windows.
 
+---
+
+## 2026-10-14 - Comprehensive Ecosystem Audit Resolution (AI Framework, Traceability, & Multi-Product Testing)
+**Agents Involved:** `@shared-code-health-agent`, `@shared-mentor-agent`, `@desktop-backend-agent`, `@desktop-gui-agent`, `@desktop-test-agent`, `@macos-desktop-agent`, `@linux-desktop-agent`, `@android-desktop-core-agent`, `@phototok-core-agent`, `@android-shared-build-agent`
+**Framework Fit & Tooling:**
+- **Fit:** Strong — All findings from the comprehensive 3-pillar audit (AI Framework, Requirements & Traceability, Applications & CI/CD Testing) were resolved and verified against the CI mirror.
+- **Agents:** Specialized product and framework agents handled disjoint scopes cleanly.
+- **Skills:** `task-lifecycle`, `sync-framework`, `sync-requirements`, `verify-build`, and `retrospective` guided the end-to-end remediation.
+- **Hooks:** Hardened `check_retrospective.py` (excluding `intent_ledger.jsonl` from `wrote_memory`), `verify_intent_delivery.py` (subagent/read-only exemption and regex feature map), `record_intent.py` (`<USER_REQUEST>` filtering), `session_report.py` (Antigravity transcript parsing), and `synthesize_retro.py` (word-boundary friction clustering).
+**Session Efficiency:** High
+- **Observations:** Parallel subagent execution resolved findings across all 5 products, `ai/`, `docs/`, and `.github/workflows/`, with CI parity and framework governance checks passing.
+**Implementation Quality:** High
+- **Observations:** Implemented `ThumbnailCache` & `PrefetchManager` in Linux Desktop, closed SQLite connection leaks and background Tkinter thread exceptions in Desktop, added unit tests for macOS `QualityScoringService` and Android `:core` readers (`MediaStoreReader`, `ExternalStorageDetector`, `AndroidExifReader` CR3), and wired `framework-governance` into `.github/workflows/desktop.yml`.
+**Framework Root Cause:** Passive hooks (`record_intent.py`) previously dirtied `ai/memory/intent_ledger.jsonl` on every prompt, which satisfied `f.startswith("ai/memory/")` in `check_retrospective.py`, and `validate_framework.py` skipped paths under deleted top-level roots (`android/`).
+**Actionable Framework Improvement:** `check_retrospective.py` now explicitly excludes `ai/memory/intent_ledger.jsonl`, `validate_framework.py` enforces `DEPRECATED_ROOTS` and stale `(planned)` detection, and `desktop.yml` runs the `framework-governance` job in CI.

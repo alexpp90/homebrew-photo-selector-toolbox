@@ -336,7 +336,7 @@ PRODUCTS = [
 CONSULTANTS = [
     ("@shared-photo-researcher-agent", "Photographic science, optical formulas, EXIF APEX standards (Tv, Av, Sv), sharpness metrics, color science."),
     ("@shared-ux-agent", "Multi-device ergonomics, Nielsen Norman heuristics, touch targets, contrast (WCAG >= 4.5:1), keyboard navigation."),
-    ("@shared-publish-agent", "Google Play policies, OAuth scopes (drive.file only), privacy policies, DSGVO/GDPR, German DDG/Impressum."),
+    ("@shared-publish-agent", "Google Play policies, zero-permission SAF compliance, privacy policies, DSGVO/GDPR, German DDG/Impressum."),
     ("@shared-code-health-agent", "Architectural refactoring, tech debt remediation, framework maintenance, dead code removal."),
     ("@shared-mentor-agent", "Mandatory gate before writing to ai/memory/ (record-lesson), playbook creation (create-playbook)."),
 ]

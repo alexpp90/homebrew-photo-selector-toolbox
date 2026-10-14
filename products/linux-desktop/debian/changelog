@@ -7,4 +7,4 @@ photo-selector-linux (0.1.0-1) trixie; urgency=medium
   * Multi-view canvas: 1-Up, 2-Up, and 3-Up Focus Mode with BoundarySlotPane.
   * Zero-latency keyboard router with root-level capture and modifier masking.
 
- -- Alexander Patz <alexander.patz@example.com>  Sat, 10 Oct 2026 12:00:00 +0000
+ -- Alexander Patz <alexpp90@users.noreply.github.com>  Sat, 10 Oct 2026 12:00:00 +0000

@@ -1,6 +1,6 @@
 ---
 name: release-compliance
-description: "Check a change for Google Play, DSGVO/GDPR, German DDG/Impressum and EU DSA impact: OAuth scope policy (drive.file only), privacy-policy-to-code sync, Data Safety answers, target-API deadlines, non-trader status. Use before any release and for any change touching permissions, endpoints, SDKs or data flow."
+description: "Check a change for Google Play, DSGVO/GDPR, German DDG/Impressum and EU DSA impact: zero-permission SAF policy, privacy-policy-to-code sync, Data Safety answers, target-API deadlines, non-trader status. Use before any release and for any change touching permissions, endpoints, SDKs or data flow."
 allowed-tools: Read, Grep, Glob, Edit, WebSearch, WebFetch
 ---
 

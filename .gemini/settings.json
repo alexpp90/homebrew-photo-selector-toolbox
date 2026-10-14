@@ -171,7 +171,7 @@
       "enable_write_tools": false
     },
     "shared-publish-agent": {
-      "description": "Publish & compliance specialist for Google Play releases and legal obligations (Germany: DDG/Impressum, DSGVO, DSA non-trader). Owns docs/products/phototok/ release and legal artifacts (release checklist as the single source of truth for open release tasks, privacy policy, Impressum), LegalLinks.kt, and OAuth scope policy enforcement (drive.file only). Verifies current Play/Google policies via authoritative sources; prepares instructions for human-only console steps.",
+      "description": "Publish & compliance specialist for Google Play releases and legal obligations (Germany: DDG/Impressum, DSGVO, DSA non-trader). Owns release and legal artifacts (release checklists as single source of truth, privacy policies, Impressum), LegalLinks.kt, and zero-permission SAF compliance. Verifies current Play/Google policies via authoritative sources; prepares instructions for human-only console steps.",
       "tools": [
         "Read",
         "Grep",

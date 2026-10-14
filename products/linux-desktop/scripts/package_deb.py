@@ -200,7 +200,7 @@ def build_control_file(
             "Architecture": "all",
             "Section": "graphics",
             "Priority": "optional",
-            "Maintainer": "Alexander Patz <alexander.patz@example.com>",
+            "Maintainer": "Alexander Patz <alexpp90@users.noreply.github.com>",
             "Depends": "python3 (>= 3.12), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, "
                        "gir1.2-gexiv2-0.10, python3-numpy, python3-pil",
         }
@@ -215,7 +215,7 @@ def build_control_file(
         f"Package: {fields.get('Package', 'photo-selector-linux')}",
         f"Version: {version}",
         f"Architecture: {fields.get('Architecture', 'all')}",
-        f"Maintainer: {fields.get('Maintainer', 'Alexander Patz <alexander.patz@example.com>')}",
+        f"Maintainer: {fields.get('Maintainer', 'Alexander Patz <alexpp90@users.noreply.github.com>')}",
         f"Installed-Size: {installed_kib}",
     ]
     if fields.get("Depends"):

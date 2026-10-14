@@ -24,7 +24,7 @@ sealed interface UndoableOperation {
 
     /**
      * A deletion already committed to a backend that trashes rather than
-     * destroys (Google Drive). The file comes back out of the trash.
+     * destroys. The file comes back out of the trash.
      */
     data class RestoreFromTrash(
         override val slots: List<ImageSlot>,

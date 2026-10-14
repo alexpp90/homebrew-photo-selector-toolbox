@@ -100,35 +100,9 @@ and you have its App ID.
 
 ---
 
-## Phase 3 — PhotoTok: enable Drive API + OAuth  ☁️
+## Phase 3 — [REMOVED] PhotoTok: enable Drive API + OAuth  ☁️
 
-> The Google Cloud Console and Firebase share the **same** project; just switch the
-> project picker at the top to **PhotoTok / phototok-app**.
-
-1. **Enable the APIs**
-   - ☁️ APIs & Services → **Library** → search **Google Drive API** → **Enable**.
-   - ☁️ APIs & Services → **Library** → search **Google Play Android Developer API** → **Enable**.
-2. **OAuth consent screen**
-   - APIs & Services → **OAuth consent screen** → User type **External** → Create.
-   - App name `PhotoTok`, support email = your email, developer contact = your email.
-   - **Scopes → Add or remove scopes** → add:
-     - `.../auth/drive` (full — **restricted**)
-     - `.../auth/drive.file`
-   - **Test users → Add users** → add your own Google account (lets you use the app
-     immediately while verification is pending).
-   - Save. Then **Publishing status → Prepare for verification / Submit**. Because
-     `.../auth/drive` is restricted, expect a verification review and a **CASA
-     security assessment**. This runs in the background — keep going.
-3. **Android OAuth client**
-   - APIs & Services → **Credentials → + Create credentials → OAuth client ID**.
-   - Application type **Android**, name **`android-phototok`**.
-   - Package name **`com.phototok`**.
-   - SHA-1: paste your **debug SHA-1** (from Phase 0). Save.
-   - Come back after Phase 5 and **add the PhotoTok Play App Signing SHA-1** to
-     this same client.
-
-✓ **Checkpoint:** Drive and Google Play APIs enabled, consent screen has both scopes + you as test
-user, and an `android-phototok` OAuth client exists with the debug SHA-1.
+> **REMOVED (2026):** Neither app uses Google Drive APIs, Google Sign-In, or OAuth. PhotoTok and Android Desktop operate 100% locally via the Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`) with zero permissions (`INTERNET` included). **Skip this phase entirely.**
 
 ---
 
@@ -189,19 +163,10 @@ of it so it's Toolbox-only.
    **Your apps** → find the old PhotoTok app
    (`1:211786657248:android:27e94ef870600f10f68f85`) → **Remove this app**.
    (Leave the Toolbox app `…8c88…` intact.)
-2. ☁️ Switch project picker to **photo-selector-tb-dist** → APIs & Services →
-   **Credentials**:
-   - Ensure there's an Android OAuth client **`android-photoselectortoolbox`** for
-     package `com.photoselectortoolbox`. Rename it to that if needed.
-   - It must list **two** SHA-1s: your debug SHA-1 **and** the Toolbox Play App
-     Signing SHA-1 (from Phase 0).
-   - Delete any leftover `com.phototok` OAuth client here.
-3. APIs & Services → **OAuth consent screen** → confirm scopes are `.../auth/drive`
-   and `.../auth/drive.file`, and you're a test user. (Verification likely already
-   done for this project; if not, submit.)
+2. ☁️ In **photo-selector-tb-dist** → APIs & Services → **Credentials**:
+   - Any legacy OAuth clients (`android-photoselectortoolbox`, `com.phototok`) are no longer used by the app and can be removed or ignored.
 
-✓ **Checkpoint:** `photo-selector-tb-dist` now contains only the Toolbox app and a
-correctly-configured `android-photoselectortoolbox` OAuth client with both SHA-1s.
+✓ **Checkpoint:** `photo-selector-tb-dist` now contains only the Toolbox app and the required service accounts.
 
 ---
 
@@ -298,11 +263,9 @@ registered.
      using `PHOTOTOK_FIREBASE_APP_ID` to the new project.
    - **Upload … AAB to Google Play** → each to its own app via its own service account.
 3. On a phone, install each app (from Play internal track or Firebase tester link)
-   and confirm **Google Drive sign-in works on the Play-signed build**. If sign-in
-   fails with a `DEVELOPER_ERROR`/`10`, the app's **Play App Signing SHA-1 is missing
-   from its OAuth client** — add it (Phase 3 / Phase 6) and retry.
+   and confirm local SAF folder opening and image culling work properly on the Play-signed build.
 
-✓ **Checkpoint:** green pipeline; both apps install and Drive sign-in works.
+✓ **Checkpoint:** green pipeline; both apps install and local SAF folder selection works.
 
 ---
 
@@ -314,7 +277,7 @@ Once Phase 9 is green, 🐙 delete the now-unused shared secrets:
 `GP_SERVICE_ACCOUNT_JSON`. Revoke the old shared service-account key in ☁️ IAM if it's
 no longer referenced.
 
-✓ **Done.** Each app now has its own project, OAuth client, signing key, service
+✓ **Done.** Each app now has its own project, signing key, service
 accounts, and secrets — they can diverge freely.
 
 ---
@@ -324,7 +287,7 @@ accounts, and secrets — they can diverge freely.
 | Thing | Toolbox | PhotoTok |
 | --- | --- | --- |
 | GCP/Firebase project | `photo-selector-tb-dist` | `phototok-app` (new) |
-| OAuth client | `android-photoselectortoolbox` | `android-phototok` |
+| Architecture | 100% on-device SAF | 100% on-device SAF |
 | Upload keystore / alias | `toolbox-upload.jks` / `toolbox-upload` | `phototok-upload.jks` / `phototok-upload` |
 | Firebase App ID | `1:211786657248:android:8c88…` | `PHOTOTOK_FIREBASE_APP_ID` var |
 | Play package | `com.photoselectortoolbox` | `com.phototok` |

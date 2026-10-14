@@ -26,7 +26,6 @@ Use these names throughout so everything is consistent and self-describing.
 | --- | --- | --- |
 | GCP / Firebase project id | `photo-selector-tb-dist` | `phototok-app` |
 | Project display name | `Photo Selector Toolbox` | `PhotoTok` |
-| Android OAuth client | `android-photoselectortoolbox` | `android-phototok` |
 | Keystore file | `toolbox-upload.jks` | `phototok-upload.jks` |
 | Key alias | `toolbox-upload` | `phototok-upload` |
 | Play publishing service account | `play-publisher@photo-selector-tb-dist…` | `play-publisher@phototok-app…` |
@@ -42,16 +41,12 @@ Use these names throughout so everything is consistent and self-describing.
 | Key password | `TOOLBOX_KEY_PASSWORD` | `PHOTOTOK_KEY_PASSWORD` | Keystore key password |
 | Firebase distribution creds | `TOOLBOX_FIREBASE_APP_DISTRIBUTION_CREDENTIALS` | `PHOTOTOK_FIREBASE_APP_DISTRIBUTION_CREDENTIALS` | Firebase Service Account credentials |
 | Play publishing creds | `TOOLBOX_GP_SERVICE_ACCOUNT_JSON` | `PHOTOTOK_GP_SERVICE_ACCOUNT_JSON` | Google Play Console Service Account credentials |
-| Google Picker API Key | - | `PHOTOTOK_PICKER_API_KEY` | Google Cloud API key for WebView Google Picker (optional if using variables) |
 
 ### GitHub repository **variables** to create
 
 | Variable | Value | Description |
 | --- | --- | --- |
 | `PHOTOTOK_FIREBASE_APP_ID` | the Android App ID from the new `phototok-app` Firebase project (looks like `1:NNN:android:xxxx`) | Firebase App ID |
-| `PHOTOTOK_GCP_PROJECT_NUMBER` | the Google Cloud Project Number (numeric ID) of the project hosting the WebView Google Picker | GCP Project Number (also used as App ID for the picker) |
-
-> **Note on Picker Config:** Both `PHOTOTOK_PICKER_API_KEY` and `PHOTOTOK_GCP_PROJECT_NUMBER` can be created as either GitHub Secrets or repository Variables. The CI build workflow handles resolving them from either location. For local builds, you can also place them in `android/local.properties` as `phototok.picker.api.key` and `phototok.gcp.project.number`.
 
 > You can delete the old shared secrets once both apps are migrated:
 > `ANDROID_KEYSTORE_FILE`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
@@ -111,29 +106,11 @@ are git-ignored and must never be committed.
    - Project settings → **Add app** → Android → package `com.phototok`.
    - Copy the generated **App ID** (`1:NNN:android:xxxx`) → put it in the GitHub
      **variable** `PHOTOTOK_FIREBASE_APP_ID`.
-   - (Optional) download `google-services.json` only if you later add the
-     google-services Gradle plugin; the current Drive auth resolves via
-     package + SHA-1 and does not require it.
+   - (Optional) `google-services.json` is not needed since no Firebase client SDKs or Google Play services run in the app.
 
-3. **Enable the APIs**
+3. **Enable the API**
    - Google Cloud Console (same project) → **APIs & Services → Library** →
-     enable **Google Drive API** and **Google Play Android Developer API**.
-
-4. **OAuth consent screen**
-   - APIs & Services → **OAuth consent screen** → External.
-   - Add scopes `…/auth/drive` and `…/auth/drive.file`.
-   - Because `…/auth/drive` is a **restricted** scope, submit for verification and
-     plan for the CASA security assessment. Add yourself as a **test user** so you
-     can use the app immediately while verification is pending.
-
-5. **Android OAuth client**
-   - APIs & Services → **Credentials → Create credentials → OAuth client ID** →
-     Android → name `android-phototok`, package `com.phototok`.
-   - Add **two** SHA-1 fingerprints:
-     - your local/debug SHA-1
-       (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`)
-     - the **Play App Signing SHA-1** from
-       Play Console → PhotoTok → App integrity (once the app exists there).
+     enable **Google Play Android Developer API**. (Google Drive API and OAuth are not needed).
 
 6. **Firebase App Distribution service account**
    - Cloud Console → IAM & Admin → **Service Accounts → Create** →
@@ -164,23 +141,13 @@ The Toolbox keeps `photo-selector-tb-dist`. Tidy it so it's Toolbox-only:
      (`1:211786657248:android:27e94ef870600f10f68f85`) so this project only holds
      the Toolbox app. (PhotoTok now lives in `phototok-app`.)
 
-2. **OAuth client** — confirm there is an `android-photoselectortoolbox` Android
-   client for package `com.photoselectortoolbox` with both the debug SHA-1 and the
-   Play App Signing SHA-1 registered. Remove any `com.phototok` client from this
-   project.
-
-3. **Service accounts** — create/rename `firebase-distributor` and `play-publisher`
+2. **Service accounts** — create/rename `firebase-distributor` and `play-publisher`
    here, generate fresh JSON keys, and store them as:
    - `TOOLBOX_FIREBASE_APP_DISTRIBUTION_CREDENTIALS`
    - `TOOLBOX_GP_SERVICE_ACCOUNT_JSON`
    In Play Console, scope `play-publisher@photo-selector-tb-dist…` to the **Toolbox
    app only**.
-   - **Note:** Ensure the **Google Play Android Developer API** is enabled in the `photo-selector-tb-dist` GCP project, and that at least one manual AAB upload has been completed to Google Play Console before attempting automated builds.
-
-4. **Drop the OAuth workaround** — once both Android clients have the correct
-   debug + Play SHA-1s registered, the `default_web_client_id` string-resource
-   workaround in `GoogleDriveAuth.kt` should no longer be needed. Test sign-in on a
-   Play-signed build, then remove that resource if present.
+   - **Note:** Ensure the **Google Play Android Developer API** is enabled in the `photo-selector-tb-dist` GCP project, and that at least one manual AAB upload has been completed to Google Play Console before attempting automated builds. (OAuth clients are not required).
 
 ---
 
@@ -202,9 +169,7 @@ Repo → **Settings → Secrets and variables → Actions**.
    - Both release APK/AAB builds succeed and are **signed** (the build won't apply
      the signing config if its app's keystore env var is empty).
    - Each app uploads to **its own** Firebase project and **its own** Play app.
-3. Install each app on a device and confirm **Google Drive sign-in works on the
-   Play-signed build** (not just debug) — this is the usual failure if a Play App
-   Signing SHA-1 is missing from the OAuth client.
+3. Install each app on a device and confirm on-device SAF folder selection and culling succeed on the Play-signed build.
 
 ---
 

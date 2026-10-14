@@ -50,12 +50,9 @@ inconsistencies:
   - PhotoTok: `1:211786657248:android:27e94ef870600f10f68f85`
 - `.firebaserc` default project = `photo-selector-tb-dist`; `firebase.json` is empty (`{}`).
 
-**Google Drive OAuth**
-- Both apps use Google Sign-In and request **`drive` + `drive.file`**.
-- Auth resolves by **package name + SHA-1**, so each package needs its **own
-  Android OAuth client**. An optional `default_web_client_id` string resource is
-  read if present (currently relied on as a workaround "to support multiple
-  package names/SHA-1 signatures" per the changelog).
+**Google Drive OAuth (Historical — Removed)**
+- Previously, both apps used Google Sign-In and requested `drive` + `drive.file`.
+- Both apps have since been migrated to 100% on-device SAF with zero permissions and no OAuth dependencies.
 
 **Signing — one key shared by both apps (inconsistency #1)**
 - Both `app/build.gradle.kts` and `phototok/build.gradle.kts` read the *same* env
@@ -190,27 +187,16 @@ keeping the status quo.
 
 ---
 
-## 4. OAuth clients & service accounts (applies under the one-project plan)
+## 4. Service accounts (OAuth clients & Drive scopes removed)
 
-- **Android OAuth client per package** (required — clients are keyed by package +
-  SHA-1):
-  - one for `com.photoselectortoolbox`
-  - one for `com.phototok`
-  - Register **both** SHA-1s that will sign each app: your local/debug SHA-1 **and**
-    the **Play App Signing SHA-1** from the Play Console (this is the usual cause
-    of "sign-in works in debug but not in the Play build", and likely why the
-    `default_web_client_id` workaround was added).
-- **One OAuth consent screen** for the project, listing the `drive` and
-  `drive.file` scopes, submitted for verification once.
-- **One Web OAuth client** only if you actually need an ID token / server-side
-  auth; otherwise drop the `default_web_client_id` workaround once the Android
-  clients + SHA-1s are registered correctly.
+> **Historical Note:** Following the 100% local SAF migration, neither app uses Google Sign-In, Drive REST API, or OAuth clients. The OAuth client and consent screen setup below is preserved for historical context only.
+
+- **[REMOVED] Android OAuth client per package** (previously required when Drive API was used).
+- **[REMOVED] OAuth consent screen** for `drive` / `drive.file` scopes.
 - **One Google Play service account** can publish both packages — keep it shared,
   it's the normal pattern.
 - **One Firebase service account** for App Distribution to both app records — keep
   shared.
-
-So: **clients are per-app, the consent screen and service accounts are shared.**
 
 ---
 
@@ -283,46 +269,32 @@ Consistent, app-scoped names so it's obvious what's shared vs per-app.
 
 A safe order of operations to reach the clean setup (one project, per-app keys):
 
-1. **Google Cloud Console (one project)**
-   - Confirm the Drive API is enabled and the OAuth consent screen lists `drive`
-     and `drive.file`; submit/refresh restricted-scope verification once.
-   - Create/clean up **two Android OAuth clients** named `android-photoselectortoolbox`
-     and `android-phototok`.
-   - For each, register both the debug SHA-1 and the **Play App Signing SHA-1**.
-   - If sign-in then works without it, remove the `default_web_client_id` workaround.
+1. **Google Cloud Console (service accounts only)**
+   - Create and configure Firebase App Distribution and Google Play publishing service accounts. (Drive API, OAuth consent screens, and OAuth clients are removed).
 
 2. **Signing keys (Option A)**
-   - Generate `phototok-upload.jks` (and, if you want full symmetry, a fresh
-     `toolbox-upload.jks`); since Play App Signing is in use, register the new
-     upload key(s) via Play Console → App integrity if rotating.
+   - Generate `phototok-upload.jks` (and `toolbox-upload.jks`); register upload keys via Play Console → App integrity.
    - Add the per-app GitHub secrets from §5.
 
 3. **CI — `.github/workflows/android.yml`**
    - Split the signing env so the Toolbox build step reads `TOOLBOX_*` secrets and
-     the PhotoTok build step reads `PHOTOTOK_*` secrets (today both read the same
-     `ANDROID_*` ones).
+     the PhotoTok build step reads `PHOTOTOK_*` secrets.
    - Keep `FIREBASE_APP_DISTRIBUTION_CREDENTIALS` and `GP_SERVICE_ACCOUNT_JSON`
      shared.
 
 4. **Docs**
-   - Update `REQUIREMENTS.md` §7.10 to describe per-app keys/secrets and the
-     one-project + per-package-OAuth-client model.
+   - Update documentation to describe per-app keys/secrets and the zero-permission SAF architecture.
 
 5. **Verify**
-   - Build a signed release for **both** apps, install, and confirm Google Drive
-     sign-in succeeds on a Play-signed build (not just debug).
+   - Build a signed release for **both** apps, install, and confirm on-device SAF folder picking and culling succeed on a Play-signed build.
 
 ---
 
 ## 7. Summary of recommendations
 
-- **Cloud projects:** keep **one** shared project — your shared full-`drive` scope
-  makes a second project mean a second (recurring) verification + security
-  assessment for no isolation benefit you currently need.
-- **OAuth:** one consent screen + service accounts shared; **one Android OAuth
-  client per package**, each with debug **and** Play SHA-1 registered.
-- **Signing:** move to **separate upload key per app**; rename secrets to be
+- **Cloud projects:** Keep one shared Firebase/GCP project for distribution and Play publishing.
+- **OAuth:** **Removed.** Both apps operate 100% locally via SAF (`ACTION_OPEN_DOCUMENT_TREE`) with zero permissions; no OAuth clients or consent screens are required.
+- **Signing:** Move to **separate upload key per app**; rename secrets to be
   app-scoped (`TOOLBOX_*` / `PHOTOTOK_*`).
-- **Naming:** app-scoped, consistent names for OAuth clients, keystores, aliases,
-  and CI secrets; optionally a neutral suite-level project id and a `:toolbox`
-  module name.
+- **Naming:** App-scoped, consistent names for keystores, aliases,
+  and CI secrets.
