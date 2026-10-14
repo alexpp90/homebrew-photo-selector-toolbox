@@ -13,7 +13,7 @@ output and issue titles. "The Android app" is ambiguous and therefore wrong — 
 | **macOS Desktop** | `macos-desktop` | `products/macos-desktop/` | `PhotoSelectorKit`, `PhotoSelectorApp` (SPM) | `PhotoSelectorApp.app`, Homebrew Cask | macOS 14+ / 15+ Apple Silicon & Intel workstations |
 | **Linux Desktop** | `linux-desktop` | `products/linux-desktop/` | `photo-selector-linux` | `.deb` package via in-repo APT repository | Debian 13 (Trixie), GNOME 46+, Linux workstations |
 | **Android Desktop** | `android-desktop` | `products/android/android-desktop/` | `:android-desktop` | `com.photoselectortoolbox` | Samsung DeX, tablets ≥ 840 dp, Chromebooks |
-| **PhotoTok** | `phototok` | `products/android/phototok/` | `:phototok` | `com.phototok` | Phones < 600 dp, portrait, gesture-first |
+| **PhotoTok** | `phototok` | `products/android/phototok/` | `:phototok` | `com.phototok` | Phones of every tier (compact to high-end), portrait, gesture-first |
 
 Plus one shared library, which is not a product:
 

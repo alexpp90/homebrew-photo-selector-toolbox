@@ -15,7 +15,7 @@ This repository contains **four independent solutions** targeting different plat
 | **Desktop** | `products/desktop/src/` | Python + Tkinter | Desktop (macOS, Linux, Windows) |
 | **macOS Desktop** | `products/macos-desktop/` | Swift 6 + SwiftUI + Vision + Accelerate | macOS 14+ / 15+ (Apple Silicon & Intel) |
 | **Android Desktop** | `products/android/android-desktop/` | Jetpack Compose + Room + OpenCV + Vico | Samsung DeX, Tablets (>= 840dp) |
-| **PhotoTok** | `products/android/phototok/` | Jetpack Compose (Lightweight) | Mobile Phone (< 600dp, portrait) |
+| **PhotoTok** | `products/android/phototok/` | Jetpack Compose (Lightweight) | Mobile phones of every tier, portrait |
 
 ### Feature Sync & Coordination Policy
 
