@@ -37,7 +37,7 @@ from photo_selector_toolbox.core.visualizer import (
 )
 from photo_selector_toolbox.core.duplicates import find_duplicates, move_to_trash
 from photo_selector_toolbox.gui.sharpness_tool import SharpnessTool
-from photo_selector_toolbox.core.config import load_config, save_config, update_config
+from photo_selector_toolbox.core.config import load_config, update_config
 from photo_selector_toolbox.core.cache import ScoreCache
 
 

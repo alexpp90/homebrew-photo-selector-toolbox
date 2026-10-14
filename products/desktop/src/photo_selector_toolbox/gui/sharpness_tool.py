@@ -16,7 +16,7 @@ from photo_selector_toolbox.core.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.core.formatting import format_score, format_meta
-from photo_selector_toolbox.core.config import load_config, save_config, update_config
+from photo_selector_toolbox.core.config import load_config, update_config
 from photo_selector_toolbox.core.utils import (
     is_excluded_subfolder,
     get_excluded_folder_names,

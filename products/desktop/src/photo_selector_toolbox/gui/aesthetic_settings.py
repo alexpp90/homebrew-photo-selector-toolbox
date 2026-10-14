@@ -27,7 +27,7 @@ from tkinter import filedialog, ttk
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from photo_selector_toolbox.core.config import load_config, save_config, update_config
+from photo_selector_toolbox.core.config import load_config, update_config
 from photo_selector_toolbox.core.utils import (
     NoRedirectHandler,
     SafeSSRFHTTPHandler,
