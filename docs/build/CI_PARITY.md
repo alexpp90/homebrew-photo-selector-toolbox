@@ -137,7 +137,7 @@ products are reported as skipped due to path filtering rather than executing red
 Local automated test runs MUST NEVER force GUI windows into the foreground or steal window focus from the developer. By default, all test suites execute in a completely backgrounded state:
 - **Desktop (Python/Tkinter):** `products/desktop/tests/conftest.py` swizzles AppKit activation (`activateIgnoringOtherApps:`) and window ordering (`makeKeyAndOrderFront:`) methods via ctypes on Darwin during pytest runs, keeping widget testing completely in-memory.
 - **macOS Desktop (Native Swift/SwiftUI):** `PhotoSelectorApp` under `--ui-self-test` (and `--screenshot`) detects background test mode (`PST_SHOW_GUI` unset) and positions the workspace window off-screen at `(-20000, -20000)` with `alphaValue = 0.0`, suppresses `NSApp.activate(ignoringOtherApps: true)`, and avoids calling `osascript ... set frontmost`. Mouse and keyboard events dispatch directly without stealing OS window focus or interrupting the developer's work.
-- **Linux Desktop (Python/GTK4):** `products/linux-desktop/tests/conftest.py` configures `GDK_BACKEND=headless` and `ADW_DISABLE_PORTAL=1`.
+- **Linux Desktop (Python/GTK4):** GTK 4 has no headless backend. `products/linux-desktop/tests/conftest.py` sets `ADW_DISABLE_PORTAL=1` and, when PyGObject or a display server is missing, replaces GTK with stubs; CI (`linux.yml:test`) runs the real GTK under `xvfb-run` (`GDK_BACKEND=x11`), which never touches a developer's screen.
 
 To disable background execution and view GUI windows interactively across any desktop suite, set `PST_SHOW_GUI=1` (or pass `--external-key` to `ui_smoke_test.sh`).
 
