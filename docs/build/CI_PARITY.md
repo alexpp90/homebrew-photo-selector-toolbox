@@ -30,9 +30,9 @@ The rule that prevents it:
 | Gate | CI job | Local | Notes |
 |---|---|---|---|
 | flake8 `src/ tests/` | `desktop.yml:lint` | ✅ everywhere | **Gates the entire desktop pipeline.** A lint error fails the run before one test executes. |
-| pytest `-m "not visual"` | `desktop.yml:test` | ✅ everywhere | Same marker filter locally and in CI. |
+| pytest `-m "not visual"` | `desktop.yml:test` | ✅ everywhere | Same marker filter locally and in CI. On Linux the runner renders it on its own Xvfb, as CI does — see [GUI gates run on Xvfb](#gui-gates-run-on-xvfb-not-your-screen). |
 | Coverage `--cov-fail-under=60` | `desktop.yml:test` (**Linux only**) | ✅ advisory everywhere | See [Coverage is Linux-authoritative](#coverage-is-linux-authoritative). |
-| Visual regression | `desktop.yml:visual` | ⚠️ Linux + `DISPLAY` only | See [Visual regression](#visual-regression-linux-only). |
+| Visual regression | `desktop.yml:visual` | ⚠️ Linux + Xvfb; baselines are runner-rendered | See [Visual regression](#visual-regression-linux-only). |
 | `testDebugUnitTest` | `android.yml:unit-tests` | ✅ needs JDK 17 + Android SDK | |
 | `assembleDebugAndroidTest` | `android.yml:unit-tests` | ✅ needs JDK 17 + Android SDK | Compiles `tests/instrumented/`. Nothing else does. |
 | `lintDebug` | `android.yml:lint` | ✅ advisory | Non-blocking in both places, on purpose. |
@@ -40,7 +40,7 @@ The rule that prevents it:
 | `swift test (macos-desktop)` | `macos.yml:swift-test` | ⚠️ Darwin only | Native Swift 6 suite covering PhotoSelectorKit & App (release SLA benchmark included). Runs on `macos-latest` in CI. |
 | macOS UI smoke test (running app) | — (local-only) | ⚠️ Darwin + logged-in GUI session | `products/macos-desktop/scripts/ui_smoke_test.sh`: drives the running app (raw binary **and** `.app` bundle) — activation policy, real key events, rendered Focus 3-Up geometry, clicks while zoomed, time-to-first-photo. Window-server key probe needs Accessibility permission, else `⊘ SKIPPED`. See [macOS UI smoke test](#macos-ui-smoke-test-local-only). |
 | `linux-desktop lint` | `linux.yml:lint` | ✅ everywhere | Flake8 static analysis on `products/linux-desktop/` |
-| `linux-desktop test` | `linux.yml:test` | ✅ everywhere | Headless unit tests covering metadata, scoring, and file transactions |
+| `linux-desktop test` | `linux.yml:test` | ✅ everywhere | Headless unit tests covering metadata, scoring, and file transactions. Runs under Xvfb on Linux, mirroring `xvfb-run -a` in CI. |
 | `debian packaging & apt repo` | `linux.yml:package` | ✅ everywhere (pure-Python builder) | `package_debian.sh`: builds the `.deb`, generates an unsigned APT repository in `products/linux-desktop/dist/apt` and verifies it. |
 | APT publish | `linux.yml:publish-apt` | ❌ credentials-bound | On `v*` tags: builds, signs (`APT_GPG_PRIVATE_KEY`) and pushes the repository to `alexpp90/apt` (GitHub Pages). |
 | Homebrew tap update | `desktop.yml:homebrew`, `macos.yml` release steps | ❌ credentials-bound | Writes formula/cask hashes and versions directly to `alexpp90/homebrew-tap` (`HOMEBREW_TAP_TOKEN`); the main repository holds no Formula/Casks. |
@@ -70,18 +70,38 @@ run the full suite and still fail on any real test failure.
 genuine coverage regression is worth catching early. If it fails locally on
 macOS but the Linux CI number is fine, trust Linux.
 
+### GUI gates run on Xvfb, not your screen
+
+Every gate that renders a widget — the Tk suites in `products/desktop/` and the GTK suite in
+`products/linux-desktop/` — goes through `run_tests.sh`'s `pyx` helper, which on Linux wraps
+the command in `xvfb-run -a -s "-screen 0 1280x1024x24"`. That is CI's own display, verbatim:
+`desktop.yml` starts `Xvfb :99 -screen 0 1280x1024x24` for its `test` and `visual` jobs, and
+`linux.yml` wraps pytest in `xvfb-run -a`.
+
+The ambient `DISPLAY` is not an acceptable substitute. Widget geometry is measured against
+the live font stack and DPI, so a desktop session rendering Cantarell 11 at 96 dpi fails
+`tests/unit/test_ui_control_occlusion.py` while CI passes — a red gate that proves nothing
+about the code. Running on a private X server also honours the standing rule that a local
+test run never opens a window on the developer's screen
+(`ai/rules/engineering-invariants.md`).
+
+Off Linux there is no Xvfb: `pyx` degrades to a plain call, and the macOS conftest keeps
+windows off-screen by its own means (see
+[Headless & background GUI execution](#headless--background-gui-execution-on-macos-all-products)).
+
 ### Visual regression (Linux only)
 
-Baselines in `products/desktop/tests/visual/baselines/` are rendered under Xvfb. macOS and
-Windows font rasterisation differs enough to produce false diffs, so the tests
-are marked `linux_only` and the local runner reports them SKIPPED off Linux.
+Baselines in `products/desktop/tests/visual/baselines/` are rendered under Xvfb **on the CI
+runner image**. macOS and Windows font rasterisation differs enough to produce false diffs,
+so the tests are marked `linux_only` and the local runner reports them SKIPPED off Linux.
 
-To run them on Linux:
-
-```bash
-Xvfb :99 -screen 0 1280x1024x24 & export DISPLAY=:99
-./scripts/run_tests.sh --python
-```
+Xvfb alone does not make them reproducible on every Linux box. A Debian 13 workstation
+renders the same widgets through a different font build than `ubuntu-latest`, which lands
+around 0.9 % of pixels — just over the 0.5 % `DEFAULT_THRESHOLD` in
+`tests/visual/conftest.py` — on text-heavy baselines. Diffs that size, concentrated on glyph
+edges, are the font stack and not a regression; `tests/visual/diffs/<name>_diff.png` shows
+which. Treat `desktop.yml:visual` as authoritative and re-render baselines only from a CI
+run.
 
 ### macOS native Swift testing and Darwin runner isolation
 
