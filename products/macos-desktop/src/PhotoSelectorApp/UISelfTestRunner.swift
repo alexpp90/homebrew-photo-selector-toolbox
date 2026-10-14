@@ -67,6 +67,8 @@ final class UISelfTestRunner {
             record("fixture.has_three_photos", false, "need ≥3 photos, found \(viewModel.photos.count)")
             return finish()
         }
+        await metadataAndScoringChecks()
+        await singleLayoutChecks()
         await keyboardChecks()
         await tripletLayoutChecks()
         await zoomChecks()
@@ -131,6 +133,109 @@ final class UISelfTestRunner {
         }
     }
 
+    // MARK: - 2b. EXIF immediately, scores lazily, AI score switchable
+
+    /// EXIF must be on screen with the photo; focus/clipping and the Vision score fill in
+    /// afterwards; with AI scoring off no Vision request may be issued at all.
+    private func metadataAndScoringChecks() async {
+        let telemetry = DisplayTelemetry.shared
+        guard let first = viewModel.photos.first else { return }
+        viewModel.setComparisonMode(.single)
+        viewModel.selectPhoto(at: 0)
+        await waitUntil(timeout: 5) { telemetry.exifShown[first.id] != nil }
+        let drawn = [ThumbnailTier.quick, .preview].compactMap { telemetry.firstDisplay(of: first.id, tier: $0) }.min()
+        if let exifAt = telemetry.exifShown[first.id], let drawn {
+            let lag = exifAt.timeIntervalSince(drawn)
+            timings["exif_after_first_draw_s"] = lag
+            record("metadata.exif_with_first_photo", lag < 0.5, String(format: "EXIF visible %.3f s after the first draw", lag))
+        } else {
+            record("metadata.exif_with_first_photo", false, "EXIF never shown for the first photo")
+        }
+
+        await waitUntil(timeout: 10) { telemetry.technicalScoresShown[first.id] != nil || self.viewModel.photos[0].scores != nil }
+        record("scoring.technical_scores_fill_in", viewModel.photos[0].scores != nil, "focus/clipping published for the first photo")
+
+        let visionAvailable: Bool
+        if #available(macOS 15.0, *) { visionAvailable = true } else { visionAvailable = false }
+        if visionAvailable {
+            await waitUntil(timeout: 15) { self.viewModel.photos[0].scores?.aesthetic != nil }
+            let aesthetic = viewModel.photos[0].scores?.aesthetic
+            record("scoring.ai_score_arrives_lazily", aesthetic != nil, "aesthetic=\(String(describing: aesthetic))")
+            if let shown = telemetry.aestheticsShown[first.id], let tech = telemetry.technicalScoresShown[first.id] {
+                timings["ai_score_after_technical_s"] = shown.timeIntervalSince(tech)
+                record("scoring.ai_score_after_technical", shown >= tech, "technical first, Vision last")
+            }
+        }
+
+        // Switch AI scoring OFF (as Settings does) and browse unscored photos.
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: AppSettingsKeys.aestheticScoringEnabled)
+        defaults.aestheticScoringEnabled = false
+        defer {
+            if let previous { defaults.set(previous, forKey: AppSettingsKeys.aestheticScoringEnabled) }
+            else { defaults.removeObject(forKey: AppSettingsKeys.aestheticScoringEnabled) }
+        }
+        telemetry.reset()
+        let targets = Array(viewModel.photos.indices.dropFirst(5).prefix(3))
+        for index in targets {
+            viewModel.selectPhoto(at: index)
+            let id = viewModel.photos[index].id
+            await waitUntil(timeout: 8) { telemetry.technicalScoresShown[id] != nil || self.viewModel.photos[index].scores != nil }
+        }
+        try? await Task.sleep(nanoseconds: UInt64((ScoringPlan.aestheticsDebounce.components.attoseconds / 1_000_000_000) + 400_000_000))
+        record(
+            "scoring.ai_off_issues_no_vision_request",
+            telemetry.aestheticRequests == 0 && targets.allSatisfy { viewModel.photos[$0].scores?.aesthetic == nil },
+            "vision requests=\(telemetry.aestheticRequests) while browsing \(targets.count) photos with AI scoring off"
+        )
+        viewModel.selectPhoto(at: 0)
+        await settle()
+    }
+
+    // MARK: - 2c. Single view: metadata never covers the photograph
+
+    private func singleLayoutChecks() async {
+        viewModel.setComparisonMode(.single)
+        viewModel.selectPhoto(at: 0)
+        _ = viewModel.resetZoomToFit()
+        viewModel.isInfoHUDVisible = true
+        let registry = UITestFrameRegistry.shared
+        await waitUntil(timeout: 3) { registry.frame("single_image_viewport") != nil && registry.frame("single_info_panel") != nil }
+        guard let image = registry.frame("single_image_viewport"), let panel = registry.frame("single_info_panel") else {
+            record("layout.single_panels_rendered", false, "frames: \(registry.frames.keys.sorted())")
+            return
+        }
+        record("layout.single_metadata_does_not_overlap_image", image.intersection(panel).isNull || image.intersection(panel).isEmpty,
+               "image=\(image) panel=\(panel)")
+        // What the panel costs the photograph: displayed (aspect-fitted) photo area with the
+        // panel present vs. the same photo filling the union of both rectangles.
+        let union = image.union(panel)
+        var retention: CGFloat = 1
+        if let first = viewModel.photos.first, let size = ThumbnailLoader.originalPixelSize(of: first.url) {
+            let kept = ZoomGeometry.fittedSize(content: size, in: image.size)
+            let full = ZoomGeometry.fittedSize(content: size, in: union.size)
+            retention = (kept.width * kept.height) / max(1, full.width * full.height)
+        }
+        timings["single_photo_area_retained"] = Double(retention)
+        record("layout.single_photo_keeps_90pct_of_area", retention >= 0.9, String(format: "photo keeps %.1f %% of the area it would have without the panel", retention * 100))
+        record("layout.single_panel_readable", panel.width > 100 && panel.height >= 40, "panel size=\(panel.size)")
+
+        viewModel.setPinchMagnification(2.5)
+        await settle()
+        let zoomedPanel = registry.frame("single_info_panel")
+        let zoomedImage = registry.frame("single_image_viewport")
+        record("layout.single_panel_stable_while_zoomed", zoomedPanel == panel && zoomedImage == image, "panel and viewport keep their rectangles while zoomed")
+        _ = viewModel.resetZoomToFit()
+
+        viewModel.isInfoHUDVisible = false
+        await waitUntil(timeout: 2) { registry.frame("single_info_panel") == nil }
+        let reclaimed = registry.frame("single_image_viewport")
+        record("layout.single_hud_off_reclaims_space", registry.frame("single_info_panel") == nil && (reclaimed.map { $0.width * $0.height > image.width * image.height } ?? false),
+               "viewport after hiding the panel: \(String(describing: reclaimed))")
+        viewModel.isInfoHUDVisible = true
+        await settle()
+    }
+
     // MARK: - 3. Keyboard through the real event queue
 
     private func keyboardChecks() async {
@@ -176,6 +281,17 @@ final class UISelfTestRunner {
         record("layout.current_above_previous", current.maxY <= previous.minY + tolerance, "current=\(current) previous=\(previous)")
         record("layout.current_above_next", current.maxY <= next.minY + tolerance, "current=\(current) next=\(next)")
         record("layout.previous_left_of_next", previous.maxX <= next.minX + tolerance, "previous=\(previous) next=\(next)")
+        for slot in ["slot_current", "slot_previous", "slot_next"] {
+            await waitUntil(timeout: 2) { registry.frame(slot + "_image") != nil }
+            if let pane = registry.frame(slot), let img = registry.frame(slot + "_image") {
+                var ok = img.minY >= pane.minY - tolerance && img.maxY <= pane.maxY + tolerance
+                if let header = registry.frame(slot + "_header") { ok = ok && header.maxY <= img.minY + tolerance }
+                if let exif = registry.frame(slot + "_exif") { ok = ok && img.maxY <= exif.minY + tolerance }
+                record("layout.\(slot)_metadata_outside_image", ok, "pane=\(pane) image=\(img)")
+            } else {
+                record("layout.\(slot)_metadata_outside_image", false, "no image frame for \(slot)")
+            }
+        }
         record("layout.current_spans_width", current.width >= previous.width + next.width - tolerance, "current.width=\(current.width)")
         record(
             "layout.current_largest",

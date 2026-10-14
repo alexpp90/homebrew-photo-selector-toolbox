@@ -1,9 +1,11 @@
 import SwiftUI
 import PhotoSelectorKit
 
-/// Maximized 1-Up preview canvas occupying >85% to 100% of window area.
-/// Progressive display (embedded-thumbnail placeholder → 2048 preview), non-occluding
-/// floating HUD pill, and honest 1:1 zoom through `ZoomableImageViewport`.
+/// Maximized 1-Up preview canvas. The photograph is aspect-fitted into the rectangle left
+/// over after the metadata panel has reserved its own space (`MetadataPanelLayout`), so the
+/// metadata **never covers the image** (REQ-MAC-LAYOUT.05). Progressive display
+/// (embedded-thumbnail placeholder → 2048 preview) and honest 1:1 zoom come from
+/// `ZoomableImageViewport`.
 public struct SinglePhotoView: View {
     public let photo: PhotoItem
     public let isHUDVisible: Bool
@@ -14,6 +16,8 @@ public struct SinglePhotoView: View {
     public var onUpdateScores: ((UUID, QualityScores) -> Void)?
 
     @StateObject private var state = ProgressivePhotoState()
+    @AppStorage(AppSettingsKeys.aestheticScoringEnabled)
+    private var aestheticsEnabled: Bool = AppSettingsDefaults.aestheticScoringEnabled
 
     public init(
         photo: PhotoItem,
@@ -34,186 +38,54 @@ public struct SinglePhotoView: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color(red: 0.043, green: 0.043, blue: 0.051)
-                .ignoresSafeArea()
-
-            ZoomableImageViewport(
-                image: state.photoID == photo.id ? state.image : nil,
-                photoURL: photo.url,
-                zoomState: zoomState,
-                panOffset: $state.panOffset,
-                onDoubleClick: onToggleZoom,
-                onPinchEnded: { onPinchEnded?($0) }
+        GeometryReader { geometry in
+            let shown = state.photoID == photo.id ? state.image : nil
+            let aspect = shown.flatMap { $0.height > 0 ? CGFloat($0.width) / CGFloat($0.height) : nil }
+            let layout = MetadataPanelLayout(
+                canvas: geometry.size,
+                aspectRatio: aspect,
+                isPanelVisible: isHUDVisible
             )
 
-            // Floating Non-Occluding Info HUD Pill (hidden while zoomed: nothing may cover
-            // the detail being inspected).
-            if isHUDVisible && !zoomState.isZoomed {
-                FloatingInfoPillView(photo: photo)
-                    .padding(.top, 20)
-                    .padding(.leading, 16)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            ZStack(alignment: .topLeading) {
+                Color(red: 0.043, green: 0.043, blue: 0.051)
+
+                ZoomableImageViewport(
+                    image: shown,
+                    photoURL: photo.url,
+                    zoomState: zoomState,
+                    panOffset: $state.panOffset,
+                    onDoubleClick: onToggleZoom,
+                    onPinchEnded: { onPinchEnded?($0) }
+                )
+                .frame(width: layout.image.width, height: layout.image.height)
+                .clipped()
+                .uiTestFrame("single_image_viewport")
+                .offset(x: layout.image.minX, y: layout.image.minY)
+
+                if layout.placement != .hidden {
+                    PhotoInfoPanelView(
+                        photo: photo,
+                        placement: layout.placement,
+                        aestheticsEnabled: aestheticsEnabled
+                    )
+                    .frame(width: layout.panel.width, height: layout.panel.height)
+                    .uiTestFrame("single_info_panel")
+                    .offset(x: layout.panel.minX, y: layout.panel.minY)
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
         .clipped()
         .accessibilityIdentifier("single_photo_view")
         .onChange(of: photo.id) { _, _ in state.panOffset = .zero }
-        .task(id: photo.id) {
-            await state.load(photo: photo, onUpdateExif: onUpdateExif, onUpdateScores: onUpdateScores)
-        }
-    }
-}
-
-/// Floating glassmorphic HUD pill displaying optical EXIF, sharpness, and aesthetic scores.
-public struct FloatingInfoPillView: View {
-    public let photo: PhotoItem
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Header Row: Filename and Format Badge
-            HStack(spacing: 8) {
-                Text(photo.filename)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-
-                let ext = photo.url.pathExtension.uppercased()
-                Text(ext)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.accentColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.accentColor.opacity(0.18))
-                    .clipShape(Capsule())
-
-                // Status Badge
-                StatusBadge(status: photo.status)
-
-                Spacer()
-            }
-
-            // Exposure Row: Camera, Shutter, Aperture, ISO, Focal Length, Lens
-            if let exif = photo.exif, !exif.isFallback {
-                VStack(alignment: .leading, spacing: 3) {
-                    if let camera = exif.cameraModel, !camera.isEmpty {
-                        HStack(spacing: 5) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.accentColor)
-                            Text(camera)
-                                .font(.system(size: 11, weight: .bold))
-                            if !exif.lens.isEmpty && exif.lens != "Unknown" {
-                                Text("· \(exif.lens)")
-                                    .font(.system(size: 11, weight: .regular))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        Text(exif.formattedSummary)
-                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.primary)
-                    }
-                }
-            } else if let exif = photo.exif, exif.isFallback {
-                HStack(spacing: 5) {
-                    Image(systemName: "camera")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                    Text("No EXIF metadata")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                HStack(spacing: 5) {
-                    Image(systemName: "camera")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                    Text("Reading EXIF…")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            // Quality Row: Sharpness and Aesthetics
-            if let scores = photo.scores {
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
-                        Image(systemName: focusIcon(for: scores.focusCategory))
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(focusColor(for: scores.focusCategory))
-
-                        Text("Focus: \(String(format: "%.1f", scores.sharpness))")
-                            .font(.system(size: 11, weight: .bold).monospacedDigit())
-                            .foregroundStyle(.primary)
-
-                        Text("[\(scores.focusCategory.rawValue.capitalized)]")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(focusColor(for: scores.focusCategory))
-                    }
-
-                    if let aesthetic = scores.aesthetic {
-                        HStack(spacing: 4) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color(red: 251/255.0, green: 191/255.0, blue: 36/255.0)) // #FBBF24
-
-                            Text(String(format: "%.1f", aesthetic))
-                                .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(.primary)
-                        }
-                    }
-
-                    if scores.isUtility {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.text.image")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.cyan)
-                            Text("Utility")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(Color.cyan)
-                        }
-                    }
-                }
-            } else {
-                HStack(spacing: 4) {
-                    ProgressView()
-                        .scaleEffect(0.5)
-                        .tint(.secondary)
-                    Text("Analyzing image quality…")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 3)
-    }
-
-    private func focusColor(for category: SharpnessCategory) -> Color {
-        switch category {
-        case .sharp: return Color(red: 52/255.0, green: 211/255.0, blue: 153/255.0)      // #34D399
-        case .acceptable: return Color(red: 245/255.0, green: 158/255.0, blue: 11/255.0) // #F59E0B
-        case .blurry: return Color(red: 244/255.0, green: 63/255.0, blue: 94/255.0)      // #F43F5E
-        }
-    }
-
-    private func focusIcon(for category: SharpnessCategory) -> String {
-        switch category {
-        case .sharp: return "checkmark.circle.fill"
-        case .acceptable: return "eye.fill"
-        case .blurry: return "exclamationmark.triangle.fill"
+        .task(id: PhotoLoadKey(photoID: photo.id, aestheticsEnabled: aestheticsEnabled)) {
+            await state.load(
+                photo: photo,
+                aestheticsEnabled: aestheticsEnabled,
+                onUpdateExif: onUpdateExif,
+                onUpdateScores: onUpdateScores
+            )
         }
     }
 }

@@ -253,6 +253,8 @@ public struct ComparisonSlotPane: View {
     public var onUpdateScores: ((UUID, QualityScores) -> Void)?
 
     @StateObject private var imageState = ProgressivePhotoState()
+    @AppStorage(AppSettingsKeys.aestheticScoringEnabled)
+    private var aestheticsEnabled: Bool = AppSettingsDefaults.aestheticScoringEnabled
 
     public init(
         photo: PhotoItem,
@@ -300,17 +302,9 @@ public struct ComparisonSlotPane: View {
             // Neutral Dark Studio Canvas Background (#0B0B0D)
             Color(red: 0.043, green: 0.043, blue: 0.051)
 
-            ZoomableImageViewport(
-                image: imageState.photoID == photo.id ? imageState.image : nil,
-                photoURL: photo.url,
-                zoomState: zoomState,
-                panOffset: panBinding,
-                onDoubleClick: onDoubleTap,
-                onPinchEnded: { onPinchEnded?($0) }
-            )
-
-            // Slot Header Overlay: Role badge, filename, status, scores, and EXIF
-            VStack(alignment: .leading, spacing: 6) {
+            // Header, image and EXIF strip stack vertically: each reserves its own rows, so
+            // no metadata is ever drawn on top of the photograph (REQ-MAC-LAYOUT.05).
+            VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
                     slotBadge
                     Text(photo.filename)
@@ -320,21 +314,41 @@ public struct ComparisonSlotPane: View {
                         .truncationMode(.middle)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
-                        .background(Color.black.opacity(0.75))
+                        .background(Color.white.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: 4))
 
                     StatusBadge(status: photo.status)
 
-                    Spacer()
+                    Spacer(minLength: 4)
 
                     scoreBadges
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .uiTestFrame(role.accessibilityIdentifier + "_header")
 
-                if isHUDVisible && !zoomState.isZoomed {
+                ZoomableImageViewport(
+                    image: imageState.photoID == photo.id ? imageState.image : nil,
+                    photoURL: photo.url,
+                    zoomState: zoomState,
+                    panOffset: panBinding,
+                    onDoubleClick: onDoubleTap,
+                    onPinchEnded: { onPinchEnded?($0) }
+                )
+                .padding(4) // gutter for the frame border / focus reticle: nothing touches the photo
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .uiTestFrame(role.accessibilityIdentifier + "_image")
+
+                if isHUDVisible {
                     exifStrip
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .uiTestFrame(role.accessibilityIdentifier + "_exif")
                 }
             }
-            .padding(8)
 
             // Base Slot Frame Border
             RoundedRectangle(cornerRadius: 6)
@@ -364,8 +378,13 @@ public struct ComparisonSlotPane: View {
         .accessibilityIdentifier(role.accessibilityIdentifier)
         .uiTestFrame(role.accessibilityIdentifier)
         .onChange(of: photo.id) { _, _ in imageState.panOffset = .zero }
-        .task(id: photo.id) {
-            await imageState.load(photo: photo, onUpdateExif: onUpdateExif, onUpdateScores: onUpdateScores)
+        .task(id: PhotoLoadKey(photoID: photo.id, aestheticsEnabled: aestheticsEnabled)) {
+            await imageState.load(
+                photo: photo,
+                aestheticsEnabled: aestheticsEnabled,
+                onUpdateExif: onUpdateExif,
+                onUpdateScores: onUpdateScores
+            )
         }
     }
 

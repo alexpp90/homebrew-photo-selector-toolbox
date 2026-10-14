@@ -110,6 +110,9 @@ public actor VisionAestheticsService {
     /// - Parameter cgImage: The image to evaluate.
     /// - Returns: An `AestheticEvaluation` containing raw and mapped scores.
     public func evaluate(cgImage: CGImage) throws -> AestheticEvaluation {
+        // The actor serialises Vision requests; a request whose photo was already navigated
+        // away from must not occupy it.
+        try Task.checkCancellation()
         guard #available(macOS 15.0, *) else {
             throw VisionAestheticsError.unsupportedOS
         }

@@ -57,4 +57,18 @@ public struct QualityScores: Sendable, Codable, Equatable, Hashable {
         self.isUtility = isUtility
         self.focusCategory = focusCategory ?? SharpnessCategory.from(score: sharpness)
     }
+
+    /// Copy with the (lazily computed) Apple Vision result filled in; every technical metric
+    /// is preserved.
+    public func withAesthetics(_ aesthetic: Double?, isUtility: Bool) -> QualityScores {
+        QualityScores(
+            sharpness: sharpness,
+            noise: noise,
+            highlightClipping: highlightClipping,
+            shadowClipping: shadowClipping,
+            aesthetic: aesthetic,
+            isUtility: isUtility,
+            focusCategory: focusCategory
+        )
+    }
 }

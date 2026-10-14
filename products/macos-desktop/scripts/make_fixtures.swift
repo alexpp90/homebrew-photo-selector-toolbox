@@ -45,7 +45,20 @@ func writeJPEG(to url: URL, width: Int, height: Int, hue: CGFloat) {
     guard let image = ctx.makeImage(),
           let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
     else { return }
-    CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+    // Camera-style EXIF so the metadata panel has something to show (and the smoke test can
+    // assert that EXIF is visible together with the first photo).
+    let properties: [CFString: Any] = [
+        kCGImageDestinationLossyCompressionQuality: 0.85,
+        kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Fixture", kCGImagePropertyTIFFModel: "Fixture X-1"],
+        kCGImagePropertyExifDictionary: [
+            kCGImagePropertyExifExposureTime: 0.004,
+            kCGImagePropertyExifFNumber: 2.8,
+            kCGImagePropertyExifISOSpeedRatings: [400],
+            kCGImagePropertyExifFocalLength: 85.0,
+            kCGImagePropertyExifLensModel: "Fixture 85mm f/1.8",
+        ],
+    ]
+    CGImageDestinationAddImage(dest, image, properties as CFDictionary)
     CGImageDestinationFinalize(dest)
 }
 

@@ -8,14 +8,18 @@ import com.phototok.data.model.ImageItem
  *
  * Rules:
  *  - Randomize wins over everything (uses the injected [shuffler] for determinism in tests).
- *  - Base order is by date, newest first (latest → oldest).
- *  - When sortByOrientation is on: landscape group first, then portrait, each kept in date order.
+ *  - Base order is by last-modified date, **newest first** (index 0 is the newest photo;
+ *    swiping to the next photo shows the next-older one). Ties break by lower-cased file
+ *    name, then URI, so the order is deterministic.
+ *  - When sortByOrientation is on: landscape group first, then portrait, each group newest first.
  *
  * Large folders are discovered progressively, so the feed is built up from
  * several batches instead of one complete list. [newItems] and [appendBatch]
  * exist for that case: they add newly discovered photos to the *end* of the
  * feed, never reordering what is already published, so a photo the user has
  * already swiped past can never jump back in front of them mid-session.
+ * The one exception is [appendBatch]'s `reorder` flag, used only while the user has not
+ * yet touched the feed: there the newest-so-far photo must be at index 0.
  */
 object PhoneFeedOrdering {
 
@@ -36,8 +40,9 @@ object PhoneFeedOrdering {
         }
 
         val byDate = images.sortedWith(
-            compareBy<ImageItem> { it.lastModified }
+            compareByDescending<ImageItem> { it.lastModified }
                 .thenBy { it.fileName.lowercase() }
+                .thenBy { it.uri }
         )
         if (!sortByOrientation) {
             return Result(byDate, -1)
@@ -65,7 +70,10 @@ object PhoneFeedOrdering {
      * Append or merge a freshly discovered batch to an already published feed.
      *
      * When [randomize] is true, [fresh] is shuffled and appended after [current].
-     * When [randomize] is false, items are merged in chronological time order.
+     * When [randomize] is false, [fresh] is ordered and appended (existing items never move),
+     * unless [reorder] is true: then the whole feed is re-ordered newest first, which the
+     * caller may only request while the user has not navigated yet (nothing to jump under
+     * their thumb) so that index 0 is always the newest photo known so far.
      *
      * When [current] is empty this is exactly [order].
      */
@@ -75,7 +83,11 @@ object PhoneFeedOrdering {
         randomize: Boolean,
         sortByOrientation: Boolean,
         shuffler: (List<ImageItem>) -> List<ImageItem> = { it.shuffled() },
+        reorder: Boolean = false,
     ): Result {
+        if (reorder && !randomize && fresh.isNotEmpty()) {
+            return order(current + fresh, randomize = false, sortByOrientation = sortByOrientation)
+        }
         if (fresh.isEmpty()) {
             return Result(current, portraitSplit(current, sortByOrientation))
         }
