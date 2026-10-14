@@ -104,12 +104,20 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
         file: File? = null,
         pfd: ParcelFileDescriptor? = null
     ): ExifData {
-        val shutterSpeed = parseExposureTime(
+        var usedApexFallback = false
+
+        val directShutter = parseExposureTime(
             exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME)
         )
+        val shutterSpeed = directShutter ?: parseApexShutterSpeed(
+            exif.getAttribute(ExifInterface.TAG_SHUTTER_SPEED_VALUE)
+        )?.also { usedApexFallback = true }
 
-        val aperture = exif.getAttributeDouble(ExifInterface.TAG_F_NUMBER, 0.0)
+        val directAperture = exif.getAttributeDouble(ExifInterface.TAG_F_NUMBER, 0.0)
             .takeIf { it > 0.0 }
+        val aperture = directAperture ?: parseApexAperture(
+            exif.getAttribute(ExifInterface.TAG_APERTURE_VALUE)
+        )?.also { usedApexFallback = true }
 
         val focalLength = exif.getAttributeDouble(ExifInterface.TAG_FOCAL_LENGTH, 0.0)
             .takeIf { it > 0.0 } ?: parseRationalValue(
@@ -133,7 +141,7 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
             focalLength35mm = focalLength35mm,
             iso = iso,
             lens = lens,
-            isFallback = false,
+            isFallback = usedApexFallback,
             rating = rating
         )
     }
@@ -241,11 +249,27 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
         }
     }
 
+    private fun parseApexShutterSpeed(value: String?): Double? {
+        val tv = parseRationalValue(value) ?: return null
+        val t = Math.pow(2.0, -tv)
+        return if (t > 0.0 && t.isFinite()) t else null
+    }
+
+    private fun parseApexAperture(value: String?): Double? {
+        val av = parseRationalValue(value) ?: return null
+        val f = Math.pow(2.0, av / 2.0)
+        return if (f > 0.0 && f.isFinite()) f else null
+    }
+
     @Suppress("DEPRECATION")
     private fun parseIso(exif: ExifInterface): Int? {
         // Try TAG_PHOTOGRAPHIC_SENSITIVITY first (newer standard)
         val isoValue = exif.getAttributeInt(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, 0)
         if (isoValue > 0) return isoValue
+
+        // Try TAG_STANDARD_OUTPUT_SENSITIVITY
+        val sosValue = exif.getAttributeInt(ExifInterface.TAG_STANDARD_OUTPUT_SENSITIVITY, 0)
+        if (sosValue > 0) return sosValue
 
         // Fall back to TAG_ISO_SPEED_RATINGS (deprecated but widely used)
         val isoLegacy = exif.getAttributeInt(ExifInterface.TAG_ISO_SPEED_RATINGS, 0)
