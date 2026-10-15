@@ -195,6 +195,7 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
+    ksp(libs.kotlin.metadata.jvm)
     implementation(libs.androidx.hilt.navigation.compose)
 
 
@@ -225,6 +226,7 @@ dependencies {
     testImplementation(libs.hilt.android.testing)
     testImplementation(libs.androidx.room.testing)
     kspTest(libs.hilt.android.compiler)
+    kspTest(libs.kotlin.metadata.jvm)
 
     // Testing — instrumented (androidTest)
     androidTestImplementation(libs.androidx.junit)
@@ -237,5 +239,6 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.room.testing)
     kspAndroidTest(libs.hilt.android.compiler)
+    kspAndroidTest(libs.kotlin.metadata.jvm)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

@@ -175,6 +175,7 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
+    ksp(libs.kotlin.metadata.jvm)
     implementation(libs.androidx.hilt.navigation.compose)
 
     // Coil (image loading)

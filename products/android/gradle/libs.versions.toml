@@ -76,6 +76,9 @@ androidx-documentfile = { group = "androidx.documentfile", name = "documentfile"
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+# Hilt <= 2.58 bundles a kotlin-metadata-jvm that cannot read Kotlin 2.4 metadata;
+# declaring the current one next to the compiler upgrades it. Drop with Hilt 2.59+.
+kotlin-metadata-jvm = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-jvm", version.ref = "kotlin" }
 androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 
 # Coil (image loading)

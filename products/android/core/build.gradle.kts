@@ -83,6 +83,7 @@ dependencies {
     // Hilt: the readers and the storage detector are @Singleton @Inject types.
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
+    ksp(libs.kotlin.metadata.jvm)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
