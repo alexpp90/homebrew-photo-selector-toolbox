@@ -630,17 +630,22 @@ def test_outcome_from_a_previous_folder_is_dropped(tmp_path):
 
 def test_file_worker_runs_jobs_off_the_calling_thread_and_delivers_through_idle_add():
     import threading
+    import time
     from photo_selector_linux.ui.file_worker import FileOperationWorker
 
     delivered, job_threads = [], []
     worker = FileOperationWorker(idle_add=lambda fn, *args: fn(*args))
 
     def job():
+        time.sleep(0.2)  # still running when the second job is queued, as on a slow runner
         job_threads.append(threading.current_thread())
         return "record"
 
     worker(job, lambda result, error: delivered.append((result, error)))
     worker(lambda: (_ for _ in ()).throw(OSError("offline")), lambda r, e: delivered.append((r, str(e))))
+    deadline = time.monotonic() + 10
+    while len(delivered) < 2 and time.monotonic() < deadline:  # shutdown() would cancel queued jobs
+        time.sleep(0.01)
     worker.shutdown()
 
     assert job_threads[0] is not threading.current_thread()
