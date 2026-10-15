@@ -268,10 +268,12 @@ def test_gui_grouping_cancellation(monkeypatch):
    # Prevent cache directory creation / sqlite operations
     monkeypatch.setattr("photo_selector_toolbox.core.cache.ScoreCache._init_db", lambda self: None)
 
-   # Mock load_config / save_config
+   # Mock update_config
     mock_config = {"group_similar": False, "group_level": "Time & Filename"}
-    monkeypatch.setattr("photo_selector_toolbox.gui.sharpness_tool.load_config", lambda: mock_config)
-    monkeypatch.setattr("photo_selector_toolbox.gui.sharpness_tool.save_config", lambda cfg: mock_config.update(cfg))
+    monkeypatch.setattr(
+        "photo_selector_toolbox.gui.sharpness_tool.update_config",
+        lambda **kwargs: mock_config.update(kwargs),
+    )
 
    # Mock parent.after to call immediately
     def mock_after(ms, func, *args):

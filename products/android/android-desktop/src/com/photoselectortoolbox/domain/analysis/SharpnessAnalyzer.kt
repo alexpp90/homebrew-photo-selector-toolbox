@@ -66,29 +66,57 @@ class SharpnessAnalyzer @Inject constructor() {
 
         var maxVariance = 0.0
 
-        for (row in 0 until gridSize) {
-            for (col in 0 until gridSize) {
-                val x = col * blockWidth
-                val y = row * blockHeight
-                val w = if (col == gridSize - 1) croppedMat.cols() - x else blockWidth
-                val h = if (row == gridSize - 1) croppedMat.rows() - y else blockHeight
+        val grayBlock = Mat()
+        val laplacian = Mat()
+        val mean = MatOfDouble()
+        val stddev = MatOfDouble()
 
-                val variance = computeBlockVariance(croppedMat, x, y, w, h)
-                if (variance > maxVariance) {
-                    maxVariance = variance
+        try {
+            for (row in 0 until gridSize) {
+                for (col in 0 until gridSize) {
+                    val x = col * blockWidth
+                    val y = row * blockHeight
+                    val w = if (col == gridSize - 1) croppedMat.cols() - x else blockWidth
+                    val h = if (row == gridSize - 1) croppedMat.rows() - y else blockHeight
+
+                    val variance = computeBlockVariance(
+                        src = croppedMat,
+                        x = x,
+                        y = y,
+                        w = w,
+                        h = h,
+                        grayBlock = grayBlock,
+                        laplacian = laplacian,
+                        mean = mean,
+                        stddev = stddev
+                    )
+                    if (variance > maxVariance) {
+                        maxVariance = variance
+                    }
                 }
             }
+        } finally {
+            grayBlock.release()
+            laplacian.release()
+            mean.release()
+            stddev.release()
         }
 
         return maxVariance
     }
 
-    private fun computeBlockVariance(src: Mat, x: Int, y: Int, w: Int, h: Int): Double {
+    private fun computeBlockVariance(
+        src: Mat,
+        x: Int,
+        y: Int,
+        w: Int,
+        h: Int,
+        grayBlock: Mat,
+        laplacian: Mat,
+        mean: MatOfDouble,
+        stddev: MatOfDouble
+    ): Double {
         val block = Mat(src, Rect(x, y, w, h))
-        val grayBlock = Mat()
-        val laplacian = Mat()
-        val mean = MatOfDouble()
-        val stddev = MatOfDouble()
         try {
             // Convert to grayscale
             if (block.channels() > 1) {
@@ -106,10 +134,6 @@ class SharpnessAnalyzer @Inject constructor() {
             return stddevValue * stddevValue
         } finally {
             block.release()
-            grayBlock.release()
-            laplacian.release()
-            mean.release()
-            stddev.release()
         }
     }
 }
