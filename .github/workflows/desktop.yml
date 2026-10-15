@@ -48,10 +48,10 @@ jobs:
       run:
         working-directory: products/desktop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -85,10 +85,10 @@ jobs:
             architecture: x64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.architecture }}
@@ -106,7 +106,7 @@ jobs:
           poetry config virtualenvs.in-project true
 
       - name: Cache Poetry venv
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: products/desktop/.venv
           key: v2-${{ runner.os }}-poetry-${{ matrix.python-version }}-${{ hashFiles('products/desktop/poetry.lock') }}
@@ -151,7 +151,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}
           path: products/desktop/test-results.xml
@@ -159,7 +159,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.os }}
           path: products/desktop/coverage.xml
@@ -174,10 +174,10 @@ jobs:
       run:
         working-directory: products/desktop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -193,7 +193,7 @@ jobs:
           poetry config virtualenvs.in-project true
 
       - name: Cache Poetry venv
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: products/desktop/.venv
           key: v2-${{ runner.os }}-poetry-3.12-${{ hashFiles('products/desktop/poetry.lock') }}
@@ -219,7 +219,7 @@ jobs:
 
       - name: Upload visual diffs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-test-diffs
           path: products/desktop/tests/visual/diffs/
@@ -249,10 +249,10 @@ jobs:
             artifact_name: photo-selector-toolbox-windows-x64
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Python 3.12
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: "3.12"
         architecture: ${{ matrix.architecture }}
@@ -271,7 +271,7 @@ jobs:
 
     # Same cache key as the test jobs so builds reuse their warm venv cache.
     - name: Cache Poetry venv
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: products/desktop/.venv
         key: v2-${{ runner.os }}-poetry-3.12-${{ hashFiles('products/desktop/poetry.lock') }}
@@ -296,7 +296,7 @@ jobs:
         python -c "import shutil; shutil.make_archive('${{ matrix.artifact_name }}', 'zip', 'dist')"
 
     - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.artifact_name }}
         path: products/desktop/${{ matrix.artifact_name }}.zip
@@ -311,7 +311,7 @@ jobs:
       contents: write
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -330,7 +330,7 @@ jobs:
             || gh api -X POST "repos/${{ github.repository }}/git/refs" -f ref=refs/tags/nightly -f sha="$GITHUB_SHA"
 
       - name: Update GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
@@ -350,13 +350,13 @@ jobs:
       GH_REF_NAME: ${{ github.ref_name }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: main
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 

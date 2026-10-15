@@ -43,9 +43,9 @@ jobs:
       toolbox: ${{ steps.filter.outputs.toolbox }}
       phototok: ${{ steps.filter.outputs.phototok }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -71,10 +71,10 @@ jobs:
     name: Unit tests (JVM)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -82,7 +82,7 @@ jobs:
       # setup-gradle handles Gradle caching (writes on main, read-only on
       # branches) — no separate actions/cache step needed.
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # Real-camera format corpus (docs/shared/SUPPORTED_FORMATS.md): fails the job if it
       # cannot be fetched, and makes the format tests mandatory instead of skippable.
@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload unit test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-test-report
           path: |
@@ -120,16 +120,16 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Run lint
         working-directory: products/android
@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload lint reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lint-report
           path: |
@@ -161,16 +161,16 @@ jobs:
       matrix:
         api-level: [30]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Enable KVM
         run: |
@@ -204,7 +204,7 @@ jobs:
 
       - name: Upload instrumented test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: instrumented-test-report-api${{ matrix.api-level }}
           path: |
@@ -244,16 +244,16 @@ jobs:
         run: echo "VERSION_CODE=$(( 10000 + ${{ github.run_number }} * 100 + ${{ github.run_attempt }} ))" >> "$GITHUB_ENV"
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build debug APK
         working-directory: products/android
@@ -350,7 +350,7 @@ jobs:
       # is guarded by a condition that guarantees the file exists, so `error`
       # is correct: it fails at the step that actually went wrong.
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: photo-selector-toolbox-android-debug
           path: products/android/android-desktop/build/outputs/apk/debug/*.apk
@@ -358,7 +358,7 @@ jobs:
 
       - name: Upload release APK
         if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v'))
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: photo-selector-toolbox-android-release
           path: products/android/release-assets/photo-selector-toolbox-android-release.apk
@@ -366,7 +366,7 @@ jobs:
 
       - name: Upload Phototok release APK
         if: github.event_name == 'push' && (needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: phototok-android-release
           path: products/android/release-assets/phototok-android-release.apk
@@ -403,7 +403,7 @@ jobs:
 
       - name: Upload release AAB
         if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v'))
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: photo-selector-toolbox-android-release-aab
           path: products/android/release-assets/photo-selector-toolbox-android-release.aab
@@ -411,7 +411,7 @@ jobs:
 
       - name: Upload Phototok release AAB
         if: github.event_name == 'push' && (needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: phototok-android-release-aab
           path: products/android/release-assets/phototok-android-release.aab
@@ -429,7 +429,7 @@ jobs:
 
       - name: Publish Release Assets
         if: github.event_name == 'push' && (needs.detect-changes.outputs.toolbox == 'true' || needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v'))
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
           name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
@@ -445,14 +445,14 @@ jobs:
     steps:
       - name: Download Photo Selector Toolbox AAB
         if: needs.detect-changes.outputs.toolbox == 'true' || startsWith(github.ref, 'refs/tags/v')
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: photo-selector-toolbox-android-release-aab
           path: release-assets
 
       - name: Download Photo Tok AAB
         if: needs.detect-changes.outputs.phototok == 'true' || startsWith(github.ref, 'refs/tags/v')
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: phototok-android-release-aab
           path: release-assets

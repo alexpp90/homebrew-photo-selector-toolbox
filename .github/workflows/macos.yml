@@ -44,7 +44,7 @@ jobs:
         working-directory: products/macos-desktop
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -81,7 +81,7 @@ jobs:
 
       - name: Upload Test Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-desktop-test-artifacts
           path: products/macos-desktop/.build/release/PhotoSelectorApp
@@ -99,7 +99,7 @@ jobs:
         working-directory: products/macos-desktop
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select Xcode 16 / Swift 6 Toolchain
         run: |
@@ -124,7 +124,7 @@ jobs:
           zip -r -y ../../../../photo-selector-macos-apple-silicon.zip PhotoSelector.app
 
       - name: Upload Release Archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: photo-selector-macos-apple-silicon
           path: photo-selector-macos-apple-silicon.zip
@@ -140,7 +140,7 @@ jobs:
       contents: write
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: photo-selector-macos-apple-silicon
           path: artifacts
@@ -156,7 +156,7 @@ jobs:
             || gh api -X POST "repos/${{ github.repository }}/git/refs" -f ref=refs/tags/nightly -f sha="$GITHUB_SHA"
 
       - name: Update GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', github.ref_name) || 'Nightly Build' }}
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
@@ -177,13 +177,13 @@ jobs:
       GH_REF_NAME: ${{ github.ref_name }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: main
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
