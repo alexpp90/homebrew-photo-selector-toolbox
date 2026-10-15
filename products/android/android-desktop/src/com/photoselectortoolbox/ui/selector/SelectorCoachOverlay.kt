@@ -241,14 +241,28 @@ private fun ImageRegionCallouts(
                     ) {
                         Title()
                         Spacer(modifier = Modifier.height(14.dp))
-                        callouts[TourRegion.CONTROLS]?.let { Callout(it) }
-                        callouts[TourRegion.KEYS]?.let {
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Callout(it)
-                        }
-                        callouts[TourRegion.FILMSTRIP]?.let {
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Callout(it, compact = true)
+                        // Weighted, so it is measured *after* the title and the
+                        // button and absorbs whatever height is left over.
+                        // A Column hands its children the remaining height in
+                        // source order, so when this stack is taller than the
+                        // flank — which it is at the reference geometry, where
+                        // row 1 is only as tall as the current frame — every
+                        // child after it was measured at zero height. That made
+                        // "Got it" a 0 dp box: present in the tree, named by the
+                        // requirement as the way to close the guide, and
+                        // impossible to hit. `fill = false` keeps the stack at
+                        // its natural height when there is room to spare, so
+                        // nothing moves on a window that already fitted.
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            callouts[TourRegion.CONTROLS]?.let { Callout(it) }
+                            callouts[TourRegion.KEYS]?.let {
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Callout(it)
+                            }
+                            callouts[TourRegion.FILMSTRIP]?.let {
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Callout(it, compact = true)
+                            }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         DismissButton(onDismiss)
