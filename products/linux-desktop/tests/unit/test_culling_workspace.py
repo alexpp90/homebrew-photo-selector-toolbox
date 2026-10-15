@@ -518,3 +518,130 @@ def test_failed_cull_is_reported_and_leaves_the_queue_unchanged():
     assert [c.filename for c in vm.candidates] == ["a.jpg", "b.jpg"]
     assert vm.trashed_count == 0 and vm.undo_stack == []
     assert messages == ["Could not move a.jpg to Trash: Operation not supported"]
+
+
+class DeferredDispatcher:
+    """Holds jobs until the test finishes them, as the background worker would later."""
+
+    def __init__(self):
+        self.pending = []
+
+    def __call__(self, job, done):
+        self.pending.append((job, done))
+
+    def finish(self):
+        job, done = self.pending.pop(0)
+        try:
+            result, error = job(), None
+        except Exception as e:  # noqa: BLE001 — mirrors FileOperationWorker
+            result, error = None, e
+        done(result, error)
+
+
+def _record(photo, action):
+    return CullingRecord(
+        photo_id=photo.id, action_type=action, original_primary_path=photo.primary_path, affected_paths=[],
+    )
+
+
+def test_running_file_operation_shows_busy_and_blocks_further_culls():
+    """A slow cloud upload must not freeze the window: busy state while it runs, no second cull."""
+    manager = MagicMock()
+    dispatcher = DeferredDispatcher()
+    vm = CullingWorkspaceViewModel(file_manager=manager, dispatcher=dispatcher)
+    a, b = make_candidate("a.jpg"), make_candidate("b.jpg")
+    vm.candidates, vm.current_folder = [a, b], Path("/tmp/test_dir")
+    manager.copy_candidate.return_value = _record(a, CullingActionType.COPY)
+    bar = ActionBarView(viewmodel=vm)
+
+    vm.cull_copy()
+
+    assert vm.is_busy and vm.busy_message == "Copying a.jpg to Selection/…"
+    assert bar.busy_text == "Copying a.jpg to Selection/…"
+    assert not bar.cull_sensitive and not bar.undo_sensitive
+    vm.cull_trash()
+    assert vm.undo() is False
+    assert len(dispatcher.pending) == 1 and not manager.trash_candidate.called
+
+    dispatcher.finish()
+
+    assert not vm.is_busy and bar.cull_sensitive and bar.busy_text == ""
+    assert vm.copied_count == 1 and vm.current_index == 1
+
+
+def test_outcome_applies_to_the_culled_photo_when_the_user_browsed_meanwhile():
+    manager = MagicMock()
+    dispatcher = DeferredDispatcher()
+    vm = CullingWorkspaceViewModel(file_manager=manager, dispatcher=dispatcher)
+    a, b, c = make_candidate("a.jpg"), make_candidate("b.jpg"), make_candidate("c.jpg")
+    vm.candidates, vm.current_folder, vm.current_index = [a, b, c], Path("/tmp/test_dir"), 1
+    manager.move_candidate.return_value = _record(b, CullingActionType.MOVE)
+    manager.undo_culling.return_value = True
+
+    vm.cull_move()  # moving b
+    vm.nav_next()  # user looks at c while the upload runs
+    dispatcher.finish()
+
+    assert [p.filename for p in vm.candidates] == ["a.jpg", "c.jpg"]
+    assert vm.current_photo is c
+    assert vm.undo_stack[-1][1] is b
+
+    assert vm.undo() is True  # started in the background
+    dispatcher.finish()
+
+    assert [p.filename for p in vm.candidates] == ["a.jpg", "b.jpg", "c.jpg"]
+    assert vm.current_photo is b and vm.selected_count == 0
+
+
+def test_failed_background_undo_is_kept_for_retry():
+    manager = MagicMock()
+    dispatcher = DeferredDispatcher()
+    vm = CullingWorkspaceViewModel(file_manager=manager, dispatcher=dispatcher)
+    a = make_candidate("a.jpg")
+    vm.candidates, vm.current_folder = [a], Path("/tmp/test_dir")
+    manager.trash_candidate.return_value = _record(a, CullingActionType.TRASH)
+    manager.undo_culling.side_effect = OSError("Drive offline")
+    messages = []
+    vm.connect("notification", lambda _vm, message: messages.append(message))
+
+    vm.cull_trash()
+    dispatcher.finish()
+    vm.undo()
+    dispatcher.finish()
+
+    assert len(vm.undo_stack) == 1 and vm.candidates == []
+    assert messages[-1] == "Could not undo trash for a.jpg: Drive offline"
+
+
+def test_outcome_from_a_previous_folder_is_dropped(tmp_path):
+    manager = MagicMock()
+    dispatcher = DeferredDispatcher()
+    vm = CullingWorkspaceViewModel(file_manager=manager, dispatcher=dispatcher)
+    a = make_candidate("a.jpg")
+    vm.candidates, vm.current_folder = [a], Path("/tmp/test_dir")
+    manager.trash_candidate.return_value = _record(a, CullingActionType.TRASH)
+
+    vm.cull_trash()
+    vm.load_directory(tmp_path)
+    dispatcher.finish()
+
+    assert vm.undo_stack == [] and vm.trashed_count == 0 and not vm.is_busy
+
+
+def test_file_worker_runs_jobs_off_the_calling_thread_and_delivers_through_idle_add():
+    import threading
+    from photo_selector_linux.ui.file_worker import FileOperationWorker
+
+    delivered, job_threads = [], []
+    worker = FileOperationWorker(idle_add=lambda fn, *args: fn(*args))
+
+    def job():
+        job_threads.append(threading.current_thread())
+        return "record"
+
+    worker(job, lambda result, error: delivered.append((result, error)))
+    worker(lambda: (_ for _ in ()).throw(OSError("offline")), lambda r, e: delivered.append((r, str(e))))
+    worker.shutdown()
+
+    assert job_threads[0] is not threading.current_thread()
+    assert delivered == [("record", None), (None, "offline")]

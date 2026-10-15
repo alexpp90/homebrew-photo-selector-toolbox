@@ -33,11 +33,16 @@ from photo_selector_linux.core.image_source import (
     decode_source,
     orientation_ops,
     read_display_source,
+    read_full_resolution_source,
 )
 from photo_selector_linux.core.metadata import read_metadata
+from photo_selector_linux.core.scoring import compute_quality_scores
 
 # Longest edge decoded for fit-to-window display (covers 4K panels); 1:1 zoom decodes full size.
 FIT_MAX_EDGE: int = 3840
+# Photos are scored on a 1080p-class proxy of the displayed pixels (R-LINUX-SCORE-01), so a RAW
+# preview, a developed RAW and a JPEG of the same scene land on the same scale.
+SCORE_MAX_EDGE: int = 1920
 
 TextureCallback = Callable[[Optional[object]], None]
 
@@ -101,6 +106,25 @@ def decode_pixbuf(source: DisplaySource, max_edge: Optional[int] = None):
     return pixbuf
 
 
+def pixbuf_to_rgb_array(pixbuf):
+    """Packed (H, W, 3) uint8 copy of a pixbuf's RGB channels (rowstride padding and alpha dropped)."""
+    import numpy as np
+
+    width, height = pixbuf.get_width(), pixbuf.get_height()
+    channels, stride = pixbuf.get_n_channels(), pixbuf.get_rowstride()
+    raw = np.frombuffer(pixbuf.get_pixels(), dtype=np.uint8)
+    rows = np.lib.stride_tricks.as_strided(raw, shape=(height, width * channels), strides=(stride, 1))
+    return np.ascontiguousarray(rows.reshape(height, width, channels)[:, :, :3])
+
+
+def score_pixbuf(pixbuf):
+    """Focus and clipping scores of a decoded photo, or None."""
+    w, h = fit_size(pixbuf.get_width(), pixbuf.get_height(), SCORE_MAX_EDGE)
+    if (w, h) != (pixbuf.get_width(), pixbuf.get_height()):
+        pixbuf = pixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
+    return compute_quality_scores(pixbuf_to_rgb_array(pixbuf))
+
+
 class PhotoTextureLoader:
     """Loads candidate photos as textures off the main loop; callbacks run on the main loop."""
 
@@ -145,9 +169,14 @@ class PhotoTextureLoader:
             data = path.read_bytes() if is_gvfs_fuse_path(path) else None
             if candidate.exif is None:
                 candidate.exif = read_metadata(path, data)
-            source = read_display_source(path, candidate.filename, data)
+            if max_edge is None:  # 1:1 zoom: full sensor resolution for RAW
+                source = read_full_resolution_source(path, candidate.filename, data)
+            else:
+                source = read_display_source(path, candidate.filename, data)
             if source is not None:
                 pixbuf = decode_pixbuf(source, max_edge)
+            if pixbuf is not None and candidate.scores is None:
+                candidate.scores = score_pixbuf(pixbuf)
         except Exception:
             pixbuf = None
         GLib.idle_add(self._deliver, key, pixbuf)

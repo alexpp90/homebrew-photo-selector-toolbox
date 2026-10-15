@@ -1,0 +1,49 @@
+"""Background worker for culling file operations; outcomes are delivered on the GTK main loop.
+
+A Move, Copy, Trash or Undo on a cloud mount uploads or downloads whole files (16 s for a 25 MB
+RAW on Google Drive); run on the main loop it froze the window. One worker thread keeps the
+operations in order, which the undo stack relies on.
+"""
+
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable
+
+try:
+    import gi
+    gi.require_version("GLib", "2.0")
+    from gi.repository import GLib
+    HAS_GI = True
+except (ImportError, ValueError):
+    HAS_GI = False
+    GLib = None
+
+from photo_selector_linux.viewmodels.culling_workspace import Job, JobDone
+
+
+class FileOperationWorker:
+    """A ``CullingWorkspaceViewModel`` dispatcher: job on a worker thread, ``done`` on the main loop."""
+
+    def __init__(self, idle_add: Callable[..., object] = None) -> None:
+        self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="culling-file-ops")
+        self._idle_add = idle_add or GLib.idle_add
+
+    def __call__(self, job: Job, done: JobDone) -> None:
+        self._pool.submit(self._work, job, done)
+
+    def _work(self, job: Job, done: JobDone) -> None:
+        try:
+            result, error = job(), None
+        except Exception as e:
+            result, error = None, e
+        self._idle_add(self._deliver, done, result, error)
+
+    @staticmethod
+    def _deliver(done: JobDone, result, error) -> bool:
+        done(result, error)
+        return False
+
+    def shutdown(self) -> None:
+        """Let a running operation finish (never abandon a half-moved bundle); drop queued ones."""
+        self._pool.shutdown(wait=True, cancel_futures=True)

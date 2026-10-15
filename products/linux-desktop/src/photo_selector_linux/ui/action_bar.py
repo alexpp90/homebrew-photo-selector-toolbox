@@ -29,6 +29,9 @@ class ActionBarView(Gtk.ActionBar if HAS_GI else object):
         self.remaining_css_class: str = "status-counter-remaining"
         self.undo_label_text: str = "Undo (Ctrl+Z)"
         self.undo_sensitive: bool = False
+        # While a file operation runs: what it does, and the cull buttons are insensitive.
+        self.busy_text: str = ""
+        self.cull_sensitive: bool = True
 
         if HAS_GI:
             super().__init__()
@@ -55,6 +58,17 @@ class ActionBarView(Gtk.ActionBar if HAS_GI else object):
         self.counter_box.append(self.lbl_trashed)
         self.counter_box.append(self.lbl_remaining)
         self.pack_start(self.counter_box)
+
+        # Progress of a running file operation (a Google Drive upload takes seconds).
+        self.busy_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.busy_spinner = Gtk.Spinner()
+        self.lbl_busy = Gtk.Label(label="")
+        self.lbl_busy.set_ellipsize(3)  # Pango.EllipsizeMode.END
+        self.lbl_busy.set_max_width_chars(40)
+        self.busy_box.append(self.busy_spinner)
+        self.busy_box.append(self.lbl_busy)
+        self.busy_box.set_visible(False)
+        self.pack_start(self.busy_box)
 
         # Center: Tactile Action Buttons
         center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -103,7 +117,10 @@ class ActionBarView(Gtk.ActionBar if HAS_GI else object):
         self.selected_css_class = "status-counter-selected" if sel > 0 else "status-counter-badge"
         self.trashed_css_class = "status-counter-trashed" if trs > 0 else "status-counter-badge"
         self.remaining_css_class = "status-counter-remaining"
-        self.undo_sensitive = undo_depth > 0
+        busy = self.viewmodel.is_busy
+        self.busy_text = self.viewmodel.busy_message or ""
+        self.cull_sensitive = not busy
+        self.undo_sensitive = undo_depth > 0 and not busy
         self.undo_label_text = f"Undo ({undo_depth}) (Ctrl+Z)" if undo_depth > 0 else "Undo (Ctrl+Z)"
 
         if not HAS_GI:
@@ -117,4 +134,12 @@ class ActionBarView(Gtk.ActionBar if HAS_GI else object):
         self.lbl_remaining.set_css_classes([self.remaining_css_class])
 
         self.btn_undo.set_sensitive(self.undo_sensitive)
+        for button in (self.btn_move, self.btn_copy, self.btn_trash):
+            button.set_sensitive(self.cull_sensitive)
+        self.lbl_busy.set_label(self.busy_text)
+        self.busy_box.set_visible(busy)
+        if busy:
+            self.busy_spinner.start()
+        else:
+            self.busy_spinner.stop()
         self.btn_undo.set_label(self.undo_label_text)

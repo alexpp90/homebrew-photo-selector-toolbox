@@ -342,12 +342,6 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             image_area.set_child(picture)
         frame.append(image_area)
 
-        self.loader.request(
-            candidate,
-            lambda texture: self._on_texture_ready(candidate, picture, image_area, status, texture),
-            full_size=allow_1to1,
-        )
-
         # Footer row: File name label + compact score badge (if computed)
         footer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         footer_box.set_halign(Gtk.Align.CENTER)
@@ -358,17 +352,29 @@ class CanvasView(Gtk.Box if HAS_GI else object):
         lbl.add_css_class("optical-strip-secondary")
         footer_box.append(lbl)
 
-        if candidate.scores is not None:
-            cat = candidate.scores.focus_category.value
-            score_pill = Gtk.Label(label=f"{candidate.scores.formatted_sharpness}")
-            score_pill.add_css_class(f"score-badge-{cat}")
-            footer_box.append(score_pill)
-
+        self._append_score_badge(footer_box, candidate)
         frame.append(footer_box)
+
+        self.loader.request(
+            candidate,
+            lambda texture: self._on_texture_ready(candidate, picture, image_area, status, footer_box, texture),
+            full_size=allow_1to1,
+        )
 
         return frame
 
-    def _on_texture_ready(self, candidate, picture, image_area, status, texture) -> None:
+    @staticmethod
+    def _append_score_badge(footer_box, candidate) -> None:
+        """Compact focus score pill; scores are computed during the first decode."""
+        if candidate.scores is None or footer_box.has_css_class("has-score-badge"):
+            return
+        cat = candidate.scores.focus_category.value
+        score_pill = Gtk.Label(label=f"{candidate.scores.formatted_sharpness}")
+        score_pill.add_css_class(f"score-badge-{cat}")
+        footer_box.append(score_pill)
+        footer_box.add_css_class("has-score-badge")
+
+    def _on_texture_ready(self, candidate, picture, image_area, status, footer_box, texture) -> None:
         status.stop()
         image_area.remove_overlay(status)
         if texture is not None:
@@ -379,6 +385,7 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             unavailable.set_halign(Gtk.Align.CENTER)
             unavailable.set_valign(Gtk.Align.CENTER)
             image_area.add_overlay(unavailable)
-        # EXIF is read during the first decode; refresh the HUD once it is known.
+        self._append_score_badge(footer_box, candidate)
+        # EXIF and scores come with the first decode; refresh the HUD once they are known.
         if candidate is self.viewmodel.current_photo:
             self.hud.update_photo(candidate)

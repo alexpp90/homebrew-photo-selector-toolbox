@@ -5,6 +5,7 @@ test_format_conformance.py proves the same path against real camera files.
 
 Adheres to:
 - R-LINUX-META-01: Supported File Formats
+- R-LINUX-UI-08: 1:1 Actual-Pixel Zoom Inspection (RAW developed at sensor resolution)
 """
 
 from __future__ import annotations
@@ -168,3 +169,37 @@ def test_format_without_a_pixbuf_loader_decodes_through_pillow():
     assert (upright.get_width(), upright.get_height()) == (30, 40)
     assert (small.get_width(), small.get_height()) == (15, 20)
     assert photo_loader.decode_pixbuf(DisplaySource(b"not an image", None, False)) is None
+
+
+def test_full_size_development_for_1to1_zoom_omits_half_size(tmp_path: Path):
+    run = _FakeRun(stdout=_ppm((6024, 4024)))
+    source = develop_raw(tmp_path / "DSC1.ARW", runner=run, decoder="d", half_size=False)
+    assert run.argv == ["d", "-w", "-Z", "-", str(tmp_path / "DSC1.ARW")]
+    assert source.rgb_size == (6024, 4024)
+
+
+def test_1to1_source_is_the_full_development_for_raw_and_the_file_otherwise(raw_with_preview, tmp_path: Path):
+    """1:1 zoom on a RAW must show sensor pixels, not the ~1600 px preview (R-LINUX-UI-08)."""
+    from photo_selector_linux.core.image_source import read_full_resolution_source
+
+    path, preview = raw_with_preview(1616, 6024)
+    full = _developed((6024, 4024))
+    assert read_full_resolution_source(path, "DSC1.ARW", developer=lambda p, d, n: full) is full
+    # Without LibRaw the preview is still shown.
+    assert read_full_resolution_source(path, "DSC1.ARW", developer=lambda p, d, n: None) == preview
+
+    jpg = tmp_path / "DSC2.JPG"
+    jpg.write_bytes(_jpeg((40, 30)))
+    developer_calls = []
+    source = read_full_resolution_source(jpg, developer=lambda *a: developer_calls.append(a))
+    assert source.data == jpg.read_bytes() and developer_calls == []
+
+
+def test_1to1_uses_a_near_full_size_preview_without_developing(raw_with_preview):
+    """NEF/PEF/CR2 embed previews within a few pixels of the sensor; developing would cost seconds."""
+    from photo_selector_linux.core.image_source import read_full_resolution_source
+
+    path, preview = raw_with_preview(5568, 5600)
+    calls = []
+    assert read_full_resolution_source(path, "DSC.NEF", developer=lambda *a: calls.append(a)) == preview
+    assert calls == []

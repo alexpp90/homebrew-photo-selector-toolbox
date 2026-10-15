@@ -8,9 +8,9 @@ Adheres to:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
-from photo_selector_linux.core.file_ops import FileCullingError, FileCullingManager
+from photo_selector_linux.core.file_ops import FileCullingManager
 from photo_selector_linux.core.models import (
     CandidatePhoto,
     CullingActionType,
@@ -19,10 +19,35 @@ from photo_selector_linux.core.models import (
 from photo_selector_linux.core.scanner import DirectoryScanner
 
 
-class CullingWorkspaceViewModel:
-    """Decoupled presentation state machine driving navigation, comparison, and culling."""
+# A file operation, and what to do with its (result, error) once it finished.
+Job = Callable[[], Any]
+JobDone = Callable[[Any, Optional[BaseException]], None]
+Dispatcher = Callable[[Job, JobDone], None]
 
-    def __init__(self, file_manager: Optional[FileCullingManager] = None):
+
+def run_inline(job: Job, done: JobDone) -> None:
+    """Dispatcher running the job on the calling thread (tests, headless use)."""
+    try:
+        result = job()
+    except Exception as e:
+        done(None, e)
+        return
+    done(result, None)
+
+
+class CullingWorkspaceViewModel:
+    """Decoupled presentation state machine driving navigation, comparison, and culling.
+
+    File operations go through ``dispatcher``. The app passes one that runs them on a background
+    worker and calls back on the main loop, so a Google Drive upload (16 s for a 25 MB RAW) does
+    not freeze the window; one operation runs at a time, so the undo stack keeps its order.
+    """
+
+    def __init__(
+        self,
+        file_manager: Optional[FileCullingManager] = None,
+        dispatcher: Optional[Dispatcher] = None,
+    ):
         self.candidates: List[CandidatePhoto] = []
         self.current_index: int = 0
         self.comparison_mode: int = 1  # 1: 1-Up, 2: 2-Up, 3: 3-Up Focus Mode
@@ -36,6 +61,10 @@ class CullingWorkspaceViewModel:
         self.undo_stack: List[Tuple[CullingRecord, CandidatePhoto, int]] = []
 
         self.file_manager = file_manager or FileCullingManager()
+        self.dispatcher: Dispatcher = dispatcher or run_inline
+        # What the running file operation is doing ("Copying DSC0001.ARW…"), or None when idle.
+        self.busy_message: Optional[str] = None
+        self._folder_generation = 0
 
         self._state_callbacks: List[Callable[[CullingWorkspaceViewModel], None]] = []
         self._notification_callbacks: List[Callable[[CullingWorkspaceViewModel, str], None]] = []
@@ -47,6 +76,10 @@ class CullingWorkspaceViewModel:
     @property
     def remaining_count(self) -> int:
         return len(self.candidates)
+
+    @property
+    def is_busy(self) -> bool:
+        return self.busy_message is not None
 
     @property
     def current_photo(self) -> Optional[CandidatePhoto]:
@@ -93,56 +126,102 @@ class CullingWorkspaceViewModel:
             self.current_index -= 1
             self._notify_state_changed()
 
+    def _run(
+        self,
+        busy_message: str,
+        job: Job,
+        on_success: Callable[[Any], None],
+        failure: str,
+        on_failure: Optional[Callable[[], None]] = None,
+    ) -> bool:
+        """Run a file operation through the dispatcher; False when one is already running.
+
+        The outcome is applied when the job finishes, to the photo itself rather than to an
+        index, because the user may browse meanwhile. A folder change drops the outcome.
+        """
+        if self.is_busy:
+            return False
+        self.busy_message = busy_message
+        generation = self._folder_generation
+        finished = []
+
+        def done(result: Any, error: Optional[BaseException]) -> None:
+            finished.append(True)
+            self.busy_message = None
+            if generation != self._folder_generation:
+                pass
+            elif error is not None:
+                if on_failure is not None:
+                    on_failure()
+                self._notify(f"{failure}: {error}")
+            else:
+                on_success(result)
+            self._notify_state_changed()
+
+        self.dispatcher(job, done)
+        if not finished:
+            self._notify_state_changed()  # show the busy state while the job runs in the background
+        return True
+
+    def _index_of(self, photo: CandidatePhoto) -> Optional[int]:
+        for i, candidate in enumerate(self.candidates):
+            if candidate is photo:
+                return i
+        return None
+
+    def _remove(self, photo: CandidatePhoto) -> int:
+        """Drop a culled photo from the queue, keeping the view on the same or the next photo."""
+        idx = self._index_of(photo)
+        if idx is None:
+            return self.current_index
+        self.candidates.pop(idx)
+        if idx < self.current_index:
+            self.current_index -= 1
+        if self.current_index >= len(self.candidates) and self.current_index > 0:
+            self.current_index = len(self.candidates) - 1
+        return idx
+
     def cull_move(self) -> None:
         """Move active candidate and all companions to Selection/ with auto-advance."""
-        photo = self.current_photo
-        if not photo or not self.current_folder:
+        photo, folder = self.current_photo, self.current_folder
+        if not photo or not folder:
             return
+        selection = self.selection_folder_name
 
-        idx = self.current_index
-        try:
-            record = self.file_manager.move_candidate(
-                photo,
-                self.current_folder,
-                selection_folder=self.selection_folder_name,
-            )
-        except FileCullingError as e:
-            self._notify(f"Could not move {photo.filename}: {e}")
-            return
-        self.undo_stack.append((record, photo, idx))
-        self.selected_count += 1
+        def moved(record: CullingRecord) -> None:
+            self.undo_stack.append((record, photo, self._remove(photo)))
+            self.selected_count += 1
+            self._notify(f"Moved {photo.filename} to {selection}/")
 
-        self.candidates.pop(idx)
-        if self.current_index >= len(self.candidates) and self.current_index > 0:
-            self.current_index -= 1
-
-        self._notify(f"Moved {photo.filename} to {self.selection_folder_name}/")
-        self._notify_state_changed()
+        self._run(
+            f"Moving {photo.filename} to {selection}/…",
+            lambda: self.file_manager.move_candidate(photo, folder, selection_folder=selection),
+            moved,
+            f"Could not move {photo.filename}",
+        )
 
     def cull_copy(self) -> None:
         """Copy active candidate and all companions to Selection/ with auto-advance."""
-        photo = self.current_photo
-        if not photo or not self.current_folder:
+        photo, folder = self.current_photo, self.current_folder
+        if not photo or not folder:
             return
+        selection = self.selection_folder_name
 
-        idx = self.current_index
-        try:
-            record = self.file_manager.copy_candidate(
-                photo,
-                self.current_folder,
-                selection_folder=self.selection_folder_name,
-            )
-        except FileCullingError as e:
-            self._notify(f"Could not copy {photo.filename}: {e}")
-            return
-        self.undo_stack.append((record, photo, idx))
-        self.copied_count += 1
-        self.selected_count += 1
+        def copied(record: CullingRecord) -> None:
+            idx = self._index_of(photo)
+            self.undo_stack.append((record, photo, idx if idx is not None else self.current_index))
+            self.copied_count += 1
+            self.selected_count += 1
+            if self.current_photo is photo and self.current_index < len(self.candidates) - 1:
+                self.current_index += 1
+            self._notify(f"Copied {photo.filename} to {selection}/")
 
-        if self.current_index < len(self.candidates) - 1:
-            self.current_index += 1
-        self._notify(f"Copied {photo.filename} to {self.selection_folder_name}/")
-        self._notify_state_changed()
+        self._run(
+            f"Copying {photo.filename} to {selection}/…",
+            lambda: self.file_manager.copy_candidate(photo, folder, selection_folder=selection),
+            copied,
+            f"Could not copy {photo.filename}",
+        )
 
     def cull_trash(self) -> None:
         """Send active candidate and all companions to Trash with auto-advance."""
@@ -150,58 +229,64 @@ class CullingWorkspaceViewModel:
         if not photo:
             return
 
-        idx = self.current_index
-        try:
-            record = self.file_manager.trash_candidate(photo)
-        except FileCullingError as e:
-            self._notify(f"Could not move {photo.filename} to Trash: {e}")
-            return
-        self.undo_stack.append((record, photo, idx))
-        self.trashed_count += 1
+        def trashed(record: CullingRecord) -> None:
+            self.undo_stack.append((record, photo, self._remove(photo)))
+            self.trashed_count += 1
+            self._notify(f"Moved {photo.filename} to Trash")
 
-        self.candidates.pop(idx)
-        if self.current_index >= len(self.candidates) and self.current_index > 0:
-            self.current_index -= 1
-
-        self._notify(f"Moved {photo.filename} to Trash")
-        self._notify_state_changed()
+        self._run(
+            f"Moving {photo.filename} to Trash…",
+            lambda: self.file_manager.trash_candidate(photo),
+            trashed,
+            f"Could not move {photo.filename} to Trash",
+        )
 
     def undo(self) -> bool:
-        """Atomically reverse the last culling operation (R-LINUX-CULL-06/07)."""
-        if not self.undo_stack:
+        """Atomically reverse the last culling operation (R-LINUX-CULL-06/07).
+
+        Returns False when there is nothing to undo, an operation is still running, or the undo
+        failed synchronously; True once it succeeded or was started in the background.
+        """
+        if not self.undo_stack or self.is_busy:
             return False
 
         record, photo, orig_idx = self.undo_stack.pop()
-        try:
-            success = self.file_manager.undo_culling(record, photo)
-        except FileCullingError as e:
-            self.undo_stack.append((record, photo, orig_idx))  # keep it so undo can be retried
-            self._notify(f"Could not undo {record.action_type.value} for {photo.filename}: {e}")
-            return False
-        if not success:
-            return False
+        outcome = []
 
-        if record.action_type == CullingActionType.MOVE:
-            insert_pos = min(orig_idx, len(self.candidates))
-            self.candidates.insert(insert_pos, photo)
-            self.current_index = insert_pos
-            self.selected_count = max(0, self.selected_count - 1)
-        elif record.action_type == CullingActionType.COPY:
-            self.selected_count = max(0, self.selected_count - 1)
-            self.copied_count = max(0, self.copied_count - 1)
-        elif record.action_type == CullingActionType.TRASH:
-            insert_pos = min(orig_idx, len(self.candidates))
-            self.candidates.insert(insert_pos, photo)
-            self.current_index = insert_pos
-            self.trashed_count = max(0, self.trashed_count - 1)
+        def undone(success: bool) -> None:
+            outcome.append(bool(success))
+            if not success:
+                return
+            if record.action_type in (CullingActionType.MOVE, CullingActionType.TRASH):
+                insert_pos = min(orig_idx, len(self.candidates))
+                self.candidates.insert(insert_pos, photo)
+                self.current_index = insert_pos
+                if record.action_type == CullingActionType.MOVE:
+                    self.selected_count = max(0, self.selected_count - 1)
+                else:
+                    self.trashed_count = max(0, self.trashed_count - 1)
+            elif record.action_type == CullingActionType.COPY:
+                self.selected_count = max(0, self.selected_count - 1)
+                self.copied_count = max(0, self.copied_count - 1)
+            self._notify(f"Undid {record.action_type.value} for {photo.filename}")
 
-        self._notify(f"Undid {record.action_type.value} for {photo.filename}")
-        self._notify_state_changed()
-        return True
+        def keep_for_retry() -> None:
+            outcome.append(False)
+            self.undo_stack.append((record, photo, orig_idx))
+
+        self._run(
+            f"Undoing {record.action_type.value} of {photo.filename}…",
+            lambda: self.file_manager.undo_culling(record, photo),
+            undone,
+            f"Could not undo {record.action_type.value} for {photo.filename}",
+            on_failure=keep_for_retry,
+        )
+        return outcome[0] if outcome else self.is_busy
 
     def load_directory(self, folder: Path) -> None:
         """Load and sort photographs from folder."""
         self.current_folder = folder.resolve()
+        self._folder_generation += 1
         scanner = DirectoryScanner(custom_selection_folder=self.selection_folder_name)
         # GVFS cloud mounts list folders under opaque IDs; show the folder's real name.
         parent_names = scanner.name_resolver.names_in(self.current_folder.parent)
