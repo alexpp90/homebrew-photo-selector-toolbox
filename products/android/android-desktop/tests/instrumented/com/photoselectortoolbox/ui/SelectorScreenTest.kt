@@ -45,6 +45,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -1222,6 +1223,64 @@ class SelectorScreenTest {
         }
     }
 
+    /**
+     * The guide's own "Got it" must be a real target, not just a node.
+     *
+     * It was a 0 dp box at the reference geometry: the control flank's column
+     * overflowed, and a Column measures its children in order, so everything
+     * after the callout stack was handed zero height. The button was present in
+     * the tree — `assertExists` passed, and `hasText("Got it")` even matched the
+     * overlay's own merged node, so a click "worked" by landing on the scrim —
+     * while the control the requirement names as the way out could not be hit.
+     * Size is therefore asserted explicitly, and the click is aimed at the
+     * button's own tag rather than at its text.
+     */
+    @Test
+    fun coachOverlay_gotItIsAHittableTargetAndCloses() {
+        fakeRepo.imagesFlow.value = mockImages
+        runBlocking { settingsRepository.setLastFolderUri("content://test/test_folder") }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithText("image1.jpg", ignoreCase = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        dismissGestureTutorialIfShown()
+        if (isCompactLayout()) return
+
+        // The intro tour only opens itself once per install, and sibling tests
+        // in this class may already have marked it seen, so open the guide the
+        // way the control block does rather than waiting for it to appear.
+        if (composeRule.onAllNodesWithTag("selector_coach_overlay", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty()
+        ) {
+            if (composeRule.onAllNodesWithTag("shortcuts_button", useUnmergedTree = true)
+                    .fetchSemanticsNodes().isEmpty()
+            ) {
+                return
+            }
+            composeRule.onAllNodesWithTag("shortcuts_button", useUnmergedTree = true)
+                .onFirst().performClick()
+        }
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithTag("selector_coach_overlay", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+
+        val dismiss = composeRule.onAllNodesWithTag("coach_overlay_dismiss", useUnmergedTree = true)
+        dismiss.fetchSemanticsNodes().forEach { node ->
+            assertTrue(
+                "\"Got it\" is laid out ${node.size.height}px tall — nothing can tap it",
+                node.size.height > 0 && node.size.width > 0,
+            )
+        }
+
+        dismiss.onFirst().performClick()
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithTag("selector_coach_overlay", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     private fun dismissGestureTutorialIfShown() {
         if (composeRule.onAllNodes(hasTestTag("gesture_tutorial_overlay"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
             composeRule.onAllNodes(hasTestTag("gesture_tutorial_overlay"), useUnmergedTree = true).onFirst().performClick()
@@ -1229,10 +1288,26 @@ class SelectorScreenTest {
                 composeRule.onAllNodes(hasTestTag("gesture_tutorial_overlay"), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
             }
         }
-        if (composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).onFirst().performClick()
+        // The coach guide is dismissed by its own button, never by its text.
+        // `hasText("GOT IT")` also matches the overlay's merged node, so the
+        // click used to land on the full-screen scrim — which dismisses too,
+        // and therefore passed for months while the button itself was laid out
+        // 0 px tall and could not be hit by a user at all.
+        if (composeRule.onAllNodesWithTag("selector_coach_overlay", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        ) {
+            composeRule.onAllNodesWithTag("coach_overlay_dismiss", useUnmergedTree = true)
+                .fetchSemanticsNodes().forEach { node ->
+                    assertTrue(
+                        "\"Got it\" is laid out ${node.size.height}px tall — nothing can tap it",
+                        node.size.height > 0 && node.size.width > 0,
+                    )
+                }
+            composeRule.onAllNodesWithTag("coach_overlay_dismiss", useUnmergedTree = true)
+                .onFirst().performClick()
             composeRule.waitUntil(timeoutMillis = 15000) {
-                composeRule.onAllNodes(hasText("GOT IT", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
+                composeRule.onAllNodesWithTag("selector_coach_overlay", useUnmergedTree = true)
+                    .fetchSemanticsNodes().isEmpty()
             }
         }
         if (composeRule.onAllNodes(hasText("Gestures", ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) {
