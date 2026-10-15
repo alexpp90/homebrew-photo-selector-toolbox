@@ -1,0 +1,42 @@
+# Dependency update PRs. Grouped and monthly so they arrive as a few reviewable PRs, not a
+# stream. Covered: the Android Gradle build (both Android products and :core) and the GitHub
+# Actions used by every workflow. Not covered on purpose: macOS Desktop (SwiftPM, no external
+# packages), Linux Desktop (Debian system packages, versions follow the distribution) and the
+# legacy Desktop (archived; security alerts still apply through the repository's Dependabot
+# alerts setting).
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /products/android
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      # Toolchain moves together: AGP, Kotlin, KSP and the Compose compiler must agree.
+      android-toolchain:
+        patterns:
+          - "com.android.*"
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+      androidx:
+        patterns:
+          - "androidx.*"
+      test-libraries:
+        patterns:
+          - "junit*"
+          - "org.robolectric*"
+          - "io.mockk*"
+          - "app.cash.turbine*"
+          - "org.jetbrains.kotlinx:kotlinx-coroutines-test"
+      other:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"

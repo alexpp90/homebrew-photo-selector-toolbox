@@ -299,8 +299,8 @@ class SettingsRepository @Inject constructor(
 
     /**
      * Record a folder as recently used, moving it to the front and de-duplicating.
-     * Folders evicted from the recents list also get their stored last-position
-     * removed so the preferences file does not grow without bound.
+     * Folders evicted from the recents list also get their scan info (and any retired
+     * last-position key) removed so the preferences file does not grow without bound.
      */
     suspend fun addRecentPath(uri: String, name: String) {
         context.dataStore.edit { prefs ->
@@ -316,29 +316,20 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    // ── Per-folder last position ─────────────────────────────────────────
+    // ── Retired per-folder last position ─────────────────────────────────
 
-    /** Keyed by the full URI: collision-free, unlike the legacy hashCode keys. */
+    // The feed is newest-first and always opens on the newest photo, so positions are no
+    // longer stored. Installs that predate this still hold these keys (indexes into the old
+    // oldest-first feed); they are removed when the folder leaves the recents list and by
+    // clearFolderPositions().
+
+    /** Keyed by the full URI. */
     private fun folderPositionKey(folderUri: String) =
         intPreferencesKey("folder_pos_v2_$folderUri")
 
-    /** Legacy hashCode-based key, read as a fallback and cleaned up on write. */
+    /** Older hashCode-based key. */
     private fun legacyFolderPositionKey(folderUri: String) =
         intPreferencesKey("folder_pos_${folderUri.hashCode()}")
-
-    suspend fun setFolderLastPosition(folderUri: String, index: Int) {
-        context.dataStore.edit { prefs ->
-            prefs[folderPositionKey(folderUri)] = index
-            prefs.remove(legacyFolderPositionKey(folderUri))
-        }
-    }
-
-    suspend fun getFolderLastPosition(folderUri: String): Int {
-        val prefs = context.dataStore.data.first()
-        return prefs[folderPositionKey(folderUri)]
-            ?: prefs[legacyFolderPositionKey(folderUri)]
-            ?: 0
-    }
 
     // ── Per-folder scan info ──────────────────────────────────────────────
 
@@ -362,7 +353,7 @@ class SettingsRepository @Inject constructor(
         return FolderScanInfo(maxLastModified = maxTime, fileCount = count)
     }
 
-    /** Clear all stored per-folder positions and scan metadata. */
+    /** Clear per-folder scan metadata and any retired last-position keys. */
     suspend fun clearFolderPositions() {
         context.dataStore.edit { prefs ->
             val keysToRemove = prefs.asMap().keys.filter {
@@ -372,7 +363,7 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    /** Clear image caches (Coil memory and disk) and all stored folder positions and scan info. */
+    /** Clear image caches (Coil memory and disk) and all per-folder scan info. */
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     suspend fun clearCache() {
         try {

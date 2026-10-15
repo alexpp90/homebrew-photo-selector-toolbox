@@ -172,7 +172,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Clear Coil thumbnail cache and stored folder positions.
+     * Clear Coil thumbnail cache and per-folder scan history (what counts as a new photo).
      * [onDone] fires after cache is cleared.
      */
     fun clearCache(onDone: () -> Unit = {}) {

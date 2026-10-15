@@ -116,7 +116,10 @@ jobs:
 
       - name: Build Application Bundle & Archive
         run: |
-          scripts/build_app.sh release
+          # Universal (arm64 + x86_64): the cask has no arch restriction and the README
+          # promises Intel support. The asset keeps its historical name because the
+          # alexpp90/homebrew-tap casks download it by that name.
+          scripts/build_app.sh release --universal
           cd .build/app
           zip -r -y ../../../../photo-selector-macos-apple-silicon.zip PhotoSelector.app
 
@@ -141,6 +144,16 @@ jobs:
         with:
           name: photo-selector-macos-apple-silicon
           path: artifacts
+
+      - name: Move nightly tag to this commit
+        # softprops/action-gh-release never moves an existing tag, so without this the Nightly
+        # Build release serves new assets under a tag pinned to an old commit.
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PATCH "repos/${{ github.repository }}/git/refs/tags/nightly" -f sha="$GITHUB_SHA" -F force=true \
+            || gh api -X POST "repos/${{ github.repository }}/git/refs" -f ref=refs/tags/nightly -f sha="$GITHUB_SHA"
 
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v2

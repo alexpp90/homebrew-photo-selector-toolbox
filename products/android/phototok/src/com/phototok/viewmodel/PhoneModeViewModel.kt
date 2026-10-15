@@ -455,9 +455,10 @@ class PhoneModeViewModel @Inject constructor(
     /**
      * Merge one discovery batch into the feed.
      *
-     * Batches are **appended**, never re-sorted into the existing feed, so a
-     * photo the user has already swiped past cannot jump back in front of them
-     * while the folder is still loading.
+     * Until the user swipes (and unless a specific photo is being kept), each batch
+     * re-orders the whole feed so index 0 is always the newest photo found so far.
+     * Once the user has navigated, batches are **appended** only, so a photo they
+     * already swiped past cannot jump back in front of them while the folder loads.
      */
     private fun publishBatch(
         discovered: List<ImageItem>,
@@ -611,12 +612,6 @@ class PhoneModeViewModel @Inject constructor(
             maybeShowRawJpegSuggestion()
             maybeShowFilterMismatchHint()
             loadExifForCurrent()
-            // Persist position for this folder
-            _uiState.value.sourceFolderUri?.let { uri ->
-                viewModelScope.launch {
-                    settingsRepository.setFolderLastPosition(uri, index)
-                }
-            }
         }
     }
 

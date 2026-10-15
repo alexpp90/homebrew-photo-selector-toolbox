@@ -64,6 +64,10 @@ products/macos-desktop/scripts/build_app.sh          # prints .build/app/PhotoSe
 open products/macos-desktop/.build/app/PhotoSelector.app
 ```
 
+The bundle holds the host architecture only. Release packaging adds `--universal` to build
+arm64 and x86_64 slices and merge them with `lipo`, so the published zip runs on Apple Silicon
+and Intel Macs alike.
+
 Directly from SPM also works; the app promotes itself to a regular foreground app at launch
 (an unbundled binary otherwise receives no key events at all):
 

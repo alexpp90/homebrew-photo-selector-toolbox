@@ -5,20 +5,52 @@
 # and receives keyboard focus normally. (The raw SwiftPM binary is also fixed at runtime by
 # ForegroundActivation, but the bundle is the supported way to run the app.)
 #
-# Usage: products/macos-desktop/scripts/build_app.sh [debug|release]
+# Usage: products/macos-desktop/scripts/build_app.sh [debug|release] [--universal]
+#   --universal  build arm64 and x86_64 slices and merge them with lipo (release packaging;
+#                the published cask serves Apple Silicon and Intel Macs from one zip).
+#                Without it the bundle holds the host architecture only (fast local runs).
 # Prints the path of the assembled bundle on the last line.
 set -euo pipefail
 
-CONFIG="${1:-release}"
+CONFIG="release"
+UNIVERSAL=false
+for arg in "$@"; do
+    case "$arg" in
+        debug|release) CONFIG="$arg" ;;
+        --universal)   UNIVERSAL=true ;;
+        *) echo "ERROR: unknown argument: $arg" >&2; exit 1 ;;
+    esac
+done
 PRODUCT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --product PhotoSelectorApp >&2
-BIN_DIR="$(swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --show-bin-path)"
 
 APP="$PRODUCT_DIR/.build/app/PhotoSelector.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN_DIR/PhotoSelectorApp" "$APP/Contents/MacOS/PhotoSelectorApp"
+
+if $UNIVERSAL; then
+    # One build per triple. Both can share one output directory, so each slice is copied
+    # out before the next build overwrites it.
+    SLICES="$PRODUCT_DIR/.build/app-slices"
+    rm -rf "$SLICES"
+    mkdir -p "$SLICES"
+    for arch in arm64 x86_64; do
+        triple="$arch-apple-macosx14.0"
+        swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --product PhotoSelectorApp --triple "$triple" >&2
+        BIN_DIR="$(swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --triple "$triple" --show-bin-path)"
+        cp "$BIN_DIR/PhotoSelectorApp" "$SLICES/PhotoSelectorApp-$arch"
+    done
+    lipo -create "$SLICES/PhotoSelectorApp-arm64" "$SLICES/PhotoSelectorApp-x86_64" \
+        -output "$APP/Contents/MacOS/PhotoSelectorApp"
+    ARCHS="$(lipo -archs "$APP/Contents/MacOS/PhotoSelectorApp")"
+    if [[ " $ARCHS " != *" arm64 "* || " $ARCHS " != *" x86_64 "* ]]; then
+        echo "ERROR: universal binary is missing a slice (has: $ARCHS)" >&2
+        exit 1
+    fi
+else
+    swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --product PhotoSelectorApp >&2
+    BIN_DIR="$(swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --show-bin-path)"
+    cp "$BIN_DIR/PhotoSelectorApp" "$APP/Contents/MacOS/PhotoSelectorApp"
+fi
 if [[ -f "$PRODUCT_DIR/Resources/AppIcon.icns" ]]; then
     cp "$PRODUCT_DIR/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 elif [[ -f "$PRODUCT_DIR/../../assets/logo.icns" ]]; then

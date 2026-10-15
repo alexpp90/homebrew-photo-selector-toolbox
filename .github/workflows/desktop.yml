@@ -319,6 +319,16 @@ jobs:
       - name: Display Downloaded Artifacts
         run: ls -R artifacts
 
+      - name: Move nightly tag to this commit
+        # softprops/action-gh-release never moves an existing tag, so without this the Nightly
+        # Build release serves new assets under a tag pinned to an old commit.
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PATCH "repos/${{ github.repository }}/git/refs/tags/nightly" -f sha="$GITHUB_SHA" -F force=true \
+            || gh api -X POST "repos/${{ github.repository }}/git/refs" -f ref=refs/tags/nightly -f sha="$GITHUB_SHA"
+
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
