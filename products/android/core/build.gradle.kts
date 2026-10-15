@@ -1,6 +1,7 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
 }
@@ -14,9 +15,15 @@ plugins {
 // solutions, and premature sharing is what couples them.
 //
 // :core must not depend on Compose, Room, OpenCV, Vico or on either app module.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 android {
     namespace = "com.photoselector.core"
-    compileSdk = 36
+    compileSdk = 37
 
     // Uniform product layout: every product in this repository exposes `src/`
     // and `tests/`, whatever its language. That overrides Gradle's default
@@ -24,13 +31,16 @@ android {
     // docs/README.md. Keep these four blocks in sync across the Android modules.
     sourceSets {
         getByName("main") {
-            java.setSrcDirs(listOf("src"))
+            java.directories.apply { clear(); add("src") }
+            kotlin.directories.apply { clear(); add("src") }
         }
         getByName("test") {
-            java.setSrcDirs(listOf("tests/unit"))
+            java.directories.apply { clear(); add("tests/unit") }
+            kotlin.directories.apply { clear(); add("tests/unit") }
         }
         getByName("androidTest") {
-            java.setSrcDirs(listOf("tests/instrumented"))
+            java.directories.apply { clear(); add("tests/instrumented") }
+            kotlin.directories.apply { clear(); add("tests/instrumented") }
         }
     }
 
@@ -53,10 +63,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     testOptions {

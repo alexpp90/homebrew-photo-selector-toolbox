@@ -12,6 +12,7 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Rect
 import org.opencv.core.Size
+import org.opencv.geometry.Geometry
 import org.opencv.imgproc.Imgproc
 import javax.inject.Inject
 import kotlin.math.PI
@@ -194,7 +195,7 @@ class OpenCvCompositionAnalyzer @Inject constructor(
             Imgproc.Sobel(grayMat, gradY, CvType.CV_32F, 0, 1)
             Core.magnitude(gradX, gradY, gradMag)
 
-            val moments = Imgproc.moments(gradMag, false)
+            val moments = Geometry.moments(gradMag, false)
             val m00 = moments.m00
             val m10 = moments.m10
             val m01 = moments.m01

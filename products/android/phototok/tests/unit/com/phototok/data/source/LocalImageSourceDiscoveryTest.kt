@@ -78,7 +78,7 @@ class LocalImageSourceDiscoveryTest {
             val parentId = parentDocumentIdOf(firstArg())
             tree[parentId]?.let { rows ->
                 MatrixCursor(COLUMNS).apply {
-                    rows.forEach { addRow(arrayOf(it.id, it.name, it.mime, it.size, it.modified)) }
+                    rows.forEach { addRow(arrayOf<Any?>(it.id, it.name, it.mime, it.size, it.modified)) }
                 }
             }
         }

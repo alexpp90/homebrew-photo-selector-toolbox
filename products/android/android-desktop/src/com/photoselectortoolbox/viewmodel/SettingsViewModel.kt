@@ -38,7 +38,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(
+            combine<Any, SettingsUiState>(
                 settingsRepository.selectionFolderName,
                 settingsRepository.sortingEnabled,
                 settingsRepository.groupingEnabled,

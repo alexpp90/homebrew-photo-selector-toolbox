@@ -17,8 +17,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class MediaStoreReaderTest {
 
     private val reader = MediaStoreReader()
@@ -47,7 +49,7 @@ class MediaStoreReaderTest {
                 MediaStore.Images.Media.DATE_MODIFIED
             )
         ).apply {
-            addRow(arrayOf("/storage/emulated/0/DCIM/IMG_0001.JPG", 4096L, 1700000000L))
+            addRow(arrayOf<Any>("/storage/emulated/0/DCIM/IMG_0001.JPG", 4096L, 1700000000L))
         }
 
         every { context.contentResolver } returns contentResolver

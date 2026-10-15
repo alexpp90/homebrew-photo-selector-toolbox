@@ -76,7 +76,7 @@ class DirectoryDocumentsProvider : ContentProvider() {
                     Document.COLUMN_LAST_MODIFIED -> f.lastModified()
                     else -> null
                 }
-            }.toTypedArray())
+            }.toTypedArray<Any?>())
         }
         return cursor
     }
