@@ -10,6 +10,7 @@ public enum AppSettingsKeys {
     public static let sharpnessBlurryThreshold = "sharpnessBlurryThreshold"
     public static let sharpnessAcceptableThreshold = "sharpnessAcceptableThreshold"
     public static let aestheticThreshold = "aestheticThreshold"
+    public static let aestheticScoringEnabled = "aestheticScoringEnabled"
 
     // MARK: - Cache & Performance
     public static let thumbnailCacheLimitMB = "thumbnailCacheLimitMB"
@@ -27,6 +28,9 @@ public struct AppSettingsDefaults {
     public static let sharpnessBlurryThreshold: Double = 35.0
     public static let sharpnessAcceptableThreshold: Double = 70.0
     public static let aestheticThreshold: Double = 0.0
+    /// Apple Vision aesthetic (AI) scoring runs lazily after the photo is on screen; users can
+    /// switch it off entirely, in which case the Vision request is never issued.
+    public static let aestheticScoringEnabled: Bool = true
 
     // Cache & Performance Defaults
     public static let thumbnailCacheLimitMB: Int = 512
@@ -88,6 +92,15 @@ public extension UserDefaults {
         }
     }
 
+    var aestheticScoringEnabled: Bool {
+        get {
+            object(forKey: AppSettingsKeys.aestheticScoringEnabled) as? Bool ?? AppSettingsDefaults.aestheticScoringEnabled
+        }
+        set {
+            set(newValue, forKey: AppSettingsKeys.aestheticScoringEnabled)
+        }
+    }
+
     var thumbnailCacheLimitMB: Int {
         get {
             let val = integer(forKey: AppSettingsKeys.thumbnailCacheLimitMB)
@@ -125,6 +138,7 @@ public extension UserDefaults {
         removeObject(forKey: AppSettingsKeys.sharpnessBlurryThreshold)
         removeObject(forKey: AppSettingsKeys.sharpnessAcceptableThreshold)
         removeObject(forKey: AppSettingsKeys.aestheticThreshold)
+        removeObject(forKey: AppSettingsKeys.aestheticScoringEnabled)
         removeObject(forKey: AppSettingsKeys.thumbnailCacheLimitMB)
         removeObject(forKey: AppSettingsKeys.preloadWindowBefore)
         removeObject(forKey: AppSettingsKeys.preloadWindowAfter)

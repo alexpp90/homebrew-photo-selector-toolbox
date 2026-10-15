@@ -81,6 +81,9 @@ struct ScoringSettingsTab: View {
     @AppStorage(AppSettingsKeys.sharpnessAcceptableThreshold)
     private var sharpnessAcceptableThreshold: Double = AppSettingsDefaults.sharpnessAcceptableThreshold
 
+    @AppStorage(AppSettingsKeys.aestheticScoringEnabled)
+    private var aestheticScoringEnabled: Bool = AppSettingsDefaults.aestheticScoringEnabled
+
     @AppStorage(AppSettingsKeys.aestheticThreshold)
     private var aestheticThreshold: Double = AppSettingsDefaults.aestheticThreshold
 
@@ -112,6 +115,10 @@ struct ScoringSettingsTab: View {
             }
 
             Section("Apple Vision Aesthetics") {
+                Toggle("Compute AI aesthetic score", isOn: $aestheticScoringEnabled)
+                Text("Runs after the photo and its EXIF are already on screen, so it never delays browsing. Turn it off to skip the Vision request entirely; focus and exposure scores are unaffected.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Minimum Aesthetic Quality Threshold:")
@@ -121,6 +128,7 @@ struct ScoringSettingsTab: View {
                             .foregroundStyle(.yellow)
                     }
                     Slider(value: $aestheticThreshold, in: 0.0...9.0, step: 0.5)
+                        .disabled(!aestheticScoringEnabled)
                 }
                 Text("Evaluates visual composition and appeal using Apple Vision VNCalculateImageAestheticsScoresRequest.")
                     .font(.caption)

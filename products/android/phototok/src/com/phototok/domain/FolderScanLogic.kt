@@ -18,7 +18,38 @@ data class FolderScanInfo(
 object FolderScanLogic {
 
     /**
-     * Returns the 0-based index of the first image in [images] whose [ImageItem.lastModified]
+     * Where the viewer lands once enumeration is complete and the folder is NOT being
+     * reloaded inside an active session. The feed is newest-first, so new photos sit at
+     * the start of it. A previously saved position is deliberately not restored.
+     *
+     * - The user already swiped: stay on [preservedUri] (fallback [currentIndex]).
+     * - Randomized feed: order carries no meaning; jump to the first new photo if any,
+     *   else stay on [preservedUri].
+     * - Otherwise: any photo newer than [previousMaxLastModified] puts the user at the
+     *   first new one (index 0 unless orientation grouping interposes); otherwise
+     *   the viewer starts at 0 (the newest).
+     */
+    fun resolveLandingIndex(
+        images: List<ImageItem>,
+        previousMaxLastModified: Long,
+        userHasNavigated: Boolean,
+        randomized: Boolean,
+        preservedUri: String?,
+        currentIndex: Int,
+    ): Int {
+        if (images.isEmpty()) return 0
+        val preserved = preservedUri?.let { u -> images.indexOfFirst { it.uri == u } }?.takeIf { it >= 0 }
+            ?: currentIndex.coerceIn(0, images.size - 1)
+        if (userHasNavigated) return preserved
+        val firstNew = findFirstNewImageIndex(images, previousMaxLastModified)
+        if (randomized) return if (firstNew >= 0) firstNew else preserved
+        if (firstNew >= 0) return firstNew
+        return 0
+    }
+
+    /**
+     * Returns the 0-based index of the first image (in feed order; for a newest-first feed
+     * this is where the run of new photos starts) in [images] whose [ImageItem.lastModified]
      * is strictly greater than [previousMaxLastModified].
      *
      * Returns -1 if [previousMaxLastModified] is <= 0 (e.g. initial folder load without

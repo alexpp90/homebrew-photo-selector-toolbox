@@ -459,7 +459,7 @@ class PhoneModeViewModelTest {
     }
 
     @Test
-    fun `later batches are appended without reordering the visible feed`() = runTest {
+    fun `after the user swiped later batches are appended without reordering the visible feed`() = runTest {
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
         coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
@@ -469,6 +469,7 @@ class PhoneModeViewModelTest {
         val first = listOf(image("old_a.jpg", 10), image("old_b.jpg", 20))
         discovery.emit(first)
         advanceUntilIdle()
+        viewModel.navigateToImage(1) // the user has taken over
         val orderAfterFirstBatch = viewModel.uiState.value.images.map { it.fileName }
 
         // Cumulative emission: the same two files plus two *newer* ones. A global
@@ -479,7 +480,51 @@ class PhoneModeViewModelTest {
         val names = viewModel.uiState.value.images.map { it.fileName }
         assertEquals(4, names.size)
         assertEquals(orderAfterFirstBatch, names.take(2))
-        assertEquals(listOf("new_b.jpg", "new_a.jpg"), names.drop(2))
+        assertEquals(listOf("new_a.jpg", "new_b.jpg"), names.drop(2))
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+    }
+
+    @Test
+    fun `before any swipe a newer later batch moves the newest photo to index 0`() = runTest {
+        val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
+        every { imageRepository.discoverImages(any()) } returns discovery
+        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
+        val viewModel = buildViewModel()
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+
+        val first = listOf(image("old_a.jpg", 10), image("old_b.jpg", 20))
+        discovery.emit(first)
+        advanceUntilIdle()
+        assertEquals("old_b.jpg", viewModel.uiState.value.images[0].fileName)
+
+        discovery.emit(first + listOf(image("new_a.jpg", 900), image("new_b.jpg", 800)))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(
+            listOf("new_a.jpg", "new_b.jpg", "old_b.jpg", "old_a.jpg"),
+            state.images.map { it.fileName },
+        )
+        assertEquals(0, state.currentIndex)
+    }
+
+    @Test
+    fun `a newer photo arriving after a swipe is appended and does not move the viewed photo`() = runTest {
+        val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
+        every { imageRepository.discoverImages(any()) } returns discovery
+        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
+        val viewModel = buildViewModel()
+        viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
+
+        val first = listOf(image("a.jpg", 30), image("b.jpg", 20))
+        discovery.emit(first)
+        advanceUntilIdle()
+        viewModel.navigateToImage(1) // b.jpg
+        discovery.emit(first + listOf(image("z_new.jpg", 99)))
+        advanceUntilIdle()
+        // append-only after a swipe: z_new is at the end, b.jpg still on screen
+        assertEquals("z_new.jpg", viewModel.uiState.value.images.last().fileName)
+        assertEquals("b.jpg", viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].fileName)
     }
 
     @Test
@@ -508,7 +553,7 @@ class PhoneModeViewModelTest {
     }
 
     @Test
-    fun `a saved position beyond the first batch is restored as photos stream in`() = runTest {
+    fun `a saved position is ignored and a fresh load starts on the newest photo`() = runTest {
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
         coEvery { settingsRepository.getFolderLastPosition(any()) } returns 4
@@ -518,31 +563,32 @@ class PhoneModeViewModelTest {
         val first = (1..3).map { image("b1_$it.jpg", it.toLong()) }
         discovery.emit(first)
         advanceUntilIdle()
-        // Clamped to what is loaded so far.
-        assertEquals(2, viewModel.uiState.value.currentIndex)
+        assertEquals(0, viewModel.uiState.value.currentIndex)
 
         discovery.emit(first + (4..8).map { image("b2_$it.jpg", it.toLong()) })
         advanceUntilIdle()
-        assertEquals(4, viewModel.uiState.value.currentIndex)
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+        assertEquals("b2_8.jpg", viewModel.uiState.value.images[0].fileName)
     }
 
     @Test
-    fun `swiping during discovery cancels the pending position restore`() = runTest {
+    fun `swiping during discovery keeps batches append-only`() = runTest {
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 7
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
 
         val first = (1..3).map { image("b1_$it.jpg", it.toLong()) }
         discovery.emit(first)
         advanceUntilIdle()
-        viewModel.navigateToImage(0) // the user takes over
+        viewModel.navigateToImage(1) // the user takes over
+        val viewed = viewModel.uiState.value.images[1].fileName
 
         discovery.emit(first + (4..9).map { image("b2_$it.jpg", it.toLong()) })
         advanceUntilIdle()
 
-        assertEquals(0, viewModel.uiState.value.currentIndex)
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+        assertEquals(viewed, viewModel.uiState.value.images[1].fileName)
     }
 
     @Test
@@ -726,11 +772,11 @@ class PhoneModeViewModelTest {
         viewModel.reloadSourceFolder()
         advanceUntilIdle()
 
-        // Images should be re-sorted chronologically: photo0 (5), photo1 (10), photo2 (20), photo3 (30)
+        // Images are newest first: photo3 (30), photo2 (20), photo1 (10), photo0 (5)
         val names = viewModel.uiState.value.images.map { it.fileName }
-        assertEquals(listOf("photo0.jpg", "photo1.jpg", "photo2.jpg", "photo3.jpg"), names)
-        // Current index should track img2 ("photo2.jpg", which is now at index 2)
-        assertEquals(2, viewModel.uiState.value.currentIndex)
+        assertEquals(listOf("photo3.jpg", "photo2.jpg", "photo1.jpg", "photo0.jpg"), names)
+        // Current index should track img2 ("photo2.jpg"), which was at index 1 and still is
+        assertEquals(1, viewModel.uiState.value.currentIndex)
         assertEquals(img2.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
     }
 
@@ -739,7 +785,7 @@ class PhoneModeViewModelTest {
         val img1 = image("photo1.jpg", 10)
         val img2 = image("photo2.jpg", 20)
         val viewModel = loadFolder(img1, img2)
-        viewModel.navigateToImage(1)
+        viewModel.navigateToImage(1) // img1 (oldest)
 
         val imgNew = image("photo3.jpg", 30)
         every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, imgNew))
@@ -747,18 +793,19 @@ class PhoneModeViewModelTest {
         viewModel.reloadSourceFolder()
         advanceUntilIdle()
 
-        // Should preserve current photo while showing prompt
-        assertEquals(1, viewModel.uiState.value.currentIndex)
+        // Should preserve current photo (img1, now at index 2) while showing prompt
+        assertEquals(2, viewModel.uiState.value.currentIndex)
         val prompt = viewModel.uiState.value.reloadPrompt
         assertNotNull(prompt)
         assertEquals(1, prompt?.newCount)
-        assertEquals(2, prompt?.firstNewIndex)
+        assertEquals(0, prompt?.firstNewIndex)
 
         // Confirming jump to latest navigates to new photo
         viewModel.confirmReloadJumpToLatest()
         advanceUntilIdle()
 
-        assertEquals(2, viewModel.uiState.value.currentIndex)
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+        assertEquals(imgNew.uri, viewModel.uiState.value.images[0].uri)
         assertNull(viewModel.uiState.value.reloadPrompt)
         coVerify { settingsRepository.setFolderScanInfo(any(), match { it.maxLastModified == 30L && it.fileCount == 3 }) }
     }
@@ -780,7 +827,8 @@ class PhoneModeViewModelTest {
         viewModel.dismissReloadPrompt()
         advanceUntilIdle()
 
-        assertEquals(1, viewModel.uiState.value.currentIndex)
+        // img1 (the photo being viewed) is now at index 2 behind the new photo
+        assertEquals(2, viewModel.uiState.value.currentIndex)
         assertNull(viewModel.uiState.value.reloadPrompt)
     }
 
@@ -797,12 +845,13 @@ class PhoneModeViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.reloadPrompt)
+        // img1 (older) stays on screen; newest-first puts it at index 1
         assertEquals(1, viewModel.uiState.value.currentIndex)
         assertTrue(viewModel.uiState.value.lastActionFeedback?.message?.contains("no new photos") == true)
     }
 
     @Test
-    fun `selectSourceFolder jumps to first unscanned photo when new photos exist outside active session`() = runTest {
+    fun `selectSourceFolder lands on the newest photo when new photos exist outside active session`() = runTest {
         val img1 = image("photo1.jpg", 10)
         val img2 = image("photo2.jpg", 20)
         val img3 = image("photo3.jpg", 30)
@@ -817,18 +866,25 @@ class PhoneModeViewModelTest {
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
         advanceUntilIdle()
 
-        // img3 (30L) is the first unscanned photo (index 2 in chronological order)
-        assertEquals(2, viewModel.uiState.value.currentIndex)
-        assertEquals(img3.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
+        // newest first: img4 and img3 are new and sit at the start
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+        assertEquals(img4.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
     }
 
     @Test
-    fun `selectSourceFolder restores saved position when no new unscanned photos exist`() = runTest {
+    fun `selectSourceFolder on a fresh folder starts on the newest photo`() = runTest {
+        val viewModel = loadFolder(image("a.jpg", 10), image("c.jpg", 30), image("b.jpg", 20))
+
+        assertEquals(listOf("c.jpg", "b.jpg", "a.jpg"), viewModel.uiState.value.images.map { it.fileName })
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+    }
+
+    @Test
+    fun `selectSourceFolder starts on the newest photo even when a position was saved`() = runTest {
         val img1 = image("photo1.jpg", 10)
         val img2 = image("photo2.jpg", 20)
         val img3 = image("photo3.jpg", 30)
 
-        // Folder previously had max timestamp 30L (all were scanned), last position was 1
         coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(maxLastModified = 30L, fileCount = 3)
         coEvery { settingsRepository.getFolderLastPosition("content://tree/photos") } returns 1
         every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, img3))
@@ -837,9 +893,8 @@ class PhoneModeViewModelTest {
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
         advanceUntilIdle()
 
-        // Should restore saved position 1
-        assertEquals(1, viewModel.uiState.value.currentIndex)
-        assertEquals(img2.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+        assertEquals(img3.uri, viewModel.uiState.value.images[0].uri)
     }
 
     @Test
@@ -854,7 +909,7 @@ class PhoneModeViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.pendingDelete)
-        coVerify(exactly = 1) { imageRepository.deleteImage(Uri.parse("content://photos/a.jpg")) }
+        coVerify(exactly = 1) { imageRepository.deleteImage(Uri.parse("content://photos/b.jpg")) }
     }
 
     @Test
@@ -901,7 +956,7 @@ class PhoneModeViewModelTest {
 
         assertTrue(viewModel.uiState.value.images.isEmpty())
         assertNull(viewModel.uiState.value.pendingDelete)
-        coVerify(exactly = 1) { imageRepository.deleteImage(Uri.parse("content://photos/a.jpg")) }
+        coVerify(exactly = 1) { imageRepository.deleteImage(Uri.parse("content://photos/b.jpg")) }
     }
 
     @Test

@@ -1,13 +1,20 @@
 import SwiftUI
 import PhotoSelectorKit
 
-/// Records when each photograph first reached the screen, per tier. Read by the UI
-/// self-test to measure time-to-first-photo; costs one dictionary write per displayed photo.
+/// Records when each photograph first reached the screen, per tier, and when its EXIF and
+/// scores first became visible. Read by the UI self-test to measure time-to-first-photo and
+/// EXIF latency; costs one dictionary write per displayed photo.
 @MainActor
 final class DisplayTelemetry {
     static let shared = DisplayTelemetry()
 
     private(set) var firstDisplayed: [UUID: [ThumbnailTier: Date]] = [:]
+    private(set) var exifShown: [UUID: Date] = [:]
+    private(set) var technicalScoresShown: [UUID: Date] = [:]
+    private(set) var aestheticsShown: [UUID: Date] = [:]
+    /// Number of Vision requests issued since the last `reset()` (the self-test asserts 0
+    /// when AI scoring is switched off).
+    private(set) var aestheticRequests = 0
 
     func markDisplayed(photoID: UUID, tier: ThumbnailTier) {
         if firstDisplayed[photoID]?[tier] == nil {
@@ -15,13 +22,39 @@ final class DisplayTelemetry {
         }
     }
 
+    func markExif(photoID: UUID) { if exifShown[photoID] == nil { exifShown[photoID] = Date() } }
+    func markTechnicalScores(photoID: UUID) { if technicalScoresShown[photoID] == nil { technicalScoresShown[photoID] = Date() } }
+    func markAesthetics(photoID: UUID) { if aestheticsShown[photoID] == nil { aestheticsShown[photoID] = Date() } }
+    func markAestheticRequest() { aestheticRequests += 1 }
+
     func firstDisplay(of photoID: UUID, tier: ThumbnailTier) -> Date? {
         firstDisplayed[photoID]?[tier]
     }
 
     func reset() {
         firstDisplayed.removeAll()
+        exifShown.removeAll()
+        technicalScoresShown.removeAll()
+        aestheticsShown.removeAll()
+        aestheticRequests = 0
     }
+}
+
+/// Identity of one load: a different photo **or** a flipped AI-score setting restarts it.
+struct PhotoLoadKey: Hashable {
+    let photoID: UUID
+    let aestheticsEnabled: Bool
+}
+
+/// Runs blocking `work` on a background thread at `priority`, propagating cancellation of the
+/// awaiting task into it (a bare `Task.detached` ignores its parent's cancellation, so stale
+/// work for photographs the user already left kept running and queued up behind the current one).
+private func runCancellable<T: Sendable>(
+    priority: TaskPriority,
+    _ work: @escaping @Sendable () async -> T
+) async -> T {
+    let task = Task.detached(priority: priority) { await work() }
+    return await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
 }
 
 /// Per-view image state for a progressively loaded photograph.
@@ -33,10 +66,16 @@ final class ProgressivePhotoState: ObservableObject {
     @Published var photoID: UUID?
     @Published var panOffset: CGSize = .zero
 
-    /// Streams placeholder → preview for `photo`, then resolves missing EXIF and scores
-    /// off the main actor.
+    /// Loads everything the viewport shows for `photo`, **in order of cost**, none of it on
+    /// the main actor:
+    /// 1. EXIF — started immediately, concurrently with the image decode (header read, ms);
+    /// 2. image: embedded-thumbnail placeholder → 2048 preview;
+    /// 3. focus + exposure clipping (Accelerate, ms) — published as soon as they exist;
+    /// 4. Apple Vision aesthetics — debounced, cancellable, and skipped entirely when the
+    ///    user switched AI scoring off.
     func load(
         photo: PhotoItem,
+        aestheticsEnabled: Bool,
         onUpdateExif: ((UUID, ExifData) -> Void)?,
         onUpdateScores: ((UUID, QualityScores) -> Void)?
     ) async {
@@ -46,34 +85,68 @@ final class ProgressivePhotoState: ObservableObject {
             photoID = photo.id
         }
 
+        let url = photo.url
+        let id = photo.id
+        let needsExif = photo.exif == nil || photo.exif?.isFallback == true
+        let exifTask: Task<Void, Never>? = needsExif ? Task { @MainActor in
+            let exif = await runCancellable(priority: .userInitiated) {
+                CullingWorkspaceViewModel.readMetadataWithCompanionFallback(for: url)
+            }
+            if let exif, !exif.isFallback, !Task.isCancelled {
+                onUpdateExif?(id, exif)
+                DisplayTelemetry.shared.markExif(photoID: id)
+            }
+        } : nil
+        if !needsExif { DisplayTelemetry.shared.markExif(photoID: id) }
+
+        await withTaskCancellationHandler {
+            await loadImageAndScores(photo: photo, aestheticsEnabled: aestheticsEnabled, onUpdateScores: onUpdateScores)
+            await exifTask?.value
+        } onCancel: {
+            exifTask?.cancel()
+        }
+    }
+
+    private func loadImageAndScores(
+        photo: PhotoItem,
+        aestheticsEnabled: Bool,
+        onUpdateScores: ((UUID, QualityScores) -> Void)?
+    ) async {
+        let id = photo.id
         var preview: CGImage?
         for await progressive in ThumbnailLoader.shared.progressivePreview(for: photo.url) {
-            guard !Task.isCancelled, photoID == photo.id else { return }
+            guard !Task.isCancelled, photoID == id else { return }
             image = progressive.image
             tier = progressive.tier
-            DisplayTelemetry.shared.markDisplayed(photoID: photo.id, tier: progressive.tier)
+            DisplayTelemetry.shared.markDisplayed(photoID: id, tier: progressive.tier)
             if progressive.tier == .preview { preview = progressive.image }
         }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, let preview else { return }
 
-        if photo.exif == nil || photo.exif?.isFallback == true {
-            let url = photo.url
-            let exif = await Task.detached(priority: .utility) {
-                CullingWorkspaceViewModel.readMetadataWithCompanionFallback(for: url)
-            }.value
-            if let exif, !exif.isFallback, !Task.isCancelled {
-                onUpdateExif?(photo.id, exif)
+        let plan = ScoringPlan.make(existing: photo.scores, aestheticsEnabled: aestheticsEnabled)
+        let wrapped = CGImageWrapper(preview)
+        var scores = photo.scores
+
+        if plan.runTechnical {
+            let technical = await runCancellable(priority: .utility) {
+                QualityScoringService.scoreTechnical(cgImage: wrapped.image)
             }
+            guard !Task.isCancelled else { return }
+            scores = technical
+            onUpdateScores?(id, technical)
+            DisplayTelemetry.shared.markTechnicalScores(photoID: id)
         }
 
-        if photo.scores == nil, let preview, !Task.isCancelled {
-            let wrapped = CGImageWrapper(preview)
-            let scores = await Task.detached(priority: .utility) {
-                await QualityScoringService.score(cgImage: wrapped.image)
-            }.value
-            if !Task.isCancelled {
-                onUpdateScores?(photo.id, scores)
+        if plan.runAesthetics, let base = scores {
+            try? await Task.sleep(for: ScoringPlan.aestheticsDebounce)
+            guard !Task.isCancelled else { return }
+            DisplayTelemetry.shared.markAestheticRequest()
+            let evaluation = await runCancellable(priority: .utility) {
+                await QualityScoringService.evaluateAesthetics(cgImage: wrapped.image)
             }
+            guard !Task.isCancelled, let evaluation else { return }
+            onUpdateScores?(id, base.withAesthetics(evaluation.mappedScore, isUtility: evaluation.isUtility))
+            DisplayTelemetry.shared.markAesthetics(photoID: id)
         }
     }
 }

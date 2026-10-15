@@ -17,6 +17,8 @@ products/macos-desktop/
 ## Key Capabilities
 
 - **Pure Native Apple Vision Aesthetics**: On-device aesthetic scoring via `VNCalculateImageAestheticsScoresRequest` utilizing Apple Neural Engine hardware with zero Python, Ollama, or external network dependencies.
+- **Metadata never covers the photo**: EXIF and scores live in their own strip/side column (chosen by a pure layout solver) and the image fits the remaining space; 2-Up/3-Up panes stack header, image and EXIF strip.
+- **Instant EXIF, lazy AI score**: EXIF shows with the first photo; focus/clipping follow in milliseconds; the Vision aesthetic score fills in last and can be switched off in Settings (`⌘,`), in which case the Vision request never runs.
 - **Hardware-Accelerated Focus Metric**: Sub-millisecond 2D Laplacian variance computation via Apple Accelerate (`vImageConvolve_PlanarF` + `vDSP`), processing >1,500 images/second per thread.
 - **Multi-Tier RAW & Image Preloading**: Sub-sampling and orientation correction via ImageIO (`CGImageSourceCreateThumbnailAtIndex`) for stutter-free scrolling and instant navigation.
 - **Maximized Viewport Culling**: Borderless comparison layouts (single, side-by-side, triplet) allocating >85% of window area to photo previews without clutter or chrome.

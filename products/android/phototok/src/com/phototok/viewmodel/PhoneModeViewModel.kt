@@ -146,11 +146,14 @@ class PhoneModeViewModel @Inject constructor(
     /** URIs whose dimensions have been read, so batch restarts do no double I/O. */
     private val dimensionsResolved = mutableSetOf<String>()
 
-    /** Saved feed position still to be restored as more photos stream in. */
-    private var pendingRestoreIndex: Int? = null
-
-    /** Set once the user changes page themselves, which cancels position restore. */
+    /** Set once the user changes page themselves. */
     private var userHasNavigated = false
+
+    /**
+     * True while batches may re-order the whole feed newest-first: the user has not
+     * swiped yet and no specific photo is being kept (active-session reload).
+     */
+    private var newestFirstReorderAllowed = true
 
     companion object {
         private const val TAG = "PhoneModeVM"
@@ -318,7 +321,6 @@ class PhoneModeViewModel @Inject constructor(
             val scanInfo = settingsRepository.getFolderScanInfo(uri.toString())
             collectDiscoveredImages(
                 folderUri = uri,
-                restorePosition = true,
                 errorLabel = "images",
                 previousMaxLastModified = scanInfo.maxLastModified,
                 wasActiveSession = false,
@@ -335,7 +337,6 @@ class PhoneModeViewModel @Inject constructor(
      */
     private suspend fun collectDiscoveredImages(
         folderUri: Uri,
-        restorePosition: Boolean,
         errorLabel: String,
         targetUriToKeep: String? = null,
         previousMaxLastModified: Long = 0L,
@@ -348,11 +349,7 @@ class PhoneModeViewModel @Inject constructor(
         // Read once here rather than per batch: on a fresh launch the observed
         // settings may not have emitted into uiState yet.
         val settings = settingsRepository.phoneSettings.first()
-        pendingRestoreIndex = if (restorePosition) {
-            settingsRepository.getFolderLastPosition(folderUri.toString()).takeIf { it > 0 }
-        } else {
-            null
-        }
+        newestFirstReorderAllowed = targetUriToKeep == null
 
         try {
             imageRepository.discoverImages(folderUri).collect { discovered ->
@@ -408,19 +405,16 @@ class PhoneModeViewModel @Inject constructor(
                     settingsRepository.setFolderScanInfo(folderUri.toString(), updatedScan)
                 }
             } else {
-                // Outside an active session:
-                // If there are new files that were not yet scanned, jump to the first new file
-                val firstNewIndex = FolderScanLogic.findFirstNewImageIndex(sorted.images, previousMaxLastModified)
-                if (firstNewIndex >= 0 && !userHasNavigated) {
-                    newIndex = firstNewIndex
-                } else {
-                    newIndex = if (uriToPreserve != null) {
-                        val idx = sorted.images.indexOfFirst { it.uri == uriToPreserve }
-                        if (idx >= 0) idx else resolveFeedIndex(current.currentIndex, sorted.images.size, targetUriToKeep, sorted.images)
-                    } else {
-                        resolveFeedIndex(current.currentIndex, sorted.images.size, targetUriToKeep, sorted.images)
-                    }
-                }
+                // Outside an active session the feed is newest-first: new photos are at the
+                // start and a fresh load or Reload starts at index 0 (the newest).
+                newIndex = FolderScanLogic.resolveLandingIndex(
+                    images = sorted.images,
+                    previousMaxLastModified = previousMaxLastModified,
+                    userHasNavigated = userHasNavigated,
+                    randomized = settings.randomizeOrder,
+                    preservedUri = uriToPreserve,
+                    currentIndex = current.currentIndex,
+                )
                 val updatedScan = FolderScanLogic.computeUpdatedScanInfo(sorted.images)
                 settingsRepository.setFolderScanInfo(folderUri.toString(), updatedScan)
             }
@@ -485,10 +479,12 @@ class PhoneModeViewModel @Inject constructor(
             fresh = freshFiltered,
             randomize = settings.randomizeOrder,
             sortByOrientation = settings.sortByOrientation,
+            // Until the user swipes, keep the newest-known photo at index 0 (nothing can
+            // jump under their thumb); afterwards batches only append.
+            reorder = newestFirstReorderAllowed && !userHasNavigated,
         )
 
-        // Resolved outside the update lambda: it consumes pendingRestoreIndex and
-        // must run exactly once per batch.
+        // Resolved outside the update lambda so it runs exactly once per batch.
         val nextIndex = resolveFeedIndex(state.currentIndex, merged.images.size, targetUriToKeep, merged.images)
 
         _uiState.update {
@@ -509,9 +505,8 @@ class PhoneModeViewModel @Inject constructor(
     }
 
     /**
-     * The index to show after a batch landed: honour a saved position while it
-     * is still out of reach of the partially loaded feed, otherwise leave the
-     * user exactly where they are.
+     * The index to show after a batch landed: keep the photo being chased by URI, else
+     * leave the user exactly where they are.
      */
     private fun resolveFeedIndex(
         currentIndex: Int,
@@ -525,11 +520,7 @@ class PhoneModeViewModel @Inject constructor(
             val idx = currentImages.indexOfFirst { it.uri == targetUri }
             if (idx >= 0) return idx
         }
-        val target = pendingRestoreIndex
-        if (target == null) return currentIndex.coerceIn(0, size - 1)
-        val restored = target.coerceAtMost(size - 1)
-        if (restored == target) pendingRestoreIndex = null
-        return restored
+        return currentIndex.coerceIn(0, size - 1)
     }
 
     fun selectCollectionFolder(uri: Uri) {
@@ -613,10 +604,8 @@ class PhoneModeViewModel @Inject constructor(
         if (index in _uiState.value.images.indices) {
             val state = _uiState.value
             if (index != state.currentIndex) {
-                // A real page change means the user has taken over; stop chasing
-                // the saved position as further batches arrive.
+                // A real page change means the user has taken over; batches stay append-only.
                 userHasNavigated = true
-                pendingRestoreIndex = null
             }
             _uiState.update { it.copy(currentIndex = index) }
             maybeShowRawJpegSuggestion()
@@ -1088,7 +1077,6 @@ class PhoneModeViewModel @Inject constructor(
             }
             collectDiscoveredImages(
                 folderUri = folderUri,
-                restorePosition = false,
                 errorLabel = "images",
                 targetUriToKeep = currentUri,
                 previousMaxLastModified = scanInfo.maxLastModified,
@@ -1104,7 +1092,7 @@ class PhoneModeViewModel @Inject constructor(
         val target = if (prompt.firstNewIndex in _uiState.value.images.indices) {
             prompt.firstNewIndex
         } else {
-            (_uiState.value.images.size - 1).coerceAtLeast(0)
+            0 // newest-first feed: the latest photo is at the start
         }
         _uiState.update { it.copy(reloadPrompt = null) }
         navigateToImage(target)
@@ -1143,7 +1131,6 @@ class PhoneModeViewModel @Inject constructor(
         dimensionsJob?.cancel()
         publishedUris.clear()
         dimensionsResolved.clear()
-        pendingRestoreIndex = null
         _uiState.update {
             it.copy(
                 images = emptyList(),
