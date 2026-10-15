@@ -172,6 +172,9 @@ dependencies {
     // DocumentFile
     implementation(libs.androidx.documentfile)
 
+    // Coroutines, aligned with kotlinx-coroutines-test (see libs.versions.toml)
+    implementation(libs.kotlinx.coroutines.core)
+
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
