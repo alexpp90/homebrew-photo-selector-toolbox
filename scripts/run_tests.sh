@@ -444,13 +444,21 @@ if $run_linux; then
         # 2. Unit tests (pytest)
         section "Linux Desktop unit tests"
         if [ -d "$ROOT_DIR/products/linux-desktop/tests" ]; then
+            # Without the real GTK 4 / GExiv2 typelibs (macOS, or a bare Linux box) conftest.py
+            # stubs gi, so the display decode path (ui/photo_loader.py) never runs and the
+            # format-conformance display checks fall back to Pillow. Say so instead of
+            # reporting the full CI gate as passed.
+            linux_ci_ref="linux.yml:test"
+            if ! py python -c "import gi; gi.require_version('Gdk', '4.0'); gi.require_version('GExiv2', '0.10'); from gi.repository import Gdk, GExiv2" &>/dev/null; then
+                linux_ci_ref="linux.yml:test (partial — no GTK 4/GExiv2 typelibs, display path stubbed)"
+            fi
             if ! have pytest && ! have poetry; then
                 skip "pytest (linux-desktop)" "linux.yml:test" "neither poetry nor pytest found"
             elif py pytest --version &>/dev/null; then
-                gate "pytest (products/linux-desktop)" "linux.yml:test" \
+                gate "pytest (products/linux-desktop)" "$linux_ci_ref" \
                     pyx pytest tests/ --tb=short -q
             elif have pytest; then
-                gate "pytest (products/linux-desktop)" "linux.yml:test" \
+                gate "pytest (products/linux-desktop)" "$linux_ci_ref" \
                     pyx pytest tests/ --tb=short -q
             else
                 skip "pytest (linux-desktop)" "linux.yml:test" "pytest runner not found"
