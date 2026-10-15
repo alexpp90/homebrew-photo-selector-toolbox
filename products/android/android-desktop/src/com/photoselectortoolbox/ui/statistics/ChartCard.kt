@@ -19,19 +19,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottomAxis
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStartAxis
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
 import com.patrykandpatrick.vico.compose.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
-import com.patrykandpatrick.vico.core.cartesian.axis.AxisItemPlacer
+import com.patrykandpatrick.vico.compose.common.fill
+import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
+import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
 import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
 import com.patrykandpatrick.vico.core.cartesian.layer.ColumnCartesianLayer
+import com.patrykandpatrick.vico.core.common.shape.CorneredShape
 import com.photoselectortoolbox.ui.theme.Indigo500
 import com.photoselectortoolbox.ui.theme.Zinc400
 import com.photoselectortoolbox.ui.theme.Zinc700
@@ -95,18 +98,18 @@ private fun VicoColumnChart(
     val keys = remember(data) { data.keys.toList() }
     val values = remember(data) { data.values.map { it.toFloat() } }
 
-    val modelProducer = remember { CartesianChartModelProducer.build() }
+    val modelProducer = remember { CartesianChartModelProducer() }
 
     LaunchedEffect(data) {
-        modelProducer.tryRunTransaction {
+        modelProducer.runTransaction {
             columnSeries {
                 series(values)
             }
         }
     }
 
-    val bottomAxisValueFormatter = CartesianValueFormatter { x, _, _ ->
-        keys.getOrElse(x.toInt()) { "" }
+    val bottomAxisValueFormatter = CartesianValueFormatter { _, value, _ ->
+        keys.getOrElse(value.toInt()) { "" }
     }
 
     CartesianChartHost(
@@ -114,10 +117,10 @@ private fun VicoColumnChart(
             rememberColumnCartesianLayer(
                 columnProvider = ColumnCartesianLayer.ColumnProvider.series(
                     rememberLineComponent(
-                        color = Indigo500,
+                        fill = fill(Indigo500),
                         thickness = 16.dp,
                         shape = remember {
-                            com.patrykandpatrick.vico.core.common.shape.Shape.rounded(
+                            CorneredShape.rounded(
                                 topLeftPercent = 40,
                                 topRightPercent = 40,
                             )
@@ -125,27 +128,28 @@ private fun VicoColumnChart(
                     ),
                 ),
             ),
-            startAxis = rememberStartAxis(
+            startAxis = VerticalAxis.rememberStart(
                 label = rememberTextComponent(
                     color = Zinc400,
                     textSize = 10.sp,
                 ),
-                axis = rememberLineComponent(color = Zinc700),
-                tick = rememberLineComponent(color = Zinc700),
-                guideline = rememberLineComponent(color = Zinc700.copy(alpha = 0.3f)),
+                line = rememberLineComponent(fill = fill(Zinc700)),
+                tick = rememberLineComponent(fill = fill(Zinc700)),
+                guideline = rememberLineComponent(fill = fill(Zinc700.copy(alpha = 0.3f))),
             ),
-            bottomAxis = rememberBottomAxis(
+            bottomAxis = HorizontalAxis.rememberBottom(
                 label = rememberTextComponent(
                     color = Zinc400,
                     textSize = 9.sp,
                 ),
-                axis = rememberLineComponent(color = Zinc700),
-                tick = rememberLineComponent(color = Zinc700),
+                line = rememberLineComponent(fill = fill(Zinc700)),
+                tick = rememberLineComponent(fill = fill(Zinc700)),
                 guideline = null,
                 valueFormatter = bottomAxisValueFormatter,
-                itemPlacer = remember {
-                    AxisItemPlacer.Horizontal.default(
-                        spacing = if (keys.size > 10) 2 else 1,
+                itemPlacer = remember(keys.size) {
+                    val spacing = if (keys.size > 10) 2 else 1
+                    HorizontalAxis.ItemPlacer.aligned(
+                        spacing = { spacing },
                         addExtremeLabelPadding = true,
                     )
                 },

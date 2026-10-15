@@ -27,7 +27,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Robolectric shadow for OpenCV's [Mat] class to bypass loading native C++
- * JNI binaries (`libopencv_java4.so`) during host JVM unit testing.
+ * JNI binaries (`libopencv_java5.so`) during host JVM unit testing.
  */
 @Implements(Mat::class)
 class ShadowMat {
@@ -43,6 +43,12 @@ class ShadowMat {
         @Implementation
         @JvmStatic
         fun n_Mat(): Long = 1L
+
+        // OpenCV 5: Mat(Mat, Rect) passes this to CleanableMat's constructor,
+        // which rejects a 0 address before the shadowed constructor body runs.
+        @Implementation
+        @JvmStatic
+        fun n_Mat(addr: Long, rowStart: Int, rowEnd: Int, colStart: Int, colEnd: Int): Long = 1L
 
         @Implementation
         @JvmStatic
