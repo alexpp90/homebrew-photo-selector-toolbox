@@ -139,16 +139,16 @@ def test_cross_filesystem_two_phase_staging_and_rollback(tmp_path: Path):
         return st
 
     call_copy = [0]
-    orig_copy2 = shutil.copy2
+    orig_copyfile = shutil.copyfile
 
-    def mock_copy2(src, dst):
+    def mock_copyfile(src, dst):
         call_copy[0] += 1
         if call_copy[0] == 2:
             raise IOError("Simulated network/device disconnect during companion staging")
-        return orig_copy2(src, dst)
+        return orig_copyfile(src, dst)
 
     with patch.object(Path, "stat", mock_stat), \
-         patch("shutil.copy2", side_effect=mock_copy2):
+         patch("shutil.copyfile", side_effect=mock_copyfile):
         with pytest.raises(FileCullingError):
             mgr.move_candidate(candidate, tmp_path)
 
@@ -191,15 +191,15 @@ def test_copy_rollback_on_failure(tmp_path: Path):
     mgr = FileCullingManager()
 
     call_count = [0]
-    orig_copy2 = shutil.copy2
+    orig_copyfile = shutil.copyfile
 
-    def mock_copy2(src, dst):
+    def mock_copyfile(src, dst):
         call_count[0] += 1
         if call_count[0] == 2:
             raise IOError("Simulated copy failure")
-        return orig_copy2(src, dst)
+        return orig_copyfile(src, dst)
 
-    with patch("shutil.copy2", side_effect=mock_copy2):
+    with patch("shutil.copyfile", side_effect=mock_copyfile):
         with pytest.raises(FileCullingError):
             mgr.copy_candidate(candidate, tmp_path)
 
@@ -340,18 +340,18 @@ def test_cross_filesystem_move_staging_failure_cleans_inflight_and_staged_replic
             return st_mock
         return st
 
-    orig_copy2 = shutil.copy2
+    orig_copyfile = shutil.copyfile
     call_copy = [0]
 
-    def mock_copy2_fail_midstream(src, dst):
+    def mock_copyfile_fail_midstream(src, dst):
         call_copy[0] += 1
         if call_copy[0] == 2:
             Path(dst).write_bytes(b"PARTIAL_CORRUPT_BYTES")
             raise OSError("No space left on device")
-        return orig_copy2(src, dst)
+        return orig_copyfile(src, dst)
 
     with patch.object(Path, "stat", mock_stat), \
-         patch("shutil.copy2", side_effect=mock_copy2_fail_midstream):
+         patch("shutil.copyfile", side_effect=mock_copyfile_fail_midstream):
         with pytest.raises(FileCullingError):
             mgr.move_candidate(candidate, tmp_path)
 
@@ -374,17 +374,17 @@ def test_copy_staging_failure_cleans_inflight_and_staged_replicas(tmp_path: Path
     candidate = CandidatePhoto(primary_path=raw, companion_paths=[jpg])
     mgr = FileCullingManager()
 
-    orig_copy2 = shutil.copy2
+    orig_copyfile = shutil.copyfile
     call_copy = [0]
 
-    def mock_copy2_fail_midstream(src, dst):
+    def mock_copyfile_fail_midstream(src, dst):
         call_copy[0] += 1
         if call_copy[0] == 2:
             Path(dst).write_bytes(b"CORRUPT")
             raise OSError("No space left on device")
-        return orig_copy2(src, dst)
+        return orig_copyfile(src, dst)
 
-    with patch("shutil.copy2", side_effect=mock_copy2_fail_midstream):
+    with patch("shutil.copyfile", side_effect=mock_copyfile_fail_midstream):
         with pytest.raises(FileCullingError):
             mgr.copy_candidate(candidate, tmp_path)
 

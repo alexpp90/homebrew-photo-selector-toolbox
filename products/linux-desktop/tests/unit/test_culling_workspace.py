@@ -499,3 +499,22 @@ def test_transactional_undo_stack():
     assert len(vm.candidates) == 2
     assert len(vm.undo_stack) == 0
     assert vm.candidates[0] == c1
+
+
+def test_failed_cull_is_reported_and_leaves_the_queue_unchanged():
+    """A failing file operation shows a message instead of dying silently in a GTK handler."""
+    from photo_selector_linux.core.file_ops import FileCullingError
+
+    manager = MagicMock()
+    manager.trash_candidate.side_effect = FileCullingError("Operation not supported")
+    vm = CullingWorkspaceViewModel(file_manager=manager)
+    vm.candidates = [make_candidate("a.jpg"), make_candidate("b.jpg")]
+    vm.current_folder = Path("/tmp/test_dir")
+    messages = []
+    vm.connect("notification", lambda _vm, message: messages.append(message))
+
+    vm.cull_trash()
+
+    assert [c.filename for c in vm.candidates] == ["a.jpg", "b.jpg"]
+    assert vm.trashed_count == 0 and vm.undo_stack == []
+    assert messages == ["Could not move a.jpg to Trash: Operation not supported"]

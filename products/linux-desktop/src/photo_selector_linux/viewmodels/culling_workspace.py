@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
-from photo_selector_linux.core.file_ops import FileCullingManager
+from photo_selector_linux.core.file_ops import FileCullingError, FileCullingManager
 from photo_selector_linux.core.models import (
     CandidatePhoto,
     CullingActionType,
@@ -100,11 +100,15 @@ class CullingWorkspaceViewModel:
             return
 
         idx = self.current_index
-        record = self.file_manager.move_candidate(
-            photo,
-            self.current_folder,
-            selection_folder=self.selection_folder_name,
-        )
+        try:
+            record = self.file_manager.move_candidate(
+                photo,
+                self.current_folder,
+                selection_folder=self.selection_folder_name,
+            )
+        except FileCullingError as e:
+            self._notify(f"Could not move {photo.filename}: {e}")
+            return
         self.undo_stack.append((record, photo, idx))
         self.selected_count += 1
 
@@ -122,11 +126,15 @@ class CullingWorkspaceViewModel:
             return
 
         idx = self.current_index
-        record = self.file_manager.copy_candidate(
-            photo,
-            self.current_folder,
-            selection_folder=self.selection_folder_name,
-        )
+        try:
+            record = self.file_manager.copy_candidate(
+                photo,
+                self.current_folder,
+                selection_folder=self.selection_folder_name,
+            )
+        except FileCullingError as e:
+            self._notify(f"Could not copy {photo.filename}: {e}")
+            return
         self.undo_stack.append((record, photo, idx))
         self.copied_count += 1
         self.selected_count += 1
@@ -143,7 +151,11 @@ class CullingWorkspaceViewModel:
             return
 
         idx = self.current_index
-        record = self.file_manager.trash_candidate(photo)
+        try:
+            record = self.file_manager.trash_candidate(photo)
+        except FileCullingError as e:
+            self._notify(f"Could not move {photo.filename} to Trash: {e}")
+            return
         self.undo_stack.append((record, photo, idx))
         self.trashed_count += 1
 
@@ -160,7 +172,12 @@ class CullingWorkspaceViewModel:
             return False
 
         record, photo, orig_idx = self.undo_stack.pop()
-        success = self.file_manager.undo_culling(record, photo)
+        try:
+            success = self.file_manager.undo_culling(record, photo)
+        except FileCullingError as e:
+            self.undo_stack.append((record, photo, orig_idx))  # keep it so undo can be retried
+            self._notify(f"Could not undo {record.action_type.value} for {photo.filename}: {e}")
+            return False
         if not success:
             return False
 
