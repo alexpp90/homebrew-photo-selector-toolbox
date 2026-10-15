@@ -42,10 +42,10 @@ jobs:
         shell: bash
         working-directory: products/linux-desktop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -64,10 +64,10 @@ jobs:
         shell: bash
         working-directory: products/linux-desktop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -100,10 +100,10 @@ jobs:
     name: Debian Packaging & APT Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -127,10 +127,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -154,7 +154,7 @@ jobs:
           echo "key_id=$KEY_ID" >> "$GITHUB_OUTPUT"
 
       - name: Check out alexpp90/apt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: alexpp90/apt
           token: ${{ secrets.APT_REPO_TOKEN }}
