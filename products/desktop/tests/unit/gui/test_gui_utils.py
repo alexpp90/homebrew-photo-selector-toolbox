@@ -159,10 +159,12 @@ def test_tooltip_empty_or_hidden_widget():
 
 def test_apply_dark_theme_to_fig():
     import matplotlib.colors as mcolors
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
     from photo_selector_toolbox.gui.app import apply_dark_theme_to_fig
 
-    fig, (ax1, ax2) = plt.subplots(1, 2)
+    fig = Figure()
+    ax1 = fig.add_subplot(1, 2, 1)
+    ax2 = fig.add_subplot(1, 2, 2)
     ax1.set_title("Title 1")
     ax1.set_xlabel("X1")
     ax1.set_ylabel("Y1")
@@ -187,16 +189,13 @@ def test_apply_dark_theme_to_fig():
     for bar in bars:
         assert mcolors.to_hex(bar.get_facecolor()).upper() == "#6366F1"
 
-    plt.close(fig)
-
 
 def test_apply_dark_theme_to_fig_empty():
     import matplotlib.colors as mcolors
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
     from photo_selector_toolbox.gui.app import apply_dark_theme_to_fig
 
-    fig = plt.figure()
+    fig = Figure()
     apply_dark_theme_to_fig(fig)
     assert mcolors.to_hex(fig.patch.get_facecolor()).upper() == "#18181B"
-    plt.close(fig)
 

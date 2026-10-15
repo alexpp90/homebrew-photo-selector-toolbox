@@ -199,6 +199,7 @@ def test_tool_initializes_with_saved_preferences():
         patch("photo_selector_toolbox.gui.sharpness_tool.load_config", return_value=saved_cfg),
         patch("photo_selector_toolbox.gui.sharpness_tool.tk.Toplevel"),
         patch("photo_selector_toolbox.gui.sharpness_tool.SharpnessTool.bind_all"),
+        patch("photo_selector_toolbox.gui.sharpness_tool.ImageCacheManager"),
     ):
         tool = SharpnessTool(parent)
         assert tool.file_type_var.get() == ".ARW"
