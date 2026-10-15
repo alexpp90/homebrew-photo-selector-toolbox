@@ -86,6 +86,8 @@ def verify_debian_definitions(product_dir: Path) -> None:
         "gir1.2-gtk-4.0",
         "gir1.2-adw-1",
         "gir1.2-gexiv2-0.10",
+        "gir1.2-gdkpixbuf-2.0",
+        "libraw-bin",  # dcraw_emu develops RAWs whose embedded preview is too small
         "python3-numpy",
         "python3-pil",
     )

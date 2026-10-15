@@ -118,7 +118,7 @@ if ! $explicit_product; then
                 products/android/*) has_android=true ;;
                 products/macos-desktop/*) has_macos=true ;;
                 products/linux-desktop/*) has_linux=true ;;
-                .github/workflows/*|scripts/run_tests.sh) has_cross=true ;;
+                .github/workflows/*|.github/actions/*|scripts/run_tests.sh|testdata/formats/*|scripts/fetch_format_corpus.py) has_cross=true ;;
             esac
         done
 
@@ -226,6 +226,24 @@ pyx() {
     py_resolve "$@"
     ${XVFB_PREFIX[@]+"${XVFB_PREFIX[@]}"} "${PY_ARGV[@]}"
 }
+
+# ── Format corpus (mirror: .github/actions/format-corpus, used by every product test job) ──
+# The real-camera RAW corpus pinned in testdata/formats/manifest.json. CI downloads it and sets
+# PST_REQUIRE_FORMAT_CORPUS=1, so each product's format tests run instead of skipping. Locally
+# the corpus is used when present (python3 scripts/fetch_format_corpus.py fetches ~280 MB once);
+# when absent, the product suites skip their corpus tests and this gate is reported SKIPPED.
+section "Format corpus"
+if ! have python3; then
+    skip "format corpus" "format-corpus action" "python3 not found"
+elif python3 "$ROOT_DIR/scripts/fetch_format_corpus.py" --check >/dev/null 2>&1; then
+    PST_FORMAT_CORPUS="$(python3 "$ROOT_DIR/scripts/fetch_format_corpus.py" --print-dir)"
+    export PST_FORMAT_CORPUS
+    export PST_REQUIRE_FORMAT_CORPUS=1
+    pass "format corpus present and verified ($PST_FORMAT_CORPUS)" "format-corpus action"
+else
+    skip "format corpus" "format-corpus action" \
+        "corpus not downloaded — product corpus tests will skip (run: python3 scripts/fetch_format_corpus.py)"
+fi
 
 # ── Python gates (mirror: desktop.yml `lint`, `test`, `visual`) ────
 if $run_python; then
@@ -465,9 +483,15 @@ if have python3; then
         python3 scripts/check_readme_parity.py --check
     gate "no private-overlay material tracked" "repo-hygiene.yml:hygiene" \
         python3 scripts/check_private_paths.py
+    gate "format contract manifest" "repo-hygiene.yml:hygiene" \
+        python3 scripts/fetch_format_corpus.py --validate
+    gate "format corpus tooling tests" "repo-hygiene.yml:hygiene" \
+        python3 -m unittest discover -s scripts/tests -q
 else
     skip "readme parity" "" "python3 not found"
     skip "no private-overlay material tracked" "" "python3 not found"
+    skip "format contract manifest" "" "python3 not found"
+    skip "format corpus tooling tests" "" "python3 not found"
 fi
 
 # ── Private overlay gates (mirror: photo-selector-private framework.yml) ──

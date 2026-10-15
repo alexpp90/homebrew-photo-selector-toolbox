@@ -6,6 +6,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.repository.FileOperationResult
 import com.photoselectortoolbox.data.repository.ImageRepository
+import com.photoselectortoolbox.domain.format.ImageFormats
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -42,17 +43,6 @@ class MoveToSelectionUseCase @Inject constructor(
         private const val RAW_SUBFOLDER = "RAW"
         private const val JPEG_SUBFOLDER = "JPEG"
 
-        private val RAW_EXTENSIONS = setOf(
-            "arw", "cr2", "cr3", "nef", "nrw", "orf", "raf", "rw2",
-            "pef", "srw", "dng", "raw", "3fr", "ari", "bay", "cap",
-            "iiq", "eip", "erf", "fff", "mef", "mdc", "mos", "mrw",
-            "obm", "ptx", "pxn", "rwl", "rwz", "sr2", "srf", "x3f"
-        )
-
-        private val JPEG_EXTENSIONS = setOf("jpg", "jpeg")
-
-        private const val XMP_EXTENSION = "xmp"
-        private const val EDIT_SUFFIX = "-Edit"
     }
 
     /**
@@ -166,63 +156,18 @@ class MoveToSelectionUseCase @Inject constructor(
     }
 
     /**
-     * Determine which subfolder an image belongs in based on its filename and extension.
-     *
-     * Rules:
-     * - RAW extensions -> RAW subfolder
-     * - JPEG extensions -> JPEG subfolder
-     * - Lightroom edit files (*-Edit.*) -> RAW subfolder
-     * - XMP sidecars -> follow their parent image's subfolder
-     * - Everything else -> Selection root
+     * The subfolder an image is sorted into; the rule is
+     * [ImageFormats.selectionSubfolder] (Lightroom `-Edit` files and RAWs → RAW,
+     * JPEG → JPEG, XMP follows a RAW parent, everything else → the root).
      */
     private fun determineTargetFolder(
         fileName: String,
         selectionDir: DocumentFile,
         rawDir: DocumentFile?,
         jpegDir: DocumentFile?
-    ): DocumentFile? {
-        val extension = fileName.substringAfterLast('.', "").lowercase()
-        val stem = fileName.substringBeforeLast('.')
-
-        return when {
-            // Lightroom edit files (*-Edit.tif, *-Edit.jpg, etc.) go to RAW subfolder
-            stem.endsWith(EDIT_SUFFIX) -> rawDir ?: selectionDir
-
-            // RAW files go to RAW subfolder
-            extension in RAW_EXTENSIONS -> rawDir ?: selectionDir
-
-            // JPEG files go to JPEG subfolder
-            extension in JPEG_EXTENSIONS -> jpegDir ?: selectionDir
-
-            // XMP sidecar files follow their parent image
-            extension == XMP_EXTENSION -> {
-                // XMP sidecar name matches parent: "IMG_001.ARW" -> "IMG_001.xmp"
-                // Check if the parent would be a RAW file
-                val parentExtension = guessParentExtension(stem)
-                if (parentExtension != null && parentExtension.lowercase() in RAW_EXTENSIONS) {
-                    rawDir ?: selectionDir
-                } else {
-                    // Default XMP to selection root if parent type is unknown
-                    selectionDir
-                }
-            }
-
-            // Everything else goes to Selection root
-            else -> selectionDir
-        }
-    }
-
-    /**
-     * For an XMP sidecar, try to guess the parent file's extension.
-     * Some XMP filenames include the parent extension: "IMG_001.ARW.xmp"
-     * In that case the stem is "IMG_001.ARW" and we can extract "ARW".
-     */
-    private fun guessParentExtension(xmpStem: String): String? {
-        val dotIndex = xmpStem.lastIndexOf('.')
-        return if (dotIndex > 0) {
-            xmpStem.substring(dotIndex + 1)
-        } else {
-            null
-        }
+    ): DocumentFile? = when (ImageFormats.selectionSubfolder(fileName)) {
+        ImageFormats.SelectionSubfolder.RAW -> rawDir ?: selectionDir
+        ImageFormats.SelectionSubfolder.JPEG -> jpegDir ?: selectionDir
+        ImageFormats.SelectionSubfolder.ROOT -> selectionDir
     }
 }

@@ -71,8 +71,22 @@ class PillowReader(ExifReader):
             shutter_speed_raw = exif_data.get("ExposureTime")
             aperture_raw = exif_data.get("FNumber")
             focal_length_raw = exif_data.get("FocalLength")
-            iso_raw = exif_data.get("ISOSpeedRatings")
+            # ISOSpeedRatings (0x8827) is absent from some files (Canon CR3
+            # records sensitivity only as ISOSpeed / RecommendedExposureIndex).
+            iso_raw = next(
+                (
+                    exif_data.get(k)
+                    for k in ("ISOSpeedRatings", "ISOSpeed", "RecommendedExposureIndex")
+                    if exif_data.get(k) not in (None, 0)
+                ),
+                None,
+            )
             lens_model_raw = exif_data.get("LensModel")
+            if isinstance(lens_model_raw, bytes):
+                lens_model_raw = lens_model_raw.decode("utf-8", errors="ignore")
+            if isinstance(lens_model_raw, str):
+                # Nikon pads LensModel with NUL bytes, Pentax/Olympus with spaces.
+                lens_model_raw = lens_model_raw.strip(" \x00") or None
 
             shutter_speed = get_float(shutter_speed_raw)
             aperture = get_float(aperture_raw)

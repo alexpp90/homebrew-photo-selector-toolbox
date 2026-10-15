@@ -128,7 +128,7 @@ Section: graphics
 Priority: optional
 Architecture: all
 Maintainer: Alexander Patz <alexander.patz@example.com>
-Depends: python3 (>= 3.12), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-gexiv2-0.10, python3-numpy, python3-pil
+Depends: python3 (>= 3.12), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-gexiv2-0.10, gir1.2-gdkpixbuf-2.0, libraw-bin, python3-numpy, python3-pil
 Description: native GNOME photograph culling and selection suite
  ...
 ```

@@ -40,8 +40,10 @@ public final class FileCullingManager: @unchecked Sendable {
     /// - Parameter photoURL: The primary photo file URL.
     /// - Returns: An array of URLs including the primary photo and all discovered companions.
     public func findCompanionFiles(for photoURL: URL) -> [URL] {
-        let canonicalPrimary = photoURL.standardizedFileURL.resolvingSymlinksInPath()
-        let parentDir = canonicalPrimary.deletingLastPathComponent()
+        // Resolve the *folder* only: a symlinked photo's companions are its neighbours in the
+        // folder being culled, not the files next to the link target.
+        let parentDir = photoURL.standardizedFileURL.deletingLastPathComponent().resolvingSymlinksInPath()
+        let canonicalPrimary = parentDir.appendingPathComponent(photoURL.lastPathComponent)
         guard let contents = try? fileManager.contentsOfDirectory(
             at: parentDir,
             includingPropertiesForKeys: nil,
@@ -63,8 +65,7 @@ public final class FileCullingManager: @unchecked Sendable {
         let baseDir = photoURL.deletingLastPathComponent()
 
         for rawCandidate in contents {
-            let candidateCanonical = rawCandidate.standardizedFileURL.resolvingSymlinksInPath()
-            if candidateCanonical == canonicalPrimary { continue }
+            if rawCandidate.lastPathComponent == canonicalPrimary.lastPathComponent { continue }
             let candidateName = rawCandidate.lastPathComponent
             let candidateNameLower = candidateName.lowercased()
             let candidateStemLower = rawCandidate.deletingPathExtension().lastPathComponent.lowercased()

@@ -5,6 +5,7 @@ import com.photoselectortoolbox.data.cache.ScoreDao
 import com.photoselectortoolbox.data.cache.ScoreEntity
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.repository.SettingsRepository
+import com.photoselectortoolbox.data.source.PhotoBitmapDecoder
 import com.photoselectortoolbox.domain.analysis.AestheticAnalyzer
 import com.photoselectortoolbox.domain.analysis.ClippingAnalyzer
 import com.photoselectortoolbox.domain.analysis.NoiseAnalyzer
@@ -34,7 +35,7 @@ class ScanImagesUseCaseBench {
 
         val useCase = ScanImagesUseCase(
             sharpnessAnalyzer, noiseAnalyzer, clippingAnalyzer, aestheticAnalyzer,
-            scoreDao, settingsRepository, context
+            scoreDao, settingsRepository, PhotoBitmapDecoder(context)
         )
 
         val imageCount = 500

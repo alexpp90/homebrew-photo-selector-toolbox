@@ -6,6 +6,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import com.photoselector.core.model.ExifData
+import com.photoselector.core.preview.Cr3Metadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -64,8 +65,14 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
 
                 if (pfd != null) {
                     pfd.use {
-                        val exif = ExifInterface(it.fileDescriptor)
-                        parseExifData(exif, file = directFile, pfd = it)
+                        // The stream is deliberately not closed: the descriptor belongs to `pfd`.
+                        val cr3 = Cr3Metadata.read(FileInputStream(it.fileDescriptor).channel)
+                        if (cr3 != null) {
+                            fromCr3(cr3, file = null, pfd = it)
+                        } else {
+                            val exif = exifFromDescriptor(it)
+                            parseExifData(exif, file = directFile, pfd = it)
+                        }
                     }
                 } else {
                     // Fall back to InputStream if PFD fails
@@ -89,6 +96,8 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
         withContext(Dispatchers.IO) {
             try {
                 if (!file.exists()) return@withContext null
+                val cr3 = RandomAccessFile(file, "r").use { Cr3Metadata.read(it.channel) }
+                if (cr3 != null) return@withContext fromCr3(cr3, file = file, pfd = null)
                 val exif = ExifInterface(file.absolutePath)
                 parseExifData(exif, file = file)
             } catch (e: Exception) {
@@ -99,51 +108,138 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
 
     override fun supportedMimeTypes(): Set<String> = SUPPORTED_MIME_TYPES
 
+    /**
+     * ExifInterface over a seekable descriptor; if the descriptor cannot be
+     * duplicated (some providers, and Robolectric's stubbed `Os.dup`), read the
+     * same descriptor as a stream from its start instead.
+     */
+    private fun exifFromDescriptor(pfd: ParcelFileDescriptor): ExifInterface = try {
+        ExifInterface(pfd.fileDescriptor)
+    } catch (e: Exception) {
+        Log.d(TAG, "Descriptor EXIF read failed (${e.javaClass.simpleName}); reading as a stream")
+        val channel = FileInputStream(pfd.fileDescriptor).channel
+        channel.position(0)
+        // The stream is deliberately not closed: the descriptor belongs to `pfd`.
+        ExifInterface(java.nio.channels.Channels.newInputStream(channel).buffered())
+    }
+
+    /** The camera values every container yields, before interpretation. */
+    private class RawValues(
+        val exposureTime: Double?,
+        val shutterSpeedApex: Double?,
+        val fNumber: Double?,
+        val apertureApex: Double?,
+        val focalLength: Double?,
+        val focalLength35mm: Double?,
+        val photographicSensitivity: Int?,
+        val sensitivityType: Int?,
+        val recommendedExposureIndex: Int?,
+        val isoSpeed: Int?,
+        val standardOutputSensitivity: Int?,
+        val lensModel: String?,
+        val lensMake: String?,
+        val make: String?,
+        val model: String?,
+    )
+
+    private fun buildExifData(v: RawValues, rating: Int): ExifData {
+        var usedApexFallback = false
+        val shutterSpeed = v.exposureTime?.takeIf { it > 0.0 }
+            ?: v.shutterSpeedApex?.let { apexToExposure(it) }?.also { usedApexFallback = true }
+        val aperture = v.fNumber?.takeIf { it > 0.0 }
+            ?: v.apertureApex?.let { apexToFNumber(it) }?.also { usedApexFallback = true }
+        return ExifData(
+            shutterSpeed = shutterSpeed,
+            aperture = aperture,
+            focalLength = v.focalLength?.takeIf { it > 0.0 },
+            focalLength35mm = v.focalLength35mm?.takeIf { it > 0.0 },
+            iso = resolveIso(v),
+            lens = v.lensModel.clean() ?: v.lensMake.clean() ?: "Unknown",
+            isFallback = usedApexFallback,
+            rating = rating,
+            make = v.make.clean(),
+            model = v.model.clean(),
+        )
+    }
+
+    private fun String?.clean(): String? = this?.trim()?.trim('\u0000')?.trim()?.ifEmpty { null }
+
+    /**
+     * ISO from whichever sensitivity tag the camera filled.
+     *
+     * `PhotographicSensitivity` (0x8827, the classic ISOSpeedRatings) first —
+     * unless it is the 65535 overflow marker. Then the tag that
+     * `SensitivityType` names (REI for type 2, ISOSpeed for 3), then any of
+     * RecommendedExposureIndex, ISOSpeed, StandardOutputSensitivity. Canon CR3
+     * leaves 0x8827 empty and stores ISO in RecommendedExposureIndex.
+     */
+    private fun resolveIso(v: RawValues): Int? {
+        val classic = v.photographicSensitivity?.takeIf { it > 0 }
+        if (classic != null && classic < 65535) return classic
+        val byType = when (v.sensitivityType) {
+            2, 6, 7 -> v.recommendedExposureIndex
+            3 -> v.isoSpeed
+            1, 4, 5 -> v.standardOutputSensitivity
+            else -> null
+        }?.takeIf { it > 0 }
+        return byType
+            ?: v.recommendedExposureIndex?.takeIf { it > 0 }
+            ?: v.isoSpeed?.takeIf { it > 0 }
+            ?: v.standardOutputSensitivity?.takeIf { it > 0 }
+            ?: classic
+    }
+
+    private fun fromCr3(cr3: Cr3Metadata, file: File?, pfd: ParcelFileDescriptor?): ExifData {
+        val values = RawValues(
+            exposureTime = cr3.exposureTime,
+            shutterSpeedApex = cr3.shutterSpeedValue,
+            fNumber = cr3.fNumber,
+            apertureApex = cr3.apertureValue,
+            focalLength = cr3.focalLength,
+            focalLength35mm = cr3.focalLength35mm,
+            photographicSensitivity = cr3.photographicSensitivity,
+            sensitivityType = cr3.sensitivityType,
+            recommendedExposureIndex = cr3.recommendedExposureIndex,
+            isoSpeed = cr3.isoSpeed,
+            standardOutputSensitivity = cr3.standardOutputSensitivity,
+            lensModel = cr3.lensModel,
+            lensMake = cr3.lensMake,
+            make = cr3.make,
+            model = cr3.model,
+        )
+        val rating = file?.let { readSidecarRating(it) }
+            ?: cr3.xmp?.let { XmpRatingParser.parseRating(it) }
+            ?: 0
+        return buildExifData(values, rating)
+    }
+
     private fun parseExifData(
         exif: ExifInterface,
         file: File? = null,
         pfd: ParcelFileDescriptor? = null
     ): ExifData {
-        var usedApexFallback = false
-
-        val directShutter = parseExposureTime(
-            exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME)
+        fun int(tag: String): Int? = exif.getAttributeInt(tag, 0).takeIf { it > 0 }
+        @Suppress("DEPRECATION")
+        val values = RawValues(
+            exposureTime = parseExposureTime(exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME)),
+            shutterSpeedApex = parseRationalValue(exif.getAttribute(ExifInterface.TAG_SHUTTER_SPEED_VALUE)),
+            fNumber = exif.getAttributeDouble(ExifInterface.TAG_F_NUMBER, 0.0).takeIf { it > 0.0 },
+            apertureApex = parseRationalValue(exif.getAttribute(ExifInterface.TAG_APERTURE_VALUE)),
+            focalLength = exif.getAttributeDouble(ExifInterface.TAG_FOCAL_LENGTH, 0.0)
+                .takeIf { it > 0.0 } ?: parseRationalValue(exif.getAttribute(ExifInterface.TAG_FOCAL_LENGTH)),
+            focalLength35mm = int(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM)?.toDouble(),
+            photographicSensitivity = int(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY)
+                ?: int(ExifInterface.TAG_ISO_SPEED_RATINGS),
+            sensitivityType = int(ExifInterface.TAG_SENSITIVITY_TYPE),
+            recommendedExposureIndex = int(ExifInterface.TAG_RECOMMENDED_EXPOSURE_INDEX),
+            isoSpeed = int(ExifInterface.TAG_ISO_SPEED),
+            standardOutputSensitivity = int(ExifInterface.TAG_STANDARD_OUTPUT_SENSITIVITY),
+            lensModel = exif.getAttribute(ExifInterface.TAG_LENS_MODEL),
+            lensMake = exif.getAttribute(ExifInterface.TAG_LENS_MAKE),
+            make = exif.getAttribute(ExifInterface.TAG_MAKE),
+            model = exif.getAttribute(ExifInterface.TAG_MODEL),
         )
-        val shutterSpeed = directShutter ?: parseApexShutterSpeed(
-            exif.getAttribute(ExifInterface.TAG_SHUTTER_SPEED_VALUE)
-        )?.also { usedApexFallback = true }
-
-        val directAperture = exif.getAttributeDouble(ExifInterface.TAG_F_NUMBER, 0.0)
-            .takeIf { it > 0.0 }
-        val aperture = directAperture ?: parseApexAperture(
-            exif.getAttribute(ExifInterface.TAG_APERTURE_VALUE)
-        )?.also { usedApexFallback = true }
-
-        val focalLength = exif.getAttributeDouble(ExifInterface.TAG_FOCAL_LENGTH, 0.0)
-            .takeIf { it > 0.0 } ?: parseRationalValue(
-            exif.getAttribute(ExifInterface.TAG_FOCAL_LENGTH)
-        )
-
-        val focalLength35mm = exif.getAttributeInt(
-            ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM, 0
-        ).takeIf { it > 0 }?.toDouble()
-
-        val iso = parseIso(exif)
-
-        val lens = parseLensInfo(exif)
-
-        val rating = extractRating(exif, file, pfd)
-
-        return ExifData(
-            shutterSpeed = shutterSpeed,
-            aperture = aperture,
-            focalLength = focalLength,
-            focalLength35mm = focalLength35mm,
-            iso = iso,
-            lens = lens,
-            isFallback = usedApexFallback,
-            rating = rating
-        )
+        return buildExifData(values, extractRating(exif, file, pfd))
     }
 
     private fun extractRating(
@@ -249,43 +345,14 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
         }
     }
 
-    private fun parseApexShutterSpeed(value: String?): Double? {
-        val tv = parseRationalValue(value) ?: return null
+    private fun apexToExposure(tv: Double): Double? {
         val t = Math.pow(2.0, -tv)
         return if (t > 0.0 && t.isFinite()) t else null
     }
 
-    private fun parseApexAperture(value: String?): Double? {
-        val av = parseRationalValue(value) ?: return null
+    private fun apexToFNumber(av: Double): Double? {
         val f = Math.pow(2.0, av / 2.0)
         return if (f > 0.0 && f.isFinite()) f else null
-    }
-
-    @Suppress("DEPRECATION")
-    private fun parseIso(exif: ExifInterface): Int? {
-        // Try TAG_PHOTOGRAPHIC_SENSITIVITY first (newer standard)
-        val isoValue = exif.getAttributeInt(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, 0)
-        if (isoValue > 0) return isoValue
-
-        // Try TAG_STANDARD_OUTPUT_SENSITIVITY
-        val sosValue = exif.getAttributeInt(ExifInterface.TAG_STANDARD_OUTPUT_SENSITIVITY, 0)
-        if (sosValue > 0) return sosValue
-
-        // Fall back to TAG_ISO_SPEED_RATINGS (deprecated but widely used)
-        val isoLegacy = exif.getAttributeInt(ExifInterface.TAG_ISO_SPEED_RATINGS, 0)
-        if (isoLegacy > 0) return isoLegacy
-
-        return null
-    }
-
-    private fun parseLensInfo(exif: ExifInterface): String {
-        val lensModel = exif.getAttribute(ExifInterface.TAG_LENS_MODEL)
-        if (!lensModel.isNullOrBlank()) return lensModel
-
-        val lensMake = exif.getAttribute(ExifInterface.TAG_LENS_MAKE)
-        if (!lensMake.isNullOrBlank()) return lensMake
-
-        return "Unknown"
     }
 }
 

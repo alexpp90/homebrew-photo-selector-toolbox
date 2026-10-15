@@ -59,6 +59,7 @@ products/
   desktop/            Legacy Desktop (Python)       — src/ tests/ benchmarks/ scripts/ pyproject.toml
 docs/                 Product documentation, organised per product  -> docs/README.md
 scripts/              Cross-product tooling — run_tests.sh (the local CI mirror)
+testdata/formats/     Supported-format contract + corpus manifest read by every product's tests
 assets/               Shared branding used by the README and the desktop icons
 ```
 

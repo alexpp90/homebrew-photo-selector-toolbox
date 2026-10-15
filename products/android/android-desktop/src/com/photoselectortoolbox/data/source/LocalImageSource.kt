@@ -8,6 +8,7 @@ import android.provider.DocumentsContract
 import android.util.Log
 import com.photoselectortoolbox.data.model.ImageDimensions
 import com.photoselectortoolbox.data.model.ImageItem
+import com.photoselectortoolbox.domain.format.ImageFormats
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,14 +48,10 @@ class LocalImageSourceImpl @Inject constructor(
     @ApplicationContext private val context: Context
 ) : LocalImageSource {
 
+    private val bitmapDecoder = PhotoBitmapDecoder(context)
+
     companion object {
         private const val TAG = "LocalImageSource"
-
-        val SUPPORTED_EXTENSIONS = setOf(
-            "jpg", "jpeg", "png", "tiff", "tif", "bmp", "gif", "webp",
-            "heif", "heic", "dng", "cr2", "cr3", "nef", "arw", "orf",
-            "rw2", "pef", "srw", "raf", "nrw"
-        )
 
         private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "phototok_selection", "phototok_leftswipe")
 
@@ -204,7 +201,14 @@ class LocalImageSourceImpl @Inject constructor(
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, opts)
             }
-            ImageDimensions.of(opts.outWidth, opts.outHeight)
+            val dimensions = ImageDimensions.of(opts.outWidth, opts.outHeight)
+            if (dimensions != ImageDimensions.UNKNOWN) {
+                dimensions
+            } else {
+                // No platform codec (CR3 has none anywhere): size it from the
+                // embedded preview's frame header — still header-only reads.
+                bitmapDecoder.containerDimensions(uri, uri.lastPathSegment.orEmpty())
+            }
         } catch (e: Exception) {
             Log.d(TAG, "Cannot read dimensions for $uri: ${e.message}")
             ImageDimensions.UNKNOWN
@@ -275,9 +279,7 @@ class LocalImageSourceImpl @Inject constructor(
                     }
 
                     if (name.startsWith(".")) continue
-                    if (name.substringAfterLast('.', "").lowercase() !in SUPPORTED_EXTENSIONS) {
-                        continue
-                    }
+                    if (!ImageFormats.isSupported(name)) continue
 
                     onImage(
                         ImageItem(

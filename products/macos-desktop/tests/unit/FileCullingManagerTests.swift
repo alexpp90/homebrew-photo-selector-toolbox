@@ -41,6 +41,29 @@ struct FileCullingManagerTests {
         #expect(!companions.contains(unrelatedURL))
     }
 
+    @Test("REQ-MAC-CULL.05: Companions of a symlinked photo are its neighbours, not the link target's")
+    func testCompanionsOfSymlinkedPrimary() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("CullingSymlink_\(UUID().uuidString)")
+        let culled = base.appendingPathComponent("card")
+        let elsewhere = base.appendingPathComponent("archive")
+        try FileManager.default.createDirectory(at: culled, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let dummy = Data("x".utf8)
+        let target = elsewhere.appendingPathComponent("DSC0001.ARW")
+        try dummy.write(to: target)
+        try dummy.write(to: elsewhere.appendingPathComponent("DSC0001.xmp"))
+        let link = culled.appendingPathComponent("DSC0001.ARW")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        let jpeg = culled.appendingPathComponent("DSC0001.JPG")
+        try dummy.write(to: jpeg)
+
+        let companions = FileCullingManager().findCompanionFiles(for: link)
+        #expect(companions.map(\.lastPathComponent) == ["DSC0001.ARW", "DSC0001.JPG"])
+        #expect(companions.allSatisfy { $0.deletingLastPathComponent().lastPathComponent == "card" })
+    }
+
     @Test("REQ-MAC-CULL.04, REQ-MAC-CULL.05: Copy to Selection copies primary and companion files preserving originals")
     func testCopyToSelection() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("CopyTest_\(UUID().uuidString)")

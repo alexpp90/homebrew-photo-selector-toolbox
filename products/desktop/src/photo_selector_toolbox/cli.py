@@ -9,10 +9,10 @@ from pathlib import Path
 from tqdm import tqdm
 
 from photo_selector_toolbox import __version__
-from photo_selector_toolbox.exif.reader import get_exif_data, SUPPORTED_EXTENSIONS
+from photo_selector_toolbox.exif.reader import get_exif_data
 from photo_selector_toolbox.core.analyzer import analyze_data, analyze_data_json
 from photo_selector_toolbox.core.visualizer import create_plots
-from photo_selector_toolbox.core.utils import get_excluded_folder_names
+from photo_selector_toolbox.core.utils import get_excluded_folder_names, scan_image_files
 
 
 def _parse_args():
@@ -62,23 +62,7 @@ def _parse_args():
 
 def _scan_image_files(root_path: Path) -> list[Path]:
     """Scan root_path recursively for supported image files."""
-    excluded_names = get_excluded_folder_names()
-    image_files = []
-    # Pre-compute tuple of extensions for fast string matching
-    supported_exts_tuple = tuple(SUPPORTED_EXTENSIONS)
-
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        # Prune excluded directories in place
-        dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-
-        dp = Path(dirpath)
-        for f in filenames:
-            if f.startswith("._"):
-                continue
-            if f.lower().endswith(supported_exts_tuple):
-                image_files.append(dp / f)
-
-    return image_files
+    return scan_image_files(root_path, get_excluded_folder_names())
 
 
 def _extract_metadata(image_files: list[Path], debug: bool = False) -> list:

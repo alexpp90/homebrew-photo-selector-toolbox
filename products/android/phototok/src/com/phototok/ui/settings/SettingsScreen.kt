@@ -219,7 +219,7 @@ fun SettingsScreen(
             var cacheCleared by remember { mutableStateOf(false) }
             SettingsClickItem(
                 title = "Delete Cache",
-                description = if (cacheCleared) "Cache deleted" else "Clear image cache & stored folder positions",
+                description = if (cacheCleared) "Cache deleted" else "Clear image cache & folder scan history",
                 onClick = {
                     viewModel.clearCache {
                         cacheCleared = true

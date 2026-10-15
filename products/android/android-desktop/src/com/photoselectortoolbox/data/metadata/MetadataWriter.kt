@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.exifinterface.media.ExifInterface
+import com.photoselectortoolbox.domain.format.ImageFormats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -40,11 +41,6 @@ class MetadataWriterImpl @Inject constructor() : MetadataWriter {
 
     companion object {
         private const val TAG = "MetadataWriter"
-
-        private val RAW_EXTENSIONS = setOf(
-            "dng", "cr2", "cr3", "nef", "arw", "orf", "raf", "rw2", "pef", "srw", "raw", "tif", "tiff"
-        )
-        private val JPEG_EXTENSIONS = setOf("jpg", "jpeg")
     }
 
     override suspend fun writeRating(context: Context, imageUri: Uri, rating: Int): Result<Unit> =
@@ -83,10 +79,11 @@ class MetadataWriterImpl @Inject constructor() : MetadataWriter {
                     )
                 }
 
-                val ext = imageFile.extension.lowercase()
-                if (ext in RAW_EXTENSIONS) {
+                // RAW (and TIFF, via the final branch) get a sidecar; only JPEG is
+                // edited in place. Classification comes from ImageFormats.
+                if (ImageFormats.isRaw(imageFile.name)) {
                     writeSidecarRating(imageFile, rating)
-                } else if (ext in JPEG_EXTENSIONS) {
+                } else if (ImageFormats.isJpeg(imageFile.name)) {
                     try {
                         writeJpegRating(imageFile, rating)
                     } catch (e: Exception) {

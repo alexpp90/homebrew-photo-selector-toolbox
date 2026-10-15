@@ -59,6 +59,7 @@ While the desktop and tablet products emphasize multi-up comparative culling and
 ### 4. Smart Ingestion & Guidance
 *   **In-Place Coach Marks Tutorial (`GestureTutorialOverlay`):** Contextual guide anchoring callouts directly to real chrome buttons without scrolling. Triggers automatically on first run, after 7+ days of inactivity, or on demand via the Help icon.
 *   **RAW+JPEG Sibling Pairing:** Centered dialog detects companion RAW and JPEG files, allowing users to link operations across both formats (`moveRelatedFiles = true`) or filter by format.
+*   **Supported Formats:** JPEG, HEIF/HEIC, PNG, TIFF and WebP, plus camera RAW — Sony ARW, Canon CR2 and CR3, Nikon NEF and NRW, Fujifilm RAF, Panasonic RW2, OM System/Olympus ORF, Pentax PEF, DNG and Samsung SRW, with further RAW extensions (3FR, IIQ, RWL, SR2, MRW, X3F, ERF, MEF, …) recognised for discovery and pairing. Extensions match case-insensitively. RAWs are shown from the camera's embedded JPEG preview (no full RAW decode, so swiping stays fast); a RAW whose preview is smaller than 1024 px (phone DNGs) falls back to the platform decoder. The contract is `testdata/formats/manifest.json` ([docs/shared/SUPPORTED_FORMATS.md](../../shared/SUPPORTED_FORMATS.md)).
 *   **Orientation-Aware Sorting & Shuffle:** Settings toggles allow prioritizing landscape or portrait orientations first, or shuffling the feed randomly.
 
 ---

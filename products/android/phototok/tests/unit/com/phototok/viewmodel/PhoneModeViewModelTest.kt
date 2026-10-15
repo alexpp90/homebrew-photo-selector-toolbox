@@ -91,7 +91,6 @@ class PhoneModeViewModelTest {
 
     private fun loadFolder(vararg images: ImageItem): PhoneModeViewModel {
         every { imageRepository.discoverImages(any()) } returns flowOf(images.toList())
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
         return viewModel
@@ -141,7 +140,6 @@ class PhoneModeViewModelTest {
     fun `selectRecentPath re-opens the folder like a fresh selection`() = runTest {
         every { imageRepository.discoverImages(any()) } returns
             flowOf(listOf(image("IMG_001.JPG", 1)))
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
         val viewModel = buildViewModel()
 
         viewModel.selectRecentPath(
@@ -244,13 +242,12 @@ class PhoneModeViewModelTest {
     }
 
     @Test
-    fun `navigateToImage persists the position for the folder`() = runTest {
+    fun `navigateToImage moves to the page`() = runTest {
         val viewModel = loadFolder(image("a.jpg", 1), image("b.jpg", 2))
 
         viewModel.navigateToImage(1)
 
         assertEquals(1, viewModel.uiState.value.currentIndex)
-        coVerify { settingsRepository.setFolderLastPosition("content://tree/photos", 1) }
     }
 
     // ── One-time action explanations ─────────────────────────────────────
@@ -442,7 +439,6 @@ class PhoneModeViewModelTest {
     fun `the viewer opens on the first batch while discovery continues`() = runTest {
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
         val viewModel = buildViewModel()
 
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
@@ -462,7 +458,6 @@ class PhoneModeViewModelTest {
     fun `after the user swiped later batches are appended without reordering the visible feed`() = runTest {
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
 
@@ -488,7 +483,6 @@ class PhoneModeViewModelTest {
     fun `before any swipe a newer later batch moves the newest photo to index 0`() = runTest {
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
 
@@ -512,7 +506,6 @@ class PhoneModeViewModelTest {
     fun `a newer photo arriving after a swipe is appended and does not move the viewed photo`() = runTest {
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
 
@@ -533,7 +526,6 @@ class PhoneModeViewModelTest {
         coEvery { imageRepository.moveImage(any(), any(), any(), any()) } returns true
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 0
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
 
@@ -553,10 +545,9 @@ class PhoneModeViewModelTest {
     }
 
     @Test
-    fun `a saved position is ignored and a fresh load starts on the newest photo`() = runTest {
+    fun `a fresh load stays on the newest photo while batches arrive`() = runTest {
         val discovery = MutableSharedFlow<List<ImageItem>>(extraBufferCapacity = 8)
         every { imageRepository.discoverImages(any()) } returns discovery
-        coEvery { settingsRepository.getFolderLastPosition(any()) } returns 4
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
 
@@ -859,7 +850,6 @@ class PhoneModeViewModelTest {
 
         // Folder previously had max timestamp 20L (img1 & img2 were scanned), last position was 0
         coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(maxLastModified = 20L, fileCount = 2)
-        coEvery { settingsRepository.getFolderLastPosition("content://tree/photos") } returns 0
         every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, img3, img4))
 
         val viewModel = buildViewModel()
@@ -880,13 +870,12 @@ class PhoneModeViewModelTest {
     }
 
     @Test
-    fun `selectSourceFolder starts on the newest photo even when a position was saved`() = runTest {
+    fun `selectSourceFolder starts on the newest photo`() = runTest {
         val img1 = image("photo1.jpg", 10)
         val img2 = image("photo2.jpg", 20)
         val img3 = image("photo3.jpg", 30)
 
         coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(maxLastModified = 30L, fileCount = 3)
-        coEvery { settingsRepository.getFolderLastPosition("content://tree/photos") } returns 1
         every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, img3))
 
         val viewModel = buildViewModel()

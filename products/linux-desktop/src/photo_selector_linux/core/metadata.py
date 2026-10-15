@@ -11,15 +11,26 @@ from __future__ import annotations
 import io
 import math
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from photo_selector_linux.core.models import ExposureMetadata
 
 _HAVE_GEXIV2 = False
 try:
     import gi
-    gi.require_version("GExiv2", "0.10")
+    # Debian 13 ships gexiv2 0.14 as namespace 0.10; gexiv2 >= 0.15 exposes namespace 0.16.
+    for _gexiv2_ns in ("0.10", "0.16"):
+        try:
+            gi.require_version("GExiv2", _gexiv2_ns)
+            break
+        except ValueError:
+            continue
+    else:
+        raise ImportError("no GExiv2 typelib")
     from gi.repository import GExiv2, GLib
+    # Must run once before any read: with exiv2 0.27.x it also enables ISO-BMFF parsing, without
+    # which CR3 and HEIC files have no metadata (exiv2 >= 0.28 enables BMFF unconditionally).
+    GExiv2.initialize()
     _HAVE_GEXIV2 = True
 except Exception:
     _HAVE_GEXIV2 = False
@@ -64,6 +75,72 @@ def _safe_float(val: Any) -> Optional[float]:
         return None
 
 
+# ISO lives in different tags per camera generation: classic ISOSpeedRatings (exiv2 >= 0.28 calls
+# it PhotographicSensitivity), while Canon CR3 and Sony bodies only fill ISOSpeed /
+# RecommendedExposureIndex. Phone DNGs may carry it in IFD0 (TIFF/EP).
+_ISO_TAGS = (
+    "Exif.Photo.ISOSpeedRatings",
+    "Exif.Photo.PhotographicSensitivity",
+    "Exif.Photo.ISOSpeed",
+    "Exif.Photo.RecommendedExposureIndex",
+    "Exif.Image.ISOSpeedRatings",
+)
+_EXPOSURE_TIME_TAGS = ("Exif.Photo.ExposureTime", "Exif.Image.ExposureTime")
+_FNUMBER_TAGS = ("Exif.Photo.FNumber", "Exif.Image.FNumber")
+_FOCAL_LENGTH_TAGS = ("Exif.Photo.FocalLength", "Exif.Image.FocalLength")
+_LENS_TAGS = ("Exif.Photo.LensModel", "Exif.Canon.LensModel", "Exif.NikonLd3.LensIDNumber")
+
+
+def _tag_string(meta: Any, tag: str) -> Optional[str]:
+    """Raw tag value as a trimmed string, or None (missing, unreadable or blank).
+
+    Uses only ``has_tag``/``get_tag_string``, which behave the same in every gexiv2 release;
+    the typed getters (get_exposure_time, ...) return different Python types across releases.
+    """
+    try:
+        if not meta.has_tag(tag):
+            return None
+        val = meta.get_tag_string(tag)
+    except Exception:
+        return None
+    if val is None:
+        return None
+    val = str(val).replace("\x00", "").strip()
+    return val or None
+
+
+def _first_float(meta: Any, tags: Iterable[str]) -> Optional[float]:
+    for tag in tags:
+        f = _safe_float(_tag_string(meta, tag))
+        if f is not None:
+            return f
+    return None
+
+
+def _iso_from(meta: Any) -> Optional[int]:
+    for tag in _ISO_TAGS:
+        raw = _tag_string(meta, tag)
+        if raw is None:
+            continue
+        try:
+            # Multi-valued tags read as "100 100"; take the first value.
+            val = int(float(raw.split()[0]))
+        except (ValueError, IndexError):
+            continue
+        # 65535 is the "ISO too high to fit" sentinel; the next tag holds the real value.
+        if 0 < val < 65535:
+            return val
+    return None
+
+
+def _text_from(meta: Any, tags: Iterable[str]) -> Optional[str]:
+    for tag in tags:
+        val = _tag_string(meta, tag)
+        if val and val.lower() != "unknown":
+            return val
+    return None
+
+
 def read_metadata_gexiv2(path: Path, data: Optional[bytes] = None) -> Optional[ExposureMetadata]:
     """Read EXIF using native GExiv2 C++ library (R-LINUX-META-02).
 
@@ -80,82 +157,39 @@ def read_metadata_gexiv2(path: Path, data: Optional[bytes] = None) -> Optional[E
             meta.open_path(str(path))
     except (GLib.Error, Exception):
         return None
+    return metadata_from_gexiv2(meta)
 
-    shutter_speed: Optional[float] = None
-    aperture: Optional[float] = None
-    iso: Optional[int] = None
-    focal_length: Optional[float] = None
-    lens: Optional[str] = None
-    camera_make: Optional[str] = None
-    camera_model: Optional[str] = None
-    is_fallback: bool = False
+
+def metadata_from_gexiv2(meta: Any) -> ExposureMetadata:
+    """Map an opened ``GExiv2.Metadata`` (or any object with ``has_tag``/``get_tag_string``)."""
+    is_fallback = False
 
     # 1. Shutter Speed (Exposure Time)
-    if meta.has_tag("Exif.Photo.ExposureTime"):
-        shutter_speed = _safe_float(meta.get_exposure_time())
-    elif meta.has_tag("Exif.Photo.ShutterSpeedValue"):
+    shutter_speed = _first_float(meta, _EXPOSURE_TIME_TAGS)
+    if shutter_speed is None:
         # APEX Tv conversion: t = 2^(-Tv) (R-LINUX-META-06)
-        tv = _safe_float(meta.get_tag_string("Exif.Photo.ShutterSpeedValue"))
+        tv = _safe_float(_tag_string(meta, "Exif.Photo.ShutterSpeedValue"))
         if tv is not None:
             shutter_speed = 2.0 ** (-tv)
             is_fallback = True
 
     # 2. Aperture (FNumber)
-    if meta.has_tag("Exif.Photo.FNumber"):
-        aperture = _safe_float(meta.get_fnumber())
-    elif meta.has_tag("Exif.Photo.ApertureValue"):
+    aperture = _first_float(meta, _FNUMBER_TAGS)
+    if aperture is None:
         # APEX Av conversion: f = 2^(Av / 2) (R-LINUX-META-06)
-        av = _safe_float(meta.get_tag_string("Exif.Photo.ApertureValue"))
+        av = _safe_float(_tag_string(meta, "Exif.Photo.ApertureValue"))
         if av is not None:
             aperture = 2.0 ** (av / 2.0)
             is_fallback = True
 
-    # 3. ISO Sensitivity
-    if meta.has_tag("Exif.Photo.ISOSpeedRatings"):
-        try:
-            raw_iso = meta.get_iso_speed()
-            if raw_iso > 0:
-                iso = int(raw_iso)
-        except Exception:
-            pass
-    if iso is None and meta.has_tag("Exif.Photo.PhotographicSensitivity"):
-        try:
-            raw_iso = int(meta.get_tag_string("Exif.Photo.PhotographicSensitivity"))
-            if raw_iso > 0:
-                iso = raw_iso
-        except Exception:
-            pass
-
-    # 4. Focal Length
-    if meta.has_tag("Exif.Photo.FocalLength"):
-        focal_length = _safe_float(meta.get_focal_length())
-
-    # 5. Lens Model
-    for tag in ("Exif.Photo.LensModel", "Exif.Canon.LensModel", "Exif.NikonLd3.LensIDNumber"):
-        if meta.has_tag(tag):
-            val = meta.get_tag_string(tag).strip()
-            if val and val.lower() != "unknown":
-                lens = val
-                break
-
-    # 6. Make & Model
-    if meta.has_tag("Exif.Image.Make"):
-        val = meta.get_tag_string("Exif.Image.Make").strip()
-        if val and val.lower() != "unknown":
-            camera_make = val
-    if meta.has_tag("Exif.Image.Model"):
-        val = meta.get_tag_string("Exif.Image.Model").strip()
-        if val and val.lower() != "unknown":
-            camera_model = val
-
     return ExposureMetadata(
         shutter_speed=shutter_speed,
         aperture=aperture,
-        iso=iso,
-        focal_length=focal_length,
-        lens=lens,
-        camera_make=camera_make,
-        camera_model=camera_model,
+        iso=_iso_from(meta),
+        focal_length=_first_float(meta, _FOCAL_LENGTH_TAGS),
+        lens=_text_from(meta, _LENS_TAGS),
+        camera_make=_text_from(meta, ("Exif.Image.Make",)),
+        camera_model=_text_from(meta, ("Exif.Image.Model",)),
         is_fallback=is_fallback,
     )
 
@@ -213,7 +247,8 @@ def read_metadata_pil(path: Path, data: Optional[bytes] = None) -> Optional[Expo
             is_fallback = True
 
     # 3. ISO
-    iso_val = exif_dict.get(0x8827) or exif_dict.get(0x8833)  # ISOSpeedRatings / PhotographicSensitivity
+    # ISOSpeedRatings, then ISOSpeed / RecommendedExposureIndex (CR3 and Sony fill only those)
+    iso_val = exif_dict.get(0x8827) or exif_dict.get(0x8833) or exif_dict.get(0x8832)
     if iso_val is not None:
         if isinstance(iso_val, (tuple, list)) and len(iso_val) > 0:
             iso_candidate = iso_val[0]

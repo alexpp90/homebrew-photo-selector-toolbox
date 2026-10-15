@@ -238,7 +238,11 @@ def evaluate_exposure_clipping(
 
 
 def _load_image_array(path_or_image: Any) -> Optional[np.ndarray]:
-    """Load an image file path into an RGB uint8 NumPy array, or return ndarray directly."""
+    """Load an image file path into an RGB uint8 NumPy array, or return ndarray directly.
+
+    Files decode through ``image_source`` like the canvas, so RAW (embedded preview or LibRaw development) and
+    HEIC files score the same pixels the user sees.
+    """
     if isinstance(path_or_image, np.ndarray):
         return path_or_image
     if isinstance(path_or_image, (str, os.PathLike)):
@@ -246,13 +250,15 @@ def _load_image_array(path_or_image: Any) -> Optional[np.ndarray]:
         if not p.is_file():
             return None
         try:
-            from PIL import Image
-            with Image.open(p) as img:
-                rgb = img.convert("RGB")
-                w, h = rgb.size
-                if w < 10 or h < 10:
-                    rgb = rgb.resize((max(16, w), max(16, h)))
-                return np.asarray(rgb, dtype=np.uint8)
+            from photo_selector_linux.core.image_source import decode_for_display
+
+            rgb = decode_for_display(p)
+            if rgb is None:
+                return None
+            w, h = rgb.size
+            if w < 10 or h < 10:
+                rgb = rgb.resize((max(16, w), max(16, h)))
+            return np.asarray(rgb, dtype=np.uint8)
         except Exception:
             return None
     return None

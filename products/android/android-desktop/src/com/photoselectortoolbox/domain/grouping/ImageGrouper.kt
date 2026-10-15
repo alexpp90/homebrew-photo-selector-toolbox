@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import com.photoselectortoolbox.data.model.ImageItem
+import com.photoselectortoolbox.data.source.PhotoBitmapDecoder
+import com.photoselectortoolbox.domain.format.ImageFormats
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlin.math.abs
@@ -33,7 +35,12 @@ class ImageGrouper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
+    private val bitmapDecoder = PhotoBitmapDecoder(context)
+
     companion object {
+        /** Long edge of the rendition a RAW/TIFF is hashed from. */
+        private const val DHASH_SOURCE_LONG_EDGE = 512
+
         /** Maximum time difference (ms) between consecutive images to be candidates. */
         private const val TIME_THRESHOLD_MS = 30_000L
 
@@ -181,18 +188,30 @@ class ImageGrouper @Inject constructor(
         val hash = try {
             val uri = Uri.parse(image.uri)
 
-            // Load a small version to compute hash efficiently
-            val options = BitmapFactory.Options().apply {
-                inSampleSize = 8 // Downsample significantly since we only need a tiny hash
-            }
-
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                val bitmap = BitmapFactory.decodeStream(stream, null, options)
-                bitmap?.let { bmp ->
+            if (ImageFormats.isRaw(image.fileName) || ImageFormats.isTiff(image.fileName)) {
+                // No platform codec for these (CR3, TIFF): hash the decode path's
+                // small rendition — the embedded camera JPEG for a RAW.
+                bitmapDecoder.decodeForDisplay(uri, image.fileName, DHASH_SOURCE_LONG_EDGE)?.let { bmp ->
                     try {
                         dHashCalculator.computeDHash(bmp, hashSize)
                     } finally {
                         bmp.recycle()
+                    }
+                }
+            } else {
+                // Load a small version to compute hash efficiently
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = 8 // Downsample significantly since we only need a tiny hash
+                }
+
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val bitmap = BitmapFactory.decodeStream(stream, null, options)
+                    bitmap?.let { bmp ->
+                        try {
+                            dHashCalculator.computeDHash(bmp, hashSize)
+                        } finally {
+                            bmp.recycle()
+                        }
                     }
                 }
             }

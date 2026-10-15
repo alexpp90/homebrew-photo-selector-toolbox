@@ -26,6 +26,27 @@ poetry run photo-selector-gui          # GUI
 poetry run photo-selector-toolbox ...  # CLI
 ```
 
+## Supported formats
+
+The shared contract in [`../../testdata/formats/manifest.json`](../../testdata/formats/manifest.json)
+([human version](../../docs/shared/SUPPORTED_FORMATS.md)); the extension sets are defined once,
+in `exif/reader.py`.
+
+- **RAW:** ARW, CR2, CR3, NEF, NRW, RAF, RW2, ORF, PEF, DNG, SRW, plus 3FR/FFF, IIQ, RWL/RAW,
+  SR2/SRF, MRW, X3F, ERF, MEF/MOS. Previews use the embedded JPEG when it is at least as large as
+  the view, otherwise LibRaw (rawpy) decodes the RAW (phone DNGs embed ~672 px previews).
+- **Bitmaps:** JPEG, HEIC/HEIF, PNG, TIFF, WebP.
+- Extensions match case-insensitively; a RAW and a JPEG with the same stem are companions and
+  move together (RAW into `Selection/RAW/`).
+
+Known gaps, enforced by `tests/unit/test_format_conformance.py`:
+
+- **HEIC/HEIF** is scanned and its EXIF read, but not displayed or scored: Pillow has no HEIF
+  decoder and `pillow-heif` is not a dependency of this archived product.
+- **CR3, RAF, RW2 EXIF needs ExifTool.** The release builds bundle it; a source install without
+  `exiftool` on `PATH` shows these files without metadata (exifread cannot parse them).
+- The camera make and model are not extracted.
+
 ## Test
 
 ```bash

@@ -37,7 +37,7 @@ public enum ThumbnailDecodeStrategy: Equatable, Sendable {
             return .embeddedPreferred(minimumLongEdge: 120)
         }
         let ext = url.pathExtension.lowercased()
-        if DirectoryScanner.rawExtensions.contains(ext) {
+        if SupportedFormats.rawExtensions.contains(ext) {
             return .embeddedPreferred(minimumLongEdge: min(1000, maxPixelSize))
         }
         return .fullDecode
@@ -251,28 +251,41 @@ public actor ThumbnailLoader {
         if Task.isCancelled { return nil }
 
         let resolved = strategy ?? ThumbnailDecodeStrategy.forRequest(url: url, maxPixelSize: maxPixelSize)
+        var embedded: CGImage?
         if case .embeddedPreferred(let minimumLongEdge) = resolved {
-            let embeddedOptions: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
-                kCGImageSourceShouldCacheImmediately: true
-            ]
-            if let embedded = CGImageSourceCreateThumbnailAtIndex(source, 0, embeddedOptions as CFDictionary),
-               max(embedded.width, embedded.height) >= minimumLongEdge {
+            embedded = embeddedThumbnail(from: source, maxPixelSize: maxPixelSize)
+            if let embedded, max(embedded.width, embedded.height) >= minimumLongEdge {
                 return embedded
             }
             if Task.isCancelled { return nil }
         }
 
+        // Embedded preview absent or too small (phone DNGs embed ~672 px): real decode.
         let thumbnailOptions: [CFString: Any] = [
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceShouldCacheImmediately: true
         ]
+        if let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) {
+            return decoded
+        }
+        if Task.isCancelled { return nil }
 
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary)
+        // The real decode failed (ImageIO cannot develop e.g. Samsung SRW): the embedded
+        // preview, whatever its size, beats a blank canvas.
+        return embedded ?? embeddedThumbnail(from: source, maxPixelSize: maxPixelSize)
+    }
+
+    /// The embedded thumbnail/preview (or a decode when ImageIO finds none), oriented.
+    private static func embeddedThumbnail(from source: CGImageSource, maxPixelSize: Int) -> CGImage? {
+        let embeddedOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, embeddedOptions as CFDictionary)
     }
 
     /// Original pixel dimensions of the primary image, **after** EXIF orientation

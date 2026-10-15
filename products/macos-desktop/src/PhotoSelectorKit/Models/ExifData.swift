@@ -8,6 +8,8 @@ public struct ExifData: Sendable, Codable, Equatable, Hashable {
     public let focalLength: Double?
     public let lens: String
     public let cameraModel: String?
+    /// Camera manufacturer (TIFF Make), trimmed. `nil` in data persisted before it existed.
+    public let cameraMake: String?
     public let isFallback: Bool
 
     public init(
@@ -17,6 +19,7 @@ public struct ExifData: Sendable, Codable, Equatable, Hashable {
         focalLength: Double? = nil,
         lens: String = "Unknown",
         cameraModel: String? = nil,
+        cameraMake: String? = nil,
         isFallback: Bool = false
     ) {
         self.shutterSpeed = shutterSpeed
@@ -25,6 +28,7 @@ public struct ExifData: Sendable, Codable, Equatable, Hashable {
         self.focalLength = focalLength
         self.lens = lens
         self.cameraModel = cameraModel
+        self.cameraMake = cameraMake
         self.isFallback = isFallback
     }
 

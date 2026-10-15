@@ -3,9 +3,7 @@ package com.photoselectortoolbox
 import android.app.Application
 import android.util.Log
 import coil.Coil
-import coil.ImageLoader
-import coil.disk.DiskCache
-import coil.memory.MemoryCache
+import com.photoselectortoolbox.data.source.PhotoImageLoader
 import dagger.hilt.android.HiltAndroidApp
 import org.opencv.android.OpenCVLoader
 
@@ -58,20 +56,9 @@ class PhotoSelectorApp : Application() {
      * headers are ignored rather than re-validated.
      */
     private fun initCoil() {
-        val imageLoader = ImageLoader.Builder(this)
-            .memoryCache {
-                MemoryCache.Builder(this)
-                    .maxSizePercent(0.30)
-                    .build()
-            }
-            .diskCache {
-                DiskCache.Builder()
-                    .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(512L * 1024 * 1024)
-                    .build()
-            }
-            .respectCacheHeaders(false)
-            .build()
+        // Built in PhotoImageLoader so the format conformance test exercises
+        // the exact loader — and the RAW/TIFF fetcher — the frames use.
+        val imageLoader = PhotoImageLoader.build(this)
         Coil.setImageLoader(imageLoader)
     }
 }

@@ -137,50 +137,34 @@ class SettingsRepositoryTest {
         assertEquals(0L, repository.phoneGestureTutorialTs.first())
     }
 
-    @Test
-    fun `folder last position stores and retrieves by URI`() = runTest {
-        val folderUri = "content://tree/dcim"
-        assertEquals(0, repository.getFolderLastPosition(folderUri))
-
-        repository.setFolderLastPosition(folderUri, 15)
-        assertEquals(15, repository.getFolderLastPosition(folderUri))
-
-        repository.setFolderLastPosition(folderUri, 25)
-        assertEquals(25, repository.getFolderLastPosition(folderUri))
+    // Positions are no longer stored (the feed always opens on the newest photo), but older
+    // installs still hold the keys. They must be removed, not left to grow.
+    private val retiredPositionKeys = { uri: String ->
+        listOf(
+            androidx.datastore.preferences.core.intPreferencesKey("folder_pos_v2_$uri"),
+            androidx.datastore.preferences.core.intPreferencesKey("folder_pos_${uri.hashCode()}"),
+        )
     }
 
-    @Test
-    fun `folder last position falls back to legacy hash key and migrates on set`() = runTest {
-        val folderUri = "content://tree/legacy_folder"
-        val legacyKey = androidx.datastore.preferences.core.intPreferencesKey("folder_pos_${folderUri.hashCode()}")
-        val v2Key = androidx.datastore.preferences.core.intPreferencesKey("folder_pos_v2_$folderUri")
+    private suspend fun writeRetiredPosition(uri: String, index: Int) {
+        context.dataStore.edit { prefs -> retiredPositionKeys(uri).forEach { prefs[it] = index } }
+    }
 
-        // Manually write legacy key
-        context.dataStore.edit { prefs ->
-            prefs[legacyKey] = 42
-        }
-
-        // Verify fallback reads legacy key
-        assertEquals(42, repository.getFolderLastPosition(folderUri))
-
-        // When setting position via repository, it writes to v2 key and deletes legacy key
-        repository.setFolderLastPosition(folderUri, 50)
-        assertEquals(50, repository.getFolderLastPosition(folderUri))
-
+    private suspend fun hasRetiredPosition(uri: String): Boolean {
         val prefs = context.dataStore.data.first()
-        assertEquals(50, prefs[v2Key])
-        assertNull(prefs[legacyKey])
+        return retiredPositionKeys(uri).any { prefs[it] != null }
     }
 
     @Test
-    fun `clearFolderPositions deletes all folder position keys`() = runTest {
-        repository.setFolderLastPosition("content://tree/a", 5)
-        repository.setFolderLastPosition("content://tree/b", 10)
+    fun `clearFolderPositions deletes retired folder position keys`() = runTest {
+        writeRetiredPosition("content://tree/a", 5)
+        writeRetiredPosition("content://tree/b", 10)
+        assertTrue(hasRetiredPosition("content://tree/a"))
 
         repository.clearFolderPositions()
 
-        assertEquals(0, repository.getFolderLastPosition("content://tree/a"))
-        assertEquals(0, repository.getFolderLastPosition("content://tree/b"))
+        assertFalse(hasRetiredPosition("content://tree/a"))
+        assertFalse(hasRetiredPosition("content://tree/b"))
     }
 
     @Test
@@ -191,14 +175,14 @@ class SettingsRepositoryTest {
         for (i in 1..10) {
             val uri = "${baseUri}$i"
             repository.addRecentPath(uri, "Folder $i")
-            repository.setFolderLastPosition(uri, i * 10)
+            writeRetiredPosition(uri, i * 10)
         }
 
         val recents = repository.phoneRecentPaths.first()
         assertEquals(10, recents.size)
         assertEquals("${baseUri}10", recents.first().uri)
-        assertEquals(100, repository.getFolderLastPosition("${baseUri}10"))
-        assertEquals(10, repository.getFolderLastPosition("${baseUri}1"))
+        assertTrue(hasRetiredPosition("${baseUri}10"))
+        assertTrue(hasRetiredPosition("${baseUri}1"))
 
         // Adding an 11th folder must evict the 1st folder and prune its position
         repository.addRecentPath("${baseUri}11", "Folder 11")
@@ -208,8 +192,9 @@ class SettingsRepositoryTest {
         assertEquals("${baseUri}11", updatedRecents.first().uri)
         assertTrue(updatedRecents.none { it.uri == "${baseUri}1" })
 
-        // Evicted folder position should have been cleaned up (fallback defaults to 0)
-        assertEquals(0, repository.getFolderLastPosition("${baseUri}1"))
+        // The evicted folder's retired position keys are cleaned up; kept folders are untouched.
+        assertFalse(hasRetiredPosition("${baseUri}1"))
+        assertTrue(hasRetiredPosition("${baseUri}10"))
     }
 
     @Test
@@ -226,12 +211,12 @@ class SettingsRepositoryTest {
     @Test
     fun `clearFolderPositions deletes scan info alongside positions`() = runTest {
         val uri = "content://com.android.externalstorage.documents/tree/SD%3ADCIM"
-        repository.setFolderLastPosition(uri, 5)
+        writeRetiredPosition(uri, 5)
         repository.setFolderScanInfo(uri, FolderScanInfo(12345L, 10))
 
         repository.clearFolderPositions()
 
-        assertEquals(0, repository.getFolderLastPosition(uri))
+        assertFalse(hasRetiredPosition(uri))
         assertEquals(FolderScanInfo(0L, 0), repository.getFolderScanInfo(uri))
     }
 }

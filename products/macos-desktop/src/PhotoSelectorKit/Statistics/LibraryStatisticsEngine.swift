@@ -4,34 +4,15 @@ import Foundation
 /// and quality leaderboards with linear O(N) complexity.
 public final class LibraryStatisticsEngine: Sendable {
 
-    /// Normalizes file extensions so synonymous formats (e.g., JPG and JPEG) group cleanly.
+    /// Normalizes file extensions so synonymous formats (e.g., JPG and JPEG) group cleanly:
+    /// every extension maps to its format's canonical (first) extension in `SupportedFormats`.
     public static func normalizeExtension(_ ext: String) -> String {
-        let lower = ext.lowercased()
-        switch lower {
-        case "jpeg": return "jpg"
-        case "heif": return "heic"
-        case "tiff": return "tif"
-        default: return lower
-        }
+        SupportedFormats.format(forExtension: ext)?.extensions.first ?? ext.lowercased()
     }
 
-    /// Standard format dictionary mapping raw file extensions to professional canonical names.
+    /// Professional display name of a file extension's format (e.g. "arw" → "Sony ARW").
     public static func canonicalFormatName(for pathExtension: String) -> String {
-        switch pathExtension.lowercased() {
-        case "arw": return "Sony ARW"
-        case "cr3": return "Canon CR3"
-        case "cr2": return "Canon CR2"
-        case "nef", "nrw": return "Nikon NEF"
-        case "raf": return "Fujifilm RAF"
-        case "dng": return "Adobe DNG"
-        case "rw2": return "Panasonic RW2"
-        case "orf": return "OM System / Olympus ORF"
-        case "jpg", "jpeg": return "JPEG"
-        case "heic", "heif": return "Apple HEIC"
-        case "tif", "tiff": return "TIFF"
-        case "png": return "PNG"
-        default: return pathExtension.uppercased()
-        }
+        SupportedFormats.format(forExtension: pathExtension)?.displayName ?? pathExtension.uppercased()
     }
 
     /// Calculates library statistics synchronously from an in-memory array of PhotoItems.

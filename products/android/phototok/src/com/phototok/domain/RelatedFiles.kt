@@ -27,10 +27,12 @@ object RelatedFiles {
 
     /**
      * Checks if [images] contains both RAW and JPEG formats of the same photo
-     * (matching stem with at least one RAW and at least one JPEG extension).
+     * (matching stem in the same parent folder, with at least one RAW and at least one
+     * JPEG extension). Camera names such as DSC_0001 repeat across folders, so a RAW in
+     * one folder and a same-named JPEG in another are not a pair.
      */
     fun hasRawJpegPairs(images: List<ImageItem>): Boolean {
-        val byStem = images.groupBy { stemOf(it.fileName) }
+        val byStem = images.groupBy { shotKey(it) }
         return byStem.values.any { group ->
             val hasRaw = group.any { PhotoExtensions.isRaw(it.fileName) }
             val hasJpeg = group.any { PhotoExtensions.isJpeg(it.fileName) }
@@ -47,7 +49,7 @@ object RelatedFiles {
      */
     fun hasFilterMismatch(images: List<ImageItem>, filter: FileTypeFilter): Boolean {
         if (filter == FileTypeFilter.ALL || images.isEmpty()) return false
-        val byStem = images.groupBy { stemOf(it.fileName) }
+        val byStem = images.groupBy { shotKey(it) }
         val matchingCount = byStem.values.count { group ->
             when (filter) {
                 FileTypeFilter.ALL -> true
@@ -58,6 +60,10 @@ object RelatedFiles {
         val unmatchedCount = byStem.size - matchingCount
         return unmatchedCount > matchingCount
     }
+
+    /** One photographic shot: same parent folder and same case-insensitive stem. */
+    private fun shotKey(image: ImageItem): Pair<String?, String> =
+        image.parentUri to stemOf(image.fileName)
 
     private fun stemOf(fileName: String): String =
         fileName.substringBeforeLast('.').lowercase()

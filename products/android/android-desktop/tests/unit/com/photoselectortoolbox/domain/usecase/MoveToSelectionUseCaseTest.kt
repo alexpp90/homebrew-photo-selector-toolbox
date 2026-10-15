@@ -1,5 +1,6 @@
 package com.photoselectortoolbox.domain.usecase
 
+import com.photoselectortoolbox.domain.format.ImageFormats
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -10,30 +11,14 @@ import org.junit.Test
  */
 class MoveToSelectionUseCaseTest {
 
-    // ── Extension classification (mirrors companion object sets) ─────
+    // ── Extension classification: the production rule, ImageFormats ─────
 
-    private val rawExtensions = setOf(
-        "arw", "cr2", "cr3", "nef", "nrw", "orf", "raf", "rw2",
-        "pef", "srw", "dng", "raw", "3fr", "ari", "bay", "cap",
-        "iiq", "eip", "erf", "fff", "mef", "mdc", "mos", "mrw",
-        "obm", "ptx", "pxn", "rwl", "rwz", "sr2", "srf", "x3f"
-    )
-    private val jpegExtensions = setOf("jpg", "jpeg")
-
-    private fun classifyExtension(fileName: String): String {
-        val ext = fileName.substringAfterLast('.', "").lowercase()
-        val stem = fileName.substringBeforeLast('.')
-        return when {
-            stem.endsWith("-Edit") -> "RAW"
-            ext in rawExtensions -> "RAW"
-            ext in jpegExtensions -> "JPEG"
-            ext == "xmp" -> {
-                val parentExt = stem.substringAfterLast('.', "").lowercase()
-                if (parentExt in rawExtensions) "RAW" else "Selection"
-            }
-            else -> "Selection"
+    private fun classifyExtension(fileName: String): String =
+        when (ImageFormats.selectionSubfolder(fileName)) {
+            ImageFormats.SelectionSubfolder.RAW -> "RAW"
+            ImageFormats.SelectionSubfolder.JPEG -> "JPEG"
+            ImageFormats.SelectionSubfolder.ROOT -> "Selection"
         }
-    }
 
     @Test
     fun `RAW extensions route to RAW folder`() {
@@ -54,16 +39,7 @@ class MoveToSelectionUseCaseTest {
     fun `Lightroom edit files route to RAW folder`() {
         assertEquals("RAW", classifyExtension("IMG_001-Edit.tif"))
         assertEquals("RAW", classifyExtension("photo-Edit.jpg"))
-        // Note: -Edit.jpg has jpg extension but -Edit suffix takes priority
-        val ext = "jpg"
-        val stem = "photo-Edit"
-        val result = when {
-            stem.endsWith("-Edit") -> "RAW"
-            ext in rawExtensions -> "RAW"
-            ext in jpegExtensions -> "JPEG"
-            else -> "Selection"
-        }
-        assertEquals("RAW", result)
+        // -Edit.jpg has a jpg extension, but the -Edit suffix takes priority.
     }
 
     @Test

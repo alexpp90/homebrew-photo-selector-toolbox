@@ -5,7 +5,7 @@ file on a GVFS cloud mount (Google Drive) must first be downloaded. Workers deco
 ``DisplaySource`` bytes into a ``GdkPixbuf`` (thread-safe), the main loop wraps it in a texture.
 
 Adheres to:
-- R-LINUX-META-01: Supported File Formats (RAW display through the embedded preview)
+- R-LINUX-META-01: Supported File Formats (RAW display through the embedded preview or LibRaw)
 - REQ-LINUX-CACHE.01: Bounded In-Memory LRU Cache
 """
 
@@ -30,6 +30,7 @@ from photo_selector_linux.core.cache import ThumbnailCache
 from photo_selector_linux.core.gvfs_names import is_gvfs_fuse_path
 from photo_selector_linux.core.image_source import (
     DisplaySource,
+    decode_source,
     orientation_ops,
     read_display_source,
 )
@@ -49,8 +50,23 @@ def fit_size(width: int, height: int, max_edge: Optional[int]) -> Tuple[int, int
     return max(1, round(width * scale)), max(1, round(height * scale))
 
 
+def _pixbuf_from_rgb(data: bytes, size: Tuple[int, int], max_edge: Optional[int]):
+    """Wrap packed upright RGB pixels in a ``GdkPixbuf``, downscaled to ``max_edge``."""
+    width, height = size
+    pixbuf = GdkPixbuf.Pixbuf.new_from_bytes(
+        GLib.Bytes.new(data), GdkPixbuf.Colorspace.RGB, False, 8, width, height, width * 3
+    )
+    w, h = fit_size(width, height, max_edge)
+    if (w, h) != (width, height):
+        pixbuf = pixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
+    return pixbuf
+
+
 def decode_pixbuf(source: DisplaySource, max_edge: Optional[int] = None):
-    """Decode encoded bytes into an upright ``GdkPixbuf``, downscaled during decode if asked."""
+    """Decode a source into an upright ``GdkPixbuf``, downscaled during decode if asked."""
+    if source.rgb_size is not None:
+        # Developed RAW (LibRaw): packed upright RGB pixels, no encoding to parse.
+        return _pixbuf_from_rgb(source.data, source.rgb_size, max_edge)
     loader = GdkPixbuf.PixbufLoader()
     if max_edge:
         def _on_size_prepared(ldr, width, height):
@@ -58,13 +74,23 @@ def decode_pixbuf(source: DisplaySource, max_edge: Optional[int] = None):
             if (w, h) != (width, height):
                 ldr.set_size(w, h)
         loader.connect("size-prepared", _on_size_prepared)
+    pixbuf = None
     try:
         loader.write(source.data)
-    finally:
+    except GLib.Error:
+        pass  # unknown format; close() below still releases the loader
+    try:
         loader.close()
-    pixbuf = loader.get_pixbuf()
+        pixbuf = loader.get_pixbuf()
+    except GLib.Error:
+        pass
     if pixbuf is None:
-        return None
+        # No GdkPixbuf loader for the format (WebP without webp-pixbuf-loader): decode with
+        # Pillow, as scoring does, so display never depends on an optional loader package.
+        image = decode_source(source)
+        if image is None:
+            return None
+        return _pixbuf_from_rgb(image.tobytes(), image.size, max_edge)
     if source.orientation is None:
         return pixbuf.apply_embedded_orientation() or pixbuf
     flip, degrees = orientation_ops(source.orientation)

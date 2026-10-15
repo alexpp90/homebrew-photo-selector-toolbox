@@ -100,17 +100,28 @@ public final class ImageMetadataReader: Sendable {
             aperture = pow(2.0, av / 2.0)
         }
 
-        // 3. ISO Sensitivity
+        // 3. ISO Sensitivity. EXIF 2.3 cameras (e.g. Canon CR3) may omit ISOSpeedRatings /
+        //    PhotographicSensitivity and record ISOSpeed, RecommendedExposureIndex or
+        //    StandardOutputSensitivity instead (per SensitivityType).
         var iso: Double?
-        let rawIso = exif?[kCGImagePropertyExifISOSpeedRatings]
-            ?? properties[kCGImagePropertyExifISOSpeedRatings]
-            ?? exif?["PhotographicSensitivity" as CFString]
-            ?? properties["PhotographicSensitivity" as CFString]
-        if let rawIso {
-            if let array = rawIso as? [Any], let first = array.first {
-                iso = toDouble(first)
+        let isoKeys: [CFString] = [
+            kCGImagePropertyExifISOSpeedRatings,
+            "PhotographicSensitivity" as CFString,
+            kCGImagePropertyExifISOSpeed,
+            kCGImagePropertyExifRecommendedExposureIndex,
+            kCGImagePropertyExifStandardOutputSensitivity
+        ]
+        for key in isoKeys {
+            guard let rawIso = exif?[key] ?? properties[key] else { continue }
+            let value: Double?
+            if let array = rawIso as? [Any] {
+                value = array.first.flatMap(toDouble)
             } else {
-                iso = toDouble(rawIso)
+                value = toDouble(rawIso)
+            }
+            if let value, value > 0 {
+                iso = value
+                break
             }
         }
 
@@ -131,20 +142,19 @@ public final class ImageMetadataReader: Sendable {
             ?? properties["LensModel" as CFString]
             ?? exif?["Lens" as CFString]
             ?? properties["Lens" as CFString]
-        if let lensModel = rawLens as? String, !lensModel.trimmingCharacters(in: .whitespaces).isEmpty {
+        if let lensModel = trimmed(rawLens as? String) {
             lens = lensModel
         }
 
         // 6. Camera Model
         var cameraModel: String?
+        var cameraMake: String?
         let rawModel = (tiff?[kCGImagePropertyTIFFModel] ?? properties[kCGImagePropertyTIFFModel] ?? properties["Model" as CFString]) as? String
         let rawMake = (tiff?[kCGImagePropertyTIFFMake] ?? properties[kCGImagePropertyTIFFMake] ?? properties["Make" as CFString]) as? String
 
-        if let model = rawModel?.trimmingCharacters(in: .whitespaces), !model.isEmpty {
-            cameraModel = model
-        } else if let make = rawMake?.trimmingCharacters(in: .whitespaces), !make.isEmpty {
-            cameraModel = make
-        }
+        // Pentax and Olympus pad Make/Model with spaces (and some writers with NULs).
+        cameraMake = trimmed(rawMake)
+        cameraModel = trimmed(rawModel) ?? cameraMake
 
         let hasAnyExif = (shutterSpeed != nil || aperture != nil || iso != nil || focalLength != nil || cameraModel != nil || lens != "Unknown")
 
@@ -155,11 +165,18 @@ public final class ImageMetadataReader: Sendable {
             focalLength: focalLength,
             lens: lens,
             cameraModel: cameraModel,
+            cameraMake: cameraMake,
             isFallback: !hasAnyExif
         )
     }
 
     // MARK: - Private Helpers
+
+    private static func trimmed(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let result = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\0")))
+        return result.isEmpty ? nil : result
+    }
 
     private static func toDouble(_ value: Any) -> Double? {
         if let d = value as? Double {

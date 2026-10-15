@@ -11,6 +11,7 @@ import com.photoselector.core.reader.MediaStoreReader
 import com.photoselectortoolbox.data.model.ImageDimensions
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.source.LocalImageSource
+import com.photoselectortoolbox.domain.format.ImageFormats
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -33,16 +34,6 @@ class ImageRepositoryImpl @Inject constructor(
         private const val RAW_SUBFOLDER = "RAW"
         private const val JPEG_SUBFOLDER = "JPEG"
 
-        private val RAW_EXTENSIONS = setOf(
-            "arw", "cr2", "cr3", "nef", "nrw", "orf", "raf", "rw2",
-            "pef", "srw", "dng", "raw", "3fr", "ari", "bay", "cap",
-            "iiq", "eip", "erf", "fff", "mef", "mdc", "mos", "mrw",
-            "obm", "ptx", "pxn", "rwl", "rwz", "sr2", "srf", "x3f"
-        )
-
-        private val JPEG_EXTENSIONS = setOf("jpg", "jpeg")
-        private const val XMP_EXTENSION = "xmp"
-        private const val EDIT_SUFFIX = "-Edit"
     }
 
     /**
@@ -243,40 +234,20 @@ class ImageRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Determine which subfolder a file belongs in based on its extension.
-     * RAW files → RAW subfolder, JPEG → JPEG subfolder,
-     * Lightroom edits → RAW subfolder, XMP sidecars → follow parent type.
+     * The subfolder of [selectionDir] a file is sorted into — the rule itself
+     * lives in [ImageFormats.selectionSubfolder], shared with
+     * MoveToSelectionUseCase so the two filing paths cannot disagree.
      */
     private fun determineTargetFolder(
         fileName: String,
         selectionDir: DocumentFile
     ): DocumentFile {
-        val extension = fileName.substringAfterLast('.', "").lowercase()
-        val stem = fileName.substringBeforeLast('.')
-
-        val rawDir by lazy {
-            selectionDir.findFile(RAW_SUBFOLDER)
-                ?: selectionDir.createDirectory(RAW_SUBFOLDER)
-        }
-        val jpegDir by lazy {
-            selectionDir.findFile(JPEG_SUBFOLDER)
-                ?: selectionDir.createDirectory(JPEG_SUBFOLDER)
-        }
-
-        return when {
-            extension in RAW_EXTENSIONS -> rawDir ?: selectionDir
-            extension in JPEG_EXTENSIONS -> jpegDir ?: selectionDir
-            stem.endsWith(EDIT_SUFFIX) -> rawDir ?: selectionDir
-            extension == XMP_EXTENSION -> {
-                val dotIndex = stem.lastIndexOf('.')
-                val parentExt = if (dotIndex > 0) stem.substring(dotIndex + 1).lowercase() else null
-                if (parentExt != null && parentExt in RAW_EXTENSIONS) {
-                    rawDir ?: selectionDir
-                } else {
-                    selectionDir
-                }
-            }
-            else -> selectionDir
+        fun sub(name: String): DocumentFile? =
+            selectionDir.findFile(name) ?: selectionDir.createDirectory(name)
+        return when (ImageFormats.selectionSubfolder(fileName)) {
+            ImageFormats.SelectionSubfolder.RAW -> sub(RAW_SUBFOLDER) ?: selectionDir
+            ImageFormats.SelectionSubfolder.JPEG -> sub(JPEG_SUBFOLDER) ?: selectionDir
+            ImageFormats.SelectionSubfolder.ROOT -> selectionDir
         }
     }
 
