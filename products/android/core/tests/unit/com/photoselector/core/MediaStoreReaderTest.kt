@@ -47,7 +47,7 @@ class MediaStoreReaderTest {
                 MediaStore.Images.Media.DATE_MODIFIED
             )
         ).apply {
-            addRow(arrayOf("/storage/emulated/0/DCIM/IMG_0001.JPG", 4096L, 1700000000L))
+            addRow(arrayOf<Any>("/storage/emulated/0/DCIM/IMG_0001.JPG", 4096L, 1700000000L))
         }
 
         every { context.contentResolver } returns contentResolver

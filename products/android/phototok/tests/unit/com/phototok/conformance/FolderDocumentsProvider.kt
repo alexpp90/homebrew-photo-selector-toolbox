@@ -76,7 +76,7 @@ class FolderDocumentsProvider : ContentProvider() {
                             Document.COLUMN_LAST_MODIFIED -> file.lastModified()
                             else -> null
                         }
-                    }.toTypedArray(),
+                    }.toTypedArray<Any?>(),
                 )
             }
         }
