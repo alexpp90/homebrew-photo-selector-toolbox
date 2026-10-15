@@ -153,3 +153,18 @@ def test_developed_pixels_decode_to_a_downscaled_pixbuf():
     small = photo_loader.decode_pixbuf(_developed((40, 30)), max_edge=20)
     assert (upright.get_width(), upright.get_height()) == (40, 30)
     assert (small.get_width(), small.get_height()) == (20, 15)
+
+
+@pytest.mark.skipif(
+    not (image_source.HAS_GEXIV2 and photo_loader.HAS_GI), reason="needs real GdkPixbuf and GTK 4 typelibs"
+)
+def test_format_without_a_pixbuf_loader_decodes_through_pillow():
+    # Debian ships no WebP GdkPixbuf loader by default (webp-pixbuf-loader is optional).
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 30), (200, 80, 40)).save(buf, "WEBP")
+    webp = DisplaySource(buf.getvalue(), 6, False)
+    upright = photo_loader.decode_pixbuf(webp)
+    small = photo_loader.decode_pixbuf(webp, max_edge=20)
+    assert (upright.get_width(), upright.get_height()) == (30, 40)
+    assert (small.get_width(), small.get_height()) == (15, 20)
+    assert photo_loader.decode_pixbuf(DisplaySource(b"not an image", None, False)) is None

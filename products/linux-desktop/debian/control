@@ -29,7 +29,8 @@ Depends:
  python3-numpy,
  python3-pil
 Recommends:
- heif-gdk-pixbuf
+ heif-gdk-pixbuf,
+ libheif-plugin-libde265
 Description: native GNOME photograph culling and selection suite
  Photo Selector Linux is a high-performance native GNOME photograph
  culling and comparison selection suite built for Debian 13 (Trixie)
