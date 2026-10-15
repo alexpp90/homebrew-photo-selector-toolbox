@@ -131,9 +131,7 @@ def get_focal_length_plot(data: List[ExifData]) -> Optional[Figure]:
 def _create_equivalent_focal_length_plot(values: List[float], title: str) -> Figure:
     """Helper to create equivalent focal length plots."""
     # Round to nearest integer for cleaner plotting
-    rounded_values = [int(round(v)) for v in values]
-
-    counter = Counter(rounded_values)
+    counter = Counter(int(round(v)) for v in values)
     top_items = dict(counter.most_common(25))
     sorted_items = sorted(top_items.items())  # Sort by focal length value
     x_vals = [str(x[0]) for x in sorted_items]
