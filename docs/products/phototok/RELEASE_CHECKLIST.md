@@ -9,7 +9,7 @@ This checklist is the **single source of truth** for Google Play release readine
 - [x] **100% Local On-Device SAF Architecture:** PhotoTok accesses user photos exclusively via Android Storage Access Framework (`Intent.ACTION_OPEN_DOCUMENT_TREE`). No cloud backend, no Google Drive OAuth, and no WebView Picker are used.
 - [x] **Zero Runtime Permissions:** `products/android/phototok/AndroidManifest.xml` declares zero `<uses-permission>` entries (no `INTERNET`, no `READ_MEDIA_IMAGES`, no `READ_EXTERNAL_STORAGE`).
 - [x] **Cloud Auto-Backup Hardened:** `AndroidManifest.xml` configures `android:dataExtractionRules="@xml/data_extraction_rules"` and `android:fullBackupContent="@xml/backup_rules"` so persisted SAF URI grants and internal databases are never silently uploaded to cloud backup.
-- [x] **Target & Compile SDK:** `targetSdk = 36` and `compileSdk = 36` in `products/android/phototok/build.gradle.kts` (meets Google Play August 31, 2026 API 36 requirement).
+- [x] **Target & Compile SDK:** `targetSdk = 36` (meets Google Play August 31, 2026 API 36 requirement) and `compileSdk = 37` in `products/android/phototok/build.gradle.kts`.
 - [x] **Hosted Legal Documents Present in Repo:**
   - `docs/products/phototok/privacy-policy.html` (bilingual EN/DE GDPR/DSGVO Art. 13 policy)
   - `docs/products/phototok/impressum.html` (bilingual DE/EN § 5 DDG legal notice)

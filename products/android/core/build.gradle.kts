@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
 }
@@ -24,7 +23,7 @@ kotlin {
 
 android {
     namespace = "com.photoselector.core"
-    compileSdk = 36
+    compileSdk = 37
 
     // Uniform product layout: every product in this repository exposes `src/`
     // and `tests/`, whatever its language. That overrides Gradle's default
@@ -32,13 +31,16 @@ android {
     // docs/README.md. Keep these four blocks in sync across the Android modules.
     sourceSets {
         getByName("main") {
-            java.setSrcDirs(listOf("src"))
+            java.directories.apply { clear(); add("src") }
+            kotlin.directories.apply { clear(); add("src") }
         }
         getByName("test") {
-            java.setSrcDirs(listOf("tests/unit"))
+            java.directories.apply { clear(); add("tests/unit") }
+            kotlin.directories.apply { clear(); add("tests/unit") }
         }
         getByName("androidTest") {
-            java.setSrcDirs(listOf("tests/instrumented"))
+            java.directories.apply { clear(); add("tests/instrumented") }
+            kotlin.directories.apply { clear(); add("tests/instrumented") }
         }
     }
 
@@ -83,7 +85,6 @@ dependencies {
     // Hilt: the readers and the storage detector are @Singleton @Inject types.
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
-    ksp(libs.kotlin.metadata.jvm)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

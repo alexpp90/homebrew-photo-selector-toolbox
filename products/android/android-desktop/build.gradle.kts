@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
@@ -17,7 +16,7 @@ kotlin {
 
 android {
     namespace = "com.photoselectortoolbox"
-    compileSdk = 36
+    compileSdk = 37
 
     // Uniform product layout: every product in this repository exposes `src/`
     // and `tests/`, whatever its language. That overrides Gradle's default
@@ -25,16 +24,19 @@ android {
     // docs/README.md. Keep these four blocks in sync across the Android modules.
     sourceSets {
         getByName("main") {
-            java.setSrcDirs(listOf("src"))
-            res.setSrcDirs(listOf("res"))
-            jniLibs.setSrcDirs(listOf("jniLibs"))
+            java.directories.apply { clear(); add("src") }
+            kotlin.directories.apply { clear(); add("src") }
+            res.directories.apply { clear(); add("res") }
+            jniLibs.directories.apply { clear(); add("jniLibs") }
             manifest.srcFile("AndroidManifest.xml")
         }
         getByName("test") {
-            java.setSrcDirs(listOf("tests/unit"))
+            java.directories.apply { clear(); add("tests/unit") }
+            kotlin.directories.apply { clear(); add("tests/unit") }
         }
         getByName("androidTest") {
-            java.setSrcDirs(listOf("tests/instrumented"))
+            java.directories.apply { clear(); add("tests/instrumented") }
+            kotlin.directories.apply { clear(); add("tests/instrumented") }
         }
     }
 
@@ -198,7 +200,6 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
-    ksp(libs.kotlin.metadata.jvm)
     implementation(libs.androidx.hilt.navigation.compose)
 
 
@@ -229,7 +230,6 @@ dependencies {
     testImplementation(libs.hilt.android.testing)
     testImplementation(libs.androidx.room.testing)
     kspTest(libs.hilt.android.compiler)
-    kspTest(libs.kotlin.metadata.jvm)
 
     // Testing — instrumented (androidTest)
     androidTestImplementation(libs.androidx.junit)
@@ -242,6 +242,5 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.room.testing)
     kspAndroidTest(libs.hilt.android.compiler)
-    kspAndroidTest(libs.kotlin.metadata.jvm)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

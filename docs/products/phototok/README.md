@@ -81,7 +81,7 @@ While the desktop and tablet products emphasize multi-up comparative culling and
 | **Gradle Module** | `:phototok` |
 | **Package Name** | `com.phototok` |
 | **Application ID** | `com.phototok` |
-| **minSdk / targetSdk / compileSdk** | 26 (Android 8.0) / 36 (Android 15) / 36 |
+| **minSdk / targetSdk / compileSdk** | 26 (Android 8.0) / 36 (Android 16) / 37 |
 | **Target Device Class** | Portrait phones $< 600$ dp (Compact window size class) |
 | **Shared Code** | `:core` (`products/android/core/`) for shared EXIF models |
 | **Output Artifacts** | `phototok-android-release.apk` / `.aab` |
