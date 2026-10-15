@@ -16,7 +16,7 @@ from photo_selector_toolbox.core.sharpness import (
     find_related_files,
 )
 from photo_selector_toolbox.core.formatting import format_score, format_meta
-from photo_selector_toolbox.core.config import load_config, save_config
+from photo_selector_toolbox.core.config import load_config, update_config
 from photo_selector_toolbox.core.utils import (
     is_excluded_subfolder,
     get_excluded_folder_names,
@@ -875,6 +875,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.toggle_focus_mode,
         )
         self.focus_exit_btn.pack(side="top", pady=10, fill="x")
+        ToolTip(self.focus_exit_btn, "Exit Focus Mode (Hotkey: F or Esc)")
 
         ttk.Separator(self.focus_right_panel, orient="horizontal").pack(
             fill="x", pady=10
@@ -885,11 +886,13 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.focus_right_panel, text="◀ Previous (Left)", command=self.prev_candidate
         )
         self.focus_prev_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_prev_btn, "Go to the previous image (Hotkey: Left Arrow)")
 
         self.focus_next_btn = ttk.Button(
             self.focus_right_panel, text="Next ▶ (Right)", command=self.next_candidate
         )
         self.focus_next_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_next_btn, "Go to the next image (Hotkey: Right Arrow)")
 
         self.focus_del_btn = ttk.Button(
             self.focus_right_panel,
@@ -897,6 +900,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.delete_current_candidate,
         )
         self.focus_del_btn.pack(side="top", pady=20, fill="x")
+        ToolTip(self.focus_del_btn, "Move current image to trash (Hotkey: Delete)")
 
         self.focus_move_btn = ttk.Button(
             self.focus_right_panel,
@@ -904,6 +908,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.move_current_to_selection,
         )
         self.focus_move_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_move_btn, "Move current image to Selection folder (Hotkey: M)")
 
         self.focus_copy_btn = ttk.Button(
             self.focus_right_panel,
@@ -911,6 +916,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             command=self.copy_current_to_selection,
         )
         self.focus_copy_btn.pack(side="top", pady=5, fill="x")
+        ToolTip(self.focus_copy_btn, "Copy current image to Selection folder (Hotkey: C)")
 
     def _setup_focus_bottom_panel(self):
        # --- Row 1: Bottom Strip ---
@@ -1314,9 +1320,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
     def on_file_type_change(self, event=None):
         new_filter = self.file_type_var.get()
         try:
-            cfg = load_config()
-            cfg["file_type_filter"] = new_filter
-            save_config(cfg)
+            update_config(file_type_filter=new_filter)
             if hasattr(self, "app_config") and isinstance(self.app_config, dict):
                 self.app_config["file_type_filter"] = new_filter
         except Exception as e:
@@ -1348,10 +1352,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         sort_by = self.sort_by_var.get()
         sort_order = self.sort_order_var.get()
         try:
-            cfg = load_config()
-            cfg["sort_by"] = sort_by
-            cfg["sort_order"] = sort_order
-            save_config(cfg)
+            update_config(sort_by=sort_by, sort_order=sort_order)
             if hasattr(self, "app_config") and isinstance(self.app_config, dict):
                 self.app_config["sort_by"] = sort_by
                 self.app_config["sort_order"] = sort_order
@@ -1575,10 +1576,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
 
         if not self._is_grouping_enabled():
            # Save settings
-            config = load_config()
-            config["group_similar"] = False
-            config["group_level"] = self.group_level_var.get()
-            save_config(config)
+            update_config(
+                group_similar=False,
+                group_level=self.group_level_var.get(),
+            )
 
             self._last_applied_group_similar = False
             self.apply_grouping_and_refresh()
@@ -1591,10 +1592,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             self.start_grouping_analysis(missing, level)
         else:
            # Save settings
-            config = load_config()
-            config["group_similar"] = True
-            config["group_level"] = level
-            save_config(config)
+            update_config(
+                group_similar=True,
+                group_level=level,
+            )
 
             self._last_applied_group_similar = True
             self._last_applied_group_level = level
@@ -1720,10 +1721,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.scan_options_btn.state(["!disabled"])
 
        # Save settings
-        config = load_config()
-        config["group_similar"] = True
-        config["group_level"] = level
-        save_config(config)
+        update_config(
+            group_similar=True,
+            group_level=level,
+        )
 
         self._last_applied_group_similar = True
         self._last_applied_group_level = level
@@ -1731,7 +1732,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.log("Similarity analysis complete.")
         self.apply_grouping_and_refresh()
 
-       # Start any scan the user queued while grouping was running.
+        # Start any scan the user queued while grouping was running.
         self._start_pending_scan_if_any()
 
     def _handle_grouping_cancelled(self):
@@ -1751,10 +1752,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.group_level_var.set(self._last_applied_group_level)
 
        # Re-save config to last applied state
-        config = load_config()
-        config["group_similar"] = self._last_applied_group_similar
-        config["group_level"] = self._last_applied_group_level
-        save_config(config)
+        update_config(
+            group_similar=self._last_applied_group_similar,
+            group_level=self._last_applied_group_level,
+        )
 
         self.log("Similarity analysis cancelled.")
         self.apply_grouping_and_refresh()

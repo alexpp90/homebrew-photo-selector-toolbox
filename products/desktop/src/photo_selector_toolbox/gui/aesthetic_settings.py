@@ -27,7 +27,7 @@ from tkinter import filedialog, ttk
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from photo_selector_toolbox.core.config import load_config, save_config
+from photo_selector_toolbox.core.config import load_config, update_config
 from photo_selector_toolbox.core.utils import (
     NoRedirectHandler,
     SafeSSRFHTTPHandler,
@@ -701,13 +701,11 @@ class AestheticSettingsDialog(tk.Toplevel):
             pass
 
     def save_settings(self) -> None:
-        # Load-mutate-save: writing only the touched keys would wipe every other
-        # setting, since save_config replaces the file wholesale.
-        config = load_config()
-        config["aesthetic_engine"] = self.engine_var.get()
-        config["nima_model_path"] = self.nima_path_var.get().strip()
-        config["ollama_url"] = self.url_var.get().strip()
-        config["ollama_model"] = self.model_var.get().strip()
-        config["ollama_prompt"] = self.prompt_text.get("1.0", "end-1c").strip()
-        save_config(config)
+        update_config(
+            aesthetic_engine=self.engine_var.get(),
+            nima_model_path=self.nima_path_var.get().strip(),
+            ollama_url=self.url_var.get().strip(),
+            ollama_model=self.model_var.get().strip(),
+            ollama_prompt=self.prompt_text.get("1.0", "end-1c").strip(),
+        )
         self.destroy()

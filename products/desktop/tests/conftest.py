@@ -136,6 +136,21 @@ def guard_tkinter_messagebox(monkeypatch):
 # ── Fixtures ─────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
+def collect_tk_garbage_on_main_thread():
+    """Collect cyclic garbage on the main thread after every test once Tk is loaded.
+
+    Tests leave tkinter objects (Variables, PhotoImages, interpreters) in reference
+    cycles. If the cyclic GC first runs on a worker thread, Tcl panics with
+    "Tcl_AsyncDelete: async handler deleted by the wrong thread" and, on Windows,
+    the whole pytest process dies with fatal exception 0x80000003.
+    """
+    yield
+    if "tkinter" in sys.modules:
+        import gc
+        gc.collect()
+
+
+@pytest.fixture(autouse=True)
 def test_db_env(tmp_path):
     """Ensure ScoreCache uses a temp database during tests."""
     try:

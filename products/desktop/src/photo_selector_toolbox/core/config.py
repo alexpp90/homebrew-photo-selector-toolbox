@@ -147,6 +147,14 @@ def save_config(config: Dict[str, Union[str, bool, List[str]]]) -> None:
         logger.error(f"Failed to save config: {e}")
 
 
+def update_config(**fields: Union[str, bool, List[str]]) -> Dict[str, Union[str, bool, List[str]]]:
+    """Updates specific fields in config while preserving all other keys."""
+    config = load_config()
+    config.update(fields)
+    save_config(config)
+    return config
+
+
 def add_recent_folder(folder_path: str) -> None:
     """Adds a folder to the recent folders list (most recent first, max 10)."""
     config = load_config()
@@ -158,8 +166,7 @@ def add_recent_folder(folder_path: str) -> None:
     recent.insert(0, folder_str)
     recent = recent[:MAX_RECENT_FOLDERS]
 
-    config["recent_folders"] = recent
-    save_config(config)
+    update_config(recent_folders=recent)
 
 
 def get_recent_folders() -> List[str]:
