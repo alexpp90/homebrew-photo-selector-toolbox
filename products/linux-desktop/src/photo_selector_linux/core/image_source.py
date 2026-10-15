@@ -35,6 +35,8 @@ GExiv2 = _metadata.GExiv2 if HAS_GEXIV2 else None
 # A display decode must reach min(MIN_DISPLAY_LONG_EDGE, native long edge).
 MIN_DISPLAY_LONG_EDGE = 1024
 RAW_DEVELOP_TIMEOUT_S = 60
+# A preview this close to the sensor's long edge already is 1:1 (NEF 5568 of 5600 px).
+FULL_SIZE_PREVIEW_RATIO = 0.9
 
 
 @dataclass(frozen=True)
@@ -134,8 +136,12 @@ def develop_raw(
     name: str = "",
     runner: Callable[..., "subprocess.CompletedProcess[bytes]"] = subprocess.run,
     decoder: Optional[str] = None,
+    half_size: bool = True,
 ) -> Optional[DisplaySource]:
-    """Develop a RAW file at half size with camera white balance; None when impossible.
+    """Develop a RAW file with camera white balance; None when impossible.
+
+    Half size (the default) is the display fallback for small previews; full size serves 1:1
+    zoom, where the embedded preview (often ~1600 px for a 6000 px sensor) is not 100%.
 
     With ``data`` (a file already downloaded from a cloud mount) LibRaw reads a local temporary
     copy instead of seeking through the network path. LibRaw applies the EXIF orientation itself.
@@ -157,8 +163,9 @@ def develop_raw(
             tmp.close()
             source_path = Path(tmp.name)
         # -h half size, -w camera white balance, -Z - write the 8-bit PPM to stdout.
+        size_args = ["-h"] if half_size else []
         proc = runner(
-            [decoder, "-h", "-w", "-Z", "-", str(source_path)],
+            [decoder, *size_args, "-w", "-Z", "-", str(source_path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=RAW_DEVELOP_TIMEOUT_S,
@@ -175,6 +182,32 @@ def develop_raw(
         if tmp is not None:
             Path(tmp.name).unlink(missing_ok=True)
     return DisplaySource(data=img.tobytes(), orientation=None, is_raw_preview=False, rgb_size=img.size)
+
+
+def read_full_resolution_source(
+    path: Path,
+    name: Optional[str] = None,
+    data: Optional[bytes] = None,
+    developer: Optional[Developer] = None,
+) -> Optional[DisplaySource]:
+    """Bytes for 1:1 zoom: a RAW developed at full sensor resolution, else the display source.
+
+    Many cameras (Nikon, Pentax, Canon CR2) embed a preview within a few pixels of the sensor
+    size; it is used as is, since developing costs seconds. Without LibRaw a RAW falls back to its
+    preview, so 1:1 then shows the preview's resolution.
+    """
+    name = name or path.name
+    if is_raw_name(name):
+        preview, preview_edge, native = _raw_preview_and_native_edge(path, data)
+        if preview is not None and native and preview_edge >= FULL_SIZE_PREVIEW_RATIO * native:
+            return preview
+        develop = developer or (lambda p, d, n: develop_raw(p, d, n, half_size=False))
+        developed = develop(path, data, name)
+        if developed is not None:
+            return developed
+        if preview is not None:
+            return preview
+    return read_display_source(path, name, data)
 
 
 def read_display_source(

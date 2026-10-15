@@ -21,6 +21,7 @@ except (ImportError, ValueError):
 
 from photo_selector_linux.ui.action_bar import ActionBarView
 from photo_selector_linux.ui.canvas import CanvasView
+from photo_selector_linux.ui.file_worker import FileOperationWorker
 from photo_selector_linux.ui.keyboard_router import KeyboardRouter
 from photo_selector_linux.ui.styling import APP_BRAND_NAME, APP_ICON_NAME
 from photo_selector_linux.viewmodels.culling_workspace import CullingWorkspaceViewModel
@@ -39,7 +40,8 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
             self.set_icon_name(APP_ICON_NAME)
             self.add_css_class("studio-dark-surface")
 
-        self.viewmodel = CullingWorkspaceViewModel()
+        # File operations run on a worker so a cloud upload does not freeze the window.
+        self.viewmodel = CullingWorkspaceViewModel(dispatcher=FileOperationWorker() if HAS_GI else None)
         if HAS_GI:
             self._build_ui()
             self._attach_keyboard_router()
