@@ -15,7 +15,7 @@ The codebase enforces strict separation of concerns:
   - `scanner`: Recursive progressive directory scanner with companion binding, Lightroom derivative detection, and dynamic `Selection/` subfolder exclusion.
   - `metadata`: Optical metadata extraction via `GExiv2` with Pillow fallback, APEX math conversions ($T_v \to 2^{-T_v}$, $A_v \to 2^{A_v/2}$), and fractional shutter formatting.
   - `image_source`: Camera RAW files (`.ARW`, `.NEF`, `.CR3`, …) are displayed through their embedded JPEG preview, upright per the RAW's EXIF orientation; photos decode in the background with a spinner.
-  - `gvfs_names`: Google Drive and other GVFS cloud mounts (GNOME Online Accounts) open like local folders — real file names are resolved through GIO, since Drive lists files under opaque IDs.
+  - `gvfs_names`: Google Drive and other GVFS cloud mounts (GNOME Online Accounts) open like local folders — real file names are resolved through GIO, since Drive lists files under opaque IDs. Move, Copy, Trash and Undo work there too; Trash keeps the file in the local GNOME Trash (under its real name) so it can be undone.
   - `file_ops`: Transactional file relocations with Two-Phase Staged Transactions for cross-mount moves, safe copy-undo preserving original source media, and FreeDesktop Trash integration (`Gio.File.trash()`).
   - `scoring`: Pure NumPy focus scoring engine utilizing 2D discrete Laplacian convolution, 3x3 Gaussian smoothing, center 50% ROI cropping, and strided Median Absolute Deviation (MAD) sensor noise compensation (< 2.0 ms SLA).
   - `duplicate_finder`: Two-stage duplicate detection using byte size pre-filtering and chunked 64 KB streaming SHA-256 hashing.

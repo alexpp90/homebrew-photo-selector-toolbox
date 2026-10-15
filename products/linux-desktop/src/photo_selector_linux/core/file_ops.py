@@ -18,7 +18,11 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from urllib.parse import quote, unquote
 
-from photo_selector_linux.core.gvfs_names import DisplayNameResolver, default_resolver
+from photo_selector_linux.core.gvfs_names import (
+    DisplayNameResolver,
+    default_resolver,
+    is_gvfs_fuse_path,
+)
 from photo_selector_linux.core.models import (
     CandidatePhoto,
     CullingActionType,
@@ -36,6 +40,19 @@ try:
     _HAVE_GIO = True
 except Exception:
     _HAVE_GIO = False
+
+
+def _copy_file(src: Path, dst: Path) -> None:
+    """Copy content, then permissions and timestamps where the destination supports them.
+
+    GVFS cloud mounts (Google Drive) reject ``utime``/``chmod`` with ENOTSUP, which made
+    ``shutil.copy2`` fail every copy and cross-mount move there after the bytes had landed.
+    """
+    shutil.copyfile(src, dst)
+    try:
+        shutil.copystat(src, dst)
+    except OSError as e:
+        logger.debug("Metadata not preserved for %s: %s", dst, e)
 
 
 class FileCullingError(Exception):
@@ -70,8 +87,12 @@ class FileCullingManager:
             return Path(xdg_data) / "Trash"
         return Path.home() / ".local" / "share" / "Trash"
 
-    def _trash_file_freedesktop(self, src: Path) -> Path:
-        """Relocate a file into the FreeDesktop.org Trash specification layout (files/ + info/)."""
+    def _trash_file_freedesktop(self, src: Path, name: Optional[str] = None) -> Path:
+        """Relocate a file into the FreeDesktop.org Trash specification layout (files/ + info/).
+
+        ``name`` is the user-facing filename when it differs from the on-disk one (GVFS cloud
+        mounts); the trash entry and its recorded original path use it.
+        """
         trash_base = self._get_trash_dir()
         files_dir = trash_base / "files"
         info_dir = trash_base / "info"
@@ -79,16 +100,17 @@ class FileCullingManager:
         info_dir.mkdir(parents=True, exist_ok=True)
 
         src_resolved = src.resolve()
-        candidate_name = src.name
+        name = name or src.name
+        candidate_name = name
         counter = 1
         while (files_dir / candidate_name).exists() or (info_dir / f"{candidate_name}.trashinfo").exists():
             counter += 1
-            candidate_name = f"{src.stem}.{counter}{src.suffix}"
+            candidate_name = f"{Path(name).stem}.{counter}{Path(name).suffix}"
 
         dst_file = files_dir / candidate_name
         info_file = info_dir / f"{candidate_name}.trashinfo"
         deletion_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-        encoded_path = quote(str(src_resolved), safe="/")
+        encoded_path = quote(str(src_resolved.parent / name), safe="/")
         info_content = f"[Trash Info]\nPath={encoded_path}\nDeletionDate={deletion_date}\n"
         info_file.write_text(info_content, encoding="utf-8")
 
@@ -96,7 +118,7 @@ class FileCullingManager:
             if src_resolved.parent.stat().st_dev == files_dir.stat().st_dev:
                 os.replace(src_resolved, dst_file)
             else:
-                shutil.copy2(src_resolved, dst_file)
+                _copy_file(src_resolved, dst_file)
                 src_resolved.unlink()
         except Exception:
             if info_file.exists():
@@ -157,7 +179,7 @@ class FileCullingManager:
             if src.parent.stat().st_dev == trash_file.stat().st_dev:
                 os.replace(trash_file, src)
             else:
-                shutil.copy2(trash_file, src)
+                _copy_file(trash_file, src)
                 trash_file.unlink()
 
             info_file = trash_file.parent.parent / "info" / f"{trash_file.name}.trashinfo"
@@ -166,6 +188,30 @@ class FileCullingManager:
                     info_file.unlink()
                 except Exception:
                     pass
+
+    def _relink_restored(self, candidate: CandidatePhoto) -> None:
+        """Point the candidate at its restored files.
+
+        A file written back to a GVFS cloud mount gets a new opaque ID, so the candidate's old
+        on-disk paths are gone; find each file again by its user-facing name.
+        """
+        stale = [p for p in candidate.all_paths if not p.exists()]
+        if not stale:
+            return
+        by_name = {}
+        for parent in {p.parent for p in stale}:
+            for on_disk, display in self.name_resolver.names_in(parent).items():
+                by_name[(parent, display)] = parent / on_disk
+        relinked = {}
+        for old in stale:
+            name = candidate.name_of(old)
+            relinked[old] = by_name.get((old.parent, name), old.parent / name)
+        candidate.primary_path = relinked.get(candidate.primary_path, candidate.primary_path)
+        candidate.companion_paths = [relinked.get(p, p) for p in candidate.companion_paths]
+        for old, new in relinked.items():
+            name = candidate.display_names.pop(old, old.name)
+            if new.name != name:
+                candidate.display_names[new] = name
 
     def _get_selection_dir(self, root_dir: Path, custom_folder: Optional[str] = None) -> Path:
         folder_name = custom_folder or self.default_selection_folder
@@ -261,7 +307,7 @@ class FileCullingManager:
                         continue
 
                     current_in_flight = (src, dst)
-                    shutil.copy2(src, dst)
+                    _copy_file(src, dst)
                     # Verify integrity
                     if dst.stat().st_size != src.stat().st_size:
                         raise IOError(f"Byte mismatch during cross-mount staging for {src.name}")
@@ -347,7 +393,7 @@ class FileCullingManager:
                     continue
 
                 current_in_flight = (src, dst)
-                shutil.copy2(src, dst)
+                _copy_file(src, dst)
                 if dst.stat().st_size != src.stat().st_size:
                     raise IOError(f"Byte mismatch copying {src.name}")
                 staged_copies.append((src, dst))
@@ -388,7 +434,13 @@ class FileCullingManager:
             for src in targets:
                 if not src.exists():
                     continue
-                if _HAVE_GIO and self._trash_dir is None and "XDG_DATA_HOME" not in os.environ:
+                if is_gvfs_fuse_path(src):
+                    # GIO cannot trash through the FUSE mount, and the cloud's own trash is out of
+                    # undo's reach: keep the file in the local Trash under its real name instead.
+                    name = candidate.name_of(src)
+                    dst_trash = self._trash_file_freedesktop(src, name)
+                    trashed_paths.append((src.resolve().parent / name, dst_trash))
+                elif _HAVE_GIO and self._trash_dir is None and "XDG_DATA_HOME" not in os.environ:
                     gfile = Gio.File.new_for_path(str(src.resolve()))
                     gfile.trash(None)
                     located = self._find_trashed_file(src)
@@ -442,7 +494,7 @@ class FileCullingManager:
                     if src.parent.stat().st_dev == dst.stat().st_dev:
                         os.replace(dst, src)
                     else:
-                        shutil.copy2(dst, src)
+                        _copy_file(dst, src)
                         dst.unlink()
             if candidate:
                 candidate.status = record.previous_status
@@ -457,6 +509,7 @@ class FileCullingManager:
                 except Exception as e:
                     raise FileCullingError(f"Failed to restore trashed file {src.name} during undo: {e}") from e
             if candidate:
+                self._relink_restored(candidate)
                 candidate.status = record.previous_status
             return True
 

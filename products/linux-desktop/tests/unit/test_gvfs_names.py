@@ -134,3 +134,46 @@ def test_viewmodel_reports_the_real_folder_name(tmp_path: Path, monkeypatch):
     vm.load_directory(folder)
 
     assert vm.current_folder_name == "Wedding 2024"
+
+
+def test_copy_succeeds_where_timestamps_cannot_be_set(tmp_path: Path, monkeypatch):
+    """Regression: Google Drive's FUSE mount rejects utime, which failed every Copy to Selection."""
+    def _no_stat(src, dst, **_kwargs):
+        raise OSError(95, "Operation not supported")
+    monkeypatch.setattr("photo_selector_linux.core.file_ops.shutil.copystat", _no_stat)
+    (tmp_path / "13b8").write_bytes(b"raw")
+    candidate = CandidatePhoto(primary_path=tmp_path / "13b8", display_names={tmp_path / "13b8": "DSC0001.ARW"})
+
+    FileCullingManager(name_resolver=FakeResolver({})).copy_candidate(candidate, tmp_path)
+
+    assert (tmp_path / "Selection" / "DSC0001.ARW").read_bytes() == b"raw"
+
+
+def test_cloud_trash_keeps_real_names_and_undo_relinks_the_candidate(tmp_path: Path, monkeypatch):
+    """GIO cannot trash through the FUSE mount: files go to the local Trash and undo restores them."""
+    monkeypatch.setattr("photo_selector_linux.core.file_ops.is_gvfs_fuse_path", lambda _path: True)
+    folder, trash = tmp_path / "drive", tmp_path / "Trash"
+    folder.mkdir()
+    (folder / "13b8").write_bytes(b"raw")
+    (folder / "13bw").write_bytes(b"jpg")
+    candidate = CandidatePhoto(
+        primary_path=folder / "13b8",
+        companion_paths=[folder / "13bw"],
+        display_names={folder / "13b8": "DSC0001.ARW", folder / "13bw": "DSC0001.JPG"},
+    )
+    manager = FileCullingManager(trash_dir=trash, name_resolver=FakeResolver({}))
+
+    record = manager.trash_candidate(candidate)
+
+    assert sorted(p.name for p in folder.iterdir()) == []
+    assert sorted(p.name for p in (trash / "files").iterdir()) == ["DSC0001.ARW", "DSC0001.JPG"]
+    info = (trash / "info" / "DSC0001.ARW.trashinfo").read_text()
+    assert f"Path={folder.resolve()}/DSC0001.ARW" in info
+
+    assert manager.undo_culling(record, candidate)
+
+    assert sorted(p.name for p in folder.iterdir()) == ["DSC0001.ARW", "DSC0001.JPG"]
+    assert candidate.primary_path == folder.resolve() / "DSC0001.ARW"
+    assert candidate.filename == "DSC0001.ARW"
+    assert [candidate.name_of(p) for p in candidate.companion_paths] == ["DSC0001.JPG"]
+    assert all(p.exists() for p in candidate.all_paths)
