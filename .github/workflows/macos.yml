@@ -11,11 +11,17 @@ on:
     paths:
       - 'products/macos-desktop/**'
       - '.github/workflows/macos.yml'
+      - 'testdata/formats/**'
+      - 'scripts/fetch_format_corpus.py'
+      - '.github/actions/format-corpus/**'
   pull_request:
     branches: [main]
     paths:
       - 'products/macos-desktop/**'
       - '.github/workflows/macos.yml'
+      - 'testdata/formats/**'
+      - 'scripts/fetch_format_corpus.py'
+      - '.github/actions/format-corpus/**'
   workflow_dispatch:
 
 concurrency:
@@ -64,6 +70,11 @@ jobs:
 
       - name: Build PhotoSelectorKit & PhotoSelectorApp (Release)
         run: swift build -c release
+
+      # Real-camera format corpus (docs/shared/SUPPORTED_FORMATS.md): fails the job if it
+      # cannot be fetched, and makes the format tests mandatory instead of skippable.
+      - name: Format conformance corpus
+        uses: ./.github/actions/format-corpus
 
       - name: Run Unit, Adversarial & SLA Test Suites (Release)
         run: swift test -c release --no-parallel

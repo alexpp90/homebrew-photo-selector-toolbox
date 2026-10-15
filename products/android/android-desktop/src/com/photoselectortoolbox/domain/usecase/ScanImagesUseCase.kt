@@ -1,20 +1,16 @@
 package com.photoselectortoolbox.domain.usecase
 
-import android.content.Context
-import android.graphics.BitmapFactory
-import android.graphics.ImageDecoder
 import android.net.Uri
-import android.os.Build
 import com.photoselectortoolbox.data.cache.ScoreDao
 import com.photoselectortoolbox.data.cache.ScoreEntity
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.model.ScanResult
 import com.photoselectortoolbox.data.repository.SettingsRepository
+import com.photoselectortoolbox.data.source.PhotoBitmapDecoder
 import com.photoselectortoolbox.domain.analysis.AestheticAnalyzer
 import com.photoselectortoolbox.domain.analysis.ClippingAnalyzer
 import com.photoselectortoolbox.domain.analysis.NoiseAnalyzer
 import com.photoselectortoolbox.domain.analysis.SharpnessAnalyzer
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -56,7 +52,7 @@ class ScanImagesUseCase @Inject constructor(
     private val aestheticAnalyzer: AestheticAnalyzer,
     private val scoreDao: ScoreDao,
     private val settingsRepository: SettingsRepository,
-    @ApplicationContext private val context: Context
+    private val bitmapDecoder: PhotoBitmapDecoder,
 ) {
 
     companion object {
@@ -197,59 +193,11 @@ class ScanImagesUseCase @Inject constructor(
     ): ScanResult? = coroutineScope {
         val uri = Uri.parse(image.uri)
 
-        // Decode the bitmap once for all analyzers with memory-efficient downsampling
-        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            try {
-                val source = ImageDecoder.createSource(context.contentResolver, uri)
-                ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                    // Set allocator to SOFTWARE because OpenCV bitmapToMat requires a software bitmap (not HARDWARE)
-                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-
-                    // Downsample if the image is too large (max 2048px on longest edge)
-                    val longestEdge = maxOf(info.size.width, info.size.height)
-                    val maxDimension = 2048
-                    if (longestEdge > maxDimension) {
-                        val sampleSize = longestEdge / maxDimension
-                        if (sampleSize > 1) {
-                            decoder.setTargetSampleSize(sampleSize)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                null
-            }
-        } else {
-            // Fallback for API < 28: use BitmapFactory with calculated inSampleSize and ARGB_8888 config
-            try {
-                val options = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(stream, null, options)
-                }
-
-                val width = options.outWidth
-                val height = options.outHeight
-                if (width > 0 && height > 0) {
-                    val longestEdge = maxOf(width, height)
-                    val maxDimension = 2048
-                    var sampleSize = 1
-                    while (longestEdge / sampleSize > maxDimension) {
-                        sampleSize *= 2
-                    }
-
-                    val decodeOptions = BitmapFactory.Options().apply {
-                        inSampleSize = sampleSize
-                        inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
-                    }
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        BitmapFactory.decodeStream(stream, null, decodeOptions)
-                    }
-                } else null
-            } catch (e: Exception) {
-                null
-            }
-        } ?: return@coroutineScope null
+        // Decode the bitmap once for all analyzers (≤ 2048 px, software ARGB_8888).
+        // RAWs go through their embedded camera JPEG — the platform has no
+        // decoder for most of them (CR3 at all) — see PhotoBitmapDecoder.
+        val bitmap = bitmapDecoder.decodeForAnalysis(uri, image.fileName)
+            ?: return@coroutineScope null
 
         try {
             // Run sharpness and noise in parallel

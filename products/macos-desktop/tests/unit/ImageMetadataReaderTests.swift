@@ -121,6 +121,49 @@ struct ImageMetadataReaderTests {
         #expect(makeOnlyExif.cameraModel == "Nikon")
     }
 
+    @Test("Make/Model/Lens are trimmed; make is kept separately (Pentax/Olympus pad with spaces)")
+    func testPaddedMakeModelAreTrimmed() {
+        let props: [CFString: Any] = [
+            kCGImagePropertyTIFFDictionary: [
+                kCGImagePropertyTIFFMake: "OLYMPUS CORPORATION    ",
+                kCGImagePropertyTIFFModel: "E-M10MarkIV     \0"
+            ],
+            kCGImagePropertyExifDictionary: [
+                kCGImagePropertyExifLensModel: "  OLYMPUS M.14-42mm F3.5-5.6 EZ  "
+            ]
+        ]
+        let exif = ImageMetadataReader.parseProperties(props)
+        #expect(exif.cameraMake == "OLYMPUS CORPORATION")
+        #expect(exif.cameraModel == "E-M10MarkIV")
+        #expect(exif.lens == "OLYMPUS M.14-42mm F3.5-5.6 EZ")
+    }
+
+    @Test("ISO falls back to ISOSpeed / RecommendedExposureIndex / StandardOutputSensitivity (Canon CR3)")
+    func testISOFallbacks() {
+        let fallbacks: [(CFString, Int)] = [
+            (kCGImagePropertyExifISOSpeed, 640),
+            (kCGImagePropertyExifRecommendedExposureIndex, 800),
+            (kCGImagePropertyExifStandardOutputSensitivity, 1600)
+        ]
+        for (key, value) in fallbacks {
+            let props: [CFString: Any] = [
+                kCGImagePropertyExifDictionary: [
+                    kCGImagePropertyExifSensitivityType: 2,
+                    key: value
+                ]
+            ]
+            #expect(ImageMetadataReader.parseProperties(props).iso == Double(value), "\(key)")
+        }
+        // ISOSpeedRatings still wins when present.
+        let both: [CFString: Any] = [
+            kCGImagePropertyExifDictionary: [
+                kCGImagePropertyExifISOSpeedRatings: [200],
+                kCGImagePropertyExifISOSpeed: 640
+            ]
+        ]
+        #expect(ImageMetadataReader.parseProperties(both).iso == 200)
+    }
+
     @Test("FormattedSummary produces concise optical string")
     func testFormattedSummary() {
         let exif = ExifData(

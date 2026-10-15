@@ -85,3 +85,24 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.robolectric)
 }
+
+// Format conformance (testdata/formats/manifest.json): hand the corpus location
+// and the "corpus is mandatory" switch to the forked test JVM explicitly, and
+// make them task inputs so a changed corpus or switch re-runs the tests instead
+// of reporting UP-TO-DATE. See docs/shared/SUPPORTED_FORMATS.md.
+tasks.withType<Test>().configureEach {
+    val corpusEnv = listOf("PST_FORMAT_CORPUS", "PST_REQUIRE_FORMAT_CORPUS")
+    corpusEnv.forEach { key ->
+        val value = System.getenv(key).orEmpty()
+        inputs.property(key, value)
+        if (value.isNotEmpty()) environment(key, value)
+    }
+    val corpusDir = System.getenv("PST_FORMAT_CORPUS")?.takeIf { it.isNotBlank() }?.let(::File)
+        ?: File(System.getProperty("user.home"), ".cache/photo-selector-toolbox/format-corpus")
+    inputs.property(
+        "formatCorpusListing",
+        corpusDir.listFiles()?.sortedBy { it.name }?.joinToString(";") { "${it.name}:${it.length()}" }.orEmpty(),
+    )
+    inputs.file(rootProject.file("../../testdata/formats/manifest.json"))
+        .withPropertyName("formatManifest").withPathSensitivity(PathSensitivity.RELATIVE)
+}

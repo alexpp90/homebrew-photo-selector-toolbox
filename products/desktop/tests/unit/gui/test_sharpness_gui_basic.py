@@ -29,6 +29,7 @@ def mock_sys_modules():
         elif name == "photo_selector_toolbox.core.utils":
             orig_mod = importlib.import_module("photo_selector_toolbox.core.utils")
             mock_mod.select_representative.side_effect = orig_mod.select_representative
+            mock_mod.scan_image_files.side_effect = orig_mod.scan_image_files
             mock_mod.is_excluded_subfolder.return_value = False
         sys.modules[name] = mock_mod
 
@@ -1021,7 +1022,9 @@ def test_auto_check_folder_detects_disk_changes(tmp_path):
     img_file = tmp_path / "new_photo.jpg"
     img_file.write_bytes(b"mock")
 
-    tool._check_and_reload_folder_if_changed()
+    # exif.reader is a module mock here; give it the real extension set.
+    with patch("photo_selector_toolbox.exif.reader.SUPPORTED_EXTENSIONS", {".jpg"}):
+        tool._check_and_reload_folder_if_changed()
     assert tool._load_folder_contents.called
 
 

@@ -45,7 +45,12 @@ class ExifReadReader(ExifReader):
                     focal_length_35 = focal_length
                     is_fallback = True
 
-                iso_tag = tags.get("EXIF ISOSpeedRatings")
+                iso_tag = (
+                    tags.get("EXIF ISOSpeedRatings")
+                    or tags.get("EXIF PhotographicSensitivity")
+                    or tags.get("EXIF ISOSpeed")
+                    or tags.get("EXIF RecommendedExposureIndex")
+                )
                 iso = iso_tag.values[0] if iso_tag and iso_tag.values else None
                 if iso is not None:
                     if hasattr(iso, "num"):
@@ -63,8 +68,8 @@ class ExifReadReader(ExifReader):
                     "MakerNote LensModel"
                 )
                 lens_model = (
-                    str(lens_model_tag.values).strip() if lens_model_tag else "Unknown"
-                )
+                    str(lens_model_tag.values).strip(" \x00") if lens_model_tag else ""
+                ) or "Unknown"
 
                 if all(
                     v is not None for v in [shutter_speed, aperture, focal_length, iso]

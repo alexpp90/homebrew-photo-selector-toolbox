@@ -38,3 +38,12 @@ jobs:
 
       - name: Verify README parity
         run: python3 scripts/check_readme_parity.py --check
+
+      # Supported-format contract (docs/shared/SUPPORTED_FORMATS.md): the manifest every
+      # product's format tests read is well-formed, every required format has a sample, the
+      # committed bitmap fixtures match their pinned hashes, and the corpus fetcher works.
+      - name: Format contract manifest
+        run: python3 scripts/fetch_format_corpus.py --validate
+
+      - name: Format corpus tooling tests
+        run: python3 -m unittest discover -s scripts/tests -v

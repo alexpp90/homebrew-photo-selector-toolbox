@@ -8,6 +8,21 @@ from photo_selector_toolbox.core.utils import get_exiftool_path
 logger = logging.getLogger(__name__)
 
 
+def _first_lens_name(*candidates: object) -> str:
+    """Returns the first candidate that reads as a lens name, trimmed.
+
+    Under `-n` ExifTool reports lens *codes* (``65535``, ``"2 20 10"``) for
+    LensID/LensType; a value without a single letter is such a code, not a name.
+    """
+    for value in candidates:
+        if value is None:
+            continue
+        text = str(value).strip(" \x00")
+        if text and any(ch.isalpha() for ch in text):
+            return text
+    return "Unknown"
+
+
 class ExifToolReader(ExifReader):
     """EXIF reader using PyExifTool."""
 
@@ -24,7 +39,18 @@ class ExifToolReader(ExifReader):
             kwargs = {"executable": exiftool_path} if exiftool_path else {}
 
             with exiftool.ExifToolHelper(**kwargs) as et:
+                # The EXIF-group tags come first: PyExifTool runs ExifTool with
+                # `-G -n`, and in that mode the Composite values are not always
+                # the recorded ones (measured on the format corpus: Composite:ISO
+                # is 616.9 for a Canon CR3 shot at ISO 640, Composite:ShutterSpeed
+                # is the 1/40 s MakerNote value for a Samsung SRW whose EXIF
+                # ExposureTime is 1/320 s, and Composite:LensID is a numeric
+                # lens code such as 65535 for Sony).
                 tags_to_fetch = [
+                    "EXIF:ExposureTime",
+                    "EXIF:FNumber",
+                    "EXIF:LensModel",
+                    "MakerNotes:LensModel",
                     "Composite:ShutterSpeed",
                     "Composite:Aperture",
                     "Composite:ISO",
@@ -61,9 +87,11 @@ class ExifToolReader(ExifReader):
                                 return None
                         return None
 
-                    shutter_speed = parse_val(data.get("Composite:ShutterSpeed"))
-                    aperture = parse_val(data.get("Composite:Aperture"))
-                    iso_val = data.get("Composite:ISO") or data.get("EXIF:ISO")
+                    shutter_speed = parse_val(
+                        data.get("EXIF:ExposureTime") or data.get("Composite:ShutterSpeed")
+                    )
+                    aperture = parse_val(data.get("EXIF:FNumber") or data.get("Composite:Aperture"))
+                    iso_val = data.get("EXIF:ISO") or data.get("Composite:ISO")
                     iso = parse_val(iso_val)
                     fl_val = data.get("Composite:FocalLength") or data.get("EXIF:FocalLength")
                     focal_length = parse_val(fl_val)
@@ -75,11 +103,12 @@ class ExifToolReader(ExifReader):
                         focal_length_35 = focal_length
                         is_fallback = True
 
-                    lens_model = (
-                        data.get("Composite:LensID")
-                        or data.get("LensModel")
-                        or data.get("LensType")
-                        or "Unknown"
+                    lens_model = _first_lens_name(
+                        data.get("EXIF:LensModel"),
+                        data.get("MakerNotes:LensModel"),
+                        data.get("Composite:LensID"),
+                        data.get("LensModel"),
+                        data.get("LensType"),
                     )
 
                     if all(

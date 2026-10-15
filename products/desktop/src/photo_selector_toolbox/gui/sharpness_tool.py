@@ -24,6 +24,8 @@ from photo_selector_toolbox.core.utils import (
     group_files_by_similarity,
     select_representative,
     load_image_preview,
+    scan_image_files,
+    REVIEW_PREVIEW_SIZE,
 )
 from photo_selector_toolbox.gui.aesthetic_settings import AestheticSettingsDialog
 from photo_selector_toolbox.gui.controllers import ImageCacheManager, ScanController
@@ -68,7 +70,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         self.image_groups: List[ImageGroup] = []
 
        # Controllers and State
-        self.cache_manager = ImageCacheManager(preview_size=(1200, 900))
+        self.cache_manager = ImageCacheManager(preview_size=REVIEW_PREVIEW_SIZE)
         self.scan_controller = ScanController()
         self.has_switched_to_review = False
         self.pending_listbox_updates = set()
@@ -1094,27 +1096,10 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
         if not folder_path.exists() or not folder_path.is_dir():
             return
 
-        from photo_selector_toolbox.exif.reader import SUPPORTED_EXTENSIONS
-        if isinstance(SUPPORTED_EXTENSIONS, (set, frozenset, list, tuple)) and len(SUPPORTED_EXTENSIONS) > 0:
-            exts_tuple = tuple(SUPPORTED_EXTENSIONS)
-        else:
-            exts_tuple = (
-                ".jpg", ".jpeg", ".png", ".arw", ".cr2", ".cr3",
-                ".nef", ".dng", ".heic", ".heif", ".tif", ".tiff",
-            )
         excluded = get_excluded_folder_names()
         excluded_names = excluded if isinstance(excluded, (set, frozenset, list)) else {"selection", "selected"}
 
-        disk_files = []
-        for dirpath, dirnames, filenames in os.walk(folder_path):
-            dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-            dp = Path(dirpath)
-            for f in filenames:
-                if f.startswith("._"):
-                    continue
-                if f.lower().endswith(exts_tuple):
-                    disk_files.append(dp / f)
-
+        disk_files = scan_image_files(folder_path, excluded_names)
         disk_files.sort(key=lambda x: x.name)
         if set(disk_files) != set(self.sorted_files):
             self.log("Detected external folder changes on disk. Refreshing...")
@@ -1136,25 +1121,7 @@ class SharpnessTool(ttk.Frame, ImagePanelsMixin):
             is_excluded_subfolder.return_value = False
 
         p = Path(folder_path)
-        from photo_selector_toolbox.exif.reader import SUPPORTED_EXTENSIONS
-
-        extensions = SUPPORTED_EXTENSIONS
-        excluded_names = get_excluded_folder_names()
-        # Pre-compute tuple of extensions for fast string matching
-        exts_tuple = tuple(extensions)
-        files = []
-
-        for dirpath, dirnames, filenames in os.walk(p):
-            # Prune excluded directories in place
-            dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-
-            dp = Path(dirpath)
-            for f in filenames:
-                if f.startswith("._"):
-                    continue
-                if f.lower().endswith(exts_tuple):
-                    files.append(dp / f)
-
+        files = scan_image_files(p, get_excluded_folder_names())
         files.sort(key=lambda x: x.name)
 
         if self.is_grouping:

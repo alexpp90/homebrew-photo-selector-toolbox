@@ -1,0 +1,30 @@
+name: Format conformance corpus
+description: >-
+  Restore (or download and verify) the real-camera RAW corpus pinned in
+  testdata/formats/manifest.json, and export PST_FORMAT_CORPUS plus
+  PST_REQUIRE_FORMAT_CORPUS=1 so every product's format tests run instead of skipping.
+  Mirror: scripts/run_tests.sh "Format corpus" section; docs/shared/SUPPORTED_FORMATS.md.
+
+runs:
+  using: composite
+  steps:
+    - name: Restore format corpus cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/format-corpus
+        key: format-corpus-${{ hashFiles('testdata/formats/manifest.json') }}
+        enableCrossOsArchive: true
+
+    - name: Fetch and verify format corpus
+      shell: bash
+      env:
+        PST_FORMAT_CORPUS: ${{ runner.temp }}/format-corpus
+      run: |
+        PY="$(command -v python3 || command -v python)"
+        "$PY" "$GITHUB_WORKSPACE/scripts/fetch_format_corpus.py"
+
+    - name: Export corpus location
+      shell: bash
+      run: |
+        echo "PST_FORMAT_CORPUS=${{ runner.temp }}/format-corpus" >> "$GITHUB_ENV"
+        echo "PST_REQUIRE_FORMAT_CORPUS=1" >> "$GITHUB_ENV"

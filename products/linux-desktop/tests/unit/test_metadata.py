@@ -119,3 +119,84 @@ def test_corrupt_exif_graceful_handling(tmp_path: Path):
     assert isinstance(meta, ExposureMetadata)
     assert meta.shutter_speed is None
     assert meta.aperture is None
+
+
+class _FakeGExiv2:
+    """Dict-backed stand-in for an opened ``GExiv2.Metadata``."""
+
+    def __init__(self, tags, broken=()):
+        self.tags, self.broken = tags, set(broken)
+
+    def has_tag(self, tag):
+        return tag in self.tags or tag in self.broken
+
+    def get_tag_string(self, tag):
+        if tag in self.broken:
+            raise RuntimeError("unreadable tag")
+        return self.tags[tag]
+
+
+def test_gexiv2_mapping_reads_cr3_iso_from_recommended_exposure_index():
+    """Canon CR3 and Sony fill ISOSpeed/RecommendedExposureIndex, not ISOSpeedRatings."""
+    from photo_selector_linux.core.metadata import metadata_from_gexiv2
+
+    meta = metadata_from_gexiv2(_FakeGExiv2({
+        "Exif.Photo.ISOSpeedRatings": "65535",  # "too high to fit" sentinel
+        "Exif.Photo.RecommendedExposureIndex": "640",
+        "Exif.Photo.ExposureTime": "1/60",
+        "Exif.Photo.FNumber": "4/1",
+        "Exif.Photo.FocalLength": "22/1",
+    }))
+    assert meta.iso == 640
+    assert math.isclose(meta.shutter_speed, 1 / 60)
+    assert meta.aperture == 4.0
+    assert meta.focal_length == 22.0
+    assert meta.is_fallback is False
+
+
+def test_gexiv2_mapping_trims_padding_and_survives_broken_tags():
+    """Pentax and Olympus pad make/model with spaces; unreadable tags are skipped."""
+    from photo_selector_linux.core.metadata import metadata_from_gexiv2
+
+    meta = metadata_from_gexiv2(_FakeGExiv2(
+        {
+            "Exif.Image.Make": "RICOH IMAGING COMPANY, LTD.  ",
+            "Exif.Image.Model": "PENTAX K-70        \x00",
+            "Exif.Canon.LensModel": "  ",
+            "Exif.NikonLd3.LensIDNumber": "Unknown",
+            "Exif.Photo.ISOSpeedRatings": "400 400",
+        },
+        broken={"Exif.Photo.LensModel", "Exif.Photo.ExposureTime"},
+    ))
+    assert meta.camera_make == "RICOH IMAGING COMPANY, LTD."
+    assert meta.camera_model == "PENTAX K-70"
+    assert meta.lens is None
+    assert meta.iso == 400
+    assert meta.shutter_speed is None
+
+
+def test_gexiv2_mapping_reads_ifd0_exposure_of_tiff_ep_files():
+    from photo_selector_linux.core.metadata import metadata_from_gexiv2
+
+    meta = metadata_from_gexiv2(_FakeGExiv2({
+        "Exif.Image.ExposureTime": "1/250",
+        "Exif.Image.FNumber": "17/10",
+        "Exif.Image.FocalLength": "438/100",
+        "Exif.Image.ISOSpeedRatings": "55",
+    }))
+    assert meta.shutter_speed == 0.004
+    assert meta.aperture == 1.7
+    assert meta.focal_length == 4.38
+    assert meta.iso == 55
+
+
+def test_gexiv2_mapping_apex_fallbacks():
+    from photo_selector_linux.core.metadata import metadata_from_gexiv2
+
+    meta = metadata_from_gexiv2(_FakeGExiv2({
+        "Exif.Photo.ShutterSpeedValue": "8/1",
+        "Exif.Photo.ApertureValue": "5/1",
+    }))
+    assert meta.is_fallback is True
+    assert meta.formatted_shutter_speed == "1/256s"
+    assert meta.formatted_aperture == "f/5.7"

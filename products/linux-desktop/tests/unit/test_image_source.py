@@ -16,6 +16,7 @@ from photo_selector_linux.core.image_source import (
     orientation_ops,
     read_display_source,
 )
+from photo_selector_linux.ui import photo_loader
 from photo_selector_linux.ui.photo_loader import fit_size
 
 needs_gexiv2 = pytest.mark.skipif(not image_source.HAS_GEXIV2, reason="GExiv2 typelib not available")
@@ -142,6 +143,7 @@ def test_fit_size(size, max_edge, expected):
 
 
 @needs_gexiv2  # proxy for real PyGObject typelibs (stub mode lacks GExiv2)
+@pytest.mark.skipif(not photo_loader.HAS_GI, reason="GTK 4 / GdkPixbuf typelibs not available")
 def test_raw_preview_decodes_upright_and_downscaled(tmp_path: Path):
     """End of the display path: preview bytes → GdkPixbuf rotated by the RAW orientation."""
     from photo_selector_linux.ui.photo_loader import decode_pixbuf

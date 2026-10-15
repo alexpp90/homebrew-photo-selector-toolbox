@@ -17,13 +17,14 @@ logger = logging.getLogger(__name__)
 
 # Use a relative import or absolute based on package structure
 # Assuming this runs as a module
-from photo_selector_toolbox.exif.reader import get_exif_data, SUPPORTED_EXTENSIONS
+from photo_selector_toolbox.exif.reader import get_exif_data
 from photo_selector_toolbox.core.analyzer import analyze_data
 from photo_selector_toolbox.core.utils import (
     resolve_path,
     load_image_preview,
     is_excluded_subfolder,
     get_excluded_folder_names,
+    scan_image_files,
 )
 from photo_selector_toolbox.core.visualizer import (
     get_shutter_speed_plot,
@@ -634,22 +635,7 @@ class ImageLibraryStatistics(ttk.Frame):
             ):
                 is_excluded_subfolder.return_value = False
 
-            excluded_names = get_excluded_folder_names()
-            image_files = []
-
-            # Pre-compute tuple of extensions for fast string matching
-            supported_exts_tuple = tuple(SUPPORTED_EXTENSIONS)
-
-            for dirpath, dirnames, filenames in os.walk(root_path):
-                # Prune excluded directories in place
-                dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
-
-                dp = Path(dirpath)
-                for f in filenames:
-                    if f.startswith("._"):
-                        continue
-                    if f.lower().endswith(supported_exts_tuple):
-                        image_files.append(dp / f)
+            image_files = scan_image_files(root_path, get_excluded_folder_names())
 
             if not image_files:
                 logger.info("No supported image files found.")

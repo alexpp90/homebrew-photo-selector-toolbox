@@ -5,7 +5,7 @@ file on a GVFS cloud mount (Google Drive) must first be downloaded. Workers deco
 ``DisplaySource`` bytes into a ``GdkPixbuf`` (thread-safe), the main loop wraps it in a texture.
 
 Adheres to:
-- R-LINUX-META-01: Supported File Formats (RAW display through the embedded preview)
+- R-LINUX-META-01: Supported File Formats (RAW display through the embedded preview or LibRaw)
 - REQ-LINUX-CACHE.01: Bounded In-Memory LRU Cache
 """
 
@@ -50,7 +50,17 @@ def fit_size(width: int, height: int, max_edge: Optional[int]) -> Tuple[int, int
 
 
 def decode_pixbuf(source: DisplaySource, max_edge: Optional[int] = None):
-    """Decode encoded bytes into an upright ``GdkPixbuf``, downscaled during decode if asked."""
+    """Decode a source into an upright ``GdkPixbuf``, downscaled during decode if asked."""
+    if source.rgb_size is not None:
+        # Developed RAW (LibRaw): packed upright RGB pixels, no encoding to parse.
+        width, height = source.rgb_size
+        pixbuf = GdkPixbuf.Pixbuf.new_from_bytes(
+            GLib.Bytes.new(source.data), GdkPixbuf.Colorspace.RGB, False, 8, width, height, width * 3
+        )
+        w, h = fit_size(width, height, max_edge)
+        if (w, h) != (width, height):
+            pixbuf = pixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
+        return pixbuf
     loader = GdkPixbuf.PixbufLoader()
     if max_edge:
         def _on_size_prepared(ldr, width, height):

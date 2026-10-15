@@ -12,6 +12,20 @@ charts and a duplicate finder.
 | Target | Samsung DeX, tablets ≥ 840 dp, Chromebooks (Medium and Expanded window size classes) |
 | Artifacts | `photo-selector-toolbox-android-release.apk` / `.aab` |
 
+## Supported formats
+
+Every format in the [shared contract](../../shared/SUPPORTED_FORMATS.md): RAW from Sony (`ARW`),
+Canon (`CR2`, `CR3`), Nikon (`NEF`, `NRW`), Fujifilm (`RAF`), Panasonic (`RW2`), OM System /
+Olympus (`ORF`), Pentax (`PEF`), Samsung (`SRW`) and `DNG`, plus `JPG`/`JPEG`, `HEIC`/`HEIF`,
+`PNG`, `TIF`/`TIFF` and `WebP`, in any letter case. Each is discovered, displayed, read for EXIF
+and scored. RAW frames are displayed and scored from the camera's embedded JPEG; Android has no
+decoder for CR3 at all, and other RAWs vary by device. Phone DNGs embed only a ~672 px preview,
+so they fall back to the platform DNG decoder. TIFF is decoded by the app, because Android has
+no TIFF codec. The recognised tier (`3FR`, `IIQ`, `RWL`, `X3F`, …) is discovered and sorted as
+RAW, and displayed where its embedded preview allows. A RAW and its JPEG appear as two frames;
+filing sorts them into `RAW/` and `JPEG/`. The one list lives in `domain/format/ImageFormats.kt`,
+and `FormatConformanceTest` holds it to `testdata/formats/manifest.json`.
+
 ## Documents
 
 - `REQUIREMENTS.md` (maintainer-private) — authoritative behaviour specification
@@ -29,7 +43,7 @@ wins.
 
 ```bash
 cd android
-./gradlew :android-desktop:testDebugUnitTest        # JVM unit tests
+./gradlew :android-desktop:testDebugUnitTest        # JVM unit tests (incl. format conformance)
 ./gradlew :android-desktop:assembleDebugAndroidTest # compiles instrumented tests — the step people skip
 ./gradlew :android-desktop:assembleDebug
 ```

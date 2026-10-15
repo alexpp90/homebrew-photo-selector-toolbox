@@ -9,11 +9,13 @@ import android.provider.DocumentsContract
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.photoselector.core.model.ExifData
+import com.photoselector.core.preview.EmbeddedPreviewExtractor
 import com.photoselector.core.reader.AndroidExifReader
 import com.photoselector.core.reader.MediaStoreReader
 import com.phototok.data.model.ImageItem
 import com.phototok.domain.PhotoExtensions
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.FileInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.coroutineContext
@@ -39,10 +41,6 @@ class LocalImageSourceImpl @Inject constructor(
         private const val RAW_SUBFOLDER = "RAW"
         private const val JPEG_SUBFOLDER = "JPEG"
         private const val EDIT_SUFFIX = "-Edit"
-
-        val SUPPORTED_EXTENSIONS = PhotoExtensions.RAW + PhotoExtensions.JPEG + setOf(
-            "png", "tiff", "tif", "bmp", "gif", "webp", "heif", "heic", "avif"
-        )
 
         private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "phototok_selection", "phototok_leftswipe")
 
@@ -224,11 +222,30 @@ class LocalImageSourceImpl @Inject constructor(
             }
             val w = opts.outWidth.coerceAtLeast(0)
             val h = opts.outHeight.coerceAtLeast(0)
-            Pair(w, h)
+            if (w > 0 && h > 0) Pair(w, h) else embeddedPreviewDimensions(uri)
         } catch (e: Exception) {
             Log.d(TAG, "Cannot read dimensions for $uri: ${e.message}")
             Pair(0, 0)
         }
+    }
+
+    /**
+     * Dimensions of a RAW the platform cannot size (e.g. CR3), from its largest
+     * embedded preview — header parsing only, the preview is not decoded.
+     * Orientations 5–8 are rotated by 90°, so width/height are swapped.
+     */
+    private fun embeddedPreviewDimensions(uri: Uri): Pair<Int, Int> = try {
+        context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+            // The stream is not closed on purpose: the descriptor belongs to `pfd`.
+            val preview = EmbeddedPreviewExtractor.find(FileInputStream(pfd.fileDescriptor).channel, minLongEdge = Int.MAX_VALUE)
+            when {
+                preview == null -> Pair(0, 0)
+                preview.orientation in 5..8 -> Pair(preview.height, preview.width)
+                else -> Pair(preview.width, preview.height)
+            }
+        } ?: Pair(0, 0)
+    } catch (e: Exception) {
+        Pair(0, 0)
     }
 
     /** The tree document id of a `content://…/tree/<id>` URI, or null. */
@@ -298,9 +315,7 @@ class LocalImageSourceImpl @Inject constructor(
                     }
 
                     if (name.startsWith(".")) continue
-                    if (name.substringAfterLast('.', "").lowercase() !in SUPPORTED_EXTENSIONS) {
-                        continue
-                    }
+                    if (!PhotoExtensions.isSupported(name)) continue
 
                     val parentUriString = DocumentsContract
                         .buildDocumentUriUsingTree(treeUri, parentId)

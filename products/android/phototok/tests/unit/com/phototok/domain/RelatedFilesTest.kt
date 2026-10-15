@@ -174,4 +174,15 @@ class RelatedFilesTest {
         org.junit.Assert.assertFalse(RelatedFiles.hasFilterMismatch(mostlyRaw, FileTypeFilter.RAW))
         assertTrue(RelatedFiles.hasFilterMismatch(mostlyRaw, FileTypeFilter.JPG))
     }
+
+    @Test
+    fun `hasRawJpegPairs only pairs files in the same folder`() {
+        fun inDir(name: String, dir: String) = img(name).copy(uri = "content://photos/$dir/$name", parentUri = "content://photos/$dir")
+
+        val acrossFolders = listOf(inDir("DSC_0001.ARW", "a"), inDir("DSC_0001.JPG", "b"))
+        org.junit.Assert.assertFalse(RelatedFiles.hasRawJpegPairs(acrossFolders))
+
+        val sameFolder = listOf(inDir("DSC_0001.ARW", "a"), inDir("DSC_0001.JPG", "a"))
+        assertTrue(RelatedFiles.hasRawJpegPairs(sameFolder))
+    }
 }

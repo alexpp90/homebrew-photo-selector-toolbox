@@ -14,6 +14,11 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Box the Review tab decodes its triplet previews into (and caches at). The
+# format conformance test displays every supported format through
+# `load_image_preview` at this size.
+REVIEW_PREVIEW_SIZE: Tuple[int, int] = (1200, 900)
+
 
 def _is_hash_similar(prev_res, next_res, hash_keys: List[str], threshold: int) -> bool:
     """Helper to check if two scan results are similar based on image hashes."""
@@ -361,7 +366,20 @@ def load_image_preview(
                                 e,
                             )
 
-                    # Fallback to standard postprocess if thumbnail extraction failed or full_res requested
+                    # An embedded preview smaller than the requested box (and than
+                    # the sensor) would be shown upscaled: phone DNGs embed ~672 px
+                    # previews. Decode the RAW instead in that case only.
+                    if img is not None:
+                        try:
+                            sensor_long = max(int(raw.sizes.width), int(raw.sizes.height))
+                        except (AttributeError, TypeError, ValueError):
+                            sensor_long = 0
+                        if max(img.size) < min(max(max_size), sensor_long):
+                            img.close()
+                            img = None
+
+                    # Fallback to standard postprocess if thumbnail extraction failed,
+                    # the preview was too small, or full_res requested
                     if img is None:
                         rgb = raw.postprocess(
                             use_camera_wb=True, bright=1.0, half_size=not full_res
@@ -420,6 +438,39 @@ def get_excluded_folder_names() -> frozenset:
     except Exception:
         pass
     return frozenset(excluded_names)
+
+
+def scan_image_files(
+    root: str | Path, excluded_names: Optional[Set[str]] = None
+) -> List[Path]:
+    """Recursively lists the supported photos under *root* (unsorted).
+
+    The one scanner behind the CLI, the Statistics tab and the Review tab:
+    extensions are matched case-insensitively against
+    `exif.reader.SUPPORTED_EXTENSIONS`, AppleDouble ``._*`` files are skipped and
+    excluded folders (Selection, ...) are pruned without being descended into.
+
+    Args:
+        root: Folder to scan.
+        excluded_names: Lower-cased folder names to prune; defaults to
+            `get_excluded_folder_names()`.
+    """
+    from photo_selector_toolbox.exif.reader import SUPPORTED_EXTENSIONS
+
+    if excluded_names is None:
+        excluded_names = get_excluded_folder_names()
+    # Same rule as `exif.reader.is_supported_image_name`, inlined with the
+    # tuple computed once per scan rather than once per file.
+    exts = tuple(SUPPORTED_EXTENSIONS)
+    files: List[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Prune excluded directories in place
+        dirnames[:] = [d for d in dirnames if d.lower() not in excluded_names]
+        dp = Path(dirpath)
+        for f in filenames:
+            if not f.startswith("._") and f.lower().endswith(exts):
+                files.append(dp / f)
+    return files
 
 
 def is_excluded_subfolder(

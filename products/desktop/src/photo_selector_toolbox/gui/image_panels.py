@@ -3,7 +3,11 @@ from PIL import Image, ImageTk
 from tkinter import ttk
 
 # Local imports
-from photo_selector_toolbox.core.utils import load_image_preview, create_placeholder_image
+from photo_selector_toolbox.core.utils import (
+    REVIEW_PREVIEW_SIZE,
+    create_placeholder_image,
+    load_image_preview,
+)
 from photo_selector_toolbox.core.formatting import format_score
 
 logger = logging.getLogger(__name__)
@@ -277,7 +281,7 @@ class ImagePanelsMixin:
     def load_images_background(
         self, prev_path, curr_path, next_path, size_curr, size_prev, size_next
     ):
-        CACHE_SIZE = (1200, 900)
+        CACHE_SIZE = REVIEW_PREVIEW_SIZE
 
         def get_image(path, requested_size):
             if path is None:

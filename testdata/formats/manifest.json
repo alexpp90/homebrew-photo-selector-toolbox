@@ -1,0 +1,553 @@
+{
+  "schema": 1,
+  "description": "Supported-format contract and conformance corpus shared by every product's tests. Human documentation: docs/shared/SUPPORTED_FORMATS.md. Change it only together with every product's implementation.",
+  "corpus": {
+    "cache_env": "PST_FORMAT_CORPUS",
+    "require_env": "PST_REQUIRE_FORMAT_CORPUS",
+    "default_cache_dir": "~/.cache/photo-selector-toolbox/format-corpus",
+    "fetch_script": "scripts/fetch_format_corpus.py",
+    "mirrors": [
+      "https://github.com/alexpp90/photo-selector/releases/download/format-corpus-v1/{file}"
+    ],
+    "license": "CC0-1.0 (raw.pixls.us); the per-sample url is the canonical origin and the last fallback"
+  },
+  "display": {
+    "min_long_edge_px": 1024,
+    "note": "A display decode of every required sample must reach min(min_long_edge_px, expect.long_edge_px), the latter being the native long edge. RAW files may use their embedded preview but must fall back to a real decode when the preview is smaller (phone DNGs embed ~672 px previews)."
+  },
+  "exif_tolerance": {
+    "relative": 0.02,
+    "note": "Exposure time, f-number and focal length match within this relative tolerance; ISO matches exactly. Make, model and lens compare case-insensitively after trimming whitespace (some cameras pad these fields with spaces)."
+  },
+  "formats": [
+    {
+      "id": "arw",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Sony",
+      "extensions": [
+        "arw"
+      ]
+    },
+    {
+      "id": "cr2",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Canon",
+      "extensions": [
+        "cr2"
+      ]
+    },
+    {
+      "id": "cr3",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Canon",
+      "extensions": [
+        "cr3"
+      ]
+    },
+    {
+      "id": "nef",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Nikon",
+      "extensions": [
+        "nef"
+      ]
+    },
+    {
+      "id": "nrw",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Nikon (compact)",
+      "extensions": [
+        "nrw"
+      ]
+    },
+    {
+      "id": "raf",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Fujifilm",
+      "extensions": [
+        "raf"
+      ]
+    },
+    {
+      "id": "rw2",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Panasonic",
+      "extensions": [
+        "rw2"
+      ]
+    },
+    {
+      "id": "orf",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "OM System / Olympus",
+      "extensions": [
+        "orf"
+      ]
+    },
+    {
+      "id": "pef",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Pentax",
+      "extensions": [
+        "pef"
+      ]
+    },
+    {
+      "id": "dng",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Adobe DNG (Leica, Pentax, phones)",
+      "extensions": [
+        "dng"
+      ]
+    },
+    {
+      "id": "srw",
+      "tier": "required",
+      "kind": "raw",
+      "vendor": "Samsung",
+      "extensions": [
+        "srw"
+      ]
+    },
+    {
+      "id": "jpeg",
+      "tier": "required",
+      "kind": "bitmap",
+      "vendor": "",
+      "extensions": [
+        "jpg",
+        "jpeg"
+      ]
+    },
+    {
+      "id": "heif",
+      "tier": "required",
+      "kind": "bitmap",
+      "vendor": "",
+      "extensions": [
+        "heic",
+        "heif"
+      ]
+    },
+    {
+      "id": "png",
+      "tier": "required",
+      "kind": "bitmap",
+      "vendor": "",
+      "extensions": [
+        "png"
+      ]
+    },
+    {
+      "id": "tiff",
+      "tier": "required",
+      "kind": "bitmap",
+      "vendor": "",
+      "extensions": [
+        "tif",
+        "tiff"
+      ]
+    },
+    {
+      "id": "webp",
+      "tier": "required",
+      "kind": "bitmap",
+      "vendor": "",
+      "extensions": [
+        "webp"
+      ]
+    },
+    {
+      "id": "3fr",
+      "tier": "recognized",
+      "kind": "raw",
+      "vendor": "Hasselblad",
+      "extensions": [
+        "3fr",
+        "fff"
+      ]
+    },
+    {
+      "id": "iiq",
+      "tier": "recognized",
+      "kind": "raw",
+      "vendor": "Phase One",
+      "extensions": [
+        "iiq"
+      ]
+    },
+    {
+      "id": "rwl",
+      "tier": "recognized",
+      "kind": "raw",
+      "vendor": "Leica",
+      "extensions": [
+        "rwl",
+        "raw"
+      ]
+    },
+    {
+      "id": "sr2",
+      "tier": "recognized",
+      "kind": "raw",
+      "vendor": "Sony (legacy)",
+      "extensions": [
+        "sr2",
+        "srf"
+      ]
+    },
+    {
+      "id": "mrw",
+      "tier": "recognized",
+      "kind": "raw",
+      "vendor": "Minolta",
+      "extensions": [
+        "mrw"
+      ]
+    },
+    {
+      "id": "x3f",
+      "tier": "recognized",
+      "kind": "raw",
+      "vendor": "Sigma",
+      "extensions": [
+        "x3f"
+      ]
+    },
+    {
+      "id": "erf",
+      "tier": "recognized",
+      "kind": "raw",
+      "vendor": "Epson",
+      "extensions": [
+        "erf"
+      ]
+    },
+    {
+      "id": "mef",
+      "tier": "recognized",
+      "kind": "raw",
+      "vendor": "Mamiya",
+      "extensions": [
+        "mef",
+        "mos"
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "id": "arw-ilce6400",
+      "format": "arw",
+      "file": "DSC00087.ARW",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Sony/ILCE-6400/DSC00087.ARW",
+      "sha256": "8a37c80fc47c6026efa2e55279220e79460e2f470b1aa48b440f8f2d47873aa6",
+      "bytes": 24763136,
+      "expect": {
+        "long_edge_px": 6000,
+        "make": "SONY",
+        "model": "ILCE-6400",
+        "iso": 250,
+        "exposure_time_s": 0.004,
+        "f_number": 4.0,
+        "focal_length_mm": 105.0,
+        "lens": "E PZ 18-105mm F4 G OSS"
+      }
+    },
+    {
+      "id": "arw-ilce7m4-lossless",
+      "format": "arw",
+      "file": "ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW",
+      "sha256": "cbbd0930c7d8706dff84c68a2004454266e6fd0d8354f5f76a106b5d776e0223",
+      "bytes": 22933504,
+      "expect": {
+        "long_edge_px": 3504,
+        "make": "SONY",
+        "model": "ILCE-7M4",
+        "iso": 250,
+        "exposure_time_s": 0.02,
+        "f_number": 5.6,
+        "focal_length_mm": 50.0,
+        "lens": "FE 50mm F2.5 G"
+      }
+    },
+    {
+      "id": "cr2-eos100d",
+      "format": "cr2",
+      "file": "IMG_3721.CR2",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Canon/EOS%20100D/IMG_3721.CR2",
+      "sha256": "85e62ea5ea658684964a61696660ffccca2a0c60fc1a2a72b30e6357a095f5e7",
+      "bytes": 27612929,
+      "expect": {
+        "long_edge_px": 5184,
+        "make": "Canon",
+        "model": "Canon EOS 100D",
+        "iso": 100,
+        "exposure_time_s": 0.005,
+        "f_number": 11.0,
+        "focal_length_mm": 43.0,
+        "lens": "EF-S18-55mm f/3.5-5.6 IS STM"
+      }
+    },
+    {
+      "id": "cr3-eosm6ii-craw",
+      "format": "cr3",
+      "file": "IMG_CRAW_3_2.CR3",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Canon/EOS%20M6%20Mark%20II/IMG_CRAW_3_2.CR3",
+      "sha256": "94635c6f91e7d743cee6881cc2519992ae9f9031fd86b49e5d0f16edf5961b55",
+      "bytes": 31581690,
+      "expect": {
+        "long_edge_px": 6960,
+        "make": "Canon",
+        "model": "Canon EOS M6 Mark II",
+        "iso": 640,
+        "exposure_time_s": 0.016667,
+        "f_number": 4.0,
+        "focal_length_mm": 22.0,
+        "lens": "EF-M15-45mm f/3.5-6.3 IS STM"
+      }
+    },
+    {
+      "id": "nef-z50",
+      "format": "nef",
+      "file": "DSC_0441.NEF",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Nikon/Z%2050/DSC_0441.NEF",
+      "sha256": "b25081cf9adcd51fec020b6d227ff094bc0327cbd26d76bad7e1dee3fb4c034a",
+      "bytes": 26472394,
+      "expect": {
+        "long_edge_px": 5568,
+        "make": "NIKON CORPORATION",
+        "model": "NIKON Z 50",
+        "iso": 250,
+        "exposure_time_s": 0.005,
+        "f_number": 8.0,
+        "focal_length_mm": 20.0,
+        "lens": "NIKKOR Z DX 16-50mm f/3.5-6.3 VR"
+      }
+    },
+    {
+      "id": "nrw-p7800",
+      "format": "nrw",
+      "file": "DSCN2039.NRW",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Nikon/Coolpix%20P7800/DSCN2039.NRW",
+      "sha256": "27ac09537dd0f75523864dcf221278e2db354d490534bc13b6eabdc031060e51",
+      "bytes": 26992101,
+      "expect": {
+        "long_edge_px": 4000,
+        "make": "NIKON",
+        "model": "COOLPIX P7800",
+        "iso": 80,
+        "exposure_time_s": 0.025,
+        "f_number": 2.0,
+        "focal_length_mm": 6.0
+      }
+    },
+    {
+      "id": "raf-xt30",
+      "format": "raf",
+      "file": "DSCF0066.RAF",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Fujifilm/X-T30/DSCF0066.RAF",
+      "sha256": "929d4ab996145d06787a684154585d00b01c68240e3aead0a3193232259c1849",
+      "bytes": 31558464,
+      "expect": {
+        "long_edge_px": 6240,
+        "make": "FUJIFILM",
+        "model": "X-T30",
+        "iso": 100,
+        "exposure_time_s": 0.008,
+        "f_number": 6.4,
+        "focal_length_mm": 35.0,
+        "lens": "XF35mmF2 R WR"
+      }
+    },
+    {
+      "id": "rw2-g100",
+      "format": "rw2",
+      "file": "P1000346.RW2",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Panasonic/DC-G100/P1000346.RW2",
+      "sha256": "045fbeed3f92ebe523849959ee0d7c20abdcb32cdbba88f334b648a44ae868fc",
+      "bytes": 24162304,
+      "expect": {
+        "long_edge_px": 5184,
+        "make": "Panasonic",
+        "model": "DC-G100",
+        "iso": 200,
+        "exposure_time_s": 0.0025,
+        "f_number": 9.0,
+        "focal_length_mm": 12.0
+      }
+    },
+    {
+      "id": "orf-em10iv",
+      "format": "orf",
+      "file": "PA040002.ORF",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Olympus/E-M10%20Mark%20IV/PA040002.ORF",
+      "sha256": "77b67d898f85d3d738cb16daf9740c0fcf078ce9662c381994604ac540ce36b4",
+      "bytes": 17953274,
+      "expect": {
+        "long_edge_px": 5184,
+        "make": "OLYMPUS CORPORATION",
+        "model": "E-M10MarkIV",
+        "iso": 100,
+        "exposure_time_s": 0.01,
+        "f_number": 3.5,
+        "focal_length_mm": 14.0,
+        "lens": "OLYMPUS M.14-42mm F3.5-5.6 EZ"
+      }
+    },
+    {
+      "id": "pef-k70",
+      "format": "pef",
+      "file": "IMGP6854.PEF",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Pentax/K-70/IMGP6854.PEF",
+      "sha256": "1d64c6aa71680642ba8f00b6f6105df3e66a4534e631f422fbf3316273c4408c",
+      "bytes": 28663115,
+      "expect": {
+        "long_edge_px": 6000,
+        "make": "RICOH IMAGING COMPANY, LTD.",
+        "model": "PENTAX K-70",
+        "iso": 400,
+        "exposure_time_s": 0.04,
+        "f_number": 5.6,
+        "focal_length_mm": 18.0
+      }
+    },
+    {
+      "id": "dng-pixel4a",
+      "format": "dng",
+      "file": "PXL_20201121_100251397.dng",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Google/Pixel%204a/PXL_20201121_100251397.dng",
+      "sha256": "11b38186ee3455376291bcdb3049728a3f9dcd94b9e82ff76855d9f3430e44be",
+      "bytes": 13586704,
+      "expect": {
+        "long_edge_px": 4016,
+        "make": "Google",
+        "model": "Pixel 4a",
+        "iso": 55,
+        "exposure_time_s": 0.004005,
+        "f_number": 1.7,
+        "focal_length_mm": 4.38
+      }
+    },
+    {
+      "id": "srw-nx3000",
+      "format": "srw",
+      "file": "_3184416.SRW",
+      "source": "corpus",
+      "url": "https://raw.pixls.us/data/Samsung/NX3000/_3184416.SRW",
+      "sha256": "b517dbe12d6d25a9b89116663892d0461e11f3160633e707ddc49c94e5469385",
+      "bytes": 21530327,
+      "expect": {
+        "long_edge_px": 5600,
+        "make": "SAMSUNG",
+        "model": "NX3000",
+        "iso": 100,
+        "exposure_time_s": 0.003125,
+        "f_number": 8.0,
+        "focal_length_mm": 50.0,
+        "lens": "NX 20-50mm F3.5-5.6"
+      }
+    },
+    {
+      "id": "jpeg-sample",
+      "format": "jpeg",
+      "file": "bitmaps/sample.jpg",
+      "source": "repo",
+      "sha256": "8fe26750cd7112eeb5afb54471344223a777db1262eecb9e2ac48772a897489e",
+      "expect": {
+        "long_edge_px": 800,
+        "make": "Canon",
+        "model": "Canon EOS 100D",
+        "iso": 100,
+        "exposure_time_s": 0.005,
+        "f_number": 11.0,
+        "focal_length_mm": 43.0
+      }
+    },
+    {
+      "id": "heif-sample",
+      "format": "heif",
+      "file": "bitmaps/sample.heic",
+      "source": "repo",
+      "sha256": "7373da7f387ca224ac90738e4559c2ce5802af8de35a8163ce9a3bd99d19c8f0",
+      "expect": {
+        "long_edge_px": 800,
+        "make": "Canon",
+        "model": "Canon EOS 100D",
+        "iso": 100,
+        "exposure_time_s": 0.005,
+        "f_number": 11.0,
+        "focal_length_mm": 43.0
+      }
+    },
+    {
+      "id": "png-sample",
+      "format": "png",
+      "file": "bitmaps/sample.png",
+      "source": "repo",
+      "sha256": "0c81454f1e0119960f3acbf4e29bf2d65c3a490ec79d7d877bff525e469a06b1",
+      "expect": {
+        "long_edge_px": 400,
+        "make": "Canon",
+        "model": "Canon EOS 100D",
+        "iso": 100,
+        "exposure_time_s": 0.005,
+        "f_number": 11.0,
+        "focal_length_mm": 43.0
+      }
+    },
+    {
+      "id": "tiff-sample",
+      "format": "tiff",
+      "file": "bitmaps/sample.tif",
+      "source": "repo",
+      "sha256": "5d937dd374c531774c7280225235004f63b64ab08b8861b223b1aa7e88d2ad55",
+      "expect": {
+        "long_edge_px": 400,
+        "make": "Canon",
+        "model": "Canon EOS 100D",
+        "iso": 100,
+        "exposure_time_s": 0.005,
+        "f_number": 11.0,
+        "focal_length_mm": 43.0
+      }
+    },
+    {
+      "id": "webp-sample",
+      "format": "webp",
+      "file": "bitmaps/sample.webp",
+      "source": "repo",
+      "sha256": "25aacc5fa6df58ed4ecd7260f6876ad6ec23ce2090311b9874148448a332482b",
+      "expect": {
+        "long_edge_px": 800,
+        "make": "Canon",
+        "model": "Canon EOS 100D",
+        "iso": 100,
+        "exposure_time_s": 0.005,
+        "f_number": 11.0,
+        "focal_length_mm": 43.0
+      }
+    }
+  ]
+}

@@ -20,10 +20,15 @@ from photo_selector_linux.core.scanner import (
 
 
 def test_supported_extensions():
-    """Verify recognition of all 17 supported bitmap and camera RAW formats (R-LINUX-META-01)."""
+    """Bitmaps plus required and recognized RAW formats (R-LINUX-META-01).
+
+    The authoritative list is testdata/formats/manifest.json; test_format_conformance.py checks
+    these sets against it.
+    """
     expected = {
-        "cr2", "cr3", "nef", "arw", "dng", "raf", "rw2", "orf", "pef", "raw",
-        "jpg", "jpeg", "png", "heic", "tif", "tiff", "webp",
+        "cr2", "cr3", "nef", "nrw", "arw", "dng", "raf", "rw2", "orf", "pef", "srw",
+        "3fr", "fff", "iiq", "rwl", "raw", "sr2", "srf", "mrw", "x3f", "erf", "mef", "mos",
+        "jpg", "jpeg", "png", "heic", "heif", "tif", "tiff", "webp",
     }
     assert expected == SUPPORTED_EXTENSIONS
 

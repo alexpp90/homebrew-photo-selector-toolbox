@@ -62,9 +62,17 @@ Same concept as desktop — configurable subfolder name (default: "Selection"). 
 - RAW/JPEG/XMP sorting uses the same logic as desktop but operates on `DocumentFile` objects
 
 ### 9.3 Supported File Types
-Same as desktop (`SUPPORTED_EXTENSIONS`) minus formats not readable by AndroidX ExifInterface. Additional Android-specific formats:
-- HEIF/HEIC (native Android support)
-- WebP (native Android support)
+The cross-product contract in [`SUPPORTED_FORMATS.md`](SUPPORTED_FORMATS.md)
+(`testdata/formats/manifest.json`). Each app keeps its own single extension list. Both route
+formats the platform cannot handle through `:core`:
+- **EXIF:** `AndroidExifReader` (AndroidX ExifInterface, plus a native reader for Canon CR3's
+  `CMT1`/`CMT2` blocks, which ExifInterface does not parse). It trims make, model and lens, and
+  falls back from `PhotographicSensitivity` to `RecommendedExposureIndex` / `ISOSpeed` /
+  `StandardOutputSensitivity`.
+- **RAW display:** `EmbeddedPreviewExtractor` finds the camera JPEG in TIFF-family RAWs, RAF,
+  RW2, ORF and CR3 without decoding RAW data. Previews below 1024 px (phone DNGs) fall back to
+  the platform decoder.
+- **TIFF display:** `TiffBitmapDecoder` (Android has no TIFF codec).
 
 
 ## 11. Project Structure

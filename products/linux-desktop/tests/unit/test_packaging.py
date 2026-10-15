@@ -60,6 +60,8 @@ def test_debian_control_metadata():
         "gir1.2-gtk-4.0",
         "gir1.2-adw-1",
         "gir1.2-gexiv2-0.10",
+        "gir1.2-gdkpixbuf-2.0",
+        "libraw-bin",
         "python3-numpy",
         "python3-pil",
     ):

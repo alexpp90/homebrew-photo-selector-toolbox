@@ -45,17 +45,10 @@ public final class DirectoryScanner: DirectoryScanning, @unchecked Sendable {
 
     public static let shared = DirectoryScanner()
 
-    public static let rawExtensions: Set<String> = [
-        "cr2", "cr3", "nef", "arw", "dng", "raf", "rw2", "orf", "pef", "3fr", "raw"
-    ]
-
-    public static let standardExtensions: Set<String> = [
-        "jpg", "jpeg", "heic", "heif", "tif", "tiff", "png"
-    ]
-
-    public static let sidecarExtensions: Set<String> = [
-        "xmp"
-    ]
+    /// Supported extensions live in `SupportedFormats` (single source of truth).
+    public static var rawExtensions: Set<String> { SupportedFormats.rawExtensions }
+    public static var standardExtensions: Set<String> { SupportedFormats.bitmapExtensions }
+    public static var sidecarExtensions: Set<String> { SupportedFormats.sidecarExtensions }
 
     /// Folder names (case-insensitive) that hold already-culled output and are never descended
     /// into, unless the folder itself is the scan root (REQ-MAC-EXIF.06).
@@ -230,12 +223,11 @@ public final class DirectoryScanner: DirectoryScanning, @unchecked Sendable {
     }
 
     static func isImage(_ url: URL) -> Bool {
-        let ext = url.pathExtension.lowercased()
-        return rawExtensions.contains(ext) || standardExtensions.contains(ext)
+        SupportedFormats.isPhoto(url)
     }
 
     static func isRAW(_ url: URL) -> Bool {
-        rawExtensions.contains(url.pathExtension.lowercased())
+        SupportedFormats.isRAW(url)
     }
 
     static func lowerStem(of url: URL) -> String {

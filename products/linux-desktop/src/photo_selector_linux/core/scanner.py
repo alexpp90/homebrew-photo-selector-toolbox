@@ -16,17 +16,14 @@ from pathlib import Path
 from typing import Dict, Generator, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 from photo_selector_linux.core.gvfs_names import DisplayNameResolver, default_resolver
+from photo_selector_linux.core.formats import (  # noqa: F401 — re-exported for callers
+    BITMAP_EXTENSIONS,
+    RAW_EXTENSIONS,
+    SUPPORTED_EXTENSIONS,
+    extension_of,
+)
 from photo_selector_linux.core.models import CandidatePhoto
 
-RAW_EXTENSIONS: Set[str] = {
-    "cr2", "cr3", "nef", "arw", "dng", "raf", "rw2", "orf", "pef", "raw"
-}
-
-BITMAP_EXTENSIONS: Set[str] = {
-    "jpg", "jpeg", "png", "heic", "tif", "tiff", "webp"
-}
-
-SUPPORTED_EXTENSIONS: Set[str] = RAW_EXTENSIONS | BITMAP_EXTENSIONS
 
 DEFAULT_EXCLUDED_FOLDERS: Set[str] = {
     "selection",
@@ -37,8 +34,8 @@ DEFAULT_EXCLUDED_FOLDERS: Set[str] = {
 
 
 def _extension_of(name: str) -> str:
-    """Lower-case extension of a filename, without the dot ("" when there is none)."""
-    return name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    """Lower-case extension of a user-facing filename, without the dot ("" when there is none)."""
+    return extension_of(name)
 
 
 def _is_file_entry(entry: os.DirEntry) -> bool:
