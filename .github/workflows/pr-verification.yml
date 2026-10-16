@@ -1,0 +1,42 @@
+name: PR Verification Record
+
+# Advisory: every PR states where it was developed and how far it was tested locally
+# (CONTRIBUTING.md, "Verification record"). This job reads the verification blocks that
+# scripts/verification_record.py writes into the PR description and compares them with the
+# PR head and the products it touches. It annotates and summarises; it never fails the PR.
+# Not mirrored in scripts/run_tests.sh: it judges the PR description, which exists only on
+# GitHub. Local equivalent: python3 scripts/verification_record.py check --body-file <file>
+# --base origin/main. See docs/build/CI_PARITY.md.
+
+on:
+  pull_request:
+    branches: [main]
+    # `edited`: re-check when a machine adds its block to the description.
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-verification-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    name: Verification record (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The description is read from the event payload by the script itself, never
+      # interpolated into the shell.
+      - name: Compare the description's records with the PR head
+        run: python3 scripts/verification_record.py check
