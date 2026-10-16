@@ -134,4 +134,35 @@ committed — please do not add files there.
 2. **Branch Naming**: Use descriptive branch names: `feature/your-feature` or `fix/your-fix`.
 3. **Commit Messages**: Use clean, descriptive commit messages adhering to conventional commits (e.g., `feat(android): add picture randomization settings`).
 4. **Run Tests**: Run `./scripts/run_tests.sh` — the local mirror of every gate CI enforces. Bare `pytest` or `gradlew testDebugUnitTest` is a strict subset and is not sufficient evidence. See [`docs/build/CI_PARITY.md`](docs/build/CI_PARITY.md).
-5. **PR Template**: Complete the pull request template in full.
+5. **Verification record**: Say where the change was developed and how far it was tested — see [below](#verification-record).
+6. **PR Template**: Complete the pull request template in full.
+
+### Verification record
+
+Every pull request states on which machine it was tested, which gates ran there, and what was
+not tested. For the native products this decides whether a change was verified at all: the
+macOS Desktop gates only run on a Mac, the Linux Desktop gates only with GTK 4 + Libadwaita,
+the Android instrumented tests only with a device or emulator. Changes by agents in sandboxes
+or the cloud, with limited tooling, say so just as plainly.
+
+1. Run `./scripts/run_tests.sh` (with `--all`, or `--android-device`, when a device is
+   attached). Every run, including a failed or partial one, saves a record in
+   `.git/pst-verification/`: hardware model, OS, toolchain versions, attached Android device
+   models, the detected agent environment, each gate's result and the exact tested tree.
+   Set `PST_EXECUTOR="<agent or person>"` when the environment is not detected correctly.
+2. Open the PR, then run `python3 scripts/verification_record.py pr` (needs `gh`). It adds this
+   machine's block to the PR description, or replaces it, and leaves everything else alone.
+   Without `gh`, paste the output of `python3 scripts/verification_record.py render`.
+3. Tested on a second machine? Run step 1 and 2 there too — each machine owns one block.
+4. Fill in *Who did the work*, *Not tested locally* and *Manual testing on real hardware*.
+
+The record identifies a run by the hash of the working tree it tested (uncommitted and new
+files included), not by the commit, because the tests normally run before the commit. If you
+commit exactly what you tested, the record matches the PR head; after a new push, re-test and
+re-run step 2. Records hold no hostnames, user names, serial numbers or local paths — this is a
+public repository.
+
+The **PR Verification Record** check (`.github/workflows/pr-verification.yml`) compares the
+blocks with the PR head and the products the PR touches, and annotates what is missing or
+stale — for example "macOS Desktop changed, but no record of the PR head ran its gates". It is
+advisory: it never blocks a merge, so the description is where the honesty lives.
