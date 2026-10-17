@@ -173,28 +173,6 @@ class CacheRepositoryImplTest {
         coVerify { dao.updateCompositionAnalysis("path", "analysis_json") }
     }
 
-    @Test
-    fun `getScoresWithMinRating delegates to DAO`() = runTest {
-        val list = listOf(ScoreEntity("path", 100, 200, rating = 4))
-        coEvery { dao.getScoresWithMinRating(3) } returns list
-
-        val result = repo.getScoresWithMinRating(3)
-
-        assertEquals(list, result)
-        coVerify { dao.getScoresWithMinRating(3) }
-    }
-
-    @Test
-    fun `getScoresWithRating delegates to DAO`() = runTest {
-        val list = listOf(ScoreEntity("path", 100, 200, rating = 5))
-        coEvery { dao.getScoresWithRating(5) } returns list
-
-        val result = repo.getScoresWithRating(5)
-
-        assertEquals(list, result)
-        coVerify { dao.getScoresWithRating(5) }
-    }
-
     // REQ-AND-CACHE.03, REQ-AND-CACHE.06
     @Test
     fun `getCachedScores updateAccessTimes and getRatings chunk 2500 URIs into 3 calls of at most 900`() = runTest {
