@@ -65,6 +65,57 @@ public struct ToastMessage: Identifiable, Equatable, Sendable {
     }
 }
 
+/// Sort order for the culling workspace candidate list (UC-13).
+public enum WorkspaceSortOrder: String, CaseIterable, Sendable {
+    case natural
+    case lowestSharpnessFirst
+}
+
+/// Pending permanent-delete confirmation published when a cloud provider refuses Trash (UC-17).
+public struct PendingPermanentDeleteConfirmation: Sendable, Equatable, Identifiable {
+    public var id: UUID { photoID }
+    public let photoID: UUID
+    public let urls: [URL]
+    public let isShared: Bool
+    public let message: String
+
+    public init(photoID: UUID, urls: [URL], isShared: Bool, message: String) {
+        self.photoID = photoID
+        self.urls = urls
+        self.isShared = isShared
+        self.message = message
+    }
+}
+
+/// Summary of SD card culling and transfer completion state (UC-10).
+public struct CardCullSummary: Sendable, Equatable {
+    public let keptCount: Int
+    public let trashedCount: Int
+    public let undecidedCount: Int
+    public let inFlightCount: Int
+    public let keepersOnCard: Bool
+    public let isSafeToFormat: Bool
+    public let summaryText: String
+
+    public init(
+        keptCount: Int,
+        trashedCount: Int,
+        undecidedCount: Int,
+        inFlightCount: Int,
+        keepersOnCard: Bool,
+        isSafeToFormat: Bool,
+        summaryText: String
+    ) {
+        self.keptCount = keptCount
+        self.trashedCount = trashedCount
+        self.undecidedCount = undecidedCount
+        self.inFlightCount = inFlightCount
+        self.keepersOnCard = keepersOnCard
+        self.isSafeToFormat = isSafeToFormat
+        self.summaryText = summaryText
+    }
+}
+
 /// MainActor state machine managing photos, navigation, comparison slots,
 /// zoom/pan sync, optimistic status mutations (<1ms), auto-advance, and keyboard routing.
 @MainActor
@@ -98,6 +149,19 @@ public final class CullingWorkspaceViewModel: ObservableObject {
     @Published public var isLibraryStatisticsPresented: Bool = false
     @Published public var isShortcutsHelpPresented: Bool = false
 
+    // MARK: - Cloud / File Provider State (U-29)
+    @Published public private(set) var isRemoteFolder: Bool = false
+    @Published public private(set) var cloudBadgeText: String? = nil
+    @Published public private(set) var requiresFullPassConfirmation: Bool = false
+    @Published public private(set) var pendingPermanentDelete: PendingPermanentDeleteConfirmation? = nil
+
+    // MARK: - Sort & Sharpness Stop Threshold (U-34)
+    @Published public var sortOrder: WorkspaceSortOrder = .natural
+    @Published public var sharpnessStopThreshold: Double? = nil
+
+    // MARK: - Local Decision Log (U-35)
+    @Published public private(set) var decisionLog: [CullingDecisionLogEntry] = []
+
     public func presentDuplicateFinder() {
         isDuplicateFinderPresented = true
     }
@@ -120,6 +184,130 @@ public final class CullingWorkspaceViewModel: ObservableObject {
 
     public var canUndo: Bool {
         !undoStack.isEmpty
+    }
+
+    /// Effective forward prefetch radius: 1 ahead on remote/cloud folders (UC-17),
+    /// or user-configured `preloadWindowAfter` on local folders.
+    public var prefetchRadius: Int {
+        isRemoteFolder ? 1 : max(2, min(userDefaults.preloadWindowAfter, 10))
+    }
+
+    /// Estimated bytes that a full-folder metadata/statistics/duplicate pass would download
+    /// on a remote/cloud folder (UC-17).
+    public var estimatedFullPassDownloadBytes: Int64 {
+        guard isRemoteFolder else { return 0 }
+        let onlineOnly = photos.map(\.url).filter { cloudInspector.isOnlineOnlyItem($0) }
+        if !onlineOnly.isEmpty {
+            return cloudInspector.estimatedDownloadBytes(for: onlineOnly)
+        }
+        let uncached = photos.filter { $0.exif == nil || $0.scores == nil }.map(\.url)
+        return cloudInspector.estimatedDownloadBytes(for: uncached)
+    }
+
+    /// Confirms and starts the full-folder metadata pass on a remote/cloud folder after user consent.
+    public func confirmAndRunFullPass() {
+        requiresFullPassConfirmation = false
+        startMetadataEnrichment()
+    }
+
+    /// Executes a pending permanent deletion after the user confirms that Trash is unavailable.
+    public func confirmPermanentDelete() {
+        guard let pending = pendingPermanentDelete else { return }
+        pendingPermanentDelete = nil
+        for url in pending.urls {
+            if FileManager.default.fileExists(atPath: url.path) {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+        if let index = photos.firstIndex(where: { $0.id == pending.photoID }) {
+            photos[index].status = .trashed
+        }
+        showToast(
+            icon: "trash.slash.fill",
+            title: "Deleted Permanently",
+            subtitle: "Cannot be undone",
+            actionType: .trash
+        )
+    }
+
+    /// Cancels a pending permanent-delete confirmation without deleting any files.
+    public func cancelPermanentDelete() {
+        pendingPermanentDelete = nil
+    }
+
+    /// Summary of SD card culling completion, in-flight transfers, and format safety (UC-10).
+    public var cardCullSummary: CardCullSummary {
+        let kept = photos.filter { $0.status == .selected || $0.status == .copied }.count
+        let trashed = photos.filter { $0.status == .trashed }.count
+        let undecided = photos.filter { $0.status == .candidate }.count
+        let inFlight = inFlightJobIDs.count
+
+        let hasExternalDest: Bool = {
+            guard let extURL = userDefaults.externalCullingDestinationURL else { return false }
+            guard let rootURL = rootDirectoryURL else { return true }
+            let extPath = extURL.standardizedFileURL.resolvingSymlinksInPath().path
+            let rootPath = rootURL.standardizedFileURL.resolvingSymlinksInPath().path
+            return !extPath.hasPrefix(rootPath)
+        }()
+
+        let keepersOnCard = kept > 0 && !hasExternalDest
+        let isSafe = !photos.isEmpty && undecided == 0 && inFlight == 0 && !keepersOnCard
+
+        let summary: String
+        if photos.isEmpty {
+            summary = "No photos loaded."
+        } else if inFlight > 0 {
+            summary = "Transfers in progress (\(inFlight) remaining) — do not format or eject card."
+        } else if undecided > 0 {
+            summary = "\(kept) kept, \(trashed) trashed, \(undecided) undecided."
+        } else if keepersOnCard {
+            summary = "All \(photos.count) photos decided, but \(kept) keeper(s) are still saved on this card — copy them off the card before formatting."
+        } else {
+            summary = "All \(photos.count) photos decided (\(kept) kept externally, \(trashed) trashed) — safe to format card."
+        }
+
+        return CardCullSummary(
+            keptCount: kept,
+            trashedCount: trashed,
+            undecidedCount: undecided,
+            inFlightCount: inFlight,
+            keepersOnCard: keepersOnCard,
+            isSafeToFormat: isSafe,
+            summaryText: summary
+        )
+    }
+
+    /// Applies the specified candidate sort order (`natural` or `lowestSharpnessFirst`, UC-13).
+    public func applySortOrder(_ order: WorkspaceSortOrder) {
+        sortOrder = order
+        guard !photos.isEmpty else { return }
+        switch order {
+        case .natural:
+            photos.sort {
+                let cmp = $0.filename.localizedStandardCompare($1.filename)
+                if cmp != .orderedSame { return cmp == .orderedAscending }
+                return $0.url.path.localizedStandardCompare($1.url.path) == .orderedAscending
+            }
+        case .lowestSharpnessFirst:
+            photos.sort { lhs, rhs in
+                switch (lhs.scores?.focusScore, rhs.scores?.focusScore) {
+                case let (lScore?, rScore?):
+                    if lScore != rScore { return lScore < rScore }
+                    return lhs.filename.localizedStandardCompare(rhs.filename) == .orderedAscending
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                case (nil, nil):
+                    return lhs.filename.localizedStandardCompare(rhs.filename) == .orderedAscending
+                }
+            }
+        }
+        currentIndex = 0
+        activeSlotIndex = 0
+        setupSlotsForMode(comparisonMode)
+        prefetchAroundCurrentIndex()
+        checkSharpnessStopThresholdOnAdvance()
     }
 
     /// Synchronizes file deletion from secondary tools into the active culling candidate list.
@@ -164,7 +352,9 @@ public final class CullingWorkspaceViewModel: ObservableObject {
     private let thumbnailCache: ThumbnailCache
     private let cullingActor: AsyncCullingActor
     private let userDefaults: UserDefaults
+    private let cloudInspector: CloudResourceInspecting
     private var undoStack: [CullingExecutionRecord] = []
+    private var inFlightJobIDs: Set<UUID> = []
     private var toastDismissTask: Task<Void, Never>?
     private var scanTask: Task<Void, Never>?
     private var metadataTask: Task<Void, Never>?
@@ -209,13 +399,15 @@ public final class CullingWorkspaceViewModel: ObservableObject {
         thumbnailLoader: ThumbnailLoader = ThumbnailLoader.shared,
         thumbnailCache: ThumbnailCache = ThumbnailCache.shared,
         cullingActor: AsyncCullingActor = AsyncCullingActor(),
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        cloudInspector: CloudResourceInspecting = SystemCloudFolderInspector()
     ) {
         self.directoryScanner = directoryScanner
         self.thumbnailLoader = thumbnailLoader
         self.thumbnailCache = thumbnailCache
         self.cullingActor = cullingActor
         self.userDefaults = userDefaults
+        self.cloudInspector = cloudInspector
         self.autoAdvance = userDefaults.autoAdvance
     }
 
@@ -258,6 +450,13 @@ public final class CullingWorkspaceViewModel: ObservableObject {
         metadataTask = nil
 
         self.rootDirectoryURL = url
+        let remote = cloudInspector.isRemoteOrCloudFolder(url)
+        self.isRemoteFolder = remote
+        self.cloudBadgeText = remote ? "Cloud Folder" : nil
+        self.requiresFullPassConfirmation = remote
+        self.pendingPermanentDelete = nil
+        self.decisionLog.removeAll()
+        self.inFlightJobIDs.removeAll()
         self.photos = []
         self.currentIndex = 0
         self.activeSlotIndex = 0
@@ -293,7 +492,9 @@ public final class CullingWorkspaceViewModel: ObservableObject {
             }
             guard let self, !Task.isCancelled else { return }
             self.isLoading = false
-            self.startMetadataEnrichment()
+            if !self.isRemoteFolder {
+                self.startMetadataEnrichment()
+            }
         }
     }
 
@@ -361,6 +562,13 @@ public final class CullingWorkspaceViewModel: ObservableObject {
     /// Sets photos directly for testing or programmatic injection.
     public func setPhotos(_ items: [PhotoItem], rootURL: URL? = nil) {
         self.rootDirectoryURL = rootURL
+        let remote = rootURL.map { cloudInspector.isRemoteOrCloudFolder($0) } ?? false
+        self.isRemoteFolder = remote
+        self.cloudBadgeText = remote ? "Cloud Folder" : nil
+        self.requiresFullPassConfirmation = remote && items.contains(where: { $0.exif == nil || $0.scores == nil || cloudInspector.isOnlineOnlyItem($0.url) })
+        self.pendingPermanentDelete = nil
+        self.decisionLog.removeAll()
+        self.inFlightJobIDs.removeAll()
         self.photos = items
         self.currentIndex = 0
         self.activeSlotIndex = 0
@@ -376,6 +584,7 @@ public final class CullingWorkspaceViewModel: ObservableObject {
         case .single, .triplet:
             if currentIndex < photos.count - 1 {
                 currentIndex += 1
+                checkSharpnessStopThresholdOnAdvance()
             }
         case .sideBySide:
             advanceActiveSlotToNextCandidate()
@@ -503,8 +712,14 @@ public final class CullingWorkspaceViewModel: ObservableObject {
         }
         guard photos.indices.contains(targetIndex) else { return }
         let photo = photos[targetIndex]
-        guard let rootURL = rootDirectoryURL ?? photo.url.deletingLastPathComponent() as URL? else {
+        guard let sourceRootURL = rootDirectoryURL ?? photo.url.deletingLastPathComponent() as URL? else {
             return
+        }
+        let effectiveRootURL: URL
+        if (action == .move || action == .copy), let externalURL = userDefaults.externalCullingDestinationURL {
+            effectiveRootURL = externalURL
+        } else {
+            effectiveRootURL = sourceRootURL
         }
 
         let previousStatus = photo.status
@@ -533,6 +748,19 @@ public final class CullingWorkspaceViewModel: ObservableObject {
 
         photos[targetIndex].status = newStatus
 
+        // Record decision log entry (U-35)
+        let logEntry = CullingDecisionLogEntry(
+            timestamp: Date(),
+            filename: photo.filename,
+            action: action,
+            focusScore: photo.scores?.focusScore,
+            iso: photo.exif?.iso.map { Int($0) },
+            shutterSpeed: photo.exif?.shutterSpeed,
+            aperture: photo.exif?.aperture,
+            focalLength: photo.exif?.focalLength
+        )
+        decisionLog.append(logEntry)
+
         // 2. Immediate Toast HUD
         showToast(
             icon: toastIcon,
@@ -555,7 +783,7 @@ public final class CullingWorkspaceViewModel: ObservableObject {
             photoID: photo.id,
             actionType: action,
             primaryURL: photo.url,
-            rootURL: rootURL,
+            rootURL: effectiveRootURL,
             destinationFolderName: destinationFolder
         )
 
@@ -569,11 +797,18 @@ public final class CullingWorkspaceViewModel: ObservableObject {
             previousStatus: previousStatus
         )
         undoStack.append(optimisticRecord)
+        inFlightJobIDs.insert(job.id)
 
         Task { [weak self, cullingActor] in
             do {
-                guard let record = try await cullingActor.enqueue(job) else { return }
+                guard let record = try await cullingActor.enqueue(job) else {
+                    await MainActor.run {
+                        self?.inFlightJobIDs.remove(job.id)
+                    }
+                    return
+                }
                 await MainActor.run {
+                    self?.inFlightJobIDs.remove(job.id)
                     if let idx = self?.undoStack.firstIndex(where: { $0.jobID == record.jobID }) {
                         let preservedPreviousStatus = self?.undoStack[idx].previousStatus ?? previousStatus
                         self?.undoStack[idx] = CullingExecutionRecord(
@@ -589,9 +824,12 @@ public final class CullingWorkspaceViewModel: ObservableObject {
                     }
                 }
             } catch is CancellationError {
-                // Cancelled before execution
+                await MainActor.run {
+                    self?.inFlightJobIDs.remove(job.id)
+                }
             } catch let error as FileCullingError {
                 await MainActor.run {
+                    self?.inFlightJobIDs.remove(job.id)
                     if case .partialTrashRollbackFailed(_, _, let remainingPairs) = error, !remainingPairs.isEmpty {
                         if let idx = self?.undoStack.firstIndex(where: { $0.jobID == job.id }) {
                             let preservedPreviousStatus = self?.undoStack[idx].previousStatus ?? previousStatus
@@ -605,15 +843,29 @@ public final class CullingWorkspaceViewModel: ObservableObject {
                                 previousStatus: preservedPreviousStatus
                             )
                         }
+                        self?.rollback(photoIndex: targetIndex, previousStatus: previousStatus, error: error)
                     } else {
                         self?.undoStack.removeAll(where: { $0.jobID == job.id })
+                        self?.handleCullingFailure(
+                            action: action,
+                            photo: photo,
+                            photoIndex: targetIndex,
+                            previousStatus: previousStatus,
+                            error: error
+                        )
                     }
-                    self?.rollback(photoIndex: targetIndex, previousStatus: previousStatus, error: error)
                 }
             } catch {
                 await MainActor.run {
+                    self?.inFlightJobIDs.remove(job.id)
                     self?.undoStack.removeAll(where: { $0.jobID == job.id })
-                    self?.rollback(photoIndex: targetIndex, previousStatus: previousStatus, error: error)
+                    self?.handleCullingFailure(
+                        action: action,
+                        photo: photo,
+                        photoIndex: targetIndex,
+                        previousStatus: previousStatus,
+                        error: error
+                    )
                 }
             }
         }
@@ -680,6 +932,50 @@ public final class CullingWorkspaceViewModel: ObservableObject {
 
     // MARK: - Private Helpers
 
+    private func checkSharpnessStopThresholdOnAdvance() {
+        guard sortOrder == .lowestSharpnessFirst,
+              let threshold = sharpnessStopThreshold,
+              let score = currentPhoto?.scores?.focusScore,
+              score >= threshold else {
+            return
+        }
+        showToast(
+            icon: "scope",
+            title: "Sharpness threshold reached (\(Int(threshold))+)",
+            subtitle: currentPhoto?.filename
+        )
+    }
+
+    private func handleCullingFailure(
+        action: CullingActionType,
+        photo: PhotoItem,
+        photoIndex: Int,
+        previousStatus: PhotoStatus,
+        error: Error
+    ) {
+        if action == .trash && isRemoteFolder {
+            if let idx = photos.firstIndex(where: { $0.id == photo.id }) {
+                photos[idx].status = previousStatus
+            } else if photos.indices.contains(photoIndex) {
+                photos[photoIndex].status = previousStatus
+            }
+            let companions = FileCullingManager().findCompanionFiles(for: photo.url)
+            let isShared = cloudInspector.isSharedItem(photo.url)
+                || (rootDirectoryURL.map { cloudInspector.isSharedItem($0) } ?? false)
+            let message = isShared
+                ? "This item is in a shared folder — deleting it permanently removes it for everyone sharing this folder."
+                : "Cloud provider does not support Trash — delete permanently without Undo?"
+            pendingPermanentDelete = PendingPermanentDeleteConfirmation(
+                photoID: photo.id,
+                urls: companions,
+                isShared: isShared,
+                message: message
+            )
+            return
+        }
+        rollback(photoIndex: photoIndex, previousStatus: previousStatus, error: error)
+    }
+
     private func advanceActiveSlotToNextCandidate() {
         guard comparisonMode == .sideBySide else {
             navigateToNext()
@@ -695,11 +991,13 @@ public final class CullingWorkspaceViewModel: ObservableObject {
         }) {
             comparisonSlotIndices[activeSlotIndex] = nextCandidate
             currentIndex = nextCandidate
+            checkSharpnessStopThresholdOnAdvance()
         } else if let anyCandidate = photos.indices.first(where: { idx in
             photos[idx].status == .candidate && !otherSlots.contains(idx) && idx != currentSlotValue
         }) {
             comparisonSlotIndices[activeSlotIndex] = anyCandidate
             currentIndex = anyCandidate
+            checkSharpnessStopThresholdOnAdvance()
         }
     }
 
@@ -795,8 +1093,8 @@ public final class CullingWorkspaceViewModel: ObservableObject {
 
     private func prefetchAroundCurrentIndex() {
         guard !photos.isEmpty else { return }
-        let windowBefore = max(1, min(userDefaults.preloadWindowBefore, 5))
-        let windowAfter = max(2, min(userDefaults.preloadWindowAfter, 10))
+        let windowBefore = isRemoteFolder ? 0 : max(1, min(userDefaults.preloadWindowBefore, 5))
+        let windowAfter = prefetchRadius
         Task { [weak self, thumbnailLoader] in
             guard let self else { return }
             await thumbnailLoader.updatePrefetchWindow(

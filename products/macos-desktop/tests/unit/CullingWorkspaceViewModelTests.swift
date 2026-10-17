@@ -247,4 +247,129 @@ struct CullingWorkspaceViewModelTests {
         vm.toggleZoomSync()
         #expect(vm.isZoomSynced == true)
     }
+
+    @Test("U-33: External culling destination routes Move/Copy off-card and cardCullSummary reports safe-to-format")
+    @MainActor
+    func testExternalDestinationAndCardCullSummary() async throws {
+        let base = FileManager.default.temporaryDirectory
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .appendingPathComponent("CardSummary_\(UUID().uuidString)", isDirectory: true)
+        let cardDir = base.appendingPathComponent("SDCard", isDirectory: true)
+        let ssdDir = base.appendingPathComponent("ExternalSSD", isDirectory: true)
+        try FileManager.default.createDirectory(at: cardDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: ssdDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let p1 = cardDir.appendingPathComponent("IMG_0001.JPG")
+        let p2 = cardDir.appendingPathComponent("IMG_0002.JPG")
+        try Data("IMG1".utf8).write(to: p1)
+        try Data("IMG2".utf8).write(to: p2)
+
+        let suiteName = "com.photoselector.tests.extdest.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.externalCullingDestinationURL = ssdDir
+        defaults.cullingDestinationFolderName = "Selection"
+
+        let actor = AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: base))
+        let vm = CullingWorkspaceViewModel(cullingActor: actor, userDefaults: defaults)
+        vm.setPhotos([PhotoItem(url: p1), PhotoItem(url: p2)], rootURL: cardDir)
+
+        // Initially: 2 undecided, not safe to format
+        #expect(vm.cardCullSummary.undecidedCount == 2)
+        #expect(vm.cardCullSummary.isSafeToFormat == false)
+
+        // Move photo 1 (routes to ssdDir/Selection/IMG_0001.JPG) and Trash photo 2
+        vm.cullCurrentPhoto(action: .move)
+        vm.cullCurrentPhoto(action: .trash)
+
+        // Wait for AsyncCullingActor to finish both jobs
+        for _ in 0..<40 {
+            if vm.cardCullSummary.inFlightCount == 0 { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+
+        let summary = vm.cardCullSummary
+        #expect(summary.keptCount == 1)
+        #expect(summary.trashedCount == 1)
+        #expect(summary.undecidedCount == 0)
+        #expect(summary.inFlightCount == 0)
+        #expect(summary.keepersOnCard == false)
+        #expect(summary.isSafeToFormat == true)
+
+        let externalKeeper = ssdDir.appendingPathComponent("Selection/IMG_0001.JPG")
+        #expect(FileManager.default.fileExists(atPath: externalKeeper.path))
+        #expect(!FileManager.default.fileExists(atPath: cardDir.appendingPathComponent("Selection/IMG_0001.JPG").path))
+    }
+
+    @Test("U-34: lowestSharpnessFirst sorts scored photos ascending before unscored and fires stop-threshold toast")
+    @MainActor
+    func testLowestSharpnessFirstSortAndStopThresholdToast() {
+        let vm = CullingWorkspaceViewModel()
+        vm.sharpnessStopThreshold = 70.0
+
+        let pSharp = PhotoItem(
+            url: URL(fileURLWithPath: "/tmp/IMG_0001.JPG"),
+            scores: QualityScores(sharpness: 82.0, noise: 1, highlightClipping: 0, shadowClipping: 0)
+        )
+        let pBlurry = PhotoItem(
+            url: URL(fileURLWithPath: "/tmp/IMG_0002.JPG"),
+            scores: QualityScores(sharpness: 18.0, noise: 1, highlightClipping: 0, shadowClipping: 0)
+        )
+        let pUnscored = PhotoItem(
+            url: URL(fileURLWithPath: "/tmp/IMG_0003.JPG"),
+            scores: nil
+        )
+        let pMedium = PhotoItem(
+            url: URL(fileURLWithPath: "/tmp/IMG_0004.JPG"),
+            scores: QualityScores(sharpness: 45.0, noise: 1, highlightClipping: 0, shadowClipping: 0)
+        )
+
+        vm.setPhotos([pSharp, pBlurry, pUnscored, pMedium])
+        vm.applySortOrder(.lowestSharpnessFirst)
+
+        // Expected order: 18.0 (IMG_0002), 45.0 (IMG_0004), 82.0 (IMG_0001), unscored (IMG_0003)
+        #expect(vm.photos.map(\.filename) == ["IMG_0002.JPG", "IMG_0004.JPG", "IMG_0001.JPG", "IMG_0003.JPG"])
+        #expect(vm.currentIndex == 0)
+        #expect(vm.currentToast == nil)
+
+        // Advance to 45.0 -> below 70 threshold, no toast
+        vm.navigateToNext()
+        #expect(vm.currentIndex == 1)
+        #expect(vm.currentToast == nil)
+
+        // Advance to 82.0 -> reaches >= 70 threshold, shows toast!
+        vm.navigateToNext()
+        #expect(vm.currentIndex == 2)
+        #expect(vm.currentToast?.title == "Sharpness threshold reached (70+)")
+
+        // Restore natural order
+        vm.applySortOrder(.natural)
+        #expect(vm.photos.map(\.filename) == ["IMG_0001.JPG", "IMG_0002.JPG", "IMG_0003.JPG", "IMG_0004.JPG"])
+    }
+
+    @Test("U-35: Culling actions append CullingDecisionLogEntry with EXIF and focusScore")
+    @MainActor
+    func testCullingDecisionLogRecording() {
+        let vm = CullingWorkspaceViewModel()
+        let item = PhotoItem(
+            url: URL(fileURLWithPath: "/tmp/DSC0999.ARW"),
+            scores: QualityScores(sharpness: 76.5, noise: 2, highlightClipping: 0, shadowClipping: 0),
+            exif: ExifData(shutterSpeed: 0.002, aperture: 2.8, iso: 800, focalLength: 85)
+        )
+        vm.setPhotos([item])
+        vm.cullCurrentPhoto(action: .move)
+
+        #expect(vm.decisionLog.count == 1)
+        let entry = vm.decisionLog[0]
+        #expect(entry.filename == "DSC0999.ARW")
+        #expect(entry.action == .move)
+        #expect(entry.focusScore == 76.5)
+        #expect(entry.iso == 800)
+        #expect(entry.shutterSpeed == 0.002)
+        #expect(entry.aperture == 2.8)
+        #expect(entry.focalLength == 85.0)
+    }
 }

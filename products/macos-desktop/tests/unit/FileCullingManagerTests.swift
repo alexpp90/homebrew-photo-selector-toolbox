@@ -565,5 +565,34 @@ struct FileCullingManagerTests {
         #expect(try String(contentsOf: jpgURL, encoding: .utf8) == "JPG_PAYLOAD")
         #expect(try String(contentsOf: xmpURL, encoding: .utf8) == "XMP_PAYLOAD")
     }
+
+    @Test("U-32: moveToSelection and copyToSelection write .photoselector-selection marker in custom destination folders")
+    func testSelectionMarkerWrittenOnMoveAndCopy() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SelectionMarkerWrite_\(UUID().uuidString)")
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let p1 = tempDir.appendingPathComponent("IMG_1.JPG")
+        let p2 = tempDir.appendingPathComponent("IMG_2.JPG")
+        try Data("1".utf8).write(to: p1)
+        try Data("2".utf8).write(to: p2)
+
+        let manager = FileCullingManager()
+        _ = try manager.moveToSelection(photoURL: p1, rootURL: tempDir, destinationFolderName: "MoveDest")
+        _ = try manager.copyToSelection(photoURL: p2, rootURL: tempDir, destinationFolderName: "CopyDest")
+
+        let moveMarker = tempDir
+            .appendingPathComponent("MoveDest", isDirectory: true)
+            .appendingPathComponent(FileCullingManager.selectionMarkerFilename)
+        let copyMarker = tempDir
+            .appendingPathComponent("CopyDest", isDirectory: true)
+            .appendingPathComponent(FileCullingManager.selectionMarkerFilename)
+
+        #expect(FileManager.default.fileExists(atPath: moveMarker.path))
+        #expect(FileManager.default.fileExists(atPath: copyMarker.path))
+    }
 }
 
