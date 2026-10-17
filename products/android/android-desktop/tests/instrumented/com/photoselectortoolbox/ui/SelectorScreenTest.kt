@@ -136,6 +136,7 @@ class SelectorScreenTest {
             SelectorHint.entries.forEach { settingsRepository.markHintSeen(it) }
             settingsRepository.setFilmstripVisible(true)
             settingsRepository.setDetailsVisible(true)
+            settingsRepository.clearPendingDeleteJournal()
         }
     }
 
@@ -144,6 +145,7 @@ class SelectorScreenTest {
         runBlocking {
             scoreDao.deleteAll()
             settingsRepository.setLastFolderUri(null)
+            settingsRepository.clearPendingDeleteJournal()
         }
     }
 

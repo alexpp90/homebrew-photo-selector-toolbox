@@ -67,6 +67,24 @@ object SelectorLabels {
     fun deletedMessage(count: Int): String =
         if (count == 1) "1 image deleted" else "$count images deleted"
 
+    /**
+     * Body text for the one-time per-folder delete confirmation dialog.
+     *
+     * Never says "cannot be undone" while UNDO / Ctrl+Z is offered; states the
+     * 20-step undo history and folder-commit boundary honestly.
+     */
+    fun deleteConfirmationMessage(fileName: String): String =
+        "Delete \"$fileName\"? Deletions in this folder are permanent once committed. " +
+            "You can undo up to 20 actions with Ctrl+Z before leaving the folder."
+
+    /** Recovery prompt text when a previous session had uncommitted pending deletions. */
+    fun uncompletedDeletionsMessage(count: Int): String =
+        if (count == 1) {
+            "1 deletion was not completed — delete now / keep"
+        } else {
+            "$count deletions were not completed — delete now / keep"
+        }
+
     /** Snackbar text after a scan finishes. */
     fun scanCompleteMessage(count: Int): String = "Scan complete · $count images analysed"
 }
