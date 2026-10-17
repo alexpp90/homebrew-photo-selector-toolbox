@@ -134,6 +134,7 @@ class CullingWorkspaceViewModel:
         failure: str,
         on_failure: Optional[Callable[[], None]] = None,
         on_error: Optional[Callable[[BaseException], None]] = None,
+        failure_message: Optional[Callable[[BaseException], Optional[str]]] = None,
     ) -> bool:
         """Run a file operation through the dispatcher; False when one is already running.
 
@@ -156,7 +157,8 @@ class CullingWorkspaceViewModel:
                     on_error(error)
                 if on_failure is not None:
                     on_failure()
-                self._notify(f"{failure}: {error}")
+                custom = failure_message(error) if failure_message is not None else None
+                self._notify(custom if custom is not None else f"{failure}: {error}")
             else:
                 on_success(result)
             self._notify_state_changed()
@@ -196,11 +198,27 @@ class CullingWorkspaceViewModel:
             self.selected_count += 1
             self._notify(f"Moved {photo.filename} to {selection}/")
 
+        def keep_partial_for_undo(error: BaseException) -> None:
+            # Copy verified, original not removable: the copy is the user's data now. Keep the
+            # record so it can be undone, and keep the photo (it is still where it was).
+            partial_record = getattr(error, "partial_record", None)
+            if partial_record is not None:
+                idx = self._index_of(photo)
+                self.undo_stack.append(
+                    (partial_record, photo, idx if idx is not None else self.current_index)
+                )
+
         self._run(
             f"Moving {photo.filename} to {selection}/…",
             lambda: self.file_manager.move_candidate(photo, folder, selection_folder=selection),
             moved,
             f"Could not move {photo.filename}",
+            on_error=keep_partial_for_undo,
+            failure_message=lambda error: (
+                f"Copied {photo.filename} to {selection}/ — original could not be removed"
+                if getattr(error, "partial_record", None) is not None
+                else None
+            ),
         )
 
     def cull_copy(self) -> None:

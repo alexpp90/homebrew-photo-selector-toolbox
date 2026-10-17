@@ -650,3 +650,32 @@ def test_file_worker_runs_jobs_off_the_calling_thread_and_delivers_through_idle_
 
     assert job_threads[0] is not threading.current_thread()
     assert delivered == [("record", None), (None, "offline")]
+
+
+def test_partial_move_is_recorded_for_undo_and_reported_without_losing_the_photo():
+    """D-1: the copy is in Selection/ but the original could not be removed. The failure must
+    leave an undo entry and say so; the photo stays in the queue because it is still on disk."""
+    from photo_selector_linux.core.file_ops import FileCullingError
+
+    photo = make_candidate("a.jpg")
+    record = CullingRecord(
+        photo_id=photo.id,
+        action_type=CullingActionType.MOVE,
+        original_primary_path=photo.primary_path,
+        affected_paths=[(photo.primary_path, Path("/tmp/test_dir/Selection/a.jpg"))],
+        unremoved_sources=[photo.primary_path],
+    )
+    manager = MagicMock()
+    manager.move_candidate.side_effect = FileCullingError("could not remove", partial_record=record)
+    vm = CullingWorkspaceViewModel(file_manager=manager)
+    vm.candidates = [photo, make_candidate("b.jpg")]
+    vm.current_folder = Path("/tmp/test_dir")
+    messages = []
+    vm.connect("notification", lambda _vm, message: messages.append(message))
+
+    vm.cull_move()
+
+    assert [c.filename for c in vm.candidates] == ["a.jpg", "b.jpg"]
+    assert [entry[0] for entry in vm.undo_stack] == [record]
+    assert vm.selected_count == 0
+    assert messages == ["Copied a.jpg to Selection/ — original could not be removed"]

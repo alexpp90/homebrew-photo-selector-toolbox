@@ -103,11 +103,14 @@ def test_intra_filesystem_move_rollback_on_failure(tmp_path: Path):
 
 
 def test_cross_filesystem_preflight_space_check(tmp_path: Path):
-    """Verify pre-flight capacity check raises InsufficientDiskSpaceError before disk mutation (R-LINUX-CULL-03)."""
+    """Verify pre-flight capacity check raises InsufficientDiskSpaceError before disk mutation (R-LINUX-CULL-03).
+
+    Only a cross-mount move copies bytes, so the destination is made to look like another device.
+    """
     raw = tmp_path / "DSC_004.ARW"
     raw.write_bytes(b"x" * 1024)
     candidate = CandidatePhoto(primary_path=raw, companion_paths=[])
-    mgr = FileCullingManager()
+    mgr = FileCullingManager(dev_of=lambda p: 2 if "Selection" in str(p) else 1)
 
     mock_stat = MagicMock()
     mock_stat.f_bavail = 1
@@ -937,3 +940,62 @@ def test_bundle_trash_failure_rolls_back_first_member_and_retains_partial_record
     assert cr3.exists() and cr3.read_bytes() == b"precious-cr3"
     assert jpg.exists() and jpg.read_bytes() == b"precious-jpg"
     assert unrelated.exists() and unrelated.read_bytes() == b"unrelated-trash-payload"
+
+
+# ── B-1: partial cross-mount move (D-1) and capacity pre-flight (D-7) ───────────
+
+
+class _NoNames:
+    def names_in(self, directory):
+        return {}
+
+
+def test_cross_mount_move_with_unremovable_source_returns_partial_record(tmp_path: Path):
+    """D-1: the verified copy stays in Selection/, the source stays on the card, and the failure
+    carries a record (marked partial) so the caller can offer undo instead of retrying into IMG-2."""
+    card = tmp_path / "card"
+    card.mkdir()
+    (card / "IMG_1.JPG").write_bytes(b"x" * 100)
+    mgr = FileCullingManager(
+        name_resolver=_NoNames(),
+        trash_dir=tmp_path / "Trash",
+        dev_of=lambda p: 2 if "Selection" in str(p) else 1,
+        mount_root_for=lambda p: None,
+    )
+    real_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self.parent == card:
+            raise PermissionError("read-only card")
+        return real_unlink(self, *args, **kwargs)
+
+    candidate = CandidatePhoto(primary_path=card / "IMG_1.JPG")
+    with patch.object(Path, "unlink", failing_unlink):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.move_candidate(candidate, card)
+
+    record = exc_info.value.partial_record
+    assert record is not None
+    assert record.action_type == CullingActionType.MOVE
+    assert [dst.name for _, dst in record.affected_paths] == ["IMG_1.JPG"]
+    assert record.unremoved_sources == [card / "IMG_1.JPG"]
+    assert "original could not be removed" in str(exc_info.value)
+    assert (card / "Selection" / "IMG_1.JPG").read_bytes() == b"x" * 100
+    assert (card / "IMG_1.JPG").exists()
+
+
+def test_same_filesystem_move_skips_the_capacity_preflight(tmp_path: Path):
+    """D-7: a rename needs no free space, so a full disk must not refuse it."""
+    (tmp_path / "IMG_2.JPG").write_bytes(b"y" * 1000)
+    mgr = FileCullingManager(name_resolver=_NoNames(), trash_dir=tmp_path / "Trash")
+
+    class FullDisk:
+        f_bavail = 0
+        f_frsize = 4096
+
+    with patch("os.statvfs", lambda p: FullDisk()):
+        record = mgr.move_candidate(CandidatePhoto(primary_path=tmp_path / "IMG_2.JPG"), tmp_path)
+
+    assert (tmp_path / "Selection" / "IMG_2.JPG").exists()
+    assert not (tmp_path / "IMG_2.JPG").exists()
+    assert record.unremoved_sources == []
