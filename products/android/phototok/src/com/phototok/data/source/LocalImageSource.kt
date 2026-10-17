@@ -13,6 +13,8 @@ import com.photoselector.core.preview.EmbeddedPreviewExtractor
 import com.photoselector.core.reader.AndroidExifReader
 import com.photoselector.core.reader.MediaStoreReader
 import com.phototok.data.model.ImageItem
+import com.phototok.data.repository.FolderAccessManager
+import com.phototok.data.repository.FolderAccessPurpose
 import com.phototok.domain.PhotoExtensions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.FileInputStream
@@ -110,7 +112,19 @@ class LocalImageSourceImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val androidExifReader: AndroidExifReader,
     private val mediaStoreReader: MediaStoreReader,
+    private val folderAccessManager: FolderAccessManager,
 ) : LocalImageSource {
+
+    constructor(
+        context: Context,
+        androidExifReader: AndroidExifReader,
+        mediaStoreReader: MediaStoreReader,
+    ) : this(
+        context = context,
+        androidExifReader = androidExifReader,
+        mediaStoreReader = mediaStoreReader,
+        folderAccessManager = FolderAccessManager(context),
+    )
 
     enum class SelectionSubfolder { RAW, JPEG, ROOT }
 
@@ -327,15 +341,11 @@ class LocalImageSourceImpl @Inject constructor(
 
     override suspend fun prepareSourceFolder(folderUri: Uri): String? =
         withContext(ioDispatcher) {
-            try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(folderUri, takeFlags)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to persist URI permission for $folderUri", e)
-            }
+            folderAccessManager.takeGrant(
+                uri = folderUri,
+                purpose = FolderAccessPurpose.SOURCE,
+                fallbackContext = context,
+            )
             val folderDoc = try {
                 DocumentFile.fromTreeUri(context, folderUri)?.takeIf { it.exists() }
             } catch (e: SecurityException) {

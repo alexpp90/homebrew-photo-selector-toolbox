@@ -118,6 +118,7 @@ class SelectorScreenTest {
         // position readout carries no `+`.
         fakeRepo.completeAfterFirstBatch = true
         fakeRepo.canTrashResult = false
+        fakeRepo.folderName = "Test Folder"
         runBlocking {
             scoreDao.deleteAll()
             settingsRepository.setLastFolderUri(null)
@@ -141,6 +142,7 @@ class SelectorScreenTest {
 
     @After
     fun teardown() {
+        fakeRepo.folderName = "Test Folder"
         runBlocking {
             scoreDao.deleteAll()
             settingsRepository.setLastFolderUri(null)
@@ -162,6 +164,23 @@ class SelectorScreenTest {
             substring = true,
             ignoreCase = true,
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun revokedGrant_showsReselectFolderPrompt() {
+        fakeRepo.folderName = null
+        runBlocking {
+            settingsRepository.setLastFolderUri("content://test/revoked_folder")
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithTag("missing_grant_prompt_card")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeRule.onNodeWithTag("missing_grant_prompt_card").assertIsDisplayed()
+        composeRule.onNodeWithText("Folder Access Needed", ignoreCase = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Re-select Folder", ignoreCase = true).assertIsDisplayed()
     }
 
     @Test

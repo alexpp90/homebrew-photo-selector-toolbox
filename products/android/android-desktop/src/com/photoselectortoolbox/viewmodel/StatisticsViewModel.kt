@@ -1,10 +1,7 @@
 package com.photoselectortoolbox.viewmodel
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.util.Log
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.photoselectortoolbox.data.repository.ImageRepository
@@ -36,6 +33,7 @@ data class StatisticsUiState(
     val error: String? = null,
     val scanProgress: Float = 0f,
     val progressText: String = "",
+    val missingGrantPrompt: Boolean = false,
 )
 
 @HiltViewModel
@@ -48,33 +46,30 @@ class StatisticsViewModel @Inject constructor(
     val uiState: StateFlow<StatisticsUiState> = _uiState.asStateFlow()
 
     fun selectFolder(uri: Uri) {
-        try {
-            val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
-        } catch (e: Exception) {
-            Log.e("StatisticsViewModel", "Failed to persist URI permission for $uri", e)
-        }
+        viewModelScope.launch {
+            val folderName = imageRepository.openFolder(context, uri)
+            if (folderName == null) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        folderUri = null,
+                        folderName = "",
+                        missingGrantPrompt = true,
+                        error = "Failed to load folder: permission revoked or directory deleted.",
+                    )
+                }
+                return@launch
+            }
 
-        val folderDoc = try {
-            DocumentFile.fromTreeUri(context, uri)
-        } catch (e: SecurityException) {
-            Log.e("StatisticsViewModel", "SecurityException loading folder $uri", e)
-            null
-        }
+            _uiState.update {
+                it.copy(
+                    folderUri = uri.toString(),
+                    folderName = folderName,
+                    missingGrantPrompt = false,
+                    error = null,
+                )
+            }
 
-        val folderName = folderDoc?.name ?: "Unknown"
-
-        _uiState.update {
-            it.copy(
-                folderUri = uri.toString(),
-                folderName = folderName,
-                error = if (folderDoc == null || !folderDoc.exists()) {
-                    "Failed to load folder: permission revoked or directory deleted."
-                } else null
-            )
-        }
-
-        if (folderDoc != null && folderDoc.exists()) {
             analyzeFolder()
         }
     }

@@ -364,4 +364,31 @@ class PhoneModeScreenDialogTest {
         assertTrue("Confirm button must trigger jump", jumped)
         assertFalse("Stay button must not be triggered", stayed)
     }
+
+    @Test
+    fun phoneModeLanding_missingGrantPrompt_displaysCardAndTriggersReselect() {
+        var pickFolderClicked = false
+
+        composeTestRule.setContent {
+            PhoneModeLanding(
+                sourceFolderUri = null,
+                sourceFolderName = "Not selected",
+                collectionFolderName = "Selection",
+                isLoading = false,
+                missingGrantPrompt = true,
+                onReselectFolder = { pickFolderClicked = true },
+                onSelectSource = {},
+                onSelectCollection = {},
+                onStart = {},
+            )
+        }
+
+        composeTestRule.onNodeWithTag("missing_grant_prompt_card").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Folder Access Needed").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("reselect_folder_button").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("reselect_folder_button").performClick()
+        assertTrue("Re-select Folder button must trigger folder picker", pickFolderClicked)
+    }
 }
+

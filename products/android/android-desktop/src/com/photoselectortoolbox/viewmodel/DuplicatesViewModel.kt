@@ -1,10 +1,7 @@
 package com.photoselectortoolbox.viewmodel
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.util.Log
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.photoselectortoolbox.data.model.DuplicateGroup
@@ -28,7 +25,8 @@ data class DuplicatesUiState(
     val folderName: String = "",
     val duplicateGroups: List<DuplicateGroup> = emptyList(),
     val selectedForDeletion: Set<String> = emptySet(),
-    val error: String? = null
+    val error: String? = null,
+    val missingGrantPrompt: Boolean = false,
 )
 
 @HiltViewModel
@@ -44,32 +42,33 @@ class DuplicatesViewModel @Inject constructor(
     private var scanJob: Job? = null
 
     fun selectFolder(uri: Uri) {
-        try {
-            val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
-        } catch (e: Exception) {
-            Log.e("DuplicatesViewModel", "Failed to persist URI permission for $uri", e)
-        }
+        scanJob?.cancel()
+        viewModelScope.launch {
+            val folderName = imageRepository.openFolder(context, uri)
+            if (folderName == null) {
+                _uiState.update {
+                    it.copy(
+                        folderUri = null,
+                        folderName = "",
+                        duplicateGroups = emptyList(),
+                        selectedForDeletion = emptySet(),
+                        missingGrantPrompt = true,
+                        error = "Failed to load folder: permission revoked or directory deleted.",
+                    )
+                }
+                return@launch
+            }
 
-        val folderDoc = try {
-            DocumentFile.fromTreeUri(context, uri)
-        } catch (e: SecurityException) {
-            Log.e("DuplicatesViewModel", "SecurityException loading folder $uri", e)
-            null
-        }
-
-        val folderName = folderDoc?.name ?: "Unknown"
-
-        _uiState.update {
-            it.copy(
-                folderUri = uri.toString(),
-                folderName = folderName,
-                duplicateGroups = emptyList(),
-                selectedForDeletion = emptySet(),
-                error = if (folderDoc == null || !folderDoc.exists()) {
-                    "Failed to load folder: permission revoked or directory deleted."
-                } else null
-            )
+            _uiState.update {
+                it.copy(
+                    folderUri = uri.toString(),
+                    folderName = folderName,
+                    duplicateGroups = emptyList(),
+                    selectedForDeletion = emptySet(),
+                    missingGrantPrompt = false,
+                    error = null,
+                )
+            }
         }
     }
 

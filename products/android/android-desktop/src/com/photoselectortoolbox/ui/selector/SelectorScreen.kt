@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -368,6 +369,7 @@ fun SelectorScreen(
             Column(modifier = Modifier.weight(1f).fillMaxSize()) {
                 if (uiState.folderUri == null || uiState.images.isEmpty()) {
                     EmptySelectorState(
+                        missingGrantPrompt = uiState.missingGrantPrompt,
                         onOpenFolder = { folderPickerLauncher.launch(null) },
                     )
                 } else {
@@ -510,19 +512,31 @@ fun SelectorScreen(
 
 @Composable
 private fun EmptySelectorState(
+    missingGrantPrompt: Boolean = false,
     onOpenFolder: () -> Unit,
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        EmptyStateCard(
-            icon = Icons.Default.PhotoCamera,
-            title = "Select a Folder",
-            description = "Choose a shoot folder to start comparing and culling frames.",
-            actionLabel = "Open Folder",
-            onAction = onOpenFolder,
-        )
+        if (missingGrantPrompt) {
+            EmptyStateCard(
+                icon = Icons.Default.FolderOpen,
+                title = "Folder Access Needed",
+                description = "Permission for this folder was revoked or the folder was moved. Re-select the folder to continue.",
+                actionLabel = "Re-select Folder",
+                onAction = onOpenFolder,
+                modifier = Modifier.testTag("missing_grant_prompt_card"),
+            )
+        } else {
+            EmptyStateCard(
+                icon = Icons.Default.PhotoCamera,
+                title = "Select a Folder",
+                description = "Choose a shoot folder to start comparing and culling frames.",
+                actionLabel = "Open Folder",
+                onAction = onOpenFolder,
+            )
+        }
     }
 }
 

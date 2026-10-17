@@ -494,4 +494,26 @@ class SelectorViewModelTest {
         assertEquals("the scan rolled EXIF back", exif, current?.exifData)
         assertEquals(70.0, current?.scanResult?.sharpnessScore!!, 0.01)
     }
+
+    // ── Persisted SAF grant lifecycle ────────────────────────────────────
+
+    @Test
+    fun `startup reconciles persisted SAF grants`() = runTest {
+        buildViewModel()
+        coVerify(exactly = 1) { settingsRepository.reconcilePersistedGrants() }
+    }
+
+    @Test
+    fun `revoked or missing folder grant sets missingGrantPrompt`() = runTest {
+        coEvery { imageRepository.openFolder(any(), any()) } returns null
+        val viewModel = buildViewModel()
+
+        viewModel.selectFolder(Uri.parse(FOLDER_URI))
+
+        val state = viewModel.uiState.value
+        assertTrue(state.missingGrantPrompt)
+        assertFalse(state.isLoading)
+        assertNotNull(state.snackbarMessage)
+    }
 }
+

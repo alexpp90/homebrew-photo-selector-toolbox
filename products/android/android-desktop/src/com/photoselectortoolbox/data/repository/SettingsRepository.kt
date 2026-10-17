@@ -1,6 +1,7 @@
 package com.photoselectortoolbox.data.repository
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -26,8 +27,11 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
 
 @Singleton
 class SettingsRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val folderAccessManager: FolderAccessManager,
 ) {
+
+    constructor(context: Context) : this(context, FolderAccessManager(context))
 
     companion object {
         private val KEY_SELECTION_FOLDER_NAME = stringPreferencesKey("selection_folder_name")
@@ -173,12 +177,24 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setLastFolderUri(uri: String?) {
+        var previousUri: String? = null
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
+            previousUri = prefs[KEY_LAST_FOLDER_URI]?.takeUnless { it.startsWith(RETIRED_DRIVE_SCHEME) }
             if (uri != null) {
                 prefs[KEY_LAST_FOLDER_URI] = uri
             } else {
                 prefs.remove(KEY_LAST_FOLDER_URI)
             }
+            referencedAfter = referencedUrisByPurpose(prefs)
+        }
+        folderAccessManager.syncReferences(referencedAfter)
+        if (uri != null && !uri.startsWith(RETIRED_DRIVE_SCHEME)) {
+            folderAccessManager.takeGrant(Uri.parse(uri), FolderAccessPurpose.SOURCE)
+        }
+        val old = previousUri
+        if (old != null && old != uri) {
+            folderAccessManager.releaseIfUnreferenced(old, referencedAfter.values.flatten().toSet())
         }
     }
 
@@ -359,10 +375,43 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setPhoneCollectionUri(uri: String?) {
+        var previousUri: String? = null
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
+            previousUri = prefs[KEY_PHONE_COLLECTION_URI]
             if (uri != null) prefs[KEY_PHONE_COLLECTION_URI] = uri
             else prefs.remove(KEY_PHONE_COLLECTION_URI)
+            referencedAfter = referencedUrisByPurpose(prefs)
         }
+        folderAccessManager.syncReferences(referencedAfter)
+        if (uri != null) {
+            folderAccessManager.takeGrant(Uri.parse(uri), FolderAccessPurpose.SELECTION_TARGET)
+        }
+        val old = previousUri
+        if (old != null && old != uri) {
+            folderAccessManager.releaseIfUnreferenced(old, referencedAfter.values.flatten().toSet())
+        }
+    }
+
+    /**
+     * Reconcile OS persisted URI grants against the URIs currently referenced in
+     * DataStore, releasing any orphaned grants from earlier sessions.
+     */
+    suspend fun reconcilePersistedGrants(): Set<String> {
+        val prefs = context.dataStore.data.first()
+        return folderAccessManager.reconcilePersistedGrants(referencedUrisByPurpose(prefs))
+    }
+
+    internal fun referencedUrisByPurpose(prefs: Preferences): Map<FolderAccessPurpose, Set<String>> {
+        val source = prefs[KEY_LAST_FOLDER_URI]
+            ?.takeUnless { it.startsWith(RETIRED_DRIVE_SCHEME) }
+            ?.let(::setOf)
+            .orEmpty()
+        val selection = prefs[KEY_PHONE_COLLECTION_URI]?.let(::setOf).orEmpty()
+        return mapOf(
+            FolderAccessPurpose.SOURCE to source,
+            FolderAccessPurpose.SELECTION_TARGET to selection,
+        )
     }
 
     suspend fun setPhoneDeleteConfirmEnabled(enabled: Boolean) {

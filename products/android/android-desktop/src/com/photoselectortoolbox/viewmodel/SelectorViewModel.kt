@@ -157,6 +157,8 @@ data class SelectorUiState(
     val sortingEnabled: Boolean = true,
     /** Active rating filter driving the filmstrip and navigation order. */
     val ratingFilter: RatingFilter = RatingFilter.All,
+    /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
+    val missingGrantPrompt: Boolean = false,
 ) {
     /** The active images adhering to the rating filter. */
     val filteredImages: List<ImageItem>
@@ -395,6 +397,7 @@ class SelectorViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            settingsRepository.reconcilePersistedGrants()
             settingsRepository.lastFolderUri.collect { uri ->
                 if (uri != null && _uiState.value.folderUri == null) {
                     selectFolder(Uri.parse(uri))
@@ -447,6 +450,7 @@ class SelectorViewModel @Inject constructor(
                 undoOperation = null,
                 pendingDeletion = null,
                 ratingFilter = RatingFilter.All,
+                missingGrantPrompt = false,
             )
         }
     }
@@ -459,6 +463,7 @@ class SelectorViewModel @Inject constructor(
                     isLoading = true,
                     isEnumerating = true,
                     error = null,
+                    missingGrantPrompt = false,
                     folderUri = uri.toString()
                 )
             }
@@ -468,18 +473,35 @@ class SelectorViewModel @Inject constructor(
             // [ImageRepository.openFolder].
             val folderName = imageRepository.openFolder(context, uri)
             if (folderName == null) {
-                _uiState.update { it.copy(isLoading = false, isEnumerating = false) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isEnumerating = false,
+                        folderUri = null,
+                        folderName = "",
+                        missingGrantPrompt = true,
+                    )
+                }
                 reportError("Failed to load folder: permission revoked or directory deleted.")
                 settingsRepository.setLastFolderUri(null)
                 return@launch
             }
 
-            _uiState.update { it.copy(folderName = folderName) }
+            _uiState.update { it.copy(folderName = folderName, missingGrantPrompt = false) }
 
             settingsRepository.setLastFolderUri(uri.toString())
 
             collectDiscovery(uri, "images") { e ->
-                if (e is SecurityException) settingsRepository.setLastFolderUri(null)
+                if (e is SecurityException) {
+                    _uiState.update {
+                        it.copy(
+                            folderUri = null,
+                            folderName = "",
+                            missingGrantPrompt = true,
+                        )
+                    }
+                    settingsRepository.setLastFolderUri(null)
+                }
             }
         }
     }

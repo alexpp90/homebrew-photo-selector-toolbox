@@ -88,11 +88,6 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri: Uri? ->
         uri?.let {
-            // Persist permission
-            try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(it, takeFlags)
-            } catch (_: Exception) {}
             viewModel.updatePhoneCollectionUri(it.toString())
         }
     }

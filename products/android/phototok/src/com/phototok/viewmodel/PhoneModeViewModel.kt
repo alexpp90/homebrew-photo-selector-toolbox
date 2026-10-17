@@ -88,6 +88,8 @@ data class PhoneModeUiState(
     val reloadPrompt: ReloadPrompt? = null,
     /** Friendly explanation when a selected folder contains 0 supported photos. */
     val emptyFolderMessage: String? = null,
+    /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
+    val missingGrantPrompt: Boolean = false,
     /** When true, Selection folder is stored inside each scanned folder. */
     val selectionUseSourceRoot: Boolean = false,
 )
@@ -268,6 +270,7 @@ class PhoneModeViewModel @Inject constructor(
 
     private fun restoreLastFolders() {
         viewModelScope.launch {
+            settingsRepository.reconcilePersistedGrants()
             val lastUri = settingsRepository.lastFolderUri.first()
             if (lastUri != null && _uiState.value.sourceFolderUri == null) {
                 selectSourceFolder(Uri.parse(lastUri))
@@ -283,7 +286,7 @@ class PhoneModeViewModel @Inject constructor(
         dimensionsJob?.cancel()
         publishedUris.clear()
         dimensionsResolved.clear()
-        _uiState.update { it.copy(emptyFolderMessage = null) }
+        _uiState.update { it.copy(emptyFolderMessage = null, missingGrantPrompt = false) }
         discoveryJob = viewModelScope.launch {
             // The previous folder's feed is dropped up front: batches are merged
             // by appending, so a stale list would be prefixed to the new folder.
@@ -293,6 +296,7 @@ class PhoneModeViewModel @Inject constructor(
                     isDiscovering = true,
                     error = null,
                     emptyFolderMessage = null,
+                    missingGrantPrompt = false,
                     sourceFolderUri = uri.toString(),
                     images = emptyList(),
                     allImages = emptyList(),
@@ -304,17 +308,23 @@ class PhoneModeViewModel @Inject constructor(
 
             val folderName = imageRepository.prepareSourceFolder(uri)
             if (folderName == null) {
+                if (settingsRepository.lastFolderUri.first() == uri.toString()) {
+                    settingsRepository.setLastFolderUri(null)
+                }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         isDiscovering = false,
+                        sourceFolderUri = null,
+                        sourceFolderName = "",
+                        missingGrantPrompt = true,
                         error = "Cannot access folder. Permission may have been revoked.",
                     )
                 }
                 return@launch
             }
 
-            _uiState.update { it.copy(sourceFolderName = folderName) }
+            _uiState.update { it.copy(sourceFolderName = folderName, missingGrantPrompt = false) }
             settingsRepository.setLastFolderUri(uri.toString())
             settingsRepository.addRecentPath(uri.toString(), folderName)
 
@@ -441,6 +451,20 @@ class PhoneModeViewModel @Inject constructor(
         } catch (e: CancellationException) {
             // A newer discovery job owns the state now — do not touch it.
             throw e
+        } catch (e: SecurityException) {
+            if (settingsRepository.lastFolderUri.first() == folderUri.toString()) {
+                settingsRepository.setLastFolderUri(null)
+            }
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isDiscovering = false,
+                    sourceFolderUri = null,
+                    sourceFolderName = "",
+                    missingGrantPrompt = true,
+                    error = "Cannot access folder. Permission may have been revoked.",
+                )
+            }
         } catch (e: Exception) {
             _uiState.update {
                 it.copy(
@@ -526,9 +550,8 @@ class PhoneModeViewModel @Inject constructor(
 
     fun selectCollectionFolder(uri: Uri) {
         viewModelScope.launch {
-            imageRepository.prepareSourceFolder(uri) // persists the URI permission
-            val name = resolveFolderName(uri.toString(), fallback = "Collection")
             settingsRepository.setPhoneCollectionUri(uri.toString())
+            val name = resolveFolderName(uri.toString(), fallback = "Collection")
             _uiState.update {
                 it.copy(collectionFolderUri = uri.toString(), collectionFolderName = name)
             }
@@ -537,9 +560,8 @@ class PhoneModeViewModel @Inject constructor(
 
     fun selectLeftSwipeFolder(uri: Uri) {
         viewModelScope.launch {
-            imageRepository.prepareSourceFolder(uri) // persists the URI permission
-            val name = resolveFolderName(uri.toString(), fallback = "Folder")
             settingsRepository.setPhoneLeftSwipeUri(uri.toString())
+            val name = resolveFolderName(uri.toString(), fallback = "Folder")
             _uiState.update {
                 it.copy(leftSwipeFolderUri = uri.toString(), leftSwipeFolderName = name)
             }
@@ -1062,6 +1084,7 @@ class PhoneModeViewModel @Inject constructor(
                     isLoading = true,
                     isDiscovering = true,
                     error = null,
+                    missingGrantPrompt = false,
                     images = emptyList(),
                     allImages = emptyList(),
                     currentIndex = 0,
@@ -1069,6 +1092,23 @@ class PhoneModeViewModel @Inject constructor(
                     showRawJpegSuggestion = false,
                     reloadPrompt = null,
                 )
+            }
+            val folderName = imageRepository.prepareSourceFolder(folderUri)
+            if (folderName == null) {
+                if (settingsRepository.lastFolderUri.first() == folderUriStr) {
+                    settingsRepository.setLastFolderUri(null)
+                }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isDiscovering = false,
+                        sourceFolderUri = null,
+                        sourceFolderName = "",
+                        missingGrantPrompt = true,
+                        error = "Cannot access folder. Permission may have been revoked.",
+                    )
+                }
+                return@launch
             }
             collectDiscoveredImages(
                 folderUri = folderUri,

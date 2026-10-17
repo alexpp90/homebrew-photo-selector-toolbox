@@ -153,15 +153,19 @@ class PhoneModeViewModelTest {
     }
 
     @Test
-    fun `selectSourceFolder reports inaccessible folders`() = runTest {
+    fun `selectSourceFolder reports inaccessible folders and sets missingGrantPrompt`() = runTest {
         coEvery { imageRepository.prepareSourceFolder(any()) } returns null
         val viewModel = buildViewModel()
+
+        coVerify(exactly = 1) { settingsRepository.reconcilePersistedGrants() }
 
         viewModel.selectSourceFolder(Uri.parse("content://tree/gone"))
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNotNull(state.error)
+        assertTrue(state.missingGrantPrompt)
+        assertNull(state.sourceFolderUri)
     }
 
     @Test
