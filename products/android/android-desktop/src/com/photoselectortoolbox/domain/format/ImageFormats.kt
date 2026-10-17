@@ -48,6 +48,52 @@ object ImageFormats {
     fun isRaw(fileName: String): Boolean = extensionOf(fileName) in RAW_EXTENSIONS
     fun isJpeg(fileName: String): Boolean = extensionOf(fileName) in JPEG_EXTENSIONS
     fun isTiff(fileName: String): Boolean = extensionOf(fileName) in TIFF_EXTENSIONS
+    fun isXmp(fileName: String): Boolean = extensionOf(fileName) == XMP_EXTENSION
+
+    /** True for any supported image format or a companion `.xmp` sidecar. */
+    fun isCompanionOrSupported(fileName: String): Boolean =
+        isSupported(fileName) || isXmp(fileName)
+
+    /** True when [fileName] is a Lightroom-style `-Edit` / `_Edit` derivative. */
+    fun isEditDerivative(fileName: String): Boolean {
+        val baseStem = baseStemWithoutExtensions(fileName)
+        return (baseStem.endsWith(EDIT_SUFFIX, ignoreCase = true) ||
+            baseStem.endsWith("_Edit", ignoreCase = true)) &&
+            baseStem.length > EDIT_SUFFIX.length
+    }
+
+    /**
+     * Canonical lower-case shot stem used to group a shot's files within a single directory:
+     * - `IMG_0001.CR3`, `IMG_0001.JPG`, `IMG_0001.xmp` → `"img_0001"`
+     * - `IMG_0001.CR3.xmp` → `"img_0001"`
+     * - `IMG_0001-Edit.tif`, `IMG_0001_Edit.jpg`, `IMG_0001-Edit.xmp` → `"img_0001"`
+     */
+    fun shotStemOf(fileName: String): String {
+        val baseStem = baseStemWithoutExtensions(fileName)
+        val stripped = when {
+            (baseStem.endsWith(EDIT_SUFFIX, ignoreCase = true) ||
+                baseStem.endsWith("_Edit", ignoreCase = true)) &&
+                baseStem.length > EDIT_SUFFIX.length ->
+                baseStem.dropLast(EDIT_SUFFIX.length)
+            else -> baseStem
+        }
+        return stripped.lowercase()
+    }
+
+    private fun baseStemWithoutExtensions(fileName: String): String {
+        val name = fileName.substringAfterLast('/')
+        if (!name.contains('.')) return name
+        return if (isXmp(name)) {
+            val withoutXmp = name.substringBeforeLast('.')
+            if (withoutXmp.contains('.') && isSupported(withoutXmp)) {
+                withoutXmp.substringBeforeLast('.')
+            } else {
+                withoutXmp
+            }
+        } else {
+            name.substringBeforeLast('.')
+        }
+    }
 
     /** Where a file goes inside the Selection folder when File Sorting is on. */
     enum class SelectionSubfolder { RAW, JPEG, ROOT }
