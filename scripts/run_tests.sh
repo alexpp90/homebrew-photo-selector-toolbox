@@ -449,6 +449,13 @@ if $run_macos; then
         gate "swift test (products/macos-desktop)" "macos.yml:swift-test" \
             swift test "${SWIFT_TEST_ARGS[@]}"
 
+        # macos.yml builds the release binary and refuses one that carries the UI test hooks.
+        gate "swift build -c release (products/macos-desktop)" "macos.yml:swift-test" \
+            swift build -c release --package-path "$ROOT_DIR/products/macos-desktop"
+        gate "release binary carries no UI test hooks" "macos.yml:swift-test" \
+            "$ROOT_DIR/products/macos-desktop/scripts/check_no_test_hooks.sh" \
+            "$ROOT_DIR/products/macos-desktop/.build/release/PhotoSelectorApp"
+
         # Local-only gate: drives the RUNNING app (activation policy, real key events,
         # rendered Focus 3-Up geometry, clicks while zoomed, time-to-first-photo). Unit
         # tests alone passed while arrow keys were dead in the real app.

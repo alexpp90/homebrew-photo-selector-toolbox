@@ -19,10 +19,14 @@ set -euo pipefail
 
 CONFIG="release"
 UNIVERSAL=false
+TEST_HOOKS=false
 for arg in "$@"; do
     case "$arg" in
         debug|release) CONFIG="$arg" ;;
         --universal)   UNIVERSAL=true ;;
+        # Compile the UI test hooks (--ui-scenario, --ui-self-test, --screenshot) in, into a separate
+        # build tree and app bundle so a distributable build never carries them (finding Q-2).
+        --test-hooks)  TEST_HOOKS=true ;;
         *) echo "ERROR: unknown argument: $arg" >&2; exit 1 ;;
     esac
 done
@@ -47,7 +51,14 @@ if [[ ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-APP="$PRODUCT_DIR/.build/app/PhotoSelector.app"
+SWIFT_EXTRA=()
+if $TEST_HOOKS; then
+    export PST_TEST_HOOKS=1
+    SWIFT_EXTRA=(--scratch-path "$PRODUCT_DIR/.build/hooks")
+    APP="$PRODUCT_DIR/.build/hooks/app/PhotoSelector.app"
+else
+    APP="$PRODUCT_DIR/.build/app/PhotoSelector.app"
+fi
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
@@ -59,8 +70,8 @@ if $UNIVERSAL; then
     mkdir -p "$SLICES"
     for arch in arm64 x86_64; do
         triple="$arch-apple-macosx14.0"
-        swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --product PhotoSelectorApp --triple "$triple" >&2
-        BIN_DIR="$(swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --triple "$triple" --show-bin-path)"
+        swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --product PhotoSelectorApp --triple "$triple" ${SWIFT_EXTRA[@]+"${SWIFT_EXTRA[@]}"} >&2
+        BIN_DIR="$(swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --triple "$triple" ${SWIFT_EXTRA[@]+"${SWIFT_EXTRA[@]}"} --show-bin-path)"
         cp "$BIN_DIR/PhotoSelectorApp" "$SLICES/PhotoSelectorApp-$arch"
     done
     lipo -create "$SLICES/PhotoSelectorApp-arm64" "$SLICES/PhotoSelectorApp-x86_64" \
@@ -71,8 +82,8 @@ if $UNIVERSAL; then
         exit 1
     fi
 else
-    swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --product PhotoSelectorApp >&2
-    BIN_DIR="$(swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --show-bin-path)"
+    swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" --product PhotoSelectorApp ${SWIFT_EXTRA[@]+"${SWIFT_EXTRA[@]}"} >&2
+    BIN_DIR="$(swift build -c "$CONFIG" --package-path "$PRODUCT_DIR" ${SWIFT_EXTRA[@]+"${SWIFT_EXTRA[@]}"} --show-bin-path)"
     cp "$BIN_DIR/PhotoSelectorApp" "$APP/Contents/MacOS/PhotoSelectorApp"
 fi
 if [[ -f "$PRODUCT_DIR/Resources/AppIcon.icns" ]]; then
