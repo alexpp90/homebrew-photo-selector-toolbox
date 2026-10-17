@@ -245,16 +245,29 @@ internal object Tags {
 
     const val EXPOSURE_TIME = 0x829A
     const val F_NUMBER = 0x829D
+    const val GPS_IFD = 0x8825
     const val PHOTOGRAPHIC_SENSITIVITY = 0x8827
     const val SENSITIVITY_TYPE = 0x8830
     const val STANDARD_OUTPUT_SENSITIVITY = 0x8831
     const val RECOMMENDED_EXPOSURE_INDEX = 0x8832
     const val ISO_SPEED = 0x8833
+    const val DATE_TIME_ORIGINAL = 0x9003
+    const val OFFSET_TIME_ORIGINAL = 0x9011
     const val SHUTTER_SPEED_VALUE = 0x9201
     const val APERTURE_VALUE = 0x9202
     const val FOCAL_LENGTH = 0x920A
     const val MAKER_NOTE = 0x927C
+    const val FOCAL_PLANE_X_RESOLUTION = 0xA20E
+    const val FOCAL_PLANE_RESOLUTION_UNIT = 0xA210
     const val FOCAL_LENGTH_35MM = 0xA405
     const val LENS_MAKE = 0xA433
     const val LENS_MODEL = 0xA434
+
+    const val GPS_LATITUDE_REF = 0x0001
+    const val GPS_LATITUDE = 0x0002
+    const val GPS_LONGITUDE_REF = 0x0003
+    const val GPS_LONGITUDE = 0x0004
+    const val GPS_TIME_STAMP = 0x0007
+    const val GPS_DATE_STAMP = 0x001D
 }
+

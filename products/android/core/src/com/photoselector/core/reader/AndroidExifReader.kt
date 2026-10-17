@@ -140,6 +140,13 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
         val lensMake: String?,
         val make: String?,
         val model: String?,
+        val gpsLatitude: Double? = null,
+        val gpsLongitude: Double? = null,
+        val gpsDateTimeUtc: String? = null,
+        val dateTimeOriginal: String? = null,
+        val offsetTimeOriginal: String? = null,
+        val focalPlaneXResolution: Double? = null,
+        val focalPlaneResolutionUnit: Int? = null,
     )
 
     private fun buildExifData(v: RawValues, rating: Int): ExifData {
@@ -159,6 +166,13 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
             rating = rating,
             make = v.make.clean(),
             model = v.model.clean(),
+            gpsLatitude = v.gpsLatitude?.takeIf { it.isFinite() },
+            gpsLongitude = v.gpsLongitude?.takeIf { it.isFinite() },
+            gpsDateTimeUtc = v.gpsDateTimeUtc.clean(),
+            dateTimeOriginal = v.dateTimeOriginal.clean(),
+            offsetTimeOriginal = v.offsetTimeOriginal.clean(),
+            focalPlaneXResolution = v.focalPlaneXResolution?.takeIf { it > 0.0 && it.isFinite() },
+            focalPlaneResolutionUnit = v.focalPlaneResolutionUnit?.takeIf { it > 0 },
         )
     }
 
@@ -206,6 +220,13 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
             lensMake = cr3.lensMake,
             make = cr3.make,
             model = cr3.model,
+            gpsLatitude = cr3.gpsLatitude,
+            gpsLongitude = cr3.gpsLongitude,
+            gpsDateTimeUtc = cr3.gpsDateTimeUtc,
+            dateTimeOriginal = cr3.dateTimeOriginal,
+            offsetTimeOriginal = cr3.offsetTimeOriginal,
+            focalPlaneXResolution = cr3.focalPlaneXResolution,
+            focalPlaneResolutionUnit = cr3.focalPlaneResolutionUnit,
         )
         val rating = file?.let { readSidecarRating(it) }
             ?: cr3.xmp?.let { XmpRatingParser.parseRating(it) }
@@ -219,6 +240,24 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
         pfd: ParcelFileDescriptor? = null
     ): ExifData {
         fun int(tag: String): Int? = exif.getAttributeInt(tag, 0).takeIf { it > 0 }
+        val latLong = exif.latLong
+        val gpsLat = latLong?.getOrNull(0)
+            ?: parseExifGpsCoordinate(
+                exif.getAttribute(ExifInterface.TAG_GPS_LATITUDE),
+                exif.getAttribute(ExifInterface.TAG_GPS_LATITUDE_REF)
+            )
+        val gpsLon = latLong?.getOrNull(1)
+            ?: parseExifGpsCoordinate(
+                exif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE),
+                exif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF)
+            )
+        val gpsUtc = parseExifGpsDateTimeUtc(
+            exif.getAttribute(ExifInterface.TAG_GPS_DATESTAMP),
+            exif.getAttribute(ExifInterface.TAG_GPS_TIMESTAMP)
+        )
+        val fpXRes = exif.getAttributeDouble(ExifInterface.TAG_FOCAL_PLANE_X_RESOLUTION, 0.0)
+            .takeIf { it > 0.0 }
+            ?: parseRationalValue(exif.getAttribute(ExifInterface.TAG_FOCAL_PLANE_X_RESOLUTION))
         @Suppress("DEPRECATION")
         val values = RawValues(
             exposureTime = parseExposureTime(exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME)),
@@ -238,8 +277,48 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
             lensMake = exif.getAttribute(ExifInterface.TAG_LENS_MAKE),
             make = exif.getAttribute(ExifInterface.TAG_MAKE),
             model = exif.getAttribute(ExifInterface.TAG_MODEL),
+            gpsLatitude = gpsLat,
+            gpsLongitude = gpsLon,
+            gpsDateTimeUtc = gpsUtc,
+            dateTimeOriginal = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL),
+            offsetTimeOriginal = exif.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL),
+            focalPlaneXResolution = fpXRes,
+            focalPlaneResolutionUnit = int(ExifInterface.TAG_FOCAL_PLANE_RESOLUTION_UNIT),
         )
         return buildExifData(values, extractRating(exif, file, pfd))
+    }
+
+    private fun parseExifGpsCoordinate(dmsAttr: String?, refAttr: String?): Double? {
+        if (dmsAttr.isNullOrBlank()) return null
+        val parts = dmsAttr.split(",").mapNotNull { parseRationalValue(it.trim()) }
+        if (parts.size < 3) return null
+        val abs = parts[0] + (parts[1] / 60.0) + (parts[2] / 3600.0)
+        if (!abs.isFinite()) return null
+        val sign = if (refAttr?.trim()?.uppercase() in setOf("S", "W")) -1.0 else 1.0
+        return abs * sign
+    }
+
+    private fun parseExifGpsDateTimeUtc(dateStamp: String?, timeStamp: String?): String? {
+        val cleanDate = dateStamp?.trim()?.takeIf { it.length >= 10 } ?: return null
+        val rawTime = timeStamp?.trim()?.ifEmpty { null } ?: return null
+        // ExifInterface may format TAG_GPS_TIMESTAMP as "14:23:05" or "14/1,23/1,5/1"
+        if (rawTime.contains(":")) {
+            val parts = rawTime.split(":")
+            if (parts.size >= 3) {
+                val h = parts[0].trim().toDoubleOrNull()?.toInt() ?: return null
+                val m = parts[1].trim().toDoubleOrNull()?.toInt() ?: return null
+                val s = parts[2].trim().toDoubleOrNull()?.toInt() ?: return null
+                return "%s %02d:%02d:%02d".format(cleanDate, h.coerceIn(0, 23), m.coerceIn(0, 59), s.coerceIn(0, 59))
+            }
+        }
+        val rationals = rawTime.split(",").mapNotNull { parseRationalValue(it.trim()) }
+        if (rationals.size >= 3) {
+            val h = rationals[0].toInt().coerceIn(0, 23)
+            val m = rationals[1].toInt().coerceIn(0, 59)
+            val s = rationals[2].toInt().coerceIn(0, 59)
+            return "%s %02d:%02d:%02d".format(cleanDate, h, m, s)
+        }
+        return null
     }
 
     private fun extractRating(
