@@ -119,6 +119,38 @@ class SelectorViewModelTest {
         coEvery { getExifData(any(), any()) } returns null
         coEvery { resolveDimensions(any(), any()) } returns emptyMap<String, ImageDimensions>()
         coEvery { deleteImage(any(), any()) } returns true
+        coEvery { moveBundle(any(), any(), any(), any()) } coAnswers {
+            val ctx = firstArg<android.content.Context>()
+            val item = secondArg<ImageItem>()
+            val dest = thirdArg<Uri>()
+            val sort = arg<Boolean>(3)
+            moveImage(ctx, Uri.parse(item.uri), dest, sort).let { res ->
+                if (item.parentDocumentId != null && res.parentDocumentId == null) {
+                    res.copy(parentDocumentId = item.parentDocumentId)
+                } else {
+                    res
+                }
+            }
+        }
+        coEvery { copyBundle(any(), any(), any(), any()) } coAnswers {
+            val ctx = firstArg<android.content.Context>()
+            val item = secondArg<ImageItem>()
+            val dest = thirdArg<Uri>()
+            val sort = arg<Boolean>(3)
+            copyImage(ctx, Uri.parse(item.uri), dest, sort).let { res ->
+                if (item.parentDocumentId != null && res.parentDocumentId == null) {
+                    res.copy(parentDocumentId = item.parentDocumentId)
+                } else {
+                    res
+                }
+            }
+        }
+        coEvery { undoMoveBundle(any(), any(), any(), any()) } coAnswers {
+            val ctx = firstArg<android.content.Context>()
+            val uris = secondArg<List<String>>()
+            val root = thirdArg<Uri>()
+            undoMove(ctx, Uri.parse(uris.first()), root)
+        }
     }
 
     private val scanImagesUseCase: ScanImagesUseCase = mockk(relaxed = true)
@@ -493,5 +525,94 @@ class SelectorViewModelTest {
         val current = viewModel.uiState.value.currentImage
         assertEquals("the scan rolled EXIF back", exif, current?.exifData)
         assertEquals(70.0, current?.scanResult?.sharpnessScore!!, 0.01)
+    }
+
+    // ── U-04b: Bundle filing, undo to parentDocumentId, and bundle delete ─
+
+    @Test
+    fun `moving a bundle records all destinationUris and parentDocumentId and undoLastOperation passes them to undoMoveBundle`() = runTest {
+        val bundleItem = ImageItem(
+            uri = "content://test/folder/sub/day1/IMG_0001.JPG",
+            fileName = "IMG_0001.JPG",
+            fileSize = 100L,
+            lastModified = 1L,
+            mimeType = "image/jpeg",
+            companions = listOf(
+                com.photoselectortoolbox.data.model.CompanionFile(
+                    uri = "content://test/folder/sub/day1/IMG_0001.CR3",
+                    fileName = "IMG_0001.CR3",
+                ),
+                com.photoselectortoolbox.data.model.CompanionFile(
+                    uri = "content://test/folder/sub/day1/IMG_0001.CR3.xmp",
+                    fileName = "IMG_0001.CR3.xmp",
+                ),
+            ),
+            parentDocumentId = "sub/day1",
+        )
+        val destUris = listOf(
+            "content://test/folder/Selection/JPEG/IMG_0001.JPG",
+            "content://test/folder/Selection/RAW/IMG_0001.CR3",
+            "content://test/folder/Selection/RAW/IMG_0001.CR3.xmp",
+        )
+        coEvery { imageRepository.moveBundle(any(), bundleItem, any(), any()) } returns
+            FileOperationResult.success(
+                sourceUri = bundleItem.uri,
+                destinationUri = destUris.first(),
+                destinationUris = destUris,
+                parentDocumentId = "sub/day1",
+            )
+        coEvery { imageRepository.undoMoveBundle(any(), destUris, Uri.parse(FOLDER_URI), "sub/day1") } returns
+            FileOperationResult.success(destUris.first(), bundleItem.uri, listOf(bundleItem.uri), "sub/day1")
+
+        val viewModel = loadFolder(bundleItem, image("b"))
+        viewModel.moveToSelection()
+
+        val undoOp = viewModel.uiState.value.undoOperation as? UndoableOperation.ReverseMove
+        assertNotNull(undoOp)
+        assertEquals(destUris, undoOp?.destinationUris)
+        assertEquals("sub/day1", undoOp?.parentDocumentId)
+
+        viewModel.undoLastOperation()
+
+        assertEquals(listOf("IMG_0001.JPG", "b"), viewModel.uiState.value.images.map { it.fileName })
+        coVerify(exactly = 1) {
+            imageRepository.undoMoveBundle(any(), destUris, Uri.parse(FOLDER_URI), "sub/day1")
+        }
+    }
+
+    @Test
+    fun `committing a pending deletion deletes both primary and companion URIs`() = runTest {
+        val bundleItem = ImageItem(
+            uri = "content://test/folder/IMG_0002.JPG",
+            fileName = "IMG_0002.JPG",
+            fileSize = 100L,
+            lastModified = 1L,
+            mimeType = "image/jpeg",
+            companions = listOf(
+                com.photoselectortoolbox.data.model.CompanionFile(
+                    uri = "content://test/folder/IMG_0002.CR3",
+                    fileName = "IMG_0002.CR3",
+                ),
+                com.photoselectortoolbox.data.model.CompanionFile(
+                    uri = "content://test/folder/IMG_0002.CR3.xmp",
+                    fileName = "IMG_0002.CR3.xmp",
+                ),
+            ),
+        )
+
+        val viewModel = loadFolder(bundleItem, image("b"))
+        viewModel.deleteCurrentImage()
+        // Trigger commit via second delete.
+        viewModel.deleteCurrentImage()
+
+        coVerify(exactly = 1) {
+            imageRepository.deleteImage(any(), Uri.parse("content://test/folder/IMG_0002.JPG"))
+        }
+        coVerify(exactly = 1) {
+            imageRepository.deleteImage(any(), Uri.parse("content://test/folder/IMG_0002.CR3"))
+        }
+        coVerify(exactly = 1) {
+            imageRepository.deleteImage(any(), Uri.parse("content://test/folder/IMG_0002.CR3.xmp"))
+        }
     }
 }

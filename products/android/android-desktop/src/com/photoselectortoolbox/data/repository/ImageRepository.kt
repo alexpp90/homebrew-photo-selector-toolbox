@@ -97,18 +97,84 @@ interface ImageRepository {
      * Reverse a completed move: take the file back out of the Selection and
      * return it to [restoreFolderUri].
      *
-     * **Known limitation, stated rather than hidden:** SAF exposes no way to ask
-     * a document for its parent, so the file returns to the root of the folder
-     * the user opened, not to the sub-folder it was originally in. It reappears
-     * in the list either way, because discovery is recursive over that folder.
      * Sorting is deliberately off — putting it back through the RAW/JPEG sorter
-     * would be a second filing decision, not an undo.
+     * would be a second filing decision, not an undo. For bundle-aware moves
+     * with a recorded sub-folder (`parentDocumentId`), use [undoMoveBundle].
      */
     suspend fun undoMove(
         context: Context,
         movedTo: Uri,
         restoreFolderUri: Uri,
     ): FileOperationResult
+
+    /**
+     * Move an [ImageItem] and all of its [ImageItem.companions] into the
+     * Selection of [destFolderUri] using bundle-wide collision-free naming.
+     */
+    suspend fun moveBundle(
+        context: Context,
+        item: ImageItem,
+        destFolderUri: Uri,
+        sorting: Boolean,
+    ): FileOperationResult = moveImage(
+        context = context,
+        sourceUri = Uri.parse(item.uri),
+        destFolderUri = destFolderUri,
+        sorting = sorting,
+    ).let { result ->
+        if (item.parentDocumentId != null && result.parentDocumentId == null) {
+            result.copy(parentDocumentId = item.parentDocumentId)
+        } else {
+            result
+        }
+    }
+
+    /**
+     * Copy an [ImageItem] and all of its [ImageItem.companions] into the
+     * Selection of [destFolderUri] using bundle-wide collision-free naming.
+     */
+    suspend fun copyBundle(
+        context: Context,
+        item: ImageItem,
+        destFolderUri: Uri,
+        sorting: Boolean,
+    ): FileOperationResult = copyImage(
+        context = context,
+        sourceUri = Uri.parse(item.uri),
+        destFolderUri = destFolderUri,
+        sorting = sorting,
+    ).let { result ->
+        if (item.parentDocumentId != null && result.parentDocumentId == null) {
+            result.copy(parentDocumentId = item.parentDocumentId)
+        } else {
+            result
+        }
+    }
+
+    /**
+     * Reverse a completed bundle move: move all [destinationUris] back into
+     * their original [parentDocumentId] sub-folder within [rootFolderUri] (or
+     * [rootFolderUri] when [parentDocumentId] is null) without creating a
+     * `Selection/` folder and without overwriting any existing file.
+     */
+    suspend fun undoMoveBundle(
+        context: Context,
+        destinationUris: List<String>,
+        rootFolderUri: Uri,
+        parentDocumentId: String? = null,
+    ): FileOperationResult {
+        val first = destinationUris.firstOrNull()
+            ?: return FileOperationResult.failure("", "No files to restore", parentDocumentId)
+        return undoMove(context, Uri.parse(first), rootFolderUri)
+    }
+
+    /**
+     * Delete an [ImageItem] and all of its [ImageItem.companions].
+     */
+    suspend fun deleteBundle(
+        context: Context,
+        item: ImageItem,
+    ): Boolean = item.allFiles.all { deleteImage(context, Uri.parse(it.uri)) }
 
     suspend fun getImageDimensions(context: Context, uri: Uri): Pair<Int, Int>
 

@@ -1029,7 +1029,8 @@ class SelectorViewModel @Inject constructor(
         commitPendingDeletion()
 
         val before = _uiState.value.listState
-        val sourceUri = before.currentUri ?: return
+        val currentItem = before.images.getOrNull(before.currentIndex) ?: return
+        val sourceUri = currentItem.uri
         val edit = OptimisticEdits.applyToCurrent(before, action)
 
         _uiState.update {
@@ -1061,11 +1062,10 @@ class SelectorViewModel @Inject constructor(
             val result = try {
                 val sorting = settingsRepository.sortingEnabled.first()
                 val destination = Uri.parse(folderUri)
-                val source = Uri.parse(sourceUri)
                 if (action == CurationAction.COPY) {
-                    imageRepository.copyImage(context, source, destination, sorting)
+                    imageRepository.copyBundle(context, currentItem, destination, sorting)
                 } else {
-                    imageRepository.moveImage(context, source, destination, sorting)
+                    imageRepository.moveBundle(context, currentItem, destination, sorting)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -1080,6 +1080,8 @@ class SelectorViewModel @Inject constructor(
                     slots = edit.slots,
                     sourceUri = sourceUri,
                     destinationUri = result.destinationUri,
+                    destinationUris = result.destinationUris,
+                    parentDocumentId = result.parentDocumentId ?: currentItem.parentDocumentId,
                 )
                 _uiState.update { current ->
                     // Only attach the undo if this action still owns the
@@ -1092,7 +1094,8 @@ class SelectorViewModel @Inject constructor(
                 }
             } else if (result?.partial == true) {
                 rollbackFiling(edit.action, edit.slots)
-                reportError(result.error ?: "Copied to Selection — original could not be removed")
+                val folder = FilingAction.selectionFolderOrDefault(_uiState.value.selectionFolderName)
+                reportError(result.error ?: "Copied to $folder — original could not be removed")
             } else {
                 rollbackFiling(edit.action, edit.slots)
                 val verb = if (action == CurationAction.COPY) "Copy" else "Move"
@@ -1180,10 +1183,11 @@ class SelectorViewModel @Inject constructor(
                 onFrameChanged()
                 appScope.launch {
                     val result = try {
-                        imageRepository.undoMove(
-                            context,
-                            Uri.parse(operation.destinationUri),
-                            Uri.parse(folderUri),
+                        imageRepository.undoMoveBundle(
+                            context = context,
+                            destinationUris = operation.destinationUris,
+                            rootFolderUri = Uri.parse(folderUri),
+                            parentDocumentId = operation.parentDocumentId,
                         )
                     } catch (e: Exception) {
                         Log.e("SelectorViewModel", "Undo move failed", e)

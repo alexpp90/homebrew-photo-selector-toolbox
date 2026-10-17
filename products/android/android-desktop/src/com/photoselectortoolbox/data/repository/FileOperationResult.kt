@@ -27,24 +27,50 @@ data class FileOperationResult(
     val success: Boolean,
     val error: String? = null,
     val partial: Boolean = false,
+    val destinationUris: List<String> = listOfNotNull(destinationUri),
+    val parentDocumentId: String? = null,
 ) {
     companion object {
-        fun success(sourceUri: String, destinationUri: String?) =
-            FileOperationResult(sourceUri, destinationUri, success = true)
+        fun success(
+            sourceUri: String,
+            destinationUri: String?,
+            destinationUris: List<String> = listOfNotNull(destinationUri),
+            parentDocumentId: String? = null,
+        ) = FileOperationResult(
+            sourceUri = sourceUri,
+            destinationUri = destinationUri,
+            success = true,
+            destinationUris = destinationUris,
+            parentDocumentId = parentDocumentId,
+        )
 
-        fun failure(sourceUri: String, error: String?) =
-            FileOperationResult(sourceUri, null, success = false, error = error)
+        fun failure(
+            sourceUri: String,
+            error: String?,
+            parentDocumentId: String? = null,
+        ) = FileOperationResult(
+            sourceUri = sourceUri,
+            destinationUri = null,
+            success = false,
+            error = error,
+            destinationUris = emptyList(),
+            parentDocumentId = parentDocumentId,
+        )
 
         fun partial(
             sourceUri: String,
             destinationUri: String,
             error: String = "Copied, but the original could not be removed",
+            destinationUris: List<String> = listOf(destinationUri),
+            parentDocumentId: String? = null,
         ) = FileOperationResult(
             sourceUri = sourceUri,
             destinationUri = destinationUri,
             success = false,
             error = error,
             partial = true,
+            destinationUris = destinationUris,
+            parentDocumentId = parentDocumentId,
         )
     }
 }

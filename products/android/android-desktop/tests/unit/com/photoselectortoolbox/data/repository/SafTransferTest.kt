@@ -13,6 +13,8 @@ import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import com.photoselector.core.reader.AndroidExifReader
 import com.photoselector.core.reader.MediaStoreReader
+import com.photoselectortoolbox.data.model.CompanionFile
+import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.source.LocalImageSource
 import com.photoselectortoolbox.domain.format.ImageFormats
 import io.mockk.every
@@ -708,5 +710,228 @@ class SafTransferTest {
         } catch (expected: CancellationException) {
             assertEquals("Transfer cancelled by scope", expected.message)
         }
+    }
+
+    // ── 7. U-04b: Bundle transfer, rollback, delete & undo to sub-folder ─
+
+    // REQ-AND-PLATFORM.06, REQ-AND-PLATFORM.12
+    @Test
+    fun `moveBundle moves CR3 + JPG + CR3 xmp from sub-folder and undoMoveBundle restores all 3 into original sub-folder`() = runTest {
+        val subDir = File(rootDir, "sub/day1").apply { mkdirs() }
+        val srcJpg = File(subDir, "IMG_0010.JPG").apply { writeText("jpeg-bytes-10") }
+        val srcCr3 = File(subDir, "IMG_0010.CR3").apply { writeText("raw-cr3-bytes-10") }
+        val srcXmp = File(subDir, "IMG_0010.CR3.xmp").apply { writeText("<x:xmpmeta>rating=5</x:xmpmeta>") }
+
+        val item = ImageItem(
+            uri = documentUriFor("sub/day1/IMG_0010.JPG").toString(),
+            fileName = "IMG_0010.JPG",
+            fileSize = srcJpg.length(),
+            lastModified = srcJpg.lastModified(),
+            mimeType = "image/jpeg",
+            companions = listOf(
+                CompanionFile(
+                    uri = documentUriFor("sub/day1/IMG_0010.CR3").toString(),
+                    fileName = "IMG_0010.CR3",
+                    fileSize = srcCr3.length(),
+                ),
+                CompanionFile(
+                    uri = documentUriFor("sub/day1/IMG_0010.CR3.xmp").toString(),
+                    fileName = "IMG_0010.CR3.xmp",
+                    fileSize = srcXmp.length(),
+                ),
+            ),
+            parentDocumentId = "sub/day1",
+        )
+
+        val moveResult = repository.moveBundle(
+            context = context,
+            item = item,
+            destFolderUri = treeUri,
+            sorting = true,
+        )
+
+        assertTrue(moveResult.success)
+        assertEquals(3, moveResult.destinationUris.size)
+        assertEquals("sub/day1", moveResult.parentDocumentId)
+
+        // All 3 files moved out of sub/day1 into Selection/JPEG and Selection/RAW.
+        assertFalse(srcJpg.exists())
+        assertFalse(srcCr3.exists())
+        assertFalse(srcXmp.exists())
+        assertEquals("jpeg-bytes-10", File(rootDir, "Selection/JPEG/IMG_0010.JPG").readText())
+        assertEquals("raw-cr3-bytes-10", File(rootDir, "Selection/RAW/IMG_0010.CR3").readText())
+        assertEquals("<x:xmpmeta>rating=5</x:xmpmeta>", File(rootDir, "Selection/RAW/IMG_0010.CR3.xmp").readText())
+
+        // Undo restores all 3 files into sub/day1 (not into rootDir and without creating sub/day1/Selection).
+        val undoResult = repository.undoMoveBundle(
+            context = context,
+            destinationUris = moveResult.destinationUris,
+            rootFolderUri = treeUri,
+            parentDocumentId = moveResult.parentDocumentId,
+        )
+
+        assertTrue(undoResult.success)
+        assertEquals(3, undoResult.destinationUris.size)
+        assertEquals("jpeg-bytes-10", File(rootDir, "sub/day1/IMG_0010.JPG").readText())
+        assertEquals("raw-cr3-bytes-10", File(rootDir, "sub/day1/IMG_0010.CR3").readText())
+        assertEquals("<x:xmpmeta>rating=5</x:xmpmeta>", File(rootDir, "sub/day1/IMG_0010.CR3.xmp").readText())
+        // Root was not polluted with restored files, and no Selection/ was created in sub/day1.
+        assertFalse(File(rootDir, "IMG_0010.JPG").exists())
+        assertFalse(File(rootDir, "IMG_0010.CR3").exists())
+        assertFalse(File(rootDir, "IMG_0010.CR3.xmp").exists())
+        assertFalse(File(rootDir, "sub/day1/Selection").exists())
+        // Selection copies were removed on undo.
+        assertFalse(File(rootDir, "Selection/JPEG/IMG_0010.JPG").exists())
+        assertFalse(File(rootDir, "Selection/RAW/IMG_0010.CR3").exists())
+        assertFalse(File(rootDir, "Selection/RAW/IMG_0010.CR3.xmp").exists())
+    }
+
+    // REQ-AND-PLATFORM.06
+    @Test
+    fun `moveBundle cleans up staged copies and preserves all sources when a companion copy fails`() = runTest {
+        val srcJpg = File(rootDir, "IMG_0011.JPG").apply { writeText("primary-jpeg-ok") }
+        val srcCr3 = File(rootDir, "IMG_0011.CR3").apply {
+            writeBytes(ByteArray(2048) { (it % 127).toByte() })
+        }
+        // Simulate size mismatch on the second file (the CR3 companion).
+        FakeSafDocumentsProvider.reportedSizeOverride = { file ->
+            if (file.parentFile?.name == "RAW" && file.name == "IMG_0011.CR3") {
+                512L
+            } else {
+                file.length()
+            }
+        }
+
+        val item = ImageItem(
+            uri = documentUriFor("IMG_0011.JPG").toString(),
+            fileName = "IMG_0011.JPG",
+            fileSize = srcJpg.length(),
+            lastModified = srcJpg.lastModified(),
+            mimeType = "image/jpeg",
+            companions = listOf(
+                CompanionFile(
+                    uri = documentUriFor("IMG_0011.CR3").toString(),
+                    fileName = "IMG_0011.CR3",
+                    fileSize = srcCr3.length(),
+                )
+            ),
+        )
+
+        val result = repository.moveBundle(
+            context = context,
+            item = item,
+            destFolderUri = treeUri,
+            sorting = true,
+        )
+
+        assertFalse(result.success)
+        assertTrue(result.destinationUris.isEmpty())
+        // The first file's staged copy in Selection/JPEG was cleaned up when the second failed.
+        assertFalse(File(rootDir, "Selection/JPEG/IMG_0011.JPG").exists())
+        assertFalse(File(rootDir, "Selection/RAW/IMG_0011.CR3").exists())
+        // Both source files are untouched.
+        assertTrue(srcJpg.exists())
+        assertTrue(srcCr3.exists())
+    }
+
+    // REQ-AND-PLATFORM.06, REQ-AND-PLATFORM.12
+    @Test
+    fun `deleteBundle deletes primary and all companion files`() = runTest {
+        val srcJpg = File(rootDir, "IMG_0012.JPG").apply { writeText("jpg") }
+        val srcCr3 = File(rootDir, "IMG_0012.CR3").apply { writeText("cr3") }
+        val srcXmp = File(rootDir, "IMG_0012.CR3.xmp").apply { writeText("xmp") }
+
+        val item = ImageItem(
+            uri = documentUriFor("IMG_0012.JPG").toString(),
+            fileName = "IMG_0012.JPG",
+            fileSize = srcJpg.length(),
+            lastModified = srcJpg.lastModified(),
+            mimeType = "image/jpeg",
+            companions = listOf(
+                CompanionFile(uri = documentUriFor("IMG_0012.CR3").toString(), fileName = "IMG_0012.CR3"),
+                CompanionFile(uri = documentUriFor("IMG_0012.CR3.xmp").toString(), fileName = "IMG_0012.CR3.xmp"),
+            ),
+        )
+
+        val deleted = repository.deleteBundle(context, item)
+
+        assertTrue(deleted)
+        assertFalse(srcJpg.exists())
+        assertFalse(srcCr3.exists())
+        assertFalse(srcXmp.exists())
+    }
+
+    // ── 8. U-04c: File Sorting off still files into Selection/ ───────────
+
+    // REQ-AND-PLATFORM.06, REQ-AND-PLATFORM.12
+    @Test
+    fun `sorting false files bundle flat into Selection without RAW or JPEG subfolders and undo restores to original folder`() = runTest {
+        val subDir = File(rootDir, "sub/day2").apply { mkdirs() }
+        val srcJpg = File(subDir, "IMG_0020.JPG").apply { writeText("flat-jpg") }
+        val srcCr3 = File(subDir, "IMG_0020.CR3").apply { writeText("flat-cr3") }
+        val srcXmp = File(subDir, "IMG_0020.CR3.xmp").apply { writeText("flat-xmp") }
+
+        val item = ImageItem(
+            uri = documentUriFor("sub/day2/IMG_0020.JPG").toString(),
+            fileName = "IMG_0020.JPG",
+            fileSize = srcJpg.length(),
+            lastModified = srcJpg.lastModified(),
+            mimeType = "image/jpeg",
+            companions = listOf(
+                CompanionFile(
+                    uri = documentUriFor("sub/day2/IMG_0020.CR3").toString(),
+                    fileName = "IMG_0020.CR3",
+                ),
+                CompanionFile(
+                    uri = documentUriFor("sub/day2/IMG_0020.CR3.xmp").toString(),
+                    fileName = "IMG_0020.CR3.xmp",
+                ),
+            ),
+            parentDocumentId = "sub/day2",
+        )
+
+        val moveResult = repository.moveBundle(
+            context = context,
+            item = item,
+            destFolderUri = treeUri,
+            sorting = false,
+        )
+
+        assertTrue(moveResult.success)
+        assertEquals(3, moveResult.destinationUris.size)
+        // Files are placed directly inside <root>/Selection/ (flat), never in <root> itself.
+        assertEquals("flat-jpg", File(rootDir, "Selection/IMG_0020.JPG").readText())
+        assertEquals("flat-cr3", File(rootDir, "Selection/IMG_0020.CR3").readText())
+        assertEquals("flat-xmp", File(rootDir, "Selection/IMG_0020.CR3.xmp").readText())
+        assertFalse(File(rootDir, "Selection/RAW").exists())
+        assertFalse(File(rootDir, "Selection/JPEG").exists())
+        assertFalse(File(rootDir, "IMG_0020.JPG").exists())
+        assertFalse(File(rootDir, "IMG_0020.CR3").exists())
+        assertFalse(File(rootDir, "IMG_0020.CR3.xmp").exists())
+
+        // Also verify copyImage with sorting = false writes into Selection/, not rootDir.
+        val rootPhoto = File(rootDir, "IMG_0021.JPG").apply { writeText("root-photo") }
+        val copyResult = repository.copyImage(
+            context = context,
+            sourceUri = documentUriFor("IMG_0021.JPG"),
+            destFolderUri = treeUri,
+            sorting = false,
+        )
+        assertTrue(copyResult.success)
+        assertEquals("root-photo", File(rootDir, "Selection/IMG_0021.JPG").readText())
+        assertTrue(rootPhoto.exists())
+
+        // Undo returns the moved bundle to sub/day2 without creating Selection/ inside sub/day2.
+        val undoResult = repository.undoMoveBundle(
+            context = context,
+            destinationUris = moveResult.destinationUris,
+            rootFolderUri = treeUri,
+            parentDocumentId = moveResult.parentDocumentId,
+        )
+        assertTrue(undoResult.success)
+        assertEquals("flat-jpg", File(rootDir, "sub/day2/IMG_0020.JPG").readText())
+        assertEquals("flat-cr3", File(rootDir, "sub/day2/IMG_0020.CR3").readText())
+        assertEquals("flat-xmp", File(rootDir, "sub/day2/IMG_0020.CR3.xmp").readText())
+        assertFalse(File(rootDir, "sub/day2/Selection").exists())
     }
 }
