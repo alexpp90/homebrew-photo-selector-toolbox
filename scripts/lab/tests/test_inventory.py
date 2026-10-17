@@ -111,6 +111,23 @@ class InventoryTests(unittest.TestCase):
         self.assertTrue(ok, reason)
         self.assertEqual(dev.adb_serial, "10.0.0.9:4444")
 
+    def test_resolve_prefers_the_mdns_transport_when_connected_twice(self) -> None:
+        dev = parse_inventory(INVENTORY).find("pixel-tablet")
+
+        def run(cmd: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+            if cmd[:2] == ["adb", "devices"]:
+                return _proc(
+                    "List of devices attached\n10.0.0.9:4444\tdevice\n"
+                    "adb-TTT222-x._adb-tls-connect._tcp\tdevice\n"
+                )
+            if cmd[-2:] == ["getprop", "ro.serialno"]:
+                return _proc("TTT222\n")
+            return _proc("device\n")
+
+        ok, _ = resolve_android_device(dev, run=run)
+        self.assertTrue(ok)
+        self.assertEqual(dev.adb_serial, "adb-TTT222-x._adb-tls-connect._tcp")
+
     def test_resolve_reports_unpaired_device(self) -> None:
         dev = parse_inventory(INVENTORY).find("pixel-tablet")
 

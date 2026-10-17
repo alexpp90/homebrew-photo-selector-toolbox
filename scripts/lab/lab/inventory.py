@@ -225,17 +225,25 @@ def resolve_android_device(dev: AndroidDevice, run: RunFn | None = None) -> tupl
     runner = run or _default_run
 
     def attached() -> str | None:
+        """The device's transport; the wireless-debugging mDNS name wins over an `ip:port` one.
+
+        A device connected both ways shows up twice in `adb devices`; Maestro keeps only one
+        transport per device (the mDNS one) and rejects the other id as "not connected".
+        """
         res = runner(["adb", "devices"], 15)
+        matches: list[str] = []
         for transport, state in parse_adb_devices(res.stdout or ""):
             if state != "device":
                 continue
             if transport == dev.serial or transport.startswith(f"adb-{dev.serial}-"):
-                return transport
-            if dev.address and transport == dev.address:
-                return transport
-            if ":" in transport and _serial_of(transport, runner) == dev.serial:
-                return transport
-        return None
+                matches.append(transport)
+            elif dev.address and transport == dev.address:
+                matches.append(transport)
+            elif ":" in transport and _serial_of(transport, runner) == dev.serial:
+                matches.append(transport)
+        if not matches:
+            return None
+        return sorted(matches, key=lambda t: (not t.startswith("adb-"), t))[0]
 
     transport = attached()
     if transport is None:

@@ -70,10 +70,11 @@ def parse_uiautomator_xml(
     nodes: list[Node] = []
     win_w = 0.0
     win_h = 0.0
+    origin: list[float] | None = None
     counter = 0
 
     def walk(elem: ET.Element, nearest_named_parent: str | None) -> None:
-        nonlocal counter, win_w, win_h
+        nonlocal counter, win_w, win_h, origin
         if elem.tag == "node":
             raw_res_id = elem.attrib.get("resource-id", "").strip()
             has_named_id = bool(raw_res_id)
@@ -83,6 +84,11 @@ def parse_uiautomator_xml(
             bounds = parse_bounds_dp(elem.attrib.get("bounds", "[0,0][0,0]"), scale)
             if win_w == 0.0 and win_h == 0.0 and bounds[2] > 0 and bounds[3] > 0:
                 win_w, win_h = bounds[2], bounds[3]
+                # uiautomator reports screen coordinates; a freeform window (DeX, ChromeOS)
+                # starts away from (0,0), so make every node relative to the window.
+                origin = [bounds[0], bounds[1]]
+            if origin is not None:
+                bounds = [round(bounds[0] - origin[0], 2), round(bounds[1] - origin[1], 2), bounds[2], bounds[3]]
 
             clickable = elem.attrib.get("clickable", "false") == "true"
             long_clickable = elem.attrib.get("long-clickable", "false") == "true"

@@ -59,6 +59,18 @@ class FakeAdbExec:
 
 
 class TestAndroidLayer(unittest.TestCase):
+    def test_freeform_window_offset_is_removed(self) -> None:
+        xml = (
+            '<hierarchy><node bounds="[584,240][2376,1584]" resource-id="" class="android.widget.FrameLayout">'
+            '<node bounds="[2200,300][2376,400]" resource-id="btn" class="android.widget.Button" clickable="true" text="x"/>'
+            "</node></hierarchy>"
+        )
+        tree = parse_uiautomator_xml(xml, density_dpi=280)
+        self.assertEqual((tree.window["w"], tree.window["h"]), (1024.0, 768.0))
+        btn = {n.id: n for n in tree.nodes}["btn"]
+        self.assertAlmostEqual(btn.bounds[0], (2200 - 584) / 1.75, places=1)  # inside the window
+        self.assertAlmostEqual(btn.bounds[1], (300 - 240) / 1.75, places=1)
+
     def test_parse_uiautomator_xml_converts_px_to_dp(self) -> None:
         tree = parse_uiautomator_xml(DATA_DIR / "android_dump.xml", density_dpi=320)
         self.assertEqual(validate(tree.to_dict(), "tree"), [])
