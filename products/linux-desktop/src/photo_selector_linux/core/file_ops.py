@@ -551,12 +551,14 @@ class FileCullingManager:
         planned_moves = self._resolve_bundle_destinations(candidate, sel_dir)
         targets = [src for src, _ in planned_moves]
 
-        # Pre-flight capacity check
-        self._verify_destination_capacity(sel_dir, targets)
-
         # Detect cross-filesystem boundaries
         sel_dev = self._dev_of(sel_dir)
         is_cross_mount = any(t.exists() and self._dev_of(t) != sel_dev for t in targets)
+
+        # Pre-flight capacity check: only a cross-mount move copies bytes. A same-filesystem
+        # move is a rename and needs no free space, so a nearly full card must not refuse it.
+        if is_cross_mount:
+            self._verify_destination_capacity(sel_dir, targets)
 
         affected: List[Tuple[Path, Path]] = []
 
@@ -643,9 +645,21 @@ class FileCullingManager:
                     sel_dir,
                     failed_names,
                 )
+                # The verified copies are the user's data now: hand back a record (marked partial
+                # through `unremoved_sources`) so the caller can keep it for undo and report
+                # "Copied to «folder» — original could not be removed" (FILE_OPERATIONS.md §4).
+                partial_record = CullingRecord(
+                    photo_id=candidate.id,
+                    action_type=CullingActionType.MOVE,
+                    original_primary_path=candidate.primary_path,
+                    affected_paths=staged_dsts,
+                    previous_status=PhotoStatus.CANDIDATE,
+                    unremoved_sources=[s for s, _ in failed_unlinks],
+                )
                 raise FileCullingError(
-                    f"Cross-filesystem move commit partially succeeded: destination replicas preserved, "
-                    f"but source files could not be removed: {failed_names}"
+                    f"Copied to {sel_dir.name} — original could not be removed: {failed_names}; "
+                    f"destination replicas preserved",
+                    partial_record=partial_record,
                 )
 
             affected = staged_dsts
