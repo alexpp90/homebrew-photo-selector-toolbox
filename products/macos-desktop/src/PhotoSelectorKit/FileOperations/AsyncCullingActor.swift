@@ -308,7 +308,7 @@ public actor AsyncCullingActor {
                     rootURL: root,
                     destinationFolderName: job.destinationFolderName
                 )
-            } catch let FileCullingError.partialMove(destinations, unremovedSources, reason) {
+            } catch let FileCullingError.partialMove(destinations, unremovedSources, reason, rollbackFailed) {
                 // Keep the record so the verified copies can be undone later (and never lost).
                 executedJobIDs.insert(job.id)
                 completedRecords[job.id] = CullingExecutionRecord(
@@ -324,7 +324,8 @@ public actor AsyncCullingActor {
                 throw FileCullingError.partialMove(
                     destinations: destinations,
                     unremovedSources: unremovedSources,
-                    reason: reason
+                    reason: reason,
+                    rollbackFailed: rollbackFailed
                 )
             }
 
