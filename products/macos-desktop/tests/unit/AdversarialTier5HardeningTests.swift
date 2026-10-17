@@ -26,7 +26,9 @@ struct AdversarialTier5HardeningTests {
             items.append(PhotoItem(id: UUID(), url: u, status: .candidate))
         }
 
-        let vm = CullingWorkspaceViewModel()
+        let vm = CullingWorkspaceViewModel(
+            cullingActor: AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: harness.rootURL))
+        )
         vm.setPhotos(items, rootURL: harness.rootURL)
         vm.autoAdvance = true
 
