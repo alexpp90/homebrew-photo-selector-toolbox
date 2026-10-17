@@ -1190,6 +1190,7 @@ class PhoneModeViewModel @Inject constructor(
                 val succeededUris = mutableSetOf<String>()
                 var failed = 0
                 var partial = 0
+                var renamedTo: String? = null
                 targets.forEach { img ->
                     val result = if (isCopy) {
                         imageRepository.copyImageDetailed(
@@ -1209,6 +1210,11 @@ class PhoneModeViewModel @Inject constructor(
                     when {
                         result.success -> {
                             succeededUris.add(img.uri)
+                            if (img === currentImage) {
+                                // The primary file got a collision suffix: say which name it became.
+                                val resultName = result.destinationUri?.let(CopyMoveFeedback::displayNameOf)
+                                if (resultName != null && resultName != img.fileName) renamedTo = resultName
+                            }
                             if (state.sourceKind == SourceKind.REMOVABLE ||
                                 state.sourceKind == SourceKind.CAMERA_MTP
                             ) {
@@ -1237,6 +1243,7 @@ class PhoneModeViewModel @Inject constructor(
                     failed = failed,
                     relatedCount = related.size,
                     partial = partial,
+                    renamedTo = renamedTo,
                 )
                 val copiedOnCard = cardTransferJournal.copiedCountForFolder(state.sourceFolderUri ?: "")
                 _uiState.update {

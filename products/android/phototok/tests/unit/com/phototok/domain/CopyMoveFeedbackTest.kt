@@ -73,4 +73,55 @@ class CopyMoveFeedbackTest {
             ),
         )
     }
+
+    @Test
+    fun `a collision-suffixed move names the file it became`() {
+        assertEquals(
+            "Moved to Selection as IMG_0001-2.jpg (+1 related)",
+            CopyMoveFeedback.message(
+                isCopy = false,
+                destinationNoun = "Selection",
+                succeeded = 2,
+                failed = 0,
+                relatedCount = 1,
+                renamedTo = "IMG_0001-2.jpg",
+            ),
+        )
+    }
+
+    @Test
+    fun `a collision-suffixed copy without companions has no related count`() {
+        assertEquals(
+            "Copied to Selection as IMG_0001-3.jpg",
+            CopyMoveFeedback.message(
+                isCopy = true,
+                destinationNoun = "Selection",
+                succeeded = 1,
+                failed = 0,
+                relatedCount = 0,
+                renamedTo = "IMG_0001-3.jpg",
+            ),
+        )
+    }
+
+    @Test
+    fun `the rename is only reported when everything succeeded`() {
+        assertEquals(
+            "Moved 1 of 2 to Selection, 1 failed",
+            CopyMoveFeedback.message(
+                isCopy = false,
+                destinationNoun = "Selection",
+                succeeded = 1,
+                failed = 1,
+                relatedCount = 1,
+                renamedTo = "IMG_0001-2.jpg",
+            ),
+        )
+    }
+
+    @Test
+    fun `display name of a document uri is the last path segment of the decoded document id`() {
+        assertEquals("a-2.jpg", CopyMoveFeedback.displayNameOf("content://x/tree/root/document/root%2FSelection%2Fa-2.jpg"))
+        assertEquals("IMG_1.JPG", CopyMoveFeedback.displayNameOf("content://x/tree/primary%3ADCIM/document/primary%3ADCIM%2FIMG_1.JPG"))
+    }
 }
