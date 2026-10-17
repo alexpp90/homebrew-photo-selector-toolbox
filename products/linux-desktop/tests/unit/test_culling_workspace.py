@@ -783,3 +783,70 @@ def test_partial_move_is_recorded_for_undo_and_reported_without_losing_the_photo
     assert [entry[0] for entry in vm.undo_stack] == [record]
     assert vm.selected_count == 0
     assert messages == ["Copied a.jpg to Selection/ — original could not be removed"]
+
+
+# ── B-7: feedback templates of docs/shared/FILE_OPERATIONS.md (finding D-8) ─────────────────────
+
+
+def _vm_with_record(kind: str, pairs):
+    photo = make_candidate("a.jpg", ["a.xmp"])
+    record = CullingRecord(
+        photo_id=photo.id,
+        action_type=CullingActionType.MOVE if kind == "move" else CullingActionType.COPY,
+        original_primary_path=photo.primary_path,
+        affected_paths=pairs,
+    )
+    manager = MagicMock()
+    getattr(manager, f"{kind}_candidate").return_value = record
+    vm = CullingWorkspaceViewModel(file_manager=manager)
+    vm.candidates = [photo, make_candidate("b.jpg")]
+    vm.current_folder = Path("/tmp/test_dir")
+    messages = []
+    vm.connect("notification", lambda _vm, message: messages.append(message))
+    return vm, photo, messages
+
+
+def test_collision_suffixed_move_says_which_name_it_got():
+    sel = Path("/tmp/test_dir/Selection")
+    vm, _photo, messages = _vm_with_record("move", [
+        (Path("/tmp/test_dir/a.jpg"), sel / "a-2.jpg"),
+        (Path("/tmp/test_dir/a.xmp"), sel / "a-2.xmp"),
+    ])
+
+    vm.cull_move()
+
+    assert messages == ["Moved to Selection/ as a-2.jpg (+1 related)"]
+
+
+def test_collision_suffixed_copy_says_which_name_it_got():
+    sel = Path("/tmp/test_dir/Selection")
+    vm, _photo, messages = _vm_with_record("copy", [(Path("/tmp/test_dir/a.jpg"), sel / "a-2.jpg")])
+
+    vm.cull_copy()
+
+    assert messages == ["Copied to Selection/ as a-2.jpg"]
+
+
+def test_transfer_without_collision_keeps_the_plain_message():
+    sel = Path("/tmp/test_dir/Selection")
+    vm, _photo, messages = _vm_with_record("move", [(Path("/tmp/test_dir/a.jpg"), sel / "a.jpg")])
+
+    vm.cull_move()
+
+    assert messages == ["Moved a.jpg to Selection/"]
+
+
+def test_undo_that_had_to_suffix_says_so():
+    sel = Path("/tmp/test_dir/Selection")
+    vm, photo, messages = _vm_with_record("move", [(Path("/tmp/test_dir/a.jpg"), sel / "a.jpg")])
+    vm.cull_move()
+    messages.clear()
+
+    def undo_with_suffix(record, candidate):
+        candidate.primary_path = Path("/tmp/test_dir/a-2.jpg")  # the original name was occupied
+        return True
+
+    vm.file_manager.undo_culling.side_effect = undo_with_suffix
+
+    assert vm.undo() is True
+    assert messages == ["Restored as a-2.jpg (original name was in use)"]
