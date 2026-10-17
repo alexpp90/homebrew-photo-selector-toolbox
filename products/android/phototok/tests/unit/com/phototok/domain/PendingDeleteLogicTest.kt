@@ -164,4 +164,51 @@ class PendingDeleteLogicTest {
         assertEquals(-1, lists.portraitSectionStart)
         assertNull(pending.revertAllowedUri)
     }
+
+    @Test
+    fun `remove drops related siblings from filtered list when filter is ALL and adjusts currentIndex`() {
+        val rawBefore = img("b.arw")
+        val rawAfter = img("b.dng")
+        // Feed under ALL filter: [a, rawBefore, b, rawAfter, c], deleting b at currentIndex = 2
+        val feed = listOf(a, rawBefore, b, rawAfter, c)
+        val (lists, pending) = PendingDeleteLogic.remove(
+            images = feed,
+            allImages = feed,
+            currentIndex = 2,
+            related = listOf(rawBefore, rawAfter),
+            sortByOrientation = false,
+        )!!
+
+        assertEquals(listOf(a, c), lists.images)
+        assertEquals(listOf(a, c), lists.allImages)
+        // rawBefore sat before currentIndex (at index 1), so c shifts into index 1
+        assertEquals(1, lists.currentIndex)
+        assertEquals(c.uri, pending.revertAllowedUri)
+        assertEquals(3, pending.slots.size)
+    }
+
+    @Test
+    fun `restore reinserts related siblings into filtered list at their original positions when filter is ALL`() {
+        val rawBefore = img("b.arw")
+        val rawAfter = img("b.dng")
+        val feed = listOf(a, rawBefore, b, rawAfter, c)
+        val (lists, pending) = PendingDeleteLogic.remove(
+            images = feed,
+            allImages = feed,
+            currentIndex = 2,
+            related = listOf(rawBefore, rawAfter),
+            sortByOrientation = false,
+        )!!
+
+        val restored = PendingDeleteLogic.restore(
+            images = lists.images,
+            allImages = lists.allImages,
+            pending = pending,
+            sortByOrientation = false,
+        )
+
+        assertEquals(feed, restored.images)
+        assertEquals(feed, restored.allImages)
+        assertEquals(2, restored.currentIndex)
+    }
 }

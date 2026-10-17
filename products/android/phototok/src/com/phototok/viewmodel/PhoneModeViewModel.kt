@@ -24,6 +24,7 @@ import com.phototok.domain.PhoneFeedOrdering
 import com.phototok.domain.PhotoFolders
 import com.phototok.domain.RelatedFiles
 import com.phototok.domain.SwipeAction
+import com.phototok.domain.TransferStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.math.abs
@@ -697,27 +698,32 @@ class PhoneModeViewModel @Inject constructor(
 
                 val succeededUris = mutableSetOf<String>()
                 var failed = 0
+                var partial = 0
                 targets.forEach { img ->
-                    val ok = if (isCopy) {
-                        imageRepository.copyImage(
+                    val result = if (isCopy) {
+                        imageRepository.copyImageDetailed(
                             sourceUri = Uri.parse(img.uri),
                             destFolderUri = folderUri,
                             sorting = sortingEnabled,
                             subfolderName = subfolderName,
                         )
                     } else {
-                        imageRepository.moveImage(
+                        imageRepository.moveImageDetailed(
                             sourceUri = Uri.parse(img.uri),
                             destFolderUri = folderUri,
                             sorting = sortingEnabled,
                             subfolderName = subfolderName,
                         )
                     }
-                    if (ok) succeededUris.add(img.uri) else failed++
+                    when (result.status) {
+                        TransferStatus.SUCCESS -> succeededUris.add(img.uri)
+                        TransferStatus.PARTIAL -> partial++
+                        TransferStatus.FAILURE -> failed++
+                    }
                 }
 
-                if (!isCopy && failed > 0) {
-                    // The optimistic removal was wrong for these files.
+                if (!isCopy && (failed > 0 || partial > 0)) {
+                    // The optimistic removal was wrong for files that remain in source.
                     restoreToFeed(slots.filter { it.image.uri !in succeededUris })
                 }
 
@@ -727,15 +733,18 @@ class PhoneModeViewModel @Inject constructor(
                     succeeded = succeededUris.size,
                     failed = failed,
                     relatedCount = related.size,
+                    partial = partial,
                 )
                 _uiState.update {
                     it.copy(
                         lastActionFeedback = ActionFeedback(
                             message = message,
-                            isError = CopyMoveFeedback.isError(failed),
+                            isError = CopyMoveFeedback.isError(failed, partial),
                         )
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (!isCopy) restoreToFeed(slots)
                 _uiState.update {
@@ -775,14 +784,15 @@ class PhoneModeViewModel @Inject constructor(
 
     /** Swipe left: request delete (does a temporary/pending delete). */
     fun requestDelete() {
-        val state = _uiState.value
-        if (state.images.isEmpty()) return
+        if (_uiState.value.images.isEmpty()) return
 
         maybeShowFirstRunHint(leftSwipeHint())
 
         // If there's already a pending deletion, finalize it first.
         finalizePendingDelete()
 
+        val state = _uiState.value
+        if (state.images.isEmpty()) return
         val imageToDelete = state.images[state.currentIndex]
         val related = if (state.moveRelatedFiles) relatedImages(imageToDelete) else emptyList()
 
@@ -812,17 +822,71 @@ class PhoneModeViewModel @Inject constructor(
      */
     fun finalizePendingDelete() {
         val pending = _uiState.value.pendingDelete ?: return
+        val folderAtDelete = _uiState.value.sourceFolderUri
         _uiState.update { it.copy(pendingDelete = null) }
 
         appScope.launch {
-            (listOf(pending.image) + pending.related).forEach { img ->
+            val targets = listOf(pending.image) + pending.related
+            val succeededUris = mutableSetOf<String>()
+            val failedItems = mutableListOf<Pair<ImageItem, String?>>()
+
+            for (img in targets) {
                 try {
                     val deleted = imageRepository.deleteImage(Uri.parse(img.uri))
-                    if (!deleted) {
+                    if (deleted) {
+                        succeededUris.add(img.uri)
+                    } else {
                         Log.e(TAG, "Failed to delete file on disk: ${img.uri}")
+                        failedItems.add(img to "could not be deleted")
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error deleting file: ${img.uri}", e)
+                    failedItems.add(img to (e.message ?: "delete failed"))
+                }
+            }
+
+            if (failedItems.isNotEmpty()) {
+                if (_uiState.value.sourceFolderUri == folderAtDelete) {
+                    val failedUris = failedItems.map { it.first.uri }.toSet()
+                    val succeededSlots = pending.slots.filter { it.image.uri in succeededUris }
+                    val failedSlots = pending.slots
+                        .filter { it.image.uri in failedUris }
+                        .map { slot ->
+                            val succeededBefore = if (slot.index >= 0) {
+                                succeededSlots.count { it.index in 0 until slot.index }
+                            } else {
+                                0
+                            }
+                            val succeededAllBefore = if (slot.allImagesIndex >= 0) {
+                                succeededSlots.count { it.allImagesIndex in 0 until slot.allImagesIndex }
+                            } else {
+                                0
+                            }
+                            slot.copy(
+                                index = if (slot.index >= 0) slot.index - succeededBefore else -1,
+                                allImagesIndex = if (slot.allImagesIndex >= 0) slot.allImagesIndex - succeededAllBefore else -1,
+                            )
+                        }
+                    restoreToFeed(failedSlots)
+                    loadExifForCurrent()
+                }
+                val errorMsg = if (succeededUris.isEmpty()) {
+                    val (firstImg, reason) = failedItems.first()
+                    "Could not delete ${firstImg.fileName}: ${reason ?: "delete failed"}"
+                } else {
+                    val failedNames = failedItems.joinToString { it.first.fileName }
+                    val reason = failedItems.first().second ?: "delete failed"
+                    "Deleted ${succeededUris.size} of ${succeededUris.size + failedItems.size} — could not delete $failedNames ($reason)"
+                }
+                _uiState.update {
+                    it.copy(
+                        lastActionFeedback = ActionFeedback(
+                            message = errorMsg,
+                            isError = true,
+                        )
+                    )
                 }
             }
         }
