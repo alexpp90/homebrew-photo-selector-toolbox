@@ -69,6 +69,13 @@ Undoing a file operation must never overwrite or delete a pre-existing file.
     existing file at that path is **never deleted or overwritten**. Instead, the restored bundle is
     assigned a shared collision-free suffix (`-2`, `-3`, …) in the original directory so companion
     pairing stays intact.
+- **Undo of a partial Move.** A Move that ended as a partial result (§4: the destination copy was
+  verified but the original could not be removed) is undone per member. For a member whose original
+  still exists, Undo deletes **only the destination copy that operation created** (a copy made by
+  that very Move, at its recorded path) and leaves the original untouched: restoring the copy next
+  to the surviving original would only create a `-N` duplicate in the source folder. Members whose
+  original is gone are restored as in a complete Move. If a member's original has disappeared since
+  (the user removed it), its copy is the only one left and is restored, never deleted.
 - **Trash path recording.** Trash operations record the exact trashed location (the URL returned by
   `FileManager.trashItem` on macOS, or the exact `files/` and `.trashinfo` paths in the mount's or
   home FreeDesktop Trash on Linux) at the moment of trashing, and Undo restores exclusively from
