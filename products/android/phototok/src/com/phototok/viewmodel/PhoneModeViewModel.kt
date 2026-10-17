@@ -443,7 +443,7 @@ class PhoneModeViewModel @Inject constructor(
                     (src.swipeRightVerb == SwipeRightVerb.MOVE || src.leftSwipeAction == SwipeAction.MOVE)
                 ) {
                     cloudMoveCoercedNoticeShown = true
-                    showFeedback("Cloud source — copying instead of moving to keep originals safe")
+                    showFeedback("Cloud folder: copying, not moving")
                 }
 
                 val prev = previous
@@ -1536,7 +1536,7 @@ class PhoneModeViewModel @Inject constructor(
                 cardClearStep = 0,
             )
         }
-        showFeedback("All files kept on card — safe to unplug card")
+        showFeedback("Safe to unplug")
     }
 
     /** Option 2: Delete only the photos swiped left during this session. */
@@ -1548,7 +1548,7 @@ class PhoneModeViewModel @Inject constructor(
                 cardClearStep = 0,
             )
         }
-        showFeedback("Deleted rejected photos from card")
+        showFeedback("Rejects deleted")
     }
 
     /** Step 1 -> Step 2 for Option 3 ("Clear entire card"). */
@@ -1609,10 +1609,10 @@ class PhoneModeViewModel @Inject constructor(
                     cardClearStep = 0,
                     cardClearComplete = true,
                     cardDeletedCount = it.cardDeletedCount + deletedCount,
-                    emptyFolderMessage = "Safe to unplug card — $deletedCount photo(s) cleared",
+                    emptyFolderMessage = "Card cleared · safe to unplug",
                 )
             }
-            showFeedback("Cleared $deletedCount photo(s) — safe to unplug card")
+            showFeedback(if (deletedCount == 1) "1 photo deleted" else "$deletedCount photos deleted")
         }
     }
 

@@ -445,9 +445,9 @@ snackbar follows these rules. They are binding for new UI as well (REQ-TOK-UX.01
 3. **Body text is optional.** Use at most one short sentence, and only when the title and
    buttons cannot stand alone (for example, "This location has no trash." explains
    *permanently*). Drop "Choose how you would like to…" paragraphs.
-4. **Buttons name the outcome.** Write "Show new", "Stay", "Link pairs", "RAW", "JPEG",
-   "Leave as is", never "Yes"/"OK". No subline under a button, except under the single
-   non-obvious option (Link pairs: "One swipe acts on both files").
+4. **Buttons name the outcome.** Write "Show new", "Stay", "Show both, linked", "RAW",
+   "JPEG", "Leave as is", never "Yes"/"OK". No subline under a button, except under the
+   single recommended or non-obvious option ("1 card per shot": "Swipes act on both files").
 5. **Point at Settings with an action, not a sentence.** Hint cards for configurable behaviour
    carry a `SETTINGS` action. "You can change this in Settings." is not written anywhere. The
    one exception is the direct-delete dialog: its confirm/cancel slots are taken, so a single
@@ -471,12 +471,15 @@ snackbar follows these rules. They are binding for new UI as well (REQ-TOK-UX.01
 |---|---|---|---|
 | New photos on reload/reopen (`FolderResumeDialog`) | "1 new photo" / "N new photos" (+ photo icon) | — | **Show new** · Stay |
 | No new photos | *no dialog* | — | explicit Reload only: snackbar "No new photos" |
-| RAW + JPEG pairs (`RawJpegSuggestionDialog`) | "RAW + JPEG pairs" | — | **Link pairs** (subline "One swipe acts on both files") · *Show only*: RAW · JPEG · Leave as is |
+| RAW + JPEG pairs (`RawJpegSuggestionDialog`) | "RAW + JPEG pairs" | — | **1 card per shot** (subline "Swipes act on both files") · Show both, linked · *Show only*: RAW · JPEG · Leave as is |
 | Direct delete (`DirectDeleteDialog`) | "Delete permanently?" | "This location has no trash." + small "Turn off this prompt in Settings." | Cancel · **Delete** |
 | Hint: swipe right / left to folder | "Swipe right copies to «folder»" | — | SETTINGS · GOT IT |
 | Hint: swipe left delete | "Swipe left deletes" | "Tap Revert to undo." | SETTINGS · GOT IT |
 | Hint: filter mismatch | "RAW only" / "JPEG only" | "Most photos here are JPEG." | SHOW ALL · GOT IT |
 | Hints: vertical, tap, zoom, revert | "Your place is saved per folder" · "Tap again to show the overlays" · "Drag to pan, double-tap to reset" · "Revert undoes the last delete only" | — | GOT IT |
+| SD / USB card done (`showCardDoneSheet`) | "Done with this card" | — | **Keep all photos** · Delete rejects · Delete all (N) · Cancel |
+| Clear whole card confirm | "Delete all N photos?" | "Photos not copied off the card are lost." | Cancel · **Delete all** |
+| Snackbars | — | "No new photos" · "RAW + JPEG linked" · "Showing RAW only" · "Safe to unplug" · "Rejects deleted" · "Cloud folder: copying, not moving" | — |
 | Landing: folder access lost | "Folder Access Needed" | "Access to this folder was lost." | Re-select Folder |
 | Landing: empty folder | "No Photos Found" | "«Folder» has no supported photos" | — |
 

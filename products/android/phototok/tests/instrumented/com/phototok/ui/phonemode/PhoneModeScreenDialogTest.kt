@@ -182,7 +182,9 @@ class PhoneModeScreenDialogTest {
 
         composeTestRule.onAllNodesWithTag("raw_jpeg_suggestion_dialog").onFirst().assertIsDisplayed()
         composeTestRule.onAllNodesWithText("RAW + JPEG pairs").onFirst().assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Link pairs").onFirst().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("1 card per shot").onFirst().assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("one_per_shot_button").onFirst().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Show both, linked").onFirst().assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Leave as is").onFirst().assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("apply_both_button").onFirst().assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("filter_raw_button").onFirst().assertIsDisplayed()

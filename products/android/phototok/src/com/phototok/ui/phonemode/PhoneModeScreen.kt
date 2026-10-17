@@ -204,19 +204,18 @@ fun PhoneModeScreen(
             title = { Text("Done with this card") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Choose how to wrap up this SD / USB card session:")
                     Button(
                         onClick = { viewModel.keepAllFilesOnCard() },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Leave card as-is (Recommended)")
+                        Text("Keep all photos")
                     }
                     if (uiState.undoStack.isNotEmpty() || uiState.pendingDelete != null) {
                         TextButton(
                             onClick = { viewModel.deleteQueuedRejectsOnCard() },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Delete rejected photos from card")
+                            Text("Delete rejects")
                         }
                     }
                     TextButton(
@@ -226,7 +225,7 @@ fun PhoneModeScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Clear all photos from card (${uiState.images.size})", color = colors.error)
+                        Text("Delete all (${uiState.images.size})", color = colors.error)
                     }
                 }
             },
@@ -242,16 +241,16 @@ fun PhoneModeScreen(
     if (showClearAllCardConfirm) {
         AlertDialog(
             onDismissRequest = { showClearAllCardConfirm = false },
-            title = { Text("Clear All Photos from Card?", color = colors.error) },
+            title = { Text("Delete all ${uiState.images.size} photos?", color = colors.error) },
             text = {
-                Text("This permanently deletes ${uiState.images.size} photos from ${uiState.sourceFolderName}. Uncopied photos cannot be recovered.")
+                Text("Photos not copied off the card are lost.")
             },
             confirmButton = {
                 TextButton(onClick = {
                     showClearAllCardConfirm = false
                     viewModel.confirmClearEntireCard()
                 }) {
-                    Text("Delete All", color = colors.error)
+                    Text("Delete all", color = colors.error)
                 }
             },
             dismissButton = {
@@ -927,7 +926,7 @@ private fun SelectionFolderViewer(
             ) {
                 Text(
                     text = if (activeTab == SelectionViewerTab.FAVOURITES) {
-                        "No favourites yet — swipe right in ★ mode to mark favourites"
+                        "No favourites yet"
                     } else {
                         "No photos in the selection folder yet"
                     },
