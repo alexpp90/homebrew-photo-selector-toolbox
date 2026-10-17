@@ -109,4 +109,39 @@ class DeferredDeletionTest {
         )
         assertEquals("d.jpg", reverted.images[reverted.currentIndex].fileName)
     }
+
+    @Test
+    fun `pending deletion uris include primary and all companion files of the bundle`() {
+        val bundle = ImageItem(
+            uri = "content://tree/sub/IMG_0001.JPG",
+            fileName = "IMG_0001.JPG",
+            fileSize = 1_000L,
+            lastModified = 0L,
+            mimeType = "image/jpeg",
+            companions = listOf(
+                com.photoselectortoolbox.data.model.CompanionFile(
+                    uri = "content://tree/sub/IMG_0001.CR3",
+                    fileName = "IMG_0001.CR3",
+                ),
+                com.photoselectortoolbox.data.model.CompanionFile(
+                    uri = "content://tree/sub/IMG_0001.CR3.xmp",
+                    fileName = "IMG_0001.CR3.xmp",
+                ),
+            ),
+            parentDocumentId = "sub",
+        )
+        val (_, pending) = DeferredDeletion.beginForCurrent(
+            SelectorListState(listOf(bundle), 0),
+            nowMillis = 0L,
+        )!!
+
+        assertEquals(
+            listOf(
+                "content://tree/sub/IMG_0001.JPG",
+                "content://tree/sub/IMG_0001.CR3",
+                "content://tree/sub/IMG_0001.CR3.xmp",
+            ),
+            pending.uris,
+        )
+    }
 }
