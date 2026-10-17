@@ -32,8 +32,8 @@ def _real_gtk_usable() -> bool:
 # Without a usable GTK, inject comprehensive test stubs
 if "gi" not in sys.modules and not _real_gtk_usable():
     def mock_require_version(namespace, version):
-        if namespace == "GExiv2":
-            raise ValueError("Namespace GExiv2 not available")
+        if namespace in ("GExiv2", "GdkPixbuf"):
+            raise ValueError(f"Namespace {namespace} not available")
         return None
 
     mock_gi = MagicMock()
