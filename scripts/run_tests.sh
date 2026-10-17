@@ -555,6 +555,8 @@ if have python3; then
         python3 scripts/check_readme_parity.py --check
     gate "no private-overlay material tracked" "repo-hygiene.yml:hygiene" \
         python3 scripts/check_private_paths.py
+    gate "release metadata consistent" "repo-hygiene.yml:hygiene" \
+        python3 scripts/release.py check
     gate "format contract manifest" "repo-hygiene.yml:hygiene" \
         python3 scripts/fetch_format_corpus.py --validate
     gate "format corpus tooling tests" "repo-hygiene.yml:hygiene" \
@@ -564,6 +566,7 @@ if have python3; then
 else
     skip "readme parity" "" "python3 not found"
     skip "no private-overlay material tracked" "" "python3 not found"
+    skip "release metadata consistent" "" "python3 not found"
     skip "format contract manifest" "" "python3 not found"
     skip "format corpus tooling tests" "" "python3 not found"
     skip "lab tooling tests" "" "python3 not found"
