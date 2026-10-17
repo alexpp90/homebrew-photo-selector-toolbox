@@ -21,8 +21,6 @@ interface CacheRepository {
     suspend fun getRating(uri: String): Int?
     suspend fun getRatings(uris: List<String>): Map<String, Int>
     suspend fun updateCompositionAnalysis(filePath: String, analysis: String?)
-    suspend fun getScoresWithMinRating(minRating: Int): List<ScoreEntity>
-    suspend fun getScoresWithRating(rating: Int): List<ScoreEntity>
 }
 
 private const val DEFAULT_CACHE_LIMIT = 10_000
@@ -116,11 +114,5 @@ class CacheRepositoryImpl @Inject constructor(
         scoreDao.updateCompositionAnalysis(filePath, analysis)
     }
 
-    override suspend fun getScoresWithMinRating(minRating: Int): List<ScoreEntity> {
-        return scoreDao.getScoresWithMinRating(minRating)
-    }
 
-    override suspend fun getScoresWithRating(rating: Int): List<ScoreEntity> {
-        return scoreDao.getScoresWithRating(rating)
-    }
 }
