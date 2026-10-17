@@ -3,6 +3,7 @@ package com.phototok.data.repository
 import android.net.Uri
 import com.photoselector.core.model.ExifData
 import com.phototok.data.model.ImageItem
+import com.phototok.data.source.FileOperationResult
 import com.phototok.data.source.SelectionListing
 import com.phototok.domain.PhotoFolders
 import kotlinx.coroutines.flow.Flow
@@ -36,6 +37,22 @@ interface ImageRepository {
         sorting: Boolean,
         subfolderName: String = PhotoFolders.SELECTION,
     ): Boolean
+
+    /** Like [moveImage], but reports a verified copy whose original could not be removed as partial. */
+    suspend fun moveImageDetailed(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        subfolderName: String = PhotoFolders.SELECTION,
+    ): FileOperationResult
+
+    /** Like [copyImage], with the destination or the error in the result. */
+    suspend fun copyImageDetailed(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        subfolderName: String = PhotoFolders.SELECTION,
+    ): FileOperationResult
 
     suspend fun getImageDimensions(uri: Uri): Pair<Int, Int>
 

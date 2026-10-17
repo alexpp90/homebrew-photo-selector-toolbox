@@ -2,6 +2,7 @@ package com.phototok.viewmodel
 
 import android.net.Uri
 import com.phototok.data.model.ImageItem
+import com.phototok.data.source.FileOperationResult
 import com.phototok.data.model.PhoneSettings
 import com.phototok.data.repository.ImageRepository
 import com.phototok.data.repository.SettingsRepository
@@ -71,6 +72,23 @@ class PhoneModeViewModelTest {
         coEvery { resolveFolderName(any()) } returns null
         coEvery { getExifData(any()) } returns null
         coEvery { getImageDimensions(any()) } returns Pair(0, 0)
+        // The view model reads the detailed result; existing tests still stub the Boolean API.
+        coEvery { copyImageDetailed(any(), any(), any(), any()) } coAnswers {
+            val src = firstArg<Uri>()
+            if (copyImage(src, secondArg(), thirdArg(), arg(3))) {
+                FileOperationResult.success(src.toString(), null)
+            } else {
+                FileOperationResult.failure(src.toString(), null)
+            }
+        }
+        coEvery { moveImageDetailed(any(), any(), any(), any()) } coAnswers {
+            val src = firstArg<Uri>()
+            if (moveImage(src, secondArg(), thirdArg(), arg(3))) {
+                FileOperationResult.success(src.toString(), null)
+            } else {
+                FileOperationResult.failure(src.toString(), null)
+            }
+        }
     }
 
     private fun image(name: String, modified: Long) = ImageItem(
@@ -1106,5 +1124,163 @@ class PhoneModeViewModelTest {
         assertTrue(pickerLaunched)
         assertNotNull(launchedUri)
         assertTrue(launchedUri.toString().contains("DCIM"))
+    }
+
+    @Test
+    fun `a partial move keeps the photo in the feed and says the original could not be removed`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(collectionAction = CollectionAction.MOVE)
+        coEvery {
+            imageRepository.moveImageDetailed(any(), any(), any(), any())
+        } answers {
+            FileOperationResult.partial(
+                sourceUri = firstArg<Uri>().toString(),
+                destinationUri = "content://tree/photos/Selection/a.jpg",
+            )
+        }
+        val viewModel = loadFolder(image("a.jpg", 2), image("b.jpg", 1))
+
+        viewModel.addToCollection()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("a.jpg", "b.jpg"), state.images.map { it.fileName })
+        assertEquals(
+            "Copied to collection — original could not be removed",
+            state.lastActionFeedback?.message,
+        )
+        assertTrue(state.lastActionFeedback?.isError == true)
+    }
+
+    @Test
+    fun `a bundle move with one partial member restores only the member that stayed behind`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(
+            collectionAction = CollectionAction.MOVE,
+            moveRelatedFiles = true,
+            fileTypeFilter = com.phototok.domain.FileTypeFilter.ALL,
+        )
+        val jpg = image("IMG_001.jpg", 30)
+        val arw = image("IMG_001.arw", 20)
+        val other = image("IMG_002.jpg", 10)
+        coEvery {
+            imageRepository.moveImageDetailed(match { it.toString() == jpg.uri }, any(), any(), any())
+        } returns FileOperationResult.success(jpg.uri, "content://tree/photos/Selection/IMG_001.jpg")
+        coEvery {
+            imageRepository.moveImageDetailed(match { it.toString() == arw.uri }, any(), any(), any())
+        } returns FileOperationResult.partial(arw.uri, "content://tree/photos/Selection/IMG_001.arw")
+        val viewModel = loadFolder(jpg, arw, other)
+
+        viewModel.addToCollection()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("IMG_001.arw", "IMG_002.jpg"), state.images.map { it.fileName })
+        assertEquals(listOf("IMG_001.arw", "IMG_002.jpg"), state.allImages.map { it.fileName })
+        assertTrue(state.lastActionFeedback?.isError == true)
+    }
+
+    @Test
+    fun `requestDelete with moveRelatedFiles removes sibling from visible feed under ALL filter and revert restores both`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(
+            moveRelatedFiles = true,
+            fileTypeFilter = com.phototok.domain.FileTypeFilter.ALL,
+        )
+        val jpg = image("IMG_001.jpg", 30)
+        val arw = image("IMG_001.arw", 20)
+        val other = image("IMG_002.jpg", 10)
+        val viewModel = loadFolder(jpg, arw, other)
+
+        assertEquals(listOf("IMG_001.jpg", "IMG_001.arw", "IMG_002.jpg"), viewModel.uiState.value.images.map { it.fileName })
+
+        viewModel.requestDelete()
+
+        assertEquals(listOf("IMG_002.jpg"), viewModel.uiState.value.images.map { it.fileName })
+        assertEquals(listOf("IMG_002.jpg"), viewModel.uiState.value.allImages.map { it.fileName })
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+
+        viewModel.revertDelete()
+
+        assertEquals(listOf("IMG_001.jpg", "IMG_001.arw", "IMG_002.jpg"), viewModel.uiState.value.images.map { it.fileName })
+        assertEquals(listOf("IMG_001.jpg", "IMG_001.arw", "IMG_002.jpg"), viewModel.uiState.value.allImages.map { it.fileName })
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+    }
+
+    @Test
+    fun `finalizePendingDelete restores photo and reports error when deleteImage returns false`() = runTest {
+        coEvery { imageRepository.deleteImage(any()) } returns false
+        val viewModel = loadFolder(image("a.jpg", 20), image("b.jpg", 10))
+
+        viewModel.requestDelete()
+        assertEquals(listOf("b.jpg"), viewModel.uiState.value.images.map { it.fileName })
+
+        viewModel.finalizePendingDelete()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("a.jpg", "b.jpg"), state.images.map { it.fileName })
+        assertEquals(listOf("a.jpg", "b.jpg"), state.allImages.map { it.fileName })
+        assertTrue(state.lastActionFeedback?.isError == true)
+        assertTrue(state.lastActionFeedback?.message?.contains("a.jpg") == true)
+    }
+
+    @Test
+    fun `finalizePendingDelete restores photo and reports cause when deleteImage throws`() = runTest {
+        coEvery { imageRepository.deleteImage(any()) } throws SecurityException("read-only SD card")
+        val viewModel = loadFolder(image("a.jpg", 20), image("b.jpg", 10))
+
+        viewModel.requestDelete()
+        viewModel.finalizePendingDelete()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("a.jpg", "b.jpg"), state.images.map { it.fileName })
+        assertTrue(state.lastActionFeedback?.isError == true)
+        assertTrue(state.lastActionFeedback?.message?.contains("a.jpg") == true)
+        assertTrue(state.lastActionFeedback?.message?.contains("read-only SD card") == true)
+    }
+
+    @Test
+    fun `finalizePendingDelete on partial linked delete failure restores only failed sibling and reports partial error`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(
+            moveRelatedFiles = true,
+            fileTypeFilter = com.phototok.domain.FileTypeFilter.ALL,
+        )
+        val jpg = image("IMG_001.jpg", 30)
+        val arw = image("IMG_001.arw", 20)
+        val other = image("IMG_002.jpg", 10)
+        coEvery { imageRepository.deleteImage(Uri.parse(jpg.uri)) } returns true
+        coEvery { imageRepository.deleteImage(Uri.parse(arw.uri)) } returns false
+
+        val viewModel = loadFolder(jpg, arw, other)
+        viewModel.requestDelete()
+        viewModel.finalizePendingDelete()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("IMG_001.arw", "IMG_002.jpg"), state.images.map { it.fileName })
+        assertEquals(listOf("IMG_001.arw", "IMG_002.jpg"), state.allImages.map { it.fileName })
+        assertTrue(state.lastActionFeedback?.isError == true)
+        assertTrue(state.lastActionFeedback?.message?.contains("Deleted 1 of 2") == true)
+        assertTrue(state.lastActionFeedback?.message?.contains("IMG_001.arw") == true)
+    }
+
+    @Test
+    fun `a failed delete commit after the folder changed reports the error and leaves the new feed alone`() = runTest {
+        val gate = CompletableDeferred<Boolean>()
+        coEvery { imageRepository.deleteImage(any()) } coAnswers { gate.await() }
+        val viewModel = loadFolder(image("a.jpg", 20), image("b.jpg", 10))
+
+        viewModel.requestDelete()
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(image("x.jpg", 5)))
+        viewModel.selectSourceFolder(Uri.parse("content://tree/other"))
+        advanceUntilIdle()
+
+        gate.complete(false)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("x.jpg"), state.images.map { it.fileName })
+        assertEquals(listOf("x.jpg"), state.allImages.map { it.fileName })
+        assertTrue(state.lastActionFeedback?.isError == true)
+        assertTrue(state.lastActionFeedback?.message?.contains("a.jpg") == true)
     }
 }
