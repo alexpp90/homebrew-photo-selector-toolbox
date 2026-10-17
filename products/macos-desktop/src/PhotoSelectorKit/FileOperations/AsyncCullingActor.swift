@@ -45,6 +45,9 @@ public struct CullingExecutionRecord: Sendable, Identifiable {
     public let originalPrimaryURL: URL
     public let affectedURLs: [URL]
     public let trashedPairs: [TrashedFilePair]
+    /// Originals of a partial move that could not be removed: their verified copies are in
+    /// `affectedURLs`, and undo deletes those copies instead of restoring them next to the originals.
+    public let unremovedSourceURLs: [URL]
     public let previousStatus: PhotoStatus
     public let timestamp: Date
 
@@ -55,6 +58,7 @@ public struct CullingExecutionRecord: Sendable, Identifiable {
         originalPrimaryURL: URL,
         affectedURLs: [URL],
         trashedPairs: [TrashedFilePair] = [],
+        unremovedSourceURLs: [URL] = [],
         previousStatus: PhotoStatus = .candidate,
         timestamp: Date = Date()
     ) {
@@ -64,6 +68,7 @@ public struct CullingExecutionRecord: Sendable, Identifiable {
         self.originalPrimaryURL = originalPrimaryURL
         self.affectedURLs = affectedURLs
         self.trashedPairs = trashedPairs
+        self.unremovedSourceURLs = unremovedSourceURLs
         self.previousStatus = previousStatus
         self.timestamp = timestamp
     }
@@ -171,11 +176,30 @@ public actor AsyncCullingActor {
                 )
                 return (sourceURL: movedURL, unsuffixedName: unsuffixedName)
             }
+            // A partial move left some originals in place (D-3): deleting the copy is the undo for
+            // those members — restoring it would put a "-2" duplicate next to the original. Only a
+            // recorded unremoved source whose file still exists counts; a copy whose original has
+            // since disappeared is the only one left and is restored like any other member.
+            let unremoved = Set(record.unremovedSourceURLs.map { $0.standardizedFileURL.resolvingSymlinksInPath().path })
+            var stillHome: [(sourceURL: URL, unsuffixedName: String)] = []
+            var toRestore: [(sourceURL: URL, unsuffixedName: String)] = []
+            for item in items {
+                let original = originalDir.appendingPathComponent(item.unsuffixedName)
+                let originalKey = original.standardizedFileURL.resolvingSymlinksInPath().path
+                if unremoved.contains(originalKey), fileManager.fileExists(atPath: original.path) {
+                    stillHome.append(item)
+                } else {
+                    toRestore.append(item)
+                }
+            }
             restoredURLs = try restoreBundleToOriginalDirectory(
-                items: items,
+                items: toRestore,
                 originalDir: originalDir,
                 primaryStem: primaryStem
             )
+            for item in stillHome where fileManager.fileExists(atPath: item.sourceURL.path) {
+                try fileManager.removeItem(at: item.sourceURL)
+            }
 
         case .copy:
             // Remove only the destination replicas in Selection/ created by the copy operation itself
@@ -278,11 +302,31 @@ public actor AsyncCullingActor {
             guard let root = job.rootURL else {
                 throw FileCullingError.directoryCreationFailed(job.primaryURL, "Missing root directory")
             }
-            affectedURLs = try cullingManager.moveToSelection(
-                photoURL: job.primaryURL,
-                rootURL: root,
-                destinationFolderName: job.destinationFolderName
-            )
+            do {
+                affectedURLs = try cullingManager.moveToSelection(
+                    photoURL: job.primaryURL,
+                    rootURL: root,
+                    destinationFolderName: job.destinationFolderName
+                )
+            } catch let FileCullingError.partialMove(destinations, unremovedSources, reason) {
+                // Keep the record so the verified copies can be undone later (and never lost).
+                executedJobIDs.insert(job.id)
+                completedRecords[job.id] = CullingExecutionRecord(
+                    jobID: job.id,
+                    photoID: job.photoID,
+                    actionType: .move,
+                    originalPrimaryURL: job.primaryURL,
+                    affectedURLs: destinations,
+                    unremovedSourceURLs: unremovedSources,
+                    previousStatus: .candidate,
+                    timestamp: Date()
+                )
+                throw FileCullingError.partialMove(
+                    destinations: destinations,
+                    unremovedSources: unremovedSources,
+                    reason: reason
+                )
+            }
 
         case .copy:
             guard let root = job.rootURL else {
