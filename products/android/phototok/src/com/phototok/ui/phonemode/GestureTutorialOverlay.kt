@@ -34,14 +34,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Icon
@@ -213,8 +213,8 @@ fun GestureTutorialOverlay(
 // ── Coach marks anchored to the real chrome ──────────────────────────────
 
 /**
- * Labels for the top app bar: the logo on the left, help and settings on the
- * right — in the same order and alignment as [PhoneModeScreen] renders them.
+ * Labels for the top app bar: the logo on the left, reload, help, info and settings
+ * on the right — in the same order and alignment as [PhoneModeScreen] renders them.
  */
 @Composable
 private fun TopBarCoachMarks() {
@@ -228,22 +228,36 @@ private fun TopBarCoachMarks() {
             label = "Tap the logo",
             description = "Show or hide the camera info on each photo",
             pointsUp = true,
-            modifier = Modifier.width(150.dp),
+            modifier = Modifier.width(108.dp),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CoachMark(
+                icon = null,
+                label = "Reload",
+                description = "Rescan folder",
+                pointsUp = true,
+                modifier = Modifier.width(56.dp),
+            )
             CoachMark(
                 icon = null,
                 label = "Help",
                 description = "This guide",
                 pointsUp = true,
-                modifier = Modifier.width(70.dp),
+                modifier = Modifier.width(52.dp),
+            )
+            CoachMark(
+                icon = null,
+                label = "Info",
+                description = "EXIF overlay",
+                pointsUp = true,
+                modifier = Modifier.width(52.dp),
             )
             CoachMark(
                 icon = null,
                 label = "Settings",
-                description = "Swipe actions, sorting, filters",
+                description = "Actions & filters",
                 pointsUp = true,
-                modifier = Modifier.width(96.dp),
+                modifier = Modifier.width(68.dp),
             )
         }
     }
@@ -265,16 +279,16 @@ private fun BottomBarCoachMarks() {
             modifier = Modifier.width(96.dp),
         )
         CoachMark(
-            icon = Icons.Default.Star,
+            icon = Icons.Default.CollectionsBookmark,
             label = "Selection",
             description = "Everything you filed away",
             pointsUp = false,
             modifier = Modifier.width(104.dp),
         )
         CoachMark(
-            icon = Icons.AutoMirrored.Filled.Undo,
+            icon = Icons.Default.RestoreFromTrash,
             label = "Revert",
-            description = "Undo the last delete",
+            description = "Restore last deleted photo",
             pointsUp = false,
             modifier = Modifier.width(96.dp),
         )

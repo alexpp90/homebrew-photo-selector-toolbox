@@ -48,7 +48,7 @@ While the desktop and tablet products emphasize multi-up comparative culling and
 ### 2. Tactile Culling Gestures
 *   **Swipe-Right to File (`COPY` / `MOVE`):** Files the photo into the user's `Selection/` folder. Accompanied by a glowing green action badge and an animated confirmation checkmark flash.
 *   **Swipe-Left to Discard or Route (`DELETE` / `COPY` / `MOVE`):** Configurable in Settings. Deletions show a progressive pulsing red trash icon, card tilt ($2^\circ$), and optional direct-delete confirmation dialog.
-*   **Persistent Revert:** Deletions remain undoable across vertical scrolls via the viewer bottom bar **Revert** button until navigation away, folder switch, or subsequent file mutation.
+*   **Persistent Revert:** Deletions remain undoable across vertical scrolls via the viewer bottom bar **Revert** button (`RestoreFromTrash`, paired with visible micro-labels alongside **Sources** and **Selection**) until navigation away, folder switch, or subsequent file mutation.
 *   **Non-Blocking Optimistic Execution:** Feed updates immediately upon gesture completion; file transfers run on the injected `@ApplicationScope`. Any failed mutation is cleanly re-inserted into the feed at its original slot.
 
 ### 3. Inspection & Tap Controls
@@ -57,6 +57,7 @@ While the desktop and tablet products emphasize multi-up comparative culling and
 *   **Pinch-to-Zoom & Pan:** Smooth two-finger zoom up to $6\times$ with single-finger panning when zoomed; paging and culling swipes are automatically disabled while inspecting fine details.
 
 ### 4. Smart Ingestion & Guidance
+*   **Resume or Start with Newest Prompt (`FolderResumeDialog`):** When reloading PhotoTok (`Sync`) or opening a folder that has been opened before, PhotoTok reports whether newer photos were added since you last left, shows your saved position (`at photo #X of Y`), and lets you choose between **Continue Where I Left Off** and **Start with Newest**.
 *   **In-Place Coach Marks Tutorial (`GestureTutorialOverlay`):** Contextual guide anchoring callouts directly to real chrome buttons without scrolling. Triggers automatically on first run, after 7+ days of inactivity, or on demand via the Help icon.
 *   **RAW+JPEG Sibling Pairing:** Centered dialog detects companion RAW and JPEG files, allowing users to link operations across both formats (`moveRelatedFiles = true`) or filter by format.
 *   **Supported Formats:** JPEG, HEIF/HEIC, PNG, TIFF and WebP, plus camera RAW — Sony ARW, Canon CR2 and CR3, Nikon NEF and NRW, Fujifilm RAF, Panasonic RW2, OM System/Olympus ORF, Pentax PEF, DNG and Samsung SRW, with further RAW extensions (3FR, IIQ, RWL, SR2, MRW, X3F, ERF, MEF, …) recognised for discovery and pairing. Extensions match case-insensitively. RAWs are shown from the camera's embedded JPEG preview (no full RAW decode, so swiping stays fast); a RAW whose preview is smaller than 1024 px (phone DNGs) falls back to the platform decoder. The contract is `testdata/formats/manifest.json` ([docs/shared/SUPPORTED_FORMATS.md](../../shared/SUPPORTED_FORMATS.md)).

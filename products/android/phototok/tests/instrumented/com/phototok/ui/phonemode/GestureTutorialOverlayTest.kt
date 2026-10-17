@@ -79,7 +79,9 @@ class GestureTutorialOverlayTest {
 
         listOf(
             "Tap the logo",
+            "Reload",
             "Help",
+            "Info",
             "Settings",
             "Sources",
             "Selection",
