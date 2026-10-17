@@ -731,28 +731,33 @@ class PhoneModeViewModel @Inject constructor(
 
                 val succeededUris = mutableSetOf<String>()
                 var failed = 0
+                var partial = 0
                 targets.forEach { img ->
-                    val ok = if (isCopy) {
-                        imageRepository.copyImage(
+                    val result = if (isCopy) {
+                        imageRepository.copyImageDetailed(
                             sourceUri = Uri.parse(img.uri),
                             destFolderUri = folderUri,
                             sorting = sortingEnabled,
                             subfolderName = subfolderName,
                         )
                     } else {
-                        imageRepository.moveImage(
+                        imageRepository.moveImageDetailed(
                             sourceUri = Uri.parse(img.uri),
                             destFolderUri = folderUri,
                             sorting = sortingEnabled,
                             subfolderName = subfolderName,
                         )
                     }
-                    if (ok) succeededUris.add(img.uri) else failed++
+                    when {
+                        result.success -> succeededUris.add(img.uri)
+                        result.partial -> partial++
+                        else -> failed++
+                    }
                 }
 
-                if (!isCopy && failed > 0) {
-                    // The optimistic removal was wrong for these files.
-                    restoreToFeed(slots.filter { it.image.uri !in succeededUris })
+                if (!isCopy && (failed > 0 || partial > 0)) {
+                    // The optimistic removal was wrong for files that are still in the source.
+                    restoreToFeed(OptimisticFeed.slotsLeftBehind(slots, goneUris = succeededUris))
                 }
 
                 val message = CopyMoveFeedback.message(
@@ -761,15 +766,18 @@ class PhoneModeViewModel @Inject constructor(
                     succeeded = succeededUris.size,
                     failed = failed,
                     relatedCount = related.size,
+                    partial = partial,
                 )
                 _uiState.update {
                     it.copy(
                         lastActionFeedback = ActionFeedback(
                             message = message,
-                            isError = CopyMoveFeedback.isError(failed),
+                            isError = CopyMoveFeedback.isError(failed, partial),
                         )
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (!isCopy) restoreToFeed(slots)
                 _uiState.update {

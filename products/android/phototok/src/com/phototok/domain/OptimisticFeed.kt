@@ -39,6 +39,26 @@ object OptimisticFeed {
     }
 
     /**
+     * The slots of the targets that were **not** removed for good, re-based to the
+     * lists as they look once the [goneUris] are really gone. [restore] re-inserts
+     * into those lists, so an index recorded before a sibling disappeared would
+     * otherwise put the survivor too far down the feed.
+     */
+    fun slotsLeftBehind(slots: List<Slot>, goneUris: Set<String>): List<Slot> {
+        val gone = slots.filter { it.image.uri in goneUris }
+        return slots.filter { it.image.uri !in goneUris }.map { slot ->
+            slot.copy(
+                index = if (slot.index >= 0) slot.index - gone.count { it.index in 0 until slot.index } else -1,
+                allImagesIndex = if (slot.allImagesIndex >= 0) {
+                    slot.allImagesIndex - gone.count { it.allImagesIndex in 0 until slot.allImagesIndex }
+                } else {
+                    -1
+                },
+            )
+        }
+    }
+
+    /**
      * Re-insert [slots] at their original positions in both lists.
      *
      * The active photo is tracked by URI rather than by index: re-inserting an

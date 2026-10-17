@@ -400,6 +400,20 @@ class LocalImageSourceImpl @Inject constructor(
         subfolderName: String,
     ): Boolean = moveImageWithResult(sourceUri, destFolderUri, sorting, subfolderName).success
 
+    override suspend fun copyImageDetailed(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        subfolderName: String,
+    ): FileOperationResult = copyImageWithResult(sourceUri, destFolderUri, sorting, subfolderName)
+
+    override suspend fun moveImageDetailed(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        subfolderName: String,
+    ): FileOperationResult = moveImageWithResult(sourceUri, destFolderUri, sorting, subfolderName)
+
     internal suspend fun copyImageWithResult(
         sourceUri: Uri,
         destFolderUri: Uri,

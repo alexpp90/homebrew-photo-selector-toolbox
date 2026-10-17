@@ -170,4 +170,33 @@ class OptimisticFeedTest {
         assertEquals(listOf("a.jpg"), restored.images.map { it.fileName })
         assertEquals(0, restored.currentIndex)
     }
+
+    @Test
+    fun `slots left behind shift past the targets that were really removed`() {
+        val d = img("d.jpg", 4)
+        val images = listOf(a, b, c, d)
+        val allImages = listOf(a, b, c, d)
+        val slots = OptimisticFeed.slotsOf(images, allImages, listOf(a, b, c))
+
+        // a and c are gone for good, b stayed in the source folder.
+        val left = OptimisticFeed.slotsLeftBehind(slots, goneUris = setOf(a.uri, c.uri))
+
+        val slot = left.single()
+        assertEquals(b.uri, slot.image.uri)
+        assertEquals(0, slot.index)
+        assertEquals(0, slot.allImagesIndex)
+    }
+
+    @Test
+    fun `slots left behind keep -1 for lists that never held the image`() {
+        val images = listOf(a)
+        val allImages = listOf(a, b)
+        val slots = OptimisticFeed.slotsOf(images, allImages, listOf(a, b))
+
+        val left = OptimisticFeed.slotsLeftBehind(slots, goneUris = setOf(a.uri))
+
+        val slot = left.single()
+        assertEquals(-1, slot.index)
+        assertEquals(0, slot.allImagesIndex)
+    }
 }

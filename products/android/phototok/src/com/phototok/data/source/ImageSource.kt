@@ -65,6 +65,40 @@ interface ImageSource {
         subfolderName: String,
     ): Boolean
 
+    /**
+     * Copy returning the full [FileOperationResult] (destination URI or error).
+     * The default implementation only knows success or failure; sources that can
+     * tell more override it.
+     */
+    suspend fun copyImageDetailed(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        subfolderName: String,
+    ): FileOperationResult =
+        if (copyImage(sourceUri, destFolderUri, sorting, subfolderName)) {
+            FileOperationResult.success(sourceUri.toString(), null)
+        } else {
+            FileOperationResult.failure(sourceUri.toString(), null)
+        }
+
+    /**
+     * Move returning the full [FileOperationResult], so callers can tell a complete
+     * move from a [FileOperationResult.partial] one (copy verified, original could
+     * not be removed) and from a failure.
+     */
+    suspend fun moveImageDetailed(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        subfolderName: String,
+    ): FileOperationResult =
+        if (moveImage(sourceUri, destFolderUri, sorting, subfolderName)) {
+            FileOperationResult.success(sourceUri.toString(), null)
+        } else {
+            FileOperationResult.failure(sourceUri.toString(), null)
+        }
+
     /** List images inside the [subfolderName] child of [folderUri]. */
     suspend fun listSelectionImages(folderUri: Uri, subfolderName: String): SelectionListing
 }
