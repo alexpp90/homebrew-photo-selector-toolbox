@@ -156,12 +156,17 @@ interface ImageRepository {
      * their original [parentDocumentId] sub-folder within [rootFolderUri] (or
      * [rootFolderUri] when [parentDocumentId] is null) without creating a
      * `Selection/` folder and without overwriting any existing file.
+     *
+     * After a *partial* move, [copiesOfSurvivingOriginals] (destination copy → original that
+     * could not be removed) lists copies that are deleted instead of restored while their
+     * original still exists; everything else is restored as usual.
      */
     suspend fun undoMoveBundle(
         context: Context,
         destinationUris: List<String>,
         rootFolderUri: Uri,
         parentDocumentId: String? = null,
+        copiesOfSurvivingOriginals: Map<String, String> = emptyMap(),
     ): FileOperationResult {
         val first = destinationUris.firstOrNull()
             ?: return FileOperationResult.failure("", "No files to restore", parentDocumentId)

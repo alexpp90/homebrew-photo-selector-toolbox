@@ -557,6 +557,41 @@ class SelectorViewModelTest {
     // ── U-04b: Bundle filing, undo to parentDocumentId, and bundle delete ─
 
     @Test
+    fun `a partial move keeps the photo, reports it and stays undoable so undo deletes only the surviving-original copies`() = runTest {
+        val item = image("a")
+        val copy = "content://test/folder/Selection/JPEG/a.jpg"
+        val copies = mapOf(copy to item.uri)
+        coEvery { imageRepository.moveBundle(any(), item, any(), any()) } returns
+            FileOperationResult.partial(
+                sourceUri = item.uri,
+                destinationUri = copy,
+                error = "Copied to Selection — original could not be removed",
+                copiesOfSurvivingOriginals = copies,
+            )
+        coEvery {
+            imageRepository.undoMoveBundle(any(), listOf(copy), Uri.parse(FOLDER_URI), any(), copies)
+        } returns FileOperationResult.success(copy, null, emptyList())
+
+        val viewModel = loadFolder(item, image("b"))
+        viewModel.moveToSelection()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.images.any { it.uri == item.uri })
+        assertEquals("Copied to Selection — original could not be removed", state.snackbarMessage)
+        val undoOp = state.undoHistory.single() as UndoableOperation.ReverseMove
+        assertEquals(copies, undoOp.copiesOfSurvivingOriginals)
+        assertTrue(undoOp.slots.isEmpty())
+
+        viewModel.undoLastOperation()
+
+        coVerify(exactly = 1) {
+            imageRepository.undoMoveBundle(any(), listOf(copy), Uri.parse(FOLDER_URI), any(), copies)
+        }
+        assertTrue(viewModel.uiState.value.undoHistory.isEmpty())
+        assertTrue(viewModel.uiState.value.images.any { it.uri == item.uri })
+    }
+
+    @Test
     fun `moving a bundle records all destinationUris and parentDocumentId and undoLastOperation passes them to undoMoveBundle`() = runTest {
         val bundleItem = ImageItem(
             uri = "content://test/folder/sub/day1/IMG_0001.JPG",

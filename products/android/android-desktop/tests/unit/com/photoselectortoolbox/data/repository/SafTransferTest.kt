@@ -79,6 +79,8 @@ class SafTransferTest {
 
             @Volatile
             var failDeletes: Boolean = false
+            /** When set, only documents whose id contains this text refuse to be deleted. */
+            var failDeletesMatching: String? = null
 
             @Volatile
             var autoRenameOnCreate: ((String) -> String)? = null
@@ -93,6 +95,7 @@ class SafTransferTest {
                 rootDir = root
                 advertiseSupportsMove = false
                 failDeletes = false
+                failDeletesMatching = null
                 autoRenameOnCreate = null
                 reportedSizeOverride = null
                 moveDocumentCalls.set(0)
@@ -271,7 +274,7 @@ class SafTransferTest {
         }
 
         private fun handleDeleteDocument(documentId: String) {
-            if (failDeletes) {
+            if (failDeletes || failDeletesMatching?.let { documentId.contains(it) } == true) {
                 throw SecurityException("Simulated read-only delete failure for $documentId")
             }
             val file = fileForDocId(documentId)
@@ -933,5 +936,118 @@ class SafTransferTest {
         assertEquals("flat-cr3", File(rootDir, "sub/day2/IMG_0020.CR3").readText())
         assertEquals("flat-xmp", File(rootDir, "sub/day2/IMG_0020.CR3.xmp").readText())
         assertFalse(File(rootDir, "sub/day2/Selection").exists())
+    }
+
+    // ── B-3 / D-3: undo of a partial bundle move ─────────────────────────
+
+    private fun bundleItem(dir: String, stem: String, subDir: File): ImageItem {
+        val jpg = File(subDir, "$stem.JPG")
+        val cr3 = File(subDir, "$stem.CR3")
+        return ImageItem(
+            uri = documentUriFor("$dir/$stem.JPG").toString(),
+            fileName = "$stem.JPG",
+            fileSize = jpg.length(),
+            lastModified = jpg.lastModified(),
+            mimeType = "image/jpeg",
+            companions = listOf(
+                CompanionFile(
+                    uri = documentUriFor("$dir/$stem.CR3").toString(),
+                    fileName = "$stem.CR3",
+                    fileSize = cr3.length(),
+                ),
+            ),
+            parentDocumentId = dir,
+        )
+    }
+
+    // REQ-AND-PLATFORM.06
+    @Test
+    fun `undo of a fully partial bundle move deletes the copies and creates no duplicate next to the originals`() = runTest {
+        val subDir = File(rootDir, "sub/day2").apply { mkdirs() }
+        File(subDir, "IMG_0020.JPG").writeText("jpeg-20")
+        File(subDir, "IMG_0020.CR3").writeText("raw-20")
+        FakeSafDocumentsProvider.failDeletes = true
+
+        val moveResult = repository.moveBundle(context, bundleItem("sub/day2", "IMG_0020", subDir), treeUri, sorting = true)
+
+        assertTrue(moveResult.partial)
+        assertEquals(2, moveResult.copiesOfSurvivingOriginals.size)
+        assertTrue(File(subDir, "IMG_0020.JPG").exists())
+
+        FakeSafDocumentsProvider.failDeletes = false
+        val undo = repository.undoMoveBundle(
+            context = context,
+            destinationUris = moveResult.destinationUris,
+            rootFolderUri = treeUri,
+            parentDocumentId = moveResult.parentDocumentId,
+            copiesOfSurvivingOriginals = moveResult.copiesOfSurvivingOriginals,
+        )
+
+        assertTrue(undo.success)
+        assertEquals(listOf("IMG_0020.CR3", "IMG_0020.JPG"), subDir.list()!!.sorted())
+        assertEquals("jpeg-20", File(subDir, "IMG_0020.JPG").readText())
+        assertEquals("raw-20", File(subDir, "IMG_0020.CR3").readText())
+        assertFalse(File(rootDir, "Selection/JPEG/IMG_0020.JPG").exists())
+        assertFalse(File(rootDir, "Selection/RAW/IMG_0020.CR3").exists())
+    }
+
+    // REQ-AND-PLATFORM.06
+    @Test
+    fun `undo of a mixed partial bundle move restores the moved member and only deletes the copy of the member that stayed`() = runTest {
+        val subDir = File(rootDir, "sub/day3").apply { mkdirs() }
+        File(subDir, "IMG_0030.JPG").writeText("jpeg-30")
+        File(subDir, "IMG_0030.CR3").writeText("raw-30")
+        FakeSafDocumentsProvider.failDeletesMatching = "IMG_0030.JPG"
+
+        val moveResult = repository.moveBundle(context, bundleItem("sub/day3", "IMG_0030", subDir), treeUri, sorting = true)
+
+        assertTrue(moveResult.partial)
+        assertEquals(1, moveResult.copiesOfSurvivingOriginals.size)
+        assertFalse(File(subDir, "IMG_0030.CR3").exists())
+        assertTrue(File(subDir, "IMG_0030.JPG").exists())
+
+        FakeSafDocumentsProvider.failDeletesMatching = null
+        val undo = repository.undoMoveBundle(
+            context = context,
+            destinationUris = moveResult.destinationUris,
+            rootFolderUri = treeUri,
+            parentDocumentId = moveResult.parentDocumentId,
+            copiesOfSurvivingOriginals = moveResult.copiesOfSurvivingOriginals,
+        )
+
+        assertTrue(undo.success)
+        assertEquals(listOf("IMG_0030.CR3", "IMG_0030.JPG"), subDir.list()!!.sorted())
+        assertEquals("raw-30", File(subDir, "IMG_0030.CR3").readText())
+        assertEquals("jpeg-30", File(subDir, "IMG_0030.JPG").readText())
+        assertFalse(File(rootDir, "Selection/JPEG/IMG_0030.JPG").exists())
+        assertFalse(File(rootDir, "Selection/RAW/IMG_0030.CR3").exists())
+    }
+
+    // REQ-AND-PLATFORM.06
+    @Test
+    fun `undo of a partial move never deletes a copy whose original has disappeared meanwhile`() = runTest {
+        val subDir = File(rootDir, "sub/day4").apply { mkdirs() }
+        File(subDir, "IMG_0040.JPG").writeText("jpeg-40")
+        File(subDir, "IMG_0040.CR3").writeText("raw-40")
+        FakeSafDocumentsProvider.failDeletes = true
+
+        val moveResult = repository.moveBundle(context, bundleItem("sub/day4", "IMG_0040", subDir), treeUri, sorting = true)
+        assertTrue(moveResult.partial)
+        FakeSafDocumentsProvider.failDeletes = false
+        File(subDir, "IMG_0040.JPG").delete() // the user removed the stuck original later
+
+        val undo = repository.undoMoveBundle(
+            context = context,
+            destinationUris = moveResult.destinationUris,
+            rootFolderUri = treeUri,
+            parentDocumentId = moveResult.parentDocumentId,
+            copiesOfSurvivingOriginals = moveResult.copiesOfSurvivingOriginals,
+        )
+
+        assertTrue(undo.success)
+        // The JPG copy was the only one left: it is restored, the CR3 copy (original still there) is deleted.
+        assertEquals("jpeg-40", File(subDir, "IMG_0040.JPG").readText())
+        assertEquals("raw-40", File(subDir, "IMG_0040.CR3").readText())
+        assertEquals(listOf("IMG_0040.CR3", "IMG_0040.JPG"), subDir.list()!!.sorted())
     }
 }
