@@ -999,3 +999,217 @@ def test_same_filesystem_move_skips_the_capacity_preflight(tmp_path: Path):
     assert (tmp_path / "Selection" / "IMG_2.JPG").exists()
     assert not (tmp_path / "IMG_2.JPG").exists()
     assert record.unremoved_sources == []
+
+
+# ── B-2: FreeDesktop trash details (D-2, D-11) ─────────────────────────────────
+
+
+def _card_manager(tmp_path: Path):
+    card = tmp_path / "card"
+    card.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    return card, _make_card_mount_manager(card, home)
+
+
+def _trash_one(mgr: FileCullingManager, card: Path):
+    photo = card / "IMG_9.JPG"
+    photo.write_bytes(b"photo")
+    record = mgr.trash_candidate(CandidatePhoto(primary_path=photo))
+    return record.affected_paths[0][1]
+
+
+def test_top_dir_trash_uses_shared_dot_trash_only_when_sticky_and_not_a_symlink(tmp_path: Path):
+    """D-11: $topdir/.Trash/$uid is allowed only if .Trash is a real directory with the sticky bit."""
+    card, mgr = _card_manager(tmp_path)
+    shared = card / ".Trash"
+    shared.mkdir()
+    os.chmod(shared, 0o1777)
+
+    trashed = _trash_one(mgr, card)
+
+    assert trashed.parent.parent == (card / ".Trash" / "1000").resolve()
+
+
+def test_top_dir_trash_falls_back_to_per_user_dir_when_dot_trash_lacks_sticky_bit(tmp_path: Path):
+    card, mgr = _card_manager(tmp_path)
+    shared = card / ".Trash"
+    shared.mkdir()
+    os.chmod(shared, 0o777)
+
+    trashed = _trash_one(mgr, card)
+
+    assert trashed.parent.parent == (card / ".Trash-1000").resolve()
+
+
+def test_top_dir_trash_ignores_a_dot_trash_symlink(tmp_path: Path):
+    card, mgr = _card_manager(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    os.chmod(elsewhere, 0o1777)
+    (card / ".Trash").symlink_to(elsewhere)
+
+    trashed = _trash_one(mgr, card)
+
+    assert trashed.parent.parent == (card / ".Trash-1000").resolve()
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_trashinfo_is_created_exclusively_and_the_next_name_is_used_on_a_race(tmp_path: Path):
+    """D-11: the .trashinfo reserves its name with O_EXCL; losing the race picks the next name."""
+    import errno
+
+    trash = tmp_path / "Trash"
+    mgr = FileCullingManager(trash_dir=trash)
+    photo = tmp_path / "IMG_5.JPG"
+    photo.write_bytes(b"data")
+
+    real_open = os.open
+    raced = []
+
+    def racing_open(path, flags, *args, **kwargs):
+        if str(path).endswith("IMG_5.JPG.trashinfo") and not raced:
+            raced.append(path)
+            Path(path).write_text("[Trash Info]\nPath=/someone/else\n")  # the other process won
+            raise FileExistsError(errno.EEXIST, "File exists", str(path))
+        return real_open(path, flags, *args, **kwargs)
+
+    with patch("os.open", racing_open):
+        files_path, info_path = mgr._trash_file_freedesktop(photo)
+
+    assert raced, "the exclusive create was never attempted"
+    assert files_path.name == "IMG_5.2.JPG"
+    assert info_path.name == "IMG_5.2.JPG.trashinfo"
+    # The other process's entry is untouched.
+    assert "someone/else" in (trash / "info" / "IMG_5.JPG.trashinfo").read_text()
+
+
+class _FakeGioFile:
+    def __init__(self, on_trash=None, children=None, move_ok=True, path=None):
+        self.on_trash = on_trash
+        self.children = children or []
+        self.move_ok = move_ok
+        self.path = path
+        self.moved_to = None
+
+    def trash(self, cancellable):
+        if self.on_trash:
+            self.on_trash()
+
+    def enumerate_children(self, attributes, flags, cancellable):
+        return self
+
+    def next_file(self, cancellable):
+        return self.children.pop(0) if self.children else None
+
+    def get_child(self, name):
+        return _FakeGioFile(path=name)
+
+    def move(self, target, flags, *args):
+        if not self.move_ok:
+            raise OSError("cannot restore")
+        self.moved_to = target
+
+
+class _FakeGioItem:
+    def __init__(self, name, orig_path):
+        self.name = name
+        self.orig_path = orig_path
+
+    def get_name(self):
+        return self.name
+
+    def get_attribute_byte_string(self, attr):
+        return self.orig_path
+
+
+def _fake_gio(trashed_file, trash_root):
+    class FakeGio:
+        class FileCopyFlags:
+            NONE = 0
+
+        class FileQueryInfoFlags:
+            NONE = 0
+
+        class File:
+            @staticmethod
+            def new_for_path(path):
+                return trashed_file
+
+            @staticmethod
+            def new_for_uri(uri):
+                return trash_root
+
+    return FakeGio
+
+
+def test_gio_trash_whose_entry_cannot_be_matched_is_located_through_the_trash_listing(tmp_path: Path):
+    """D-2: GIO trashed the file but the .trashinfo Path= does not match; the pair must still be
+    recorded (found through GIO's own trash:/// listing) instead of raising with no record."""
+    from photo_selector_linux.core import file_ops
+
+    trash = tmp_path / "Trash"
+    (trash / "files").mkdir(parents=True)
+    (trash / "info").mkdir(parents=True)
+    photo = tmp_path / "IMG_7.JPG"
+    photo.write_bytes(b"data")
+
+    def gio_moves_file():
+        (trash / "files" / "IMG_7.JPG").write_bytes(b"data")
+        (trash / "info" / "IMG_7.JPG.trashinfo").write_text("[Trash Info]\nPath=/odd/encoding\n")
+        photo.unlink()
+
+    trashed = _FakeGioFile(on_trash=gio_moves_file)
+    root = _FakeGioFile(children=[_FakeGioItem("IMG_7.JPG", str(photo))])
+    mgr = FileCullingManager(trash_dir=trash)
+
+    with patch.object(FileCullingManager, "_use_gio", return_value=True), \
+         patch.object(file_ops, "Gio", _fake_gio(trashed, root), create=True):
+        record = mgr.trash_candidate(CandidatePhoto(primary_path=photo))
+
+    assert record.affected_paths == [(photo, (trash / "files" / "IMG_7.JPG").resolve())]
+    assert record.trash_info_paths[photo] == (trash / "info" / "IMG_7.JPG.trashinfo").resolve()
+
+
+def test_gio_trash_that_cannot_be_located_at_all_is_restored_before_raising(tmp_path: Path):
+    from photo_selector_linux.core import file_ops
+
+    trash = tmp_path / "Trash"
+    photo = tmp_path / "IMG_8.JPG"
+    photo.write_bytes(b"data")
+
+    def gio_moves_file():
+        photo.unlink()
+
+    trashed = _FakeGioFile(on_trash=gio_moves_file)
+    restored_item = _FakeGioFile()
+    root = _FakeGioFile(children=[_FakeGioItem("IMG_8.JPG", str(photo))])
+    root.get_child = lambda name: restored_item  # type: ignore[method-assign]
+    mgr = FileCullingManager(trash_dir=trash)
+
+    with patch.object(FileCullingManager, "_use_gio", return_value=True), \
+         patch.object(file_ops, "Gio", _fake_gio(trashed, root), create=True):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.trash_candidate(CandidatePhoto(primary_path=photo))
+
+    assert restored_item.moved_to is not None, "the file was left in the Trash"
+    assert "restored" in str(exc_info.value).lower()
+
+
+def test_gio_trash_that_cannot_be_located_or_restored_tells_the_user_where_the_file_is(tmp_path: Path):
+    from photo_selector_linux.core import file_ops
+
+    trash = tmp_path / "Trash"
+    photo = tmp_path / "IMG_10.JPG"
+    photo.write_bytes(b"data")
+    trashed = _FakeGioFile(on_trash=photo.unlink)
+    root = _FakeGioFile(children=[])
+    mgr = FileCullingManager(trash_dir=trash)
+
+    with patch.object(FileCullingManager, "_use_gio", return_value=True), \
+         patch.object(file_ops, "Gio", _fake_gio(trashed, root), create=True):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.trash_candidate(CandidatePhoto(primary_path=photo))
+
+    assert "IMG_10.JPG" in str(exc_info.value)
+    assert "Trash" in str(exc_info.value)
