@@ -35,6 +35,8 @@ data class FileOperationResult(
      * them next to the originals, which would only create a `-N` duplicate (finding D-3).
      */
     val copiesOfSurvivingOriginals: Map<String, String> = emptyMap(),
+    /** Something the user should be told although the operation succeeded (e.g. an undo that fell back to the opened folder). */
+    val notice: String? = null,
 ) {
     companion object {
         fun success(

@@ -557,6 +557,27 @@ class SelectorViewModelTest {
     // ── U-04b: Bundle filing, undo to parentDocumentId, and bundle delete ─
 
     @Test
+    fun `an undo that fell back to the opened folder tells the user`() = runTest {
+        val item = image("a")
+        val copy = "content://test/folder/Selection/JPEG/a.jpg"
+        coEvery { imageRepository.moveBundle(any(), item, any(), any()) } returns
+            FileOperationResult.success(item.uri, copy, listOf(copy), "msf:gone")
+        coEvery { imageRepository.undoMoveBundle(any(), listOf(copy), Uri.parse(FOLDER_URI), "msf:gone") } returns
+            FileOperationResult.success(copy, item.uri, listOf(item.uri), "msf:gone").copy(
+                notice = "Restored to the opened folder — the original folder no longer exists",
+            )
+
+        val viewModel = loadFolder(item, image("b"))
+        viewModel.moveToSelection()
+        viewModel.undoLastOperation()
+
+        assertEquals(
+            "Restored to the opened folder — the original folder no longer exists",
+            viewModel.uiState.value.snackbarMessage,
+        )
+    }
+
+    @Test
     fun `a partial move keeps the photo, reports it and stays undoable so undo deletes only the surviving-original copies`() = runTest {
         val item = image("a")
         val copy = "content://test/folder/Selection/JPEG/a.jpg"
