@@ -22,7 +22,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
@@ -286,6 +288,10 @@ class ImageRepositoryImpl @Inject constructor(
     }
 
     private val transferSemaphore = Semaphore(MAX_CONCURRENT_TRANSFERS)
+    private val destinationLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+
+    private fun destinationLockFor(destinationKey: String): Mutex =
+        destinationLocks.getOrPut(destinationKey) { Mutex() }
 
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     internal var documentMover: SafDocumentMover = DefaultSafDocumentMover
@@ -595,45 +601,52 @@ class ImageRepositoryImpl @Inject constructor(
                 }
                 val effectiveDestRootUri = customDestUriStr?.let { Uri.parse(it) } ?: destFolderUri
 
-                val destFolder = DocumentFile.fromTreeUri(context, effectiveDestRootUri)
-                    ?: return@withContext sourceUris.map { uri ->
-                        FileOperationResult.failure(
-                            sourceUri = uri.toString(),
-                            error = "Could not write to the $primaryFolderName folder",
-                            parentDocumentId = parentDocumentId,
-                        )
-                    }
+                // Two transfers into the same destination must not interleave "pick a free name ->
+                // create the file" or "find the folder -> create it": the loser would overwrite the
+                // winner's file or leave a second "Selection (1)" folder (finding D-5). One lock per
+                // destination root; transfers to different destinations still run in parallel.
+                destinationLockFor(effectiveDestRootUri.toString()).withLock {
 
-                val isSecondPass = customDestUriStr == null && (
-                    destFolder.name?.equals(primaryFolderName, ignoreCase = true) == true ||
-                        runCatching { destFolder.findFile(SELECTION_MARKER_FILE_NAME) != null }.getOrDefault(false)
+                    val destFolder = DocumentFile.fromTreeUri(context, effectiveDestRootUri)
+                        ?: return@withContext sourceUris.map { uri ->
+                            FileOperationResult.failure(
+                                sourceUri = uri.toString(),
+                                error = "Could not write to the $primaryFolderName folder",
+                                parentDocumentId = parentDocumentId,
+                            )
+                        }
+
+                    val isSecondPass = customDestUriStr == null && (
+                        destFolder.name?.equals(primaryFolderName, ignoreCase = true) == true ||
+                            runCatching { destFolder.findFile(SELECTION_MARKER_FILE_NAME) != null }.getOrDefault(false)
+                        )
+                    val folderName = if (isSecondPass) secondaryFolderName else primaryFolderName
+
+                    val selectionDir = destFolder.findFile(folderName)
+                        ?: destFolder.createDirectory(folderName)
+                        ?: return@withContext sourceUris.map { uri ->
+                            FileOperationResult.failure(
+                                sourceUri = uri.toString(),
+                                error = "Could not write to the $folderName folder",
+                                parentDocumentId = parentDocumentId,
+                            )
+                        }
+
+                    val results = executeBundleTransfer(
+                        context = context,
+                        sourceUris = sourceUris,
+                        treeRootUri = effectiveDestRootUri,
+                        baseTargetFolder = selectionDir,
+                        sorting = sorting,
+                        targetFolderLabel = folderName,
+                        isMove = isMove,
+                        parentDocumentId = parentDocumentId,
                     )
-                val folderName = if (isSecondPass) secondaryFolderName else primaryFolderName
-
-                val selectionDir = destFolder.findFile(folderName)
-                    ?: destFolder.createDirectory(folderName)
-                    ?: return@withContext sourceUris.map { uri ->
-                        FileOperationResult.failure(
-                            sourceUri = uri.toString(),
-                            error = "Could not write to the $folderName folder",
-                            parentDocumentId = parentDocumentId,
-                        )
+                    if (results.any { it.success || it.partial }) {
+                        ensureSelectionMarkerFile(selectionDir)
                     }
-
-                val results = executeBundleTransfer(
-                    context = context,
-                    sourceUris = sourceUris,
-                    treeRootUri = effectiveDestRootUri,
-                    baseTargetFolder = selectionDir,
-                    sorting = sorting,
-                    targetFolderLabel = folderName,
-                    isMove = isMove,
-                    parentDocumentId = parentDocumentId,
-                )
-                if (results.any { it.success || it.partial }) {
-                    ensureSelectionMarkerFile(selectionDir)
+                    results
                 }
-                results
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
