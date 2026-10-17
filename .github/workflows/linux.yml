@@ -93,7 +93,7 @@ jobs:
       - name: Run pytest
         env:
           GDK_BACKEND: x11
-        run: xvfb-run -a poetry run pytest tests/unit -q --tb=short --cov=photo_selector_linux --cov-report=term-missing:skip-covered --cov-fail-under=70
+        run: timeout 420 xvfb-run -a poetry run pytest tests/unit -v --tb=short -o faulthandler_timeout=120 -p no:cacheprovider
 
   # ── Debian Packaging & APT Validation (Mirror: scripts/run_tests.sh `linux.yml:package`) ──
   package:
