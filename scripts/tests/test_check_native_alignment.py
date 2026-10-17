@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 from pathlib import Path
 import struct
 import sys
@@ -99,8 +101,12 @@ class CheckNativeAlignmentTests(unittest.TestCase):
             ok_aab, reports_aab = cna.check_targets([aab_path])
             self.assertFalse(ok_aab)
             self.assertEqual(len(reports_aab), 2)
-            self.assertEqual(cna.main([str(aab_path)]), 1)
-            self.assertEqual(cna.main([str(apk_path)]), 0)
+            # main() prints ✘/✔ lines; capture them so a green suite prints no ✘.
+            out = io.StringIO()
+            with contextlib.redirect_stderr(out), contextlib.redirect_stdout(out):
+                self.assertEqual(cna.main([str(aab_path)]), 1)
+                self.assertEqual(cna.main([str(apk_path)]), 0)
+            self.assertIn("libtflite_jni.so", out.getvalue())
 
     def test_directory_target_inspects_merged_native_libs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -112,7 +118,8 @@ class CheckNativeAlignmentTests(unittest.TestCase):
             (arm64_dir / "libc++_shared.so").write_bytes(_make_elf64_le([16384]))
             (x86_dir / "libc++_shared.so").write_bytes(_make_elf64_le([4096]))
 
-            self.assertEqual(cna.main([str(root)]), 0)
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cna.main([str(root)]), 0)
 
 
 if __name__ == "__main__":
