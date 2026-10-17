@@ -212,7 +212,7 @@ public final class DirectoryScanner: DirectoryScanning, @unchecked Sendable {
     /// each, in natural filename order.
     ///
     /// - Same stem, different extension (RAW+JPEG, `.xmp`) form one photograph.
-    /// - `<stem>-Edit*` / `<stem>_edit*` derivatives join `<stem>` when that capture exists.
+    /// - `<stem>-Edit*` / `<stem>_edit*` / `<stem>-Enhanced-NR*` derivatives join `<stem>` when that capture exists.
     /// - Primary preference: original capture over derivative, RAW over rendered, then name.
     /// - Sidecars alone (orphan `.xmp`) never produce a photograph.
     public static func groupPrimaryPhotos(in files: [URL]) -> [URL] {
@@ -252,9 +252,9 @@ public final class DirectoryScanner: DirectoryScanning, @unchecked Sendable {
         url.deletingPathExtension().lastPathComponent.lowercased()
     }
 
-    /// `"dsc0001-edit-2"` → `"dsc0001"`; `nil` when the stem is not a Lightroom derivative.
+    /// `"dsc0001-edit-2"` / `"dsc0001-enhanced-nr"` → `"dsc0001"`; `nil` when the stem is not a derivative.
     static func editBaseStem(of lowerStem: String) -> String? {
-        let markers = ["-edit", "_edit"]
+        let markers = ["-edit", "_edit", "-enhanced-nr", "_enhanced-nr"]
         let ranges = markers.compactMap { lowerStem.range(of: $0) }
         guard let first = ranges.min(by: { $0.lowerBound < $1.lowerBound }) else { return nil }
         let base = String(lowerStem[..<first.lowerBound])

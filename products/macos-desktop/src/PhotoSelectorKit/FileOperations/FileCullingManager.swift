@@ -111,8 +111,8 @@ public final class FileCullingManager: @unchecked Sendable {
         let primaryFilename = canonicalPrimary.lastPathComponent
         let primaryStem = canonicalPrimary.deletingPathExtension().lastPathComponent
         let stemLower = primaryStem.lowercased()
-        let editPrefix = stemLower + "-edit"
-        let editUnderscore = stemLower + "_edit"
+        // Lightroom edits and Enhanced-NR (Adobe Denoise) derivatives travel with their shot.
+        let derivativePrefixes = ["-edit", "_edit", "-enhanced-nr", "_enhanced-nr"].map { stemLower + $0 }
         let dotXmp = primaryFilename.lowercased() + ".xmp"
 
         var companions = Set<URL>()
@@ -140,8 +140,9 @@ public final class FileCullingManager: @unchecked Sendable {
                 continue
             }
 
-            // 3. Lightroom edits (e.g. DSC0001-Edit.tif, DSC0001-Edit.xmp)
-            if candidateStemLower.hasPrefix(editPrefix) || candidateStemLower.hasPrefix(editUnderscore) {
+            // 3. Lightroom edits and Enhanced-NR derivatives (e.g. DSC0001-Edit.tif, DSC0001-Edit.xmp,
+            //    DSC0001-Enhanced-NR.dng)
+            if derivativePrefixes.contains(where: { candidateStemLower.hasPrefix($0) }) {
                 companions.insert(candidateURL)
                 continue
             }

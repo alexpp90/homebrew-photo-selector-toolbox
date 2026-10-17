@@ -78,7 +78,7 @@ def _apply_bundle_suffix(name: str, base_stem: str, suffix_num: int) -> str:
     stem = p.stem
     ext = p.suffix
     stem_lower = stem.lower()
-    for marker in ("-edit", "_edit", "-enhanced-nr"):
+    for marker in ("-edit", "_edit", "-enhanced-nr", "_enhanced-nr"):
         idx = stem_lower.find(marker)
         if idx > 0:
             return f"{stem[:idx]}-{suffix_num}{stem[idx:]}{ext}"
