@@ -1,0 +1,21 @@
+# Lab: toggle Samsung DeX (on the tablet's own screen) through its Quick Settings tile.
+# Samsung exposes no shell command for DeX and ignores `cmd statusbar click-tile` for it, so
+# the lab taps the tile like a person. "DeX" is the tile label in every locale seen so far.
+appId: com.android.systemui
+---
+- pressKey: Home
+- swipe:
+    start: "50%,0%"
+    end: "50%,60%"
+- swipe:
+    start: "50%,5%"
+    end: "50%,80%"
+- scrollUntilVisible:
+    element:
+      text: ".*DeX.*"
+    direction: RIGHT
+    timeout: 8000
+    optional: true
+- tapOn:
+    text: ".*DeX.*"
+- pressKey: Back

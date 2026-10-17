@@ -160,6 +160,15 @@ def _run_android_product(
         ok, reason = resolve_fn(dev)
         adb = AdbClient(serial=dev.adb_serial or dev.serial)
         saved = None
+        if ok and dev.personal:
+            try:
+                busy = adb.in_use_by()
+            except Exception:  # noqa: BLE001 - an unreadable state is not proof of use
+                busy = None
+            if busy:
+                ok, reason = False, (
+                    f"{dev.name} is in use ({busy} on screen); go to the home screen or lock it, then re-run"
+                )
         if ok:
             try:
                 saved = record_device_state(adb)

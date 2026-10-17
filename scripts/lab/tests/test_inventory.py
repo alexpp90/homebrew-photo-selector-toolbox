@@ -229,7 +229,9 @@ class _DexAdb:
 class DexTests(unittest.TestCase):
     def setUp(self) -> None:
         self.addCleanup(setattr, android_configs, "DEX_POLL_S", android_configs.DEX_POLL_S)
+        self.addCleanup(setattr, android_configs, "DEX_TILE_TAPPER", android_configs.DEX_TILE_TAPPER)
         android_configs.DEX_POLL_S = 0.0
+        android_configs.DEX_TILE_TAPPER = None
 
     def test_dex_config_only_on_devices_that_support_it(self) -> None:
         inv = parse_inventory(
@@ -254,6 +256,16 @@ class DexTests(unittest.TestCase):
     def test_dex_that_does_not_switch_is_not_run(self) -> None:
         with self.assertRaises(ConfigNotRunError):
             set_dex(_DexAdb(stuck=True), True)  # type: ignore[arg-type]
+
+    def test_quick_settings_tap_is_the_fallback_when_click_tile_is_ignored(self) -> None:
+        adb = _DexAdb(stuck=True)  # click-tile does nothing, like One UI 8
+
+        def tap(serial):  # type: ignore[no-untyped-def]
+            adb.dex = True
+            return 0
+
+        set_dex(adb, True, tile_tapper=tap)  # type: ignore[arg-type]
+        self.assertTrue(adb.dex)
 
 
 class AndroidFanOutTests(unittest.TestCase):

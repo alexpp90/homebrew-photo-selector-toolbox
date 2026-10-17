@@ -64,6 +64,34 @@ class AdbClient:
         if "mDreamingLockscreen=true" in win_dump:
             raise RuntimeError(f"Device {self.serial} is still locked (mDreamingLockscreen=true)")
 
+    def in_use_by(self) -> str | None:
+        """The app a person is using right now, or None when the device is idle.
+
+        Idle means: screen off or dozing, lock screen showing, or the top activity is the home
+        screen or a lab app. Personal devices are checked before a run takes them over.
+        """
+        power = self.run("shell", "dumpsys", "power")
+        if "mWakefulness=Awake" not in power:
+            return None
+        window = self.run("shell", "dumpsys", "window")
+        if "isKeyguardShowing=true" in window or "mDreamingLockscreen=true" in window:
+            return None
+        acts = self.run("shell", "dumpsys", "activity", "activities")
+        m = re.search(r"topResumedActivity=\S+\s+\S+\s+([\w.]+)/", acts) or re.search(
+            r"mResumedActivity: \S+\s+\S+\s+([\w.]+)/", acts
+        )
+        if not m:
+            return None
+        top = m.group(1)
+        home = self.run(
+            "shell", "cmd", "package", "resolve-activity", "--brief",
+            "-a", "android.intent.action.MAIN", "-c", "android.intent.category.HOME",
+        )
+        home_pkgs = {ln.split("/")[0].strip() for ln in home.splitlines() if "/" in ln}
+        if top in home_pkgs or top.endswith(".lab") or "launcher" in top:
+            return None
+        return top
+
     def current_user(self) -> int:
         out = self.run("shell", "am", "get-current-user").strip()
         return int(out.splitlines()[-1].strip())

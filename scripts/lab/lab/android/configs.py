@@ -6,7 +6,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -86,6 +86,21 @@ DEX_POLLS = 20
 DEX_POLL_S = 1.0
 
 
+def _maestro_dex_tile(serial: str | None) -> int:
+    """Tap the DeX tile in Quick Settings with Maestro (`scripts/lab/flows/samsung_dex_tile.yaml`)."""
+    import tempfile
+
+    from .runner import default_maestro_runner
+
+    flow = Path(__file__).resolve().parent.parent.parent / "flows" / "samsung_dex_tile.yaml"
+    with tempfile.TemporaryDirectory(prefix="pstlab-dex-") as tmp:
+        return default_maestro_runner(serial, flow, Path(tmp) / "dex.xml")
+
+
+# Fallback used by `set_dex` when `click-tile` does not switch DeX; tests replace it.
+DEX_TILE_TAPPER: Callable[[str | None], int] | None = _maestro_dex_tile
+
+
 def dex_active(adb: AdbClient) -> bool:
     """True while Samsung DeX runs on the default display (its windowing mode turns freeform)."""
     out = adb.run("shell", "dumpsys", "window", "displays")
@@ -93,7 +108,7 @@ def dex_active(adb: AdbClient) -> bool:
     return bool(m and m.group(1) == "freeform")
 
 
-def set_dex(adb: AdbClient, on: bool) -> None:
+def set_dex(adb: AdbClient, on: bool, tile_tapper: Callable[[str | None], int] | None = None) -> None:
     """Switch DeX on or off through its Quick Settings tile and verify the windowing mode.
 
     Raises `ConfigNotRunError` when the switch does not take effect (tile missing, device
@@ -103,15 +118,25 @@ def set_dex(adb: AdbClient, on: bool) -> None:
     if dex_active(adb) == on:
         return
     adb.run("shell", "input", "keyevent", "KEYCODE_WAKEUP")
-    adb.run("shell", "cmd", "statusbar", "click-tile", DEX_TILE)
-    for _ in range(DEX_POLLS):
-        if DEX_POLL_S > 0:
-            time.sleep(DEX_POLL_S)
-        if dex_active(adb) == on:
-            # DeX restarts the launcher and re-lays out every task; let it settle.
+
+    def wait_for(state: bool) -> bool:
+        for _ in range(DEX_POLLS):
             if DEX_POLL_S > 0:
-                time.sleep(3 * DEX_POLL_S)
-            return
+                time.sleep(DEX_POLL_S)
+            if dex_active(adb) == state:
+                # DeX restarts the launcher and re-lays out every task; let it settle.
+                if DEX_POLL_S > 0:
+                    time.sleep(3 * DEX_POLL_S)
+                return True
+        return False
+
+    adb.run("shell", "cmd", "statusbar", "click-tile", DEX_TILE)
+    if wait_for(on):
+        return
+    # One UI ignores click-tile for the DeX tile; tap it in Quick Settings instead.
+    tapper = tile_tapper or DEX_TILE_TAPPER
+    if tapper is not None and tapper(adb.serial) == 0 and wait_for(on):
+        return
     state = "on" if on else "off"
     raise ConfigNotRunError(
         f"could not switch Samsung DeX {state} automatically; switch it {state} on the device "

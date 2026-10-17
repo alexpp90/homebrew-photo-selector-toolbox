@@ -150,6 +150,19 @@ def _build_exif_bytes(dt: datetime, orientation: int = 1) -> bytes:
     exif[0x0112] = int(orientation)
     exif[0x0132] = dt_str
     exif[0x9003] = dt_str
+    # Exposure data in the Exif sub-IFD, like a real camera writes it: the apps' info overlays
+    # and the shared EXIF contract read ISO, shutter, aperture, focal length and lens from here,
+    # and PhotoTok shows no overlay at all for a photo without them.
+    if hasattr(exif, "get_ifd"):
+        from PIL.TiffImagePlugin import IFDRational
+
+        sub = exif.get_ifd(0x8769)
+        sub[0x8827] = 400  # ISOSpeedRatings
+        sub[0x829A] = IFDRational(1, 250)  # ExposureTime
+        sub[0x829D] = IFDRational(28, 10)  # FNumber
+        sub[0x920A] = IFDRational(50, 1)  # FocalLength
+        sub[0xA434] = "PSTLab 50mm F2.8"  # LensModel
+        sub[0x9003] = dt_str  # DateTimeOriginal
     return exif.tobytes()
 
 
