@@ -44,6 +44,7 @@ public struct CullingExecutionRecord: Sendable, Identifiable {
     public let actionType: CullingActionType
     public let originalPrimaryURL: URL
     public let affectedURLs: [URL]
+    public let trashedPairs: [TrashedFilePair]
     public let previousStatus: PhotoStatus
     public let timestamp: Date
 
@@ -53,6 +54,7 @@ public struct CullingExecutionRecord: Sendable, Identifiable {
         actionType: CullingActionType,
         originalPrimaryURL: URL,
         affectedURLs: [URL],
+        trashedPairs: [TrashedFilePair] = [],
         previousStatus: PhotoStatus = .candidate,
         timestamp: Date = Date()
     ) {
@@ -61,6 +63,7 @@ public struct CullingExecutionRecord: Sendable, Identifiable {
         self.actionType = actionType
         self.originalPrimaryURL = originalPrimaryURL
         self.affectedURLs = affectedURLs
+        self.trashedPairs = trashedPairs
         self.previousStatus = previousStatus
         self.timestamp = timestamp
     }
@@ -130,9 +133,8 @@ public actor AsyncCullingActor {
     public func cancelOrUndo(jobID: UUID, fallbackRecord: CullingExecutionRecord) async throws -> [URL] {
         cancelledJobIDs.insert(jobID)
         if let completedRecord = completedRecords[jobID] {
-            completedRecords.removeValue(forKey: jobID)
             return try await undo(record: completedRecord)
-        } else if !fallbackRecord.affectedURLs.isEmpty {
+        } else if !fallbackRecord.affectedURLs.isEmpty || !fallbackRecord.trashedPairs.isEmpty {
             return try await undo(record: fallbackRecord)
         }
         return []
@@ -145,7 +147,7 @@ public actor AsyncCullingActor {
     /// - Parameter record: The execution record to undo.
     /// - Returns: The list of restored URLs.
     public func undo(record: CullingExecutionRecord) async throws -> [URL] {
-        guard !record.affectedURLs.isEmpty else {
+        guard !record.affectedURLs.isEmpty || !record.trashedPairs.isEmpty else {
             return []
         }
 
@@ -198,24 +200,51 @@ public actor AsyncCullingActor {
             }
 
         case .trash:
-            // Move files back from Trash to original directory without deleting occupied destinations
-            let items: [(sourceURL: URL, unsuffixedName: String)] = record.affectedURLs.enumerated().map { index, trashedURL in
-                let unsuffixedName: String
-                if index == 0 {
-                    unsuffixedName = record.originalPrimaryURL.lastPathComponent
+            // Move files back from Trash to original directory using the recorded (originalURL, trashedURL) pairs
+            let items: [(sourceURL: URL, unsuffixedName: String)]
+            if !record.trashedPairs.isEmpty {
+                items = record.trashedPairs.map { pair in
+                    (sourceURL: pair.trashedURL, unsuffixedName: pair.originalURL.lastPathComponent)
+                }
+            } else {
+                items = record.affectedURLs.enumerated().map { index, trashedURL in
+                    let unsuffixedName = index == 0
+                        ? record.originalPrimaryURL.lastPathComponent
+                        : trashedURL.lastPathComponent
+                    return (sourceURL: trashedURL, unsuffixedName: unsuffixedName)
+                }
+            }
+            do {
+                restoredURLs = try restoreBundleToOriginalDirectory(
+                    items: items,
+                    originalDir: originalDir,
+                    primaryStem: primaryStem
+                )
+            } catch {
+                // Never drop the undo entry while a member is still in the Trash
+                let remainingPairs: [TrashedFilePair]
+                if !record.trashedPairs.isEmpty {
+                    remainingPairs = record.trashedPairs.filter { fileManager.fileExists(atPath: $0.trashedURL.path) }
                 } else {
-                    unsuffixedName = cleanTrashedFilename(
-                        trashedURL.lastPathComponent,
-                        originalPrimaryURL: record.originalPrimaryURL
+                    remainingPairs = items
+                        .filter { fileManager.fileExists(atPath: $0.sourceURL.path) }
+                        .map { TrashedFilePair(originalURL: originalDir.appendingPathComponent($0.unsuffixedName), trashedURL: $0.sourceURL) }
+                }
+                if !remainingPairs.isEmpty {
+                    executedJobIDs.insert(record.jobID)
+                    completedRecords[record.jobID] = CullingExecutionRecord(
+                        jobID: record.jobID,
+                        photoID: record.photoID,
+                        actionType: .trash,
+                        originalPrimaryURL: record.originalPrimaryURL,
+                        affectedURLs: remainingPairs.map(\.trashedURL),
+                        trashedPairs: remainingPairs,
+                        previousStatus: record.previousStatus,
+                        timestamp: record.timestamp
                     )
                 }
-                return (sourceURL: trashedURL, unsuffixedName: unsuffixedName)
+                throw error
             }
-            restoredURLs = try restoreBundleToOriginalDirectory(
-                items: items,
-                originalDir: originalDir,
-                primaryStem: primaryStem
-            )
         }
 
         executedJobIDs.remove(record.jobID)
@@ -229,6 +258,11 @@ public actor AsyncCullingActor {
         completedRecords[jobID] != nil
     }
 
+    /// Returns the actor's cached completed execution record for the given job ID, if present.
+    public func completedRecord(for jobID: UUID) -> CullingExecutionRecord? {
+        completedRecords[jobID]
+    }
+
     // MARK: - Private Execution
 
     private func executeJob(_ job: CullingJob) throws -> CullingExecutionRecord {
@@ -237,6 +271,8 @@ public actor AsyncCullingActor {
         }
 
         let affectedURLs: [URL]
+        var trashedPairs: [TrashedFilePair] = []
+
         switch job.actionType {
         case .move:
             guard let root = job.rootURL else {
@@ -259,7 +295,31 @@ public actor AsyncCullingActor {
             )
 
         case .trash:
-            affectedURLs = try cullingManager.moveToTrash(photoURL: job.primaryURL)
+            do {
+                let pairs = try cullingManager.moveToTrashWithPairs(photoURL: job.primaryURL)
+                trashedPairs = pairs
+                affectedURLs = pairs.map(\.trashedURL)
+            } catch let FileCullingError.partialTrashRollbackFailed(url, reason, remainingPairs) {
+                if !remainingPairs.isEmpty {
+                    let partialRecord = CullingExecutionRecord(
+                        jobID: job.id,
+                        photoID: job.photoID,
+                        actionType: .trash,
+                        originalPrimaryURL: job.primaryURL,
+                        affectedURLs: remainingPairs.map(\.trashedURL),
+                        trashedPairs: remainingPairs,
+                        previousStatus: .candidate,
+                        timestamp: Date()
+                    )
+                    executedJobIDs.insert(job.id)
+                    completedRecords[job.id] = partialRecord
+                }
+                throw FileCullingError.partialTrashRollbackFailed(
+                    url: url,
+                    reason: reason,
+                    remainingTrashedPairs: remainingPairs
+                )
+            }
         }
 
         executedJobIDs.insert(job.id)
@@ -270,6 +330,7 @@ public actor AsyncCullingActor {
             actionType: job.actionType,
             originalPrimaryURL: job.primaryURL,
             affectedURLs: affectedURLs,
+            trashedPairs: trashedPairs,
             previousStatus: .candidate,
             timestamp: Date()
         )
@@ -376,30 +437,5 @@ public actor AsyncCullingActor {
             return "\(originalStemPrefix)\(remainder)"
         }
         return movedFilename
-    }
-
-    private func cleanTrashedFilename(_ trashedFilename: String, originalPrimaryURL: URL) -> String {
-        let primaryFilename = originalPrimaryURL.lastPathComponent
-        if trashedFilename == primaryFilename {
-            return primaryFilename
-        }
-
-        let ext = (trashedFilename as NSString).pathExtension
-        let stem = (trashedFilename as NSString).deletingPathExtension
-
-        let cleanedStem = stem.replacingOccurrences(
-            of: #"\s+(\d{2}-\d{2}-\d{2}-\d{3}|\d+)$"#,
-            with: "",
-            options: .regularExpression
-        )
-
-        if cleanedStem.lowercased().hasSuffix(".\(ext.lowercased())") {
-            return cleanedStem
-        }
-
-        if !ext.isEmpty {
-            return "\(cleanedStem).\(ext)"
-        }
-        return cleanedStem
     }
 }

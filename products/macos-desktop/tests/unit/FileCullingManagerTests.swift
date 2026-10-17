@@ -491,5 +491,79 @@ struct FileCullingManagerTests {
         #expect(Set(discoveredA.map(\.lastPathComponent)) == Set(bundleA.map(\.0)))
         #expect(Set(discoveredB.map(\.lastPathComponent)) == Set(expectedBundleB.map(\.0)))
     }
+
+    @Test("U-03: SystemTrashService throws trashFailed when FileManager.trashItem returns nil resultingItemURL")
+    func testSystemTrashServiceNilResultingItemURLThrowsTrashFailed() throws {
+        final class NilResultTrashFileManager: FileManager {
+            override func trashItem(at url: URL, resultingItemURL outResultingURL: AutoreleasingUnsafeMutablePointer<NSURL?>?) throws {
+                outResultingURL?.pointee = nil
+            }
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NilTrashResultTest_\(UUID().uuidString)")
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let photoURL = tempDir.appendingPathComponent("IMG_NIL_TRASH.JPG")
+        try Data("BYTES".utf8).write(to: photoURL)
+
+        let service = SystemTrashService(fileManager: NilResultTrashFileManager())
+        let manager = FileCullingManager(trashService: service)
+
+        #expect(throws: FileCullingError.self) {
+            try manager.moveToTrashWithPairs(photoURL: photoURL)
+        }
+        #expect(FileManager.default.fileExists(atPath: photoURL.path), "Original file must still exist when trashItem returned nil URL")
+    }
+
+    @Test("U-03: Injected TrashService failing on second member of RAW+JPG+XMP bundle rolls first member back to source folder")
+    func testTrashRollbackOnSecondMemberFailureRestoresFirstMember() throws {
+        struct FailingSecondTrashService: TrashService {
+            let baseService: DirectoryTrashService
+            let failOnFilename: String
+
+            func trash(_ url: URL) throws -> URL {
+                if url.lastPathComponent == failOnFilename {
+                    throw FileCullingError.trashFailed(url: url, reason: "Simulated failure on companion")
+                }
+                return try baseService.trash(url)
+            }
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TrashRollbackSecondMember_\(UUID().uuidString)")
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let rawURL = tempDir.appendingPathComponent("IMG_0010.CR3")
+        let jpgURL = tempDir.appendingPathComponent("IMG_0010.JPG")
+        let xmpURL = tempDir.appendingPathComponent("IMG_0010.xmp")
+        try Data("RAW_PAYLOAD".utf8).write(to: rawURL)
+        try Data("JPG_PAYLOAD".utf8).write(to: jpgURL)
+        try Data("XMP_PAYLOAD".utf8).write(to: xmpURL)
+
+        let trashService = FailingSecondTrashService(
+            baseService: DirectoryTrashService(rootDirectory: tempDir),
+            failOnFilename: "IMG_0010.JPG"
+        )
+        let manager = FileCullingManager(trashService: trashService)
+
+        #expect(throws: FileCullingError.self) {
+            try manager.moveToTrashWithPairs(photoURL: rawURL)
+        }
+
+        // First member must be rolled back to its original location and all 3 files present in source folder
+        #expect(FileManager.default.fileExists(atPath: rawURL.path))
+        #expect(FileManager.default.fileExists(atPath: jpgURL.path))
+        #expect(FileManager.default.fileExists(atPath: xmpURL.path))
+        #expect(try String(contentsOf: rawURL, encoding: .utf8) == "RAW_PAYLOAD")
+        #expect(try String(contentsOf: jpgURL, encoding: .utf8) == "JPG_PAYLOAD")
+        #expect(try String(contentsOf: xmpURL, encoding: .utf8) == "XMP_PAYLOAD")
+    }
 }
 
