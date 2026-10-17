@@ -47,6 +47,9 @@ class FakeAdbExec:
             buf = io.BytesIO()
             Image.new("RGB", (100, 60), (20, 40, 60)).save(buf, format="PNG")
             return subprocess.CompletedProcess(cmd, 0, stdout=buf.getvalue(), stderr=b"")
+        if "dumpsys activity activities" in joined:
+            task = "  * Task{abc #12 type=standard A=10074:com.photoselectortoolbox.lab U=0 visible=true mode=fullscreen sz=1}\n"
+            return subprocess.CompletedProcess(cmd, 0, stdout=task.encode(), stderr=b"")
         if "resolve-activity" in joined:
             pkg = cmd[-1]
             return subprocess.CompletedProcess(cmd, 0, stdout=f"priority=0\n{pkg}/.MainActivity\n".encode(), stderr=b"")

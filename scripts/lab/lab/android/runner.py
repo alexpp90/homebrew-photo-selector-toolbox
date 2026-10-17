@@ -26,6 +26,7 @@ from .configs import (
     reset_config,
     resize_app_window,
     set_verified_rotation,
+    window_mode_mismatch,
 )
 from .tree_android import parse_uiautomator_xml
 
@@ -165,14 +166,17 @@ def run_android_journey(
         if manifest.get("fresh_install"):
             adb.clear(app_id, user=user_id)
         adb.start(app_id)
-        window = load_android_configs().get(config_name, {}).get("window")
-        if window:
-            try:
-                resize_app_window(adb, app_id, str(window))
-            except ConfigNotRunError as exc:
-                res_obj = {"status": "not-run", "reason": str(exc), "findings": 0}
-                (out_dir / "result.json").write_text(json.dumps(res_obj, indent=2), encoding="utf-8")
-                return "not-run", []
+        cfg_spec = load_android_configs().get(config_name, {})
+        try:
+            mismatch = window_mode_mismatch(adb, app_id, cfg_spec)
+            if mismatch:
+                raise ConfigNotRunError(mismatch)
+            if cfg_spec.get("window"):
+                resize_app_window(adb, app_id, str(cfg_spec["window"]))
+        except ConfigNotRunError as exc:
+            res_obj = {"status": "not-run", "reason": str(exc), "findings": 0}
+            (out_dir / "result.json").write_text(json.dumps(res_obj, indent=2), encoding="utf-8")
+            return "not-run", []
 
         ensure_flow = r / "products" / "android" / product / "tests" / "e2e" / ENSURE_FOLDER_FLOW
         if not manifest.get("fresh_install") and ensure_flow.is_file():

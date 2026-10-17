@@ -55,10 +55,12 @@ install.
   language work.
 - **Rotation.** A docked Pixel Tablet ignores rotation requests; its portrait configs are
   reported *not run*.
-- **DeX.** `dex-on-device` runs only on devices with `supports: [dex]` and switches Samsung DeX
-  on through its Quick Settings tile; every other config switches it off. If the switch does
-  not take, the config is reported *not run*; switch DeX on by hand and re-run with
-  `--config dex-on-device`.
+- **DeX.** The lab never switches Samsung DeX: on One UI 8 the DeX tile is a toggle and DeX
+  is only visible in how apps open (freeform desktop windows), so a wrong reading would flip
+  it the wrong way. `dex-on-device` (devices with `supports: [dex]`) runs when the app opens in
+  a desktop window; every other tablet config runs when it opens fullscreen; the other kind is
+  reported *not run* with the instruction. For both modes: run with DeX off, switch DeX on by
+  hand, run again with `--config dex-on-device`.
 - **Chromebook (ChromeOS ARC).** Enable Settings → Developers → Linux development environment →
   Develop Android apps → ADB debugging, approve the prompt once; the lab finds it as
   `_adb._tcp` on port 5555. Only the `chromebook-*` configs run there (devices with

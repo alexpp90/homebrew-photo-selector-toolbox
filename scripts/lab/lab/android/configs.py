@@ -39,7 +39,6 @@ class SavedDeviceState:
     font_scale: str = "1.0"
     night_mode: str = "no"
     stay_on: str = "0"
-    dex: bool = False
 
 
 def load_android_configs(path: Path | None = None) -> dict[str, dict[str, Any]]:
@@ -69,7 +68,6 @@ def record_device_state(adb: AdbClient) -> SavedDeviceState:
     night = "yes" if "night mode: yes" in night_out else ("auto" if "night mode: auto" in night_out else "no")
     stay_on = adb.run("shell", "settings", "get", "global", "stay_on_while_plugged_in").strip()
     return SavedDeviceState(
-        dex=dex_active(adb),
         user_rotation=user_rot,
         accelerometer_rotation=acc_rot,
         size_override=m_size.group(1) if m_size else None,
@@ -80,89 +78,23 @@ def record_device_state(adb: AdbClient) -> SavedDeviceState:
     )
 
 
-# Samsung DeX on the tablet's own screen is a launcher Quick Settings tile (One UI 8).
-DEX_TILE = "com.sec.android.app.launcher/com.honeyspace.dexservice.DesktopModeTile"
-DEX_POLLS = 20
-DEX_POLL_S = 1.0
+def window_mode_mismatch(adb: AdbClient, app_id: str, cfg: dict[str, Any]) -> str | None:
+    """Why the launched app's window does not fit `cfg`, or None when it does.
 
-
-def _tap_dex_tile(adb: AdbClient) -> int:
-    """Open Quick Settings, find the tile whose label is exactly "DeX" and tap its centre.
-
-    Samsung exposes no shell command for DeX, ignores `cmd statusbar click-tile` for it, and
-    Maestro hangs on its system UI; a plain uiautomator dump plus `input tap` works. The dump
-    is retried until the panel has finished expanding (an early tap lands on the animation).
-    Returns 0 when the tile was tapped.
+    Samsung DeX on the tablet's own screen (One UI 8 desktop windowing) leaves the home screen
+    and the display's windowing mode unchanged; the only reliable sign is that apps open as
+    freeform windows. So DeX is checked on the app after launch, and the lab never switches it:
+    the DeX tile is a toggle, and a tap driven by a wrong reading switched DeX off on the
+    maintainer's tablet (2026-10-17).
     """
-    adb.run("shell", "cmd", "statusbar", "expand-settings")
-    for _ in range(5):
-        if DEX_POLL_S > 0:
-            time.sleep(DEX_POLL_S)
-        adb.run("shell", "uiautomator", "dump", "/sdcard/pst_qs.xml", timeout=30)
-        xml = adb.run("shell", "cat", "/sdcard/pst_qs.xml")
-        for node in re.findall(r"<node [^>]*>", xml):
-            label = re.search(r'content-desc="([^"]*)"', node)
-            text = re.search(r' text="([^"]*)"', node)
-            names = {(label.group(1) if label else "").strip(), (text.group(1) if text else "").strip()}
-            b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
-            if "DeX" in names and b and 'clickable="true"' in node:
-                x0, y0, x1, y1 = (int(v) for v in b.groups())
-                adb.run("shell", "input", "tap", str((x0 + x1) // 2), str((y0 + y1) // 2))
-                return 0
-    adb.run("shell", "cmd", "statusbar", "collapse")
-    return 1
-
-
-# Fallback used by `set_dex` when `click-tile` does not switch DeX; tests replace it.
-DEX_TILE_TAPPER: Callable[[AdbClient], int] | None = _tap_dex_tile
-
-
-def dex_active(adb: AdbClient) -> bool:
-    """True while Samsung DeX runs on the default display (its windowing mode turns freeform).
-
-    Only Samsung devices count: ChromeOS ARC is always freeform and has no DeX.
-    """
-    if adb.run("shell", "getprop", "ro.product.manufacturer").strip().lower() not in ("samsung", ""):
-        return False
-    out = adb.run("shell", "dumpsys", "window", "displays")
-    m = re.search(r"mWindowingMode=([a-z]+)", out)
-    return bool(m and m.group(1) == "freeform")
-
-
-def set_dex(adb: AdbClient, on: bool, tile_tapper: Callable[[AdbClient], int] | None = None) -> None:
-    """Switch DeX on or off through its Quick Settings tile and verify the windowing mode.
-
-    Raises `ConfigNotRunError` when the switch does not take effect (tile missing, device
-    locked, a first-use confirmation dialog), so DeX configs are reported "not run" with the
-    reason instead of running in the wrong mode.
-    """
-    if dex_active(adb) == on:
-        return
-    adb.run("shell", "input", "keyevent", "KEYCODE_WAKEUP")
-
-    def wait_for(state: bool) -> bool:
-        for _ in range(DEX_POLLS):
-            if DEX_POLL_S > 0:
-                time.sleep(DEX_POLL_S)
-            if dex_active(adb) == state:
-                # DeX restarts the launcher and re-lays out every task; let it settle.
-                if DEX_POLL_S > 0:
-                    time.sleep(3 * DEX_POLL_S)
-                return True
-        return False
-
-    adb.run("shell", "cmd", "statusbar", "click-tile", DEX_TILE)
-    if wait_for(on):
-        return
-    # One UI ignores click-tile for the DeX tile; tap it in Quick Settings instead.
-    tapper = tile_tapper or DEX_TILE_TAPPER
-    if tapper is not None and tapper(adb) == 0 and wait_for(on):
-        return
-    state = "on" if on else "off"
-    raise ConfigNotRunError(
-        f"could not switch Samsung DeX {state} automatically; switch it {state} on the device "
-        f"and re-run with --config <the DeX config>"
-    )
+    if cfg.get("native_display"):
+        return None  # ChromeOS ARC: always freeform, never DeX
+    _, mode, _, _ = adb.app_task(app_id)
+    if cfg.get("dex") and mode != "freeform":
+        return "Samsung DeX is off (app opened fullscreen); switch DeX on by hand and re-run this config"
+    if not cfg.get("dex") and mode == "freeform":
+        return "the app opened in a desktop window (Samsung DeX on?); switch DeX off by hand and re-run this config"
+    return None
 
 
 def set_verified_rotation(adb: AdbClient, orientation: str) -> None:
@@ -232,14 +164,11 @@ def apply_config(
         adb.run("shell", "cmd", "uimode", "night", "yes" if cfg.get("night") else "no")
         return
     if cfg.get("dex"):
-        # Real DeX on the device screen: DeX owns size, density and rotation; only text and
-        # theme settings apply.
-        set_dex(adb, True)
+        # Real DeX on the device screen (switched on by hand): DeX owns size, density and
+        # rotation; only text and theme settings apply. The runner checks the app's window.
         adb.run("shell", "settings", "put", "system", "font_scale", f"{float(cfg.get('font_scale', 1.0))}")
         adb.run("shell", "cmd", "uimode", "night", "yes" if cfg.get("night") else "no")
         return
-    if dex_active(adb):
-        set_dex(adb, False)
 
     if "size" in cfg:
         adb.run("shell", "wm", "size", natural_size(adb, str(cfg["size"])))
@@ -275,11 +204,6 @@ def reset_config(adb: AdbClient, saved: SavedDeviceState | None = None) -> None:
     adb.run("shell", "cmd", "uimode", "night", saved.night_mode if saved else "no")
     if saved is not None:
         adb.run("shell", "settings", "put", "global", "stay_on_while_plugged_in", saved.stay_on)
-        if dex_active(adb) != saved.dex:
-            try:
-                set_dex(adb, saved.dex)
-            except ConfigNotRunError:
-                pass
         adb.run(
             "shell",
             "settings",

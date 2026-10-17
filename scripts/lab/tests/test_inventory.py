@@ -20,7 +20,7 @@ from lab.android.configs import (  # noqa: E402
     natural_size,
     record_device_state,
     reset_config,
-    set_dex,
+    window_mode_mismatch,
     set_verified_rotation,
 )
 from lab.inventory import (  # noqa: E402
@@ -213,31 +213,23 @@ class GeometryTests(unittest.TestCase):
             set_verified_rotation(adb, "portrait")  # type: ignore[arg-type]
 
 
-class _DexAdb:
-    """Fake Samsung tablet: the DeX tile flips freeform mode unless `stuck`."""
+class _WindowAdb:
+    """Fake device whose lab app opens in `mode` (fullscreen, or freeform under DeX / ARC)."""
 
-    def __init__(self, stuck: bool = False) -> None:
-        self.dex = False
-        self.stuck = stuck
+    def __init__(self, mode: str) -> None:
+        self.mode = mode
         self.serial = "FAKE"
         self.calls: list[tuple[str, ...]] = []
 
     def run(self, *args: str, timeout: int = 30) -> str:
         self.calls.append(args)
-        if args[:3] == ("shell", "cmd", "statusbar") and not self.stuck:
-            self.dex = not self.dex
-        if args == ("shell", "dumpsys", "window", "displays"):
-            return f"mWindowingMode={'freeform' if self.dex else 'fullscreen'}\n"
         return ""
+
+    def app_task(self, app_id: str):  # type: ignore[no-untyped-def]
+        return 7, self.mode, (0, 0, 100, 100), (200, 200)
 
 
 class DexTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.addCleanup(setattr, android_configs, "DEX_POLL_S", android_configs.DEX_POLL_S)
-        self.addCleanup(setattr, android_configs, "DEX_TILE_TAPPER", android_configs.DEX_TILE_TAPPER)
-        android_configs.DEX_POLL_S = 0.0
-        android_configs.DEX_TILE_TAPPER = None
-
     def test_dex_config_only_on_devices_that_support_it(self) -> None:
         inv = parse_inventory(
             {"android": {"t": {"serial": "T", "role": "tablet"}, "s": {"serial": "S", "role": "tablet", "supports": ["dex"]}}}
@@ -245,47 +237,27 @@ class DexTests(unittest.TestCase):
         self.assertFalse(inv.find("t").allows_config("dex-on-device"))
         self.assertTrue(inv.find("s").allows_config("dex-on-device"))
 
-    def test_dex_config_switches_dex_on_and_others_switch_it_off(self) -> None:
-        adb = _DexAdb()
+    def test_dex_is_read_from_the_app_window_never_switched(self) -> None:
+        app = "com.photoselectortoolbox.lab"
+        dex = {"dex": True}
+        tab = {"size": "2960x1848", "rotation": "landscape"}
+        self.assertIsNone(window_mode_mismatch(_WindowAdb("freeform"), app, dex))  # type: ignore[arg-type]
+        self.assertIn("DeX is off", window_mode_mismatch(_WindowAdb("fullscreen"), app, dex) or "")  # type: ignore[arg-type]
+        self.assertIsNone(window_mode_mismatch(_WindowAdb("fullscreen"), app, tab))  # type: ignore[arg-type]
+        self.assertIn("switch DeX off", window_mode_mismatch(_WindowAdb("freeform"), app, tab) or "")  # type: ignore[arg-type]
+        # ChromeOS ARC is always freeform and never DeX.
+        self.assertIsNone(window_mode_mismatch(_WindowAdb("freeform"), app, {"native_display": True}))  # type: ignore[arg-type]
+
+    def test_dex_config_touches_no_display_or_system_ui(self) -> None:
+        adb = _WindowAdb("freeform")
         apply_config(adb, "dex-on-device")  # type: ignore[arg-type]
-        self.assertTrue(adb.dex)
-        # DeX owns the geometry: no size, density or rotation writes.
-        self.assertFalse(any(c[:3] == ("shell", "wm", "size") for c in adb.calls))
-        android_configs.set_verified_rotation, orig = (lambda a, o: None), android_configs.set_verified_rotation
-        try:
-            apply_config(adb, "tab-landscape")  # type: ignore[arg-type]
-        finally:
-            android_configs.set_verified_rotation = orig
-        self.assertFalse(adb.dex)
+        self.assertFalse(any(c[:2] == ("shell", "wm") for c in adb.calls))
+        self.assertFalse(any(c[:3] in (("shell", "cmd", "statusbar"), ("shell", "input", "tap")) for c in adb.calls))
 
-    def test_chromebook_window_leaves_the_display_alone_and_is_not_dex(self) -> None:
-        adb = _DexAdb()
-        adb.dex = True  # ARC is always freeform
-
-        def run(*args: str, timeout: int = 30) -> str:
-            if args == ("shell", "getprop", "ro.product.manufacturer"):
-                return "Google\n"
-            return _DexAdb.run(adb, *args, timeout=timeout)
-
-        adb.run = run  # type: ignore[method-assign]
-        self.assertFalse(android_configs.dex_active(adb))  # type: ignore[arg-type]
+    def test_chromebook_window_leaves_the_display_alone(self) -> None:
+        adb = _WindowAdb("freeform")
         apply_config(adb, "chromebook-window")  # type: ignore[arg-type]
         self.assertFalse(any(c[:2] == ("shell", "wm") for c in adb.calls))
-        self.assertFalse(any(c[:3] == ("shell", "cmd", "statusbar") for c in adb.calls))
-
-    def test_dex_that_does_not_switch_is_not_run(self) -> None:
-        with self.assertRaises(ConfigNotRunError):
-            set_dex(_DexAdb(stuck=True), True)  # type: ignore[arg-type]
-
-    def test_quick_settings_tap_is_the_fallback_when_click_tile_is_ignored(self) -> None:
-        adb = _DexAdb(stuck=True)  # click-tile does nothing, like One UI 8
-
-        def tap(_adb):  # type: ignore[no-untyped-def]
-            adb.dex = True
-            return 0
-
-        set_dex(adb, True, tile_tapper=tap)  # type: ignore[arg-type]
-        self.assertTrue(adb.dex)
 
 
 class AndroidFanOutTests(unittest.TestCase):
