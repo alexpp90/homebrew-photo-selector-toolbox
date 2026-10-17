@@ -55,5 +55,32 @@ class CopyMoveFeedbackTest {
     fun `isError only when something failed`() {
         assertFalse(CopyMoveFeedback.isError(0))
         assertTrue(CopyMoveFeedback.isError(1))
+        assertTrue(CopyMoveFeedback.isError(failed = 0, partial = 1))
+    }
+
+    @Test
+    fun `partial move where copy succeeded but original could not be removed`() {
+        assertEquals(
+            "Copied to collection — original could not be removed",
+            CopyMoveFeedback.message(
+                isCopy = false,
+                destinationNoun = "collection",
+                succeeded = 0,
+                failed = 0,
+                relatedCount = 0,
+                partial = 1,
+            ),
+        )
+        assertEquals(
+            "Copied to folder — original could not be removed (1 failed)",
+            CopyMoveFeedback.message(
+                isCopy = false,
+                destinationNoun = "folder",
+                succeeded = 0,
+                failed = 1,
+                relatedCount = 1,
+                partial = 1,
+            ),
+        )
     }
 }

@@ -6,6 +6,8 @@ import com.photoselector.core.model.ExifData
 import com.phototok.data.model.ImageItem
 import com.phototok.data.source.ImageSourceResolver
 import com.phototok.data.source.SelectionListing
+import com.phototok.domain.TransferResult
+import com.phototok.domain.TransferStatus
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -65,6 +67,36 @@ class ImageRepositoryImpl @Inject constructor(
         }
         return resolver.sourceFor(sourceUri)
             .copyImage(sourceUri, destFolderUri, sorting, subfolderName)
+    }
+
+    override suspend fun moveImageDetailed(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        subfolderName: String,
+        desiredFileName: String?,
+    ): TransferResult {
+        if (!resolver.sameSource(sourceUri, destFolderUri)) {
+            Log.w(TAG, "Cross-source move is not supported: $sourceUri -> $destFolderUri")
+            return TransferResult(TransferStatus.FAILURE, error = "Cross-source move is not supported")
+        }
+        return resolver.sourceFor(sourceUri)
+            .moveImageDetailed(sourceUri, destFolderUri, sorting, subfolderName, desiredFileName)
+    }
+
+    override suspend fun copyImageDetailed(
+        sourceUri: Uri,
+        destFolderUri: Uri,
+        sorting: Boolean,
+        subfolderName: String,
+        desiredFileName: String?,
+    ): TransferResult {
+        if (!resolver.sameSource(sourceUri, destFolderUri)) {
+            Log.w(TAG, "Cross-source copy is not supported: $sourceUri -> $destFolderUri")
+            return TransferResult(TransferStatus.FAILURE, error = "Cross-source copy is not supported")
+        }
+        return resolver.sourceFor(sourceUri)
+            .copyImageDetailed(sourceUri, destFolderUri, sorting, subfolderName, desiredFileName)
     }
 
     override suspend fun getImageDimensions(uri: Uri): Pair<Int, Int> =
