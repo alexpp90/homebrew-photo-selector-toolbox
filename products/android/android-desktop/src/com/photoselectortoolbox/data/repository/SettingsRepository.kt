@@ -68,6 +68,12 @@ class SettingsRepository @Inject constructor(
          */
         private val KEY_SEEN_HINTS = stringSetPreferencesKey("seen_first_run_hints")
 
+        /**
+         * Durable journal of deferred-delete URIs not yet committed to disk,
+         * so a killed process can offer recovery on next startup (PRP WP-11 / U-05).
+         */
+        private val KEY_PENDING_DELETE_JOURNAL = stringSetPreferencesKey("pending_delete_journal")
+
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
         const val DEFAULT_SORTING_ENABLED = true
         const val DEFAULT_GROUPING_ENABLED = false
@@ -469,5 +475,56 @@ class SettingsRepository @Inject constructor(
     suspend fun getFolderLastPosition(folderUri: String): Int {
         val key = intPreferencesKey("folder_pos_${folderUri.hashCode()}")
         return context.dataStore.data.map { prefs -> prefs[key] ?: 0 }.first()
+    }
+
+    // ── Durable pending-delete journal (PRP WP-11 / U-05) ────────────────
+
+    /**
+     * URIs of pending deletions not yet committed to disk.
+     *
+     * Recorded when a deletion is deferred into the undo history and removed
+     * when it is either reverted or committed, so a process killed mid-session
+     * can surface an honest recovery prompt on next launch instead of silently
+     * resurrecting or losing the pending operations.
+     */
+    val pendingDeleteJournal: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PENDING_DELETE_JOURNAL] ?: emptySet()
+    }
+
+    suspend fun setPendingDeleteJournal(uris: Set<String>) {
+        context.dataStore.edit { prefs ->
+            if (uris.isEmpty()) {
+                prefs.remove(KEY_PENDING_DELETE_JOURNAL)
+            } else {
+                prefs[KEY_PENDING_DELETE_JOURNAL] = uris
+            }
+        }
+    }
+
+    suspend fun addPendingDeletes(uris: Collection<String>) {
+        if (uris.isEmpty()) return
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_PENDING_DELETE_JOURNAL] ?: emptySet()
+            prefs[KEY_PENDING_DELETE_JOURNAL] = current + uris
+        }
+    }
+
+    suspend fun removePendingDeletes(uris: Collection<String>) {
+        if (uris.isEmpty()) return
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_PENDING_DELETE_JOURNAL] ?: emptySet()
+            val updated = current - uris.toSet()
+            if (updated.isEmpty()) {
+                prefs.remove(KEY_PENDING_DELETE_JOURNAL)
+            } else {
+                prefs[KEY_PENDING_DELETE_JOURNAL] = updated
+            }
+        }
+    }
+
+    suspend fun clearPendingDeleteJournal() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(KEY_PENDING_DELETE_JOURNAL)
+        }
     }
 }

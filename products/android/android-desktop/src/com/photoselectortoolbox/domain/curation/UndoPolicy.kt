@@ -55,6 +55,43 @@ sealed interface UndoableOperation {
 object UndoPolicy {
 
     /**
+     * Maximum number of reversible operations (deferred deletes + moves) held in
+     * the session undo stack before the oldest entry is evicted and committed.
+     */
+    const val MAX_UNDO_HISTORY = 20
+
+    /**
+     * Push [operation] onto the front of [history] (newest first), evicting any
+     * entries beyond [maxDepth].
+     */
+    fun push(
+        history: List<UndoableOperation>,
+        operation: UndoableOperation,
+        maxDepth: Int = MAX_UNDO_HISTORY,
+    ): UndoPushResult {
+        val combined = listOf(operation) + history
+        return if (combined.size <= maxDepth) {
+            UndoPushResult(history = combined)
+        } else {
+            UndoPushResult(
+                history = combined.take(maxDepth),
+                evicted = combined.drop(maxDepth),
+            )
+        }
+    }
+
+    /**
+     * Pop the newest operation from [history], returning the popped operation
+     * (or null when empty) and the remaining history.
+     */
+    fun pop(
+        history: List<UndoableOperation>,
+    ): Pair<UndoableOperation?, List<UndoableOperation>> {
+        val head = history.firstOrNull() ?: return null to emptyList()
+        return head to history.drop(1)
+    }
+
+    /**
      * Undo for a deletion that is still deferred — nothing on disk has changed
      * yet, which is the strongest form of undo available.
      */
@@ -114,4 +151,29 @@ object UndoPolicy {
             parentDocumentId = parentDocumentId,
         )
     }
+}
+
+/** Result of pushing a new operation onto the bounded undo history. */
+data class UndoPushResult(
+    val history: List<UndoableOperation>,
+    val evicted: List<UndoableOperation> = emptyList(),
+) {
+    /** Pending deletions evicted from the tail that must now be committed to disk. */
+    val evictedPendingDeletions: List<PendingDeletion>
+        get() = evicted.filterIsInstance<UndoableOperation.RevertPendingDelete>().map { it.pending }
+}
+
+/** Alias object for callers referencing [UndoHistory] directly. */
+object UndoHistory {
+    const val MAX_UNDO_HISTORY = UndoPolicy.MAX_UNDO_HISTORY
+
+    fun push(
+        history: List<UndoableOperation>,
+        operation: UndoableOperation,
+        maxDepth: Int = MAX_UNDO_HISTORY,
+    ): UndoPushResult = UndoPolicy.push(history, operation, maxDepth)
+
+    fun pop(
+        history: List<UndoableOperation>,
+    ): Pair<UndoableOperation?, List<UndoableOperation>> = UndoPolicy.pop(history)
 }
