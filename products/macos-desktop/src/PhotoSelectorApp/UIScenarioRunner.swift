@@ -351,6 +351,7 @@ final class UIScenarioRunner {
         case "toolbar_mode_1": return "1-Up"
         case "toolbar_mode_2": return "2-Up"
         case "toolbar_mode_3": return "3-Up"
+        case "toolbar_pan_link": return "Toggle Linked Panning"
         case "zoom_exit_button": return "Fit"
         default: return id
         }

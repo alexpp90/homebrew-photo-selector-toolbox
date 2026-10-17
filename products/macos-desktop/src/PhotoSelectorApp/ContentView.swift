@@ -10,6 +10,9 @@ public struct ContentView: View {
     @StateObject private var keyboardRouter = KeyboardShortcutRouter()
     @FocusState private var isWorkspaceFocused: Bool
 
+    /// Minimum pointer hit target (pt) for toolbar controls — the desktop floor `layout_lint` R5 enforces.
+    private static let minTarget: CGFloat = 24
+
     public init(viewModel: CullingWorkspaceViewModel = CullingWorkspaceViewModel()) {
         self.viewModel = viewModel
     }
@@ -80,33 +83,6 @@ public struct ContentView: View {
                                 }
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                            // Floating Top-Right Mini Mode Pill (Auxiliary Controls)
-                            if viewModel.comparisonMode != .single {
-                                HStack(spacing: 6) {
-                                    Button(action: { viewModel.toggleZoomSync() }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: viewModel.isZoomSynced ? "link" : "link.badge.slash")
-                                            Text(viewModel.isZoomSynced ? "Pan Linked" : "Pan Free")
-                                                .font(.system(size: 11, weight: .medium))
-                                        }
-                                        .foregroundStyle(viewModel.isZoomSynced ? Color.accentColor : Color.secondary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .focusable(false)
-                                    .help(viewModel.isZoomSynced ? "Synchronized Pan Active (Press S)" : "Independent Pan Active (Press S)")
-                                }
-                                .padding(4)
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
-                                    )
-                                .padding(.top, 12)
-                                .padding(.trailing, 16)
-                            }
 
                             // Zoom exit pill: a visible way back to Fit whenever any zoom is active.
                             if viewModel.zoomState.isZoomed {
@@ -340,6 +316,7 @@ public struct ContentView: View {
                         .foregroundStyle(Color.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
+                        .frame(minWidth: Self.minTarget, minHeight: Self.minTarget)
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
@@ -363,6 +340,7 @@ public struct ContentView: View {
                         .foregroundStyle(Color.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
+                        .frame(minWidth: Self.minTarget, minHeight: Self.minTarget)
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
@@ -389,6 +367,24 @@ public struct ContentView: View {
 
             // View Toggles
             HStack(spacing: 6) {
+                // Pan link toggle lives in the toolbar (not floating over the photos), so it can
+                // never cover a slot's score badge in 2-Up or Focus 3-Up.
+                if viewModel.comparisonMode != .single {
+                    Button(action: { viewModel.toggleZoomSync() }) {
+                        Image(systemName: viewModel.isZoomSynced ? "link" : "link.badge.slash")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(viewModel.isZoomSynced ? Color.accentColor : Color.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                            .frame(minWidth: Self.minTarget, minHeight: Self.minTarget)
+                    }
+                    .buttonStyle(.bordered)
+                    .focusable(false)
+                    .uiTestFrame("toolbar_pan_link")
+                    .accessibilityLabel(viewModel.isZoomSynced ? "Pan Linked" : "Pan Free")
+                    .help(viewModel.isZoomSynced ? "Synchronized Pan Active (Press S)" : "Independent Pan Active (Press S)")
+                }
+
                 Button(action: { viewModel.toggleZoom() }) {
                     HStack(spacing: 3) {
                         Image(systemName: viewModel.zoomState.isZoomed ? "arrow.down.right.and.arrow.up.left" : "magnifyingglass")
@@ -398,6 +394,7 @@ public struct ContentView: View {
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
+                    .frame(minHeight: Self.minTarget)
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
@@ -413,6 +410,7 @@ public struct ContentView: View {
                         .font(.system(size: 12))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
+                        .frame(minWidth: Self.minTarget, minHeight: Self.minTarget)
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
@@ -427,6 +425,7 @@ public struct ContentView: View {
                         .font(.system(size: 12))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
+                        .frame(minWidth: Self.minTarget, minHeight: Self.minTarget)
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
@@ -437,6 +436,7 @@ public struct ContentView: View {
                         .font(.system(size: 11, weight: .bold))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
+                        .frame(minWidth: Self.minTarget, minHeight: Self.minTarget)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.accentColor.opacity(0.85))
@@ -463,6 +463,7 @@ public struct ContentView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
+            .frame(minHeight: Self.minTarget)
             .background(viewModel.comparisonMode == mode ? Color.accentColor : Color.clear)
             .foregroundStyle(viewModel.comparisonMode == mode ? Color.white : Color.primary)
             .clipShape(RoundedRectangle(cornerRadius: 5))
