@@ -54,6 +54,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -133,7 +135,7 @@ fun SelectorScreen(
     // scan cannot move the frame behind the sheet. Esc is the exception — it is
     // what closes the sheet.
     val sheetOpen = showScanConfig || guideOpen ||
-        uiState.showDeleteConfirmation
+        uiState.showDeleteConfirmation || uiState.uncompletedDeletionsPrompt != null
 
     val dismissGuide: () -> Unit = {
         showGuide = false
@@ -201,7 +203,7 @@ fun SelectorScreen(
             onDismissRequest = { viewModel.dismissDeleteConfirmation() },
             title = { Text("Delete Image") },
             text = {
-                Text("Delete \"${uiState.currentImage?.fileName ?: ""}\"? This cannot be undone.")
+                Text(SelectorLabels.deleteConfirmationMessage(uiState.currentImage?.fileName ?: ""))
             },
             confirmButton = {
                 TextButton(
@@ -218,7 +220,32 @@ fun SelectorScreen(
         )
     }
 
-
+    uiState.uncompletedDeletionsPrompt?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = { viewModel.keepUncompletedDeletions() },
+            title = { Text("Uncompleted Deletions") },
+            text = {
+                Text(SelectorLabels.uncompletedDeletionsMessage(prompt.uris.size))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.confirmUncompletedDeletions() },
+                    modifier = Modifier.testTag("dialog_confirm_uncompleted_deletions"),
+                ) {
+                    Text("Delete now", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.keepUncompletedDeletions() },
+                    modifier = Modifier.testTag("dialog_keep_uncompleted_deletions"),
+                ) {
+                    Text("Keep")
+                }
+            },
+            containerColor = StudioCard,
+        )
+    }
 
     if (showScanConfig) {
         ScanConfigSheet(
@@ -238,7 +265,7 @@ fun SelectorScreen(
             onDismiss = { showFullscreen = false },
             onDelete = { index ->
                 viewModel.navigateToImage(index)
-                viewModel.showDeleteConfirmation()
+                viewModel.requestDelete()
             },
             onMoveToSelection = { index ->
                 viewModel.navigateToImage(index)
@@ -298,6 +325,8 @@ fun SelectorScreen(
                                         contextMenuAt != null -> contextMenuAt = null
                                         showScanConfig -> showScanConfig = false
                                         guideOpen -> dismissGuide()
+                                        uiState.showDeleteConfirmation -> viewModel.dismissDeleteConfirmation()
+                                        uiState.uncompletedDeletionsPrompt != null -> viewModel.keepUncompletedDeletions()
                                         uiState.maximisedFrame != null -> viewModel.clearMaximised()
                                     }
                                 },
@@ -309,6 +338,8 @@ fun SelectorScreen(
                                     }
                                 },
                                 onNavigate = onNavigate,
+                                ctrlOrMetaPressed = event.isCtrlPressed || event.isMetaPressed,
+                                onUndo = viewModel::undoLastOperation,
                             )
                         }
                 } else {
@@ -561,6 +592,8 @@ internal fun handleSelectorKey(
     onCloseOverlays: () -> Unit,
     onSetRating: ((Int) -> Unit)? = null,
     onNavigate: ((Screen) -> Unit)? = null,
+    ctrlOrMetaPressed: Boolean = false,
+    onUndo: (() -> Unit)? = null,
 ): Boolean {
     if (key == Key.Escape) {
         if (sheetOpen || contextMenuOpen || fullscreenOpen || maximised) {
@@ -571,6 +604,14 @@ internal fun handleSelectorKey(
     }
 
     if (sheetOpen) return false
+
+    if (ctrlOrMetaPressed) {
+        if (key == Key.Z) {
+            onUndo?.invoke()
+            return true
+        }
+        return false
+    }
 
     // When a frame is maximised, keys 0–5 set the rating of that maximised frame (0 = unrate, 1..5 = stars)
     if (maximised && onSetRating != null) {

@@ -62,6 +62,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,6 +76,16 @@ import kotlinx.coroutines.withContext
  * read before.
  */
 enum class SelectorFrame { PREVIOUS, CURRENT, NEXT }
+
+/**
+ * Recovery prompt raised on startup when uncommitted pending deletions from a
+ * previous killed session are found in the durable journal (PRP WP-11 / U-05).
+ */
+data class UncompletedDeletionsPrompt(
+    val uris: List<String>,
+    val count: Int = uris.size,
+    val message: String = SelectorLabels.uncompletedDeletionsMessage(count),
+)
 
 data class SelectorUiState(
     val images: List<ImageItem> = emptyList(),
@@ -109,14 +120,22 @@ data class SelectorUiState(
      */
     val snackbarMessage: String? = null,
     /**
-     * What, if anything, the snackbar's UNDO would actually reverse.
+     * Unified undo stack (newest first, up to [UndoPolicy.MAX_UNDO_HISTORY] = 20).
      *
-     * Null means no UNDO is drawn. `UndoPolicy` decides — a button that silently
-     * does nothing is worse than no button (REQUIREMENTS §2).
+     * Holds both deferred deletions ([UndoableOperation.RevertPendingDelete]) and
+     * completed moves ([UndoableOperation.ReverseMove]) in LIFO order.
      */
-    val undoOperation: UndoableOperation? = null,
-    /** A deletion removed from the list but not yet committed to disk. */
-    val pendingDeletion: PendingDeletion? = null,
+    val undoHistory: List<UndoableOperation> = emptyList(),
+    /**
+     * Whether the currently visible snackbar represents the top of [undoHistory]
+     * and should offer an inline UNDO button.
+     */
+    val snackbarUndoAvailable: Boolean = false,
+    /**
+     * Recovery prompt when uncommitted deletions from a killed session are found
+     * in the durable pending-delete journal.
+     */
+    val uncompletedDeletionsPrompt: UncompletedDeletionsPrompt? = null,
     val showDeleteConfirmation: Boolean = false,
     val groupingEnabled: Boolean = false,
     val groups: List<List<Int>> = emptyList(),
@@ -160,6 +179,24 @@ data class SelectorUiState(
     /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
     val missingGrantPrompt: Boolean = false,
 ) {
+    /**
+     * What, if anything, the snackbar's UNDO would actually reverse.
+     *
+     * Null means no UNDO is drawn on the snackbar (e.g. for Copy, Scan complete,
+     * Error, or after the snackbar is dismissed), while [undoHistory] remains
+     * available to `Ctrl+Z`.
+     */
+    val undoOperation: UndoableOperation?
+        get() = if (snackbarUndoAvailable) undoHistory.firstOrNull() else null
+
+    /** The most recent deletion removed from the list but not yet committed to disk. */
+    val pendingDeletion: PendingDeletion?
+        get() = undoHistory.filterIsInstance<UndoableOperation.RevertPendingDelete>().firstOrNull()?.pending
+
+    /** All deletions currently held in [undoHistory] and not yet committed to disk. */
+    val pendingDeletions: List<PendingDeletion>
+        get() = undoHistory.filterIsInstance<UndoableOperation.RevertPendingDelete>().map { it.pending }
+
     /** The active images adhering to the rating filter. */
     val filteredImages: List<ImageItem>
         get() = if (ratingFilter is RatingFilter.All) {
@@ -280,7 +317,12 @@ class SelectorViewModel @Inject constructor(
     private var scoreRestoreJob: Job? = null
     private var scanJob: Job? = null
     private var groupingJob: Job? = null
-    private var deletionTimerJob: Job? = null
+
+    /**
+     * Session-scoped set of folder URIs for which the photographer has already
+     * confirmed permanent SAF deletion in this session (U-05).
+     */
+    private val confirmedDeleteFolders = mutableSetOf<String>()
 
     /**
      * Every URI ever published for this folder, including ones the photographer
@@ -308,6 +350,22 @@ class SelectorViewModel @Inject constructor(
     private val imageGrouper = ImageGrouper(context)
 
     init {
+        viewModelScope.launch {
+            settingsRepository.pendingDeleteJournal.take(1).collect { recovered ->
+                if (recovered.isNotEmpty()) {
+                    val sorted = recovered.toList()
+                    _uiState.update {
+                        it.copy(
+                            uncompletedDeletionsPrompt = UncompletedDeletionsPrompt(
+                                uris = sorted,
+                                count = sorted.size,
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
         viewModelScope.launch {
             combine(
                 settingsRepository.groupingEnabled,
@@ -417,7 +475,7 @@ class SelectorViewModel @Inject constructor(
      * old folder's URIs and the screen stays empty with no error anywhere.
      */
     private fun resetSession() {
-        commitPendingDeletion()
+        commitAllPendingDeletions()
         discoveryJob?.cancel()
         visibleDimensionsJob?.cancel()
         backfillDimensionsJob?.cancel()
@@ -447,8 +505,8 @@ class SelectorViewModel @Inject constructor(
                 scanProgress = 0f,
                 scanStatusText = "",
                 snackbarMessage = null,
-                undoOperation = null,
-                pendingDeletion = null,
+                undoHistory = emptyList(),
+                snackbarUndoAvailable = false,
                 ratingFilter = RatingFilter.All,
                 missingGrantPrompt = false,
             )
@@ -823,7 +881,7 @@ class SelectorViewModel @Inject constructor(
                         scanProgress = 1f,
                         scanStatusText = "",
                         snackbarMessage = SelectorLabels.scanCompleteMessage(analysed),
-                        undoOperation = null,
+                        snackbarUndoAvailable = false,
                     )
                 }
             } catch (e: CancellationException) {
@@ -903,14 +961,12 @@ class SelectorViewModel @Inject constructor(
         _uiState.update { it.copy(showDeleteConfirmation = false) }
     }
 
+    fun requestDeleteCurrentImage() = requestDelete()
+
     /**
-     * Delete the current frame, skipping the dialog only when the file can be
-     * recovered from the system trash.
-     *
-     * Called from the labelled Delete control, the `Del` key and the context
-     * menu — never from a swipe. A swipe used to invoke this on the phone
-     * layout, which made the same horizontal gesture mean "next frame" in the
-     * viewer and "destroy this file" in the feed; that binding is gone.
+     * Delete the current frame, skipping the dialog when the file can be
+     * recovered from the system trash or when the photographer has already
+     * confirmed permanent deletion for this folder in the current session.
      */
     fun requestDelete() {
         val state = _uiState.value
@@ -918,8 +974,9 @@ class SelectorViewModel @Inject constructor(
 
         val currentImage = state.images[state.currentIndex]
         val uri = Uri.parse(currentImage.uri)
+        val folderUri = state.folderUri
 
-        if (imageRepository.canTrash(uri)) {
+        if (imageRepository.canTrash(uri) || (folderUri != null && folderUri in confirmedDeleteFolders)) {
             deleteCurrentImage()
         } else {
             showDeleteConfirmation()
@@ -927,19 +984,17 @@ class SelectorViewModel @Inject constructor(
     }
 
     /**
-     * Remove the current frame from the list now and delete it from disk when
-     * the undo window closes.
+     * Remove the current frame from the list now and push it onto the 20-deep
+     * [SelectorUiState.undoHistory] stack.
      *
-     * Nothing touches the file system here, which is what makes the UNDO
-     * trustworthy: reverting is a list insertion, so it cannot fail. The commit
-     * runs on [appScope] — a deletion that vanishes because the photographer
-     * backed out of the screen is a data-integrity bug, not a cancelled task.
+     * Nothing touches the file system until the entry is evicted past
+     * [UndoPolicy.MAX_UNDO_HISTORY], the folder changes, or the session exits,
+     * which makes `Ctrl+Z` / `UNDO` an infallible list insertion while in the folder.
      */
     fun deleteCurrentImage() {
-        // Another destructive action arriving closes the previous window.
-        commitPendingDeletion()
-
         val state = _uiState.value
+        state.folderUri?.let { confirmedDeleteFolders.add(it) }
+
         val (listState, pending) =
             DeferredDeletion.beginForCurrent(state.listState, System.currentTimeMillis())
                 ?: run {
@@ -947,42 +1002,64 @@ class SelectorViewModel @Inject constructor(
                     return
                 }
 
-        _uiState.update {
-            it.copy(
+        val operation = UndoPolicy.forPendingDelete(pending) ?: return
+        var evictedPendings: List<PendingDeletion> = emptyList()
+
+        _uiState.update { current ->
+            val pushResult = UndoPolicy.push(current.undoHistory, operation)
+            evictedPendings = pushResult.evictedPendingDeletions
+            current.copy(
                 images = listState.images,
                 currentIndex = listState.currentIndex,
                 showDeleteConfirmation = false,
-                pendingDeletion = pending,
                 snackbarMessage = SelectorLabels.deletedMessage(pending.slots.size),
-                undoOperation = UndoPolicy.forPendingDelete(pending),
+                undoHistory = pushResult.history,
+                snackbarUndoAvailable = true,
             )
         }
         onFrameChanged()
-        // The frame is gone from the list and nothing has touched the disk. That
-        // second half is invisible, so it is said once.
         raiseHint(SelectorHint.DELETE_UNDO)
 
-        deletionTimerJob?.cancel()
-        deletionTimerJob = appScope.launch {
-            delay(DeferredDeletion.UNDO_WINDOW_MILLIS)
-            commitPendingDeletion()
+        appScope.launch {
+            settingsRepository.addPendingDeletes(pending.uris)
+        }
+
+        evictedPendings.forEach { evicted ->
+            commitPendingDeletion(evicted, state.folderUri)
         }
     }
 
     /**
-     * Write the pending deletion to disk.
+     * Commit every pending deletion currently in [SelectorUiState.undoHistory] to disk.
      *
-     * Triggered by the window closing, by another destructive or filing action,
-     * by a folder change, and by the screen being left ([onCleared]).
+     * Called when leaving the folder ([resetSession]) or when the ViewModel is
+     * cleared ([onCleared]).
      */
-    private fun commitPendingDeletion() {
-        val pending = _uiState.value.pendingDeletion ?: return
-        deletionTimerJob?.cancel()
-        deletionTimerJob = null
-        _uiState.update { it.copy(pendingDeletion = null) }
+    private fun commitAllPendingDeletions() {
+        val state = _uiState.value
+        val pendings = state.pendingDeletions
+        if (pendings.isEmpty()) return
+        val originFolderUri = state.folderUri
+        _uiState.update { current ->
+            val remaining = current.undoHistory.filterNot { it is UndoableOperation.RevertPendingDelete }
+            current.copy(
+                undoHistory = remaining,
+                snackbarUndoAvailable = current.snackbarUndoAvailable && remaining.isNotEmpty(),
+            )
+        }
+        pendings.forEach { pending ->
+            commitPendingDeletion(pending, originFolderUri)
+        }
+    }
 
-        val canTrash = pending.uris.all { imageRepository.canTrash(Uri.parse(it)) }
-
+    /**
+     * Write a single [pending] deletion to disk and remove its URIs from the
+     * durable pending-delete journal.
+     *
+     * If deleting any file fails while [originFolderUri] is still open, the
+     * frame is restored to the list and an error naming the photo is reported.
+     */
+    private fun commitPendingDeletion(pending: PendingDeletion, originFolderUri: String?) {
         appScope.launch {
             var failures = 0
             pending.uris.forEach { uri ->
@@ -994,30 +1071,62 @@ class SelectorViewModel @Inject constructor(
                 }
                 if (!deleted) failures++
             }
-
-            _uiState.update { state ->
-                val offered = state.undoOperation
-                // Only this deletion's own UNDO is rewritten. Once on disk, the
-                // list restore is honest only where the backend kept the file:
-                // a SAF delete is an unlink with nothing behind it, so the
-                // affordance disappears rather than lying about what it does.
-                if (offered is UndoableOperation.RevertPendingDelete &&
-                    offered.pending == pending
-                ) {
-                    state.copy(
-                        undoOperation = UndoPolicy.forCommittedDelete(pending.slots, canTrash),
-                    )
-                } else {
-                    state
-                }
-            }
+            settingsRepository.removePendingDeletes(pending.uris)
 
             if (failures > 0) {
-                reportError(
-                    if (failures == 1) "1 image could not be deleted"
-                    else "$failures images could not be deleted"
-                )
+                val failedName = pending.slots.firstOrNull()?.image?.fileName ?: "image"
+                _uiState.update { state ->
+                    if (originFolderUri != null && state.folderUri == originFolderUri) {
+                        val restored = DeferredDeletion.revert(state.listState, pending)
+                        state.copy(
+                            images = restored.images,
+                            currentIndex = restored.currentIndex,
+                        )
+                    } else {
+                        state
+                    }
+                }
+                reportError("Could not delete $failedName")
             }
+        }
+    }
+
+    /**
+     * Complete uncommitted deletions recovered from a previous killed session.
+     */
+    fun confirmUncompletedDeletions() {
+        val prompt = _uiState.value.uncompletedDeletionsPrompt ?: return
+        _uiState.update { state ->
+            val edit = OptimisticEdits.apply(state.listState, CurationAction.DELETE, prompt.uris)
+            state.copy(
+                images = edit.state.images,
+                currentIndex = edit.state.currentIndex,
+                uncompletedDeletionsPrompt = null,
+            )
+        }
+        appScope.launch {
+            prompt.uris.forEach { uri ->
+                try {
+                    imageRepository.deleteImage(context, Uri.parse(uri))
+                } catch (e: Exception) {
+                    Log.e("SelectorViewModel", "Recovery delete failed for $uri", e)
+                }
+            }
+            settingsRepository.removePendingDeletes(prompt.uris)
+            settingsRepository.clearPendingDeleteJournal()
+        }
+    }
+
+    /**
+     * Keep photos from a previous killed session's uncommitted deletions and
+     * clear the recovery journal without deleting.
+     */
+    fun keepUncompletedDeletions() {
+        val prompt = _uiState.value.uncompletedDeletionsPrompt ?: return
+        _uiState.update { it.copy(uncompletedDeletionsPrompt = null) }
+        appScope.launch {
+            settingsRepository.removePendingDeletes(prompt.uris)
+            settingsRepository.clearPendingDeleteJournal()
         }
     }
 
@@ -1044,9 +1153,6 @@ class SelectorViewModel @Inject constructor(
         val folderUri = state.folderUri ?: return
         if (state.images.isEmpty()) return
 
-        // A filing action is the next action: it closes any open undo window.
-        commitPendingDeletion()
-
         val before = _uiState.value.listState
         val currentItem = before.images.getOrNull(before.currentIndex) ?: return
         val sourceUri = currentItem.uri
@@ -1069,7 +1175,7 @@ class SelectorViewModel @Inject constructor(
                 ),
                 // Populated once the transfer reports where the file went; a
                 // move with no destination URI is not reversible.
-                undoOperation = null,
+                snackbarUndoAvailable = false,
             )
         }
         onFrameChanged()
@@ -1102,13 +1208,18 @@ class SelectorViewModel @Inject constructor(
                     destinationUris = result.destinationUris,
                     parentDocumentId = result.parentDocumentId ?: currentItem.parentDocumentId,
                 )
-                _uiState.update { current ->
-                    // Only attach the undo if this action still owns the
-                    // snackbar; a later action must not inherit it.
-                    if (current.undoOperation == null && current.snackbarMessage != null) {
-                        current.copy(undoOperation = undo)
-                    } else {
-                        current
+                if (undo != null) {
+                    var evictedPendings: List<PendingDeletion> = emptyList()
+                    _uiState.update { current ->
+                        val pushResult = UndoPolicy.push(current.undoHistory, undo)
+                        evictedPendings = pushResult.evictedPendingDeletions
+                        current.copy(
+                            undoHistory = pushResult.history,
+                            snackbarUndoAvailable = current.snackbarMessage != null,
+                        )
+                    }
+                    evictedPendings.forEach { evicted ->
+                        commitPendingDeletion(evicted, folderUri)
                     }
                 }
             } else if (result?.partial == true) {
@@ -1129,7 +1240,7 @@ class SelectorViewModel @Inject constructor(
             state.copy(
                 images = restored.images,
                 currentIndex = restored.currentIndex,
-                undoOperation = null,
+                snackbarUndoAvailable = false,
             )
         }
     }
@@ -1137,31 +1248,32 @@ class SelectorViewModel @Inject constructor(
     // ── Undo ─────────────────────────────────────────────────────────────
 
     /**
-     * Reverse the last action, where `UndoPolicy` said that was possible.
+     * Pop and reverse the newest operation in [SelectorUiState.undoHistory].
      *
-     * The three cases are genuinely different operations, not one operation with
-     * flags: a pending delete is a list insertion, a committed delete is a trash
-     * restore, and a move is a file operation back into the opened folder.
+     * Supports up to [UndoPolicy.MAX_UNDO_HISTORY] (20) interleaved deletions
+     * and moves in LIFO order via `Ctrl+Z` / `⌘Z` or the snackbar `UNDO` button.
      */
     fun undoLastOperation() {
         val state = _uiState.value
-        when (val operation = state.undoOperation) {
+        val (operation, remainingHistory) = UndoPolicy.pop(state.undoHistory)
+        when (operation) {
             null -> return
 
             is UndoableOperation.RevertPendingDelete -> {
-                deletionTimerJob?.cancel()
-                deletionTimerJob = null
                 val restored = DeferredDeletion.revert(state.listState, operation.pending)
                 _uiState.update {
                     it.copy(
                         images = restored.images,
                         currentIndex = restored.currentIndex,
-                        pendingDeletion = null,
-                        undoOperation = null,
+                        undoHistory = remainingHistory,
+                        snackbarUndoAvailable = false,
                         snackbarMessage = null,
                     )
                 }
                 onFrameChanged()
+                appScope.launch {
+                    settingsRepository.removePendingDeletes(operation.pending.uris)
+                }
             }
 
             is UndoableOperation.RestoreFromTrash -> {
@@ -1170,7 +1282,8 @@ class SelectorViewModel @Inject constructor(
                     it.copy(
                         images = restored.images,
                         currentIndex = restored.currentIndex,
-                        undoOperation = null,
+                        undoHistory = remainingHistory,
+                        snackbarUndoAvailable = false,
                         snackbarMessage = null,
                     )
                 }
@@ -1195,7 +1308,8 @@ class SelectorViewModel @Inject constructor(
                     it.copy(
                         images = restored.images,
                         currentIndex = restored.currentIndex,
-                        undoOperation = null,
+                        undoHistory = remainingHistory,
+                        snackbarUndoAvailable = false,
                         snackbarMessage = null,
                     )
                 }
@@ -1213,6 +1327,17 @@ class SelectorViewModel @Inject constructor(
                         null
                     }
                     if (result == null || !result.success) {
+                        _uiState.update { current ->
+                            val reapplied = OptimisticEdits.apply(
+                                current.listState,
+                                CurationAction.MOVE,
+                                operation.slots.map { it.uri },
+                            )
+                            current.copy(
+                                images = reapplied.state.images,
+                                currentIndex = reapplied.state.currentIndex,
+                            )
+                        }
                         reportError("Could not move the image back")
                     }
                 }
@@ -1220,9 +1345,9 @@ class SelectorViewModel @Inject constructor(
         }
     }
 
-    /** The snackbar has timed out or been dismissed; its undo goes with it. */
+    /** The snackbar has timed out or been dismissed; its inline undo goes with it. */
     fun dismissSnackbar() {
-        _uiState.update { it.copy(snackbarMessage = null, undoOperation = null) }
+        _uiState.update { it.copy(snackbarMessage = null, snackbarUndoAvailable = false) }
     }
 
     // ── Misc actions ─────────────────────────────────────────────────────
@@ -1356,7 +1481,7 @@ class SelectorViewModel @Inject constructor(
     /** Errors reach the photographer through the same snackbar as everything else. */
     private fun reportError(message: String) {
         _uiState.update {
-            it.copy(error = message, snackbarMessage = message, undoOperation = null)
+            it.copy(error = message, snackbarMessage = message, snackbarUndoAvailable = false)
         }
     }
 
@@ -1676,7 +1801,7 @@ class SelectorViewModel @Inject constructor(
      */
     override fun onCleared() {
         super.onCleared()
-        commitPendingDeletion()
+        commitAllPendingDeletions()
         cancelAllPrefetch()
     }
 

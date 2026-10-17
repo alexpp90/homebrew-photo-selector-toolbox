@@ -15,10 +15,13 @@ import com.photoselectortoolbox.data.repository.CacheRepository
 import com.photoselectortoolbox.data.repository.FileOperationResult
 import com.photoselectortoolbox.data.repository.ImageRepository
 import com.photoselectortoolbox.data.repository.SettingsRepository
+import androidx.compose.ui.input.key.Key
 import com.photoselectortoolbox.domain.curation.UndoableOperation
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
 import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
+import com.photoselectortoolbox.ui.selector.SelectorActions
+import com.photoselectortoolbox.ui.selector.handleSelectorKey
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -88,6 +91,7 @@ class SelectorViewModelTest {
     private val seenFullscreenHintFlow = MutableStateFlow(true)
     private val seenNavHintFlow = MutableStateFlow(true)
     private val selectionFolderNameFlow = MutableStateFlow(FilingAction.DEFAULT_SELECTION_FOLDER)
+    private val pendingDeleteJournalFlow = MutableStateFlow<Set<String>>(emptySet())
 
     /** Discovery batches, pushed by the test to imitate progressive enumeration. */
     private val discovery = MutableSharedFlow<List<ImageItem>>(replay = 1)
@@ -110,6 +114,7 @@ class SelectorViewModelTest {
         every { hasSeenFullscreenGestureHint } returns seenFullscreenHintFlow
         every { hasSeenNavHint } returns seenNavHintFlow
         every { selectionFolderName } returns selectionFolderNameFlow
+        every { pendingDeleteJournal } returns pendingDeleteJournalFlow
     }
 
     private val imageRepository: ImageRepository = mockk(relaxed = true) {
@@ -431,14 +436,15 @@ class SelectorViewModelTest {
     }
 
     @Test
-    fun `a second destructive action commits the first deletion to disk`() = runTest {
+    fun `a second destructive action keeps both deletions in the 20-step undo stack`() = runTest {
         val viewModel = loadFolder(image("a"), image("b"), image("c"))
         viewModel.deleteCurrentImage()
         viewModel.deleteCurrentImage()
 
-        coVerify(exactly = 1) {
-            imageRepository.deleteImage(any(), match { it.toString().endsWith("/a") })
+        coVerify(exactly = 0) {
+            imageRepository.deleteImage(any(), any())
         }
+        assertEquals(2, viewModel.uiState.value.undoHistory.size)
         assertEquals(listOf("c"), viewModel.uiState.value.images.map { it.fileName })
     }
 
@@ -623,8 +629,8 @@ class SelectorViewModelTest {
 
         val viewModel = loadFolder(bundleItem, image("b"))
         viewModel.deleteCurrentImage()
-        // Trigger commit via second delete.
-        viewModel.deleteCurrentImage()
+        // Trigger commit via folder switch.
+        viewModel.selectFolder(Uri.parse(OTHER_FOLDER_URI))
 
         coVerify(exactly = 1) {
             imageRepository.deleteImage(any(), Uri.parse("content://test/folder/IMG_0002.JPG"))
@@ -635,6 +641,180 @@ class SelectorViewModelTest {
         coVerify(exactly = 1) {
             imageRepository.deleteImage(any(), Uri.parse("content://test/folder/IMG_0002.CR3.xmp"))
         }
+    }
+
+    // ── U-05: 20-step undo stack, one-time per-folder confirmation, journal & Ctrl+Z ─
+
+    @Test
+    fun `confirming delete once per folder skips dialog for subsequent deletes and resets on new folder`() = runTest {
+        every { imageRepository.canTrash(any()) } returns false
+        val viewModel = loadFolder(image("a"), image("b"), image("c"))
+
+        // First delete in FOLDER_URI shows confirmation dialog.
+        viewModel.requestDelete()
+        assertTrue(viewModel.uiState.value.showDeleteConfirmation)
+        assertEquals(3, viewModel.uiState.value.images.size)
+
+        // User confirms the dialog.
+        viewModel.deleteCurrentImage()
+        assertFalse(viewModel.uiState.value.showDeleteConfirmation)
+        assertEquals(listOf("b", "c"), viewModel.uiState.value.images.map { it.fileName })
+
+        // Second delete in the same folder executes immediately without showing the dialog.
+        viewModel.requestDelete()
+        assertFalse(viewModel.uiState.value.showDeleteConfirmation)
+        assertEquals(listOf("c"), viewModel.uiState.value.images.map { it.fileName })
+
+        // Switching to another folder resets the confirmation gate for that new folder.
+        viewModel.selectFolder(Uri.parse(OTHER_FOLDER_URI))
+        discovery.emit(listOf(image("d"), image("e")))
+        viewModel.requestDelete()
+        assertTrue(viewModel.uiState.value.showDeleteConfirmation)
+    }
+
+    @Test
+    fun `three consecutive moves and deletes undo in LIFO order to their original slot indices`() = runTest {
+        coEvery { imageRepository.moveImage(any(), any(), any(), any()) } coAnswers {
+            val src = secondArg<Uri>().toString()
+            val name = src.substringAfterLast('/')
+            FileOperationResult.success(src, "content://test/sel/$name", listOf("content://test/sel/$name"))
+        }
+        coEvery { imageRepository.undoMove(any(), any(), any()) } coAnswers {
+            val dest = secondArg<Uri>().toString()
+            val name = dest.substringAfterLast('/')
+            FileOperationResult.success(dest, "content://test/folder/$name", listOf("content://test/folder/$name"))
+        }
+
+        val viewModel = loadFolder(image("a"), image("b"), image("c"), image("d"))
+        // 1. Delete "a" (slot 0) -> remaining: b, c, d
+        viewModel.deleteCurrentImage()
+        // 2. Move "b" (now at slot 0) -> remaining: c, d
+        viewModel.moveToSelection()
+        // 3. Delete "c" (now at slot 0) -> remaining: d
+        viewModel.deleteCurrentImage()
+
+        assertEquals(listOf("d"), viewModel.uiState.value.images.map { it.fileName })
+        assertEquals(3, viewModel.uiState.value.undoHistory.size)
+
+        // Undo 3 (Delete "c") -> c, d
+        viewModel.undoLastOperation()
+        assertEquals(listOf("c", "d"), viewModel.uiState.value.images.map { it.fileName })
+
+        // Undo 2 (Move "b") -> b, c, d
+        viewModel.undoLastOperation()
+        assertEquals(listOf("b", "c", "d"), viewModel.uiState.value.images.map { it.fileName })
+
+        // Undo 1 (Delete "a") -> a, b, c, d
+        viewModel.undoLastOperation()
+        assertEquals(listOf("a", "b", "c", "d"), viewModel.uiState.value.images.map { it.fileName })
+        assertTrue(viewModel.uiState.value.undoHistory.isEmpty())
+    }
+
+    @Test
+    fun `pushing a 21st undoable action evicts the oldest entry and commits its pending deletion to disk`() = runTest {
+        val items = (1..22).map { i -> image("img_$i.jpg") }
+        val viewModel = loadFolder(*items.toTypedArray())
+
+        repeat(20) {
+            viewModel.deleteCurrentImage()
+        }
+        assertEquals(20, viewModel.uiState.value.undoHistory.size)
+        coVerify(exactly = 0) { imageRepository.deleteImage(any(), any()) }
+
+        // 21st delete evicts img_1.jpg and commits it to disk.
+        viewModel.deleteCurrentImage()
+        assertEquals(20, viewModel.uiState.value.undoHistory.size)
+        coVerify(exactly = 1) {
+            imageRepository.deleteImage(any(), Uri.parse("content://test/folder/img_1.jpg"))
+        }
+    }
+
+    @Test
+    fun `failed pending delete commit restores the photo to images and reports its name in error`() = runTest {
+        coEvery {
+            imageRepository.deleteImage(any(), Uri.parse("content://test/folder/img_1.jpg"))
+        } returns false
+
+        val items = (1..22).map { i -> image("img_$i.jpg") }
+        val viewModel = loadFolder(*items.toTypedArray())
+
+        // Push 21 deletes so img_1.jpg is evicted and committed while still in the same folder.
+        repeat(21) {
+            viewModel.deleteCurrentImage()
+        }
+
+        val state = viewModel.uiState.value
+        assertTrue(state.images.any { it.fileName == "img_1.jpg" })
+        assertEquals("Could not delete img_1.jpg", state.error)
+        assertEquals("Could not delete img_1.jpg", state.snackbarMessage)
+    }
+
+    @Test
+    fun `non-empty pendingDeleteJournal on startup exposes prompt and confirm or keep clears journal`() = runTest {
+        val orphanUri = "content://test/folder/orphan.jpg"
+        pendingDeleteJournalFlow.value = setOf(orphanUri)
+
+        // Case 1: Confirming deletes the journaled URI and clears the journal.
+        val vmConfirm = buildViewModel()
+        val prompt1 = vmConfirm.uiState.value.uncompletedDeletionsPrompt
+        assertNotNull(prompt1)
+        assertEquals(listOf(orphanUri), prompt1?.uris)
+
+        vmConfirm.confirmUncompletedDeletions()
+        assertNull(vmConfirm.uiState.value.uncompletedDeletionsPrompt)
+        coVerify(exactly = 1) { imageRepository.deleteImage(any(), Uri.parse(orphanUri)) }
+        coVerify(atLeast = 1) { settingsRepository.clearPendingDeleteJournal() }
+
+        // Case 2: Keeping clears the journal without calling deleteImage.
+        val keepUri = "content://test/folder/keep.jpg"
+        pendingDeleteJournalFlow.value = setOf(keepUri)
+        val vmKeep = buildViewModel()
+        assertNotNull(vmKeep.uiState.value.uncompletedDeletionsPrompt)
+
+        vmKeep.keepUncompletedDeletions()
+        assertNull(vmKeep.uiState.value.uncompletedDeletionsPrompt)
+        coVerify(exactly = 0) { imageRepository.deleteImage(any(), Uri.parse(keepUri)) }
+    }
+
+    @Test
+    fun `Ctrl+Z key event invokes undoLastOperation even after snackbar is dismissed`() = runTest {
+        val viewModel = loadFolder(image("a"), image("b"))
+        viewModel.deleteCurrentImage()
+        assertEquals(listOf("b"), viewModel.uiState.value.images.map { it.fileName })
+
+        // Dismiss the snackbar — snackbar undo is now null, but undoHistory still holds the operation.
+        viewModel.dismissSnackbar()
+        assertNull(viewModel.uiState.value.undoOperation)
+        assertEquals(1, viewModel.uiState.value.undoHistory.size)
+
+        val handled = handleSelectorKey(
+            key = Key.Z,
+            sheetOpen = false,
+            contextMenuOpen = false,
+            fullscreenOpen = false,
+            maximised = false,
+            actions = SelectorActions(
+                onMove = {},
+                onCopy = {},
+                onDelete = {},
+                onFullscreen = {},
+                onToggleDetails = {},
+                onToggleFilmstrip = {},
+                onToggleOverlayValues = {},
+                onShowShortcuts = {},
+            ),
+            onPrevious = {},
+            onNext = {},
+            onMaximise = {},
+            onShowShortcuts = {},
+            onCloseOverlays = {},
+            ctrlOrMetaPressed = true,
+            onUndo = viewModel::undoLastOperation,
+        )
+
+        assertTrue(handled)
+        assertEquals(listOf("a", "b"), viewModel.uiState.value.images.map { it.fileName })
+        assertTrue(viewModel.uiState.value.undoHistory.isEmpty())
     }
 }
 
