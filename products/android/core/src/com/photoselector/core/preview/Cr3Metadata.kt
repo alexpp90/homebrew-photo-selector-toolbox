@@ -1,6 +1,7 @@
 package com.photoselector.core.preview
 
 import java.nio.channels.FileChannel
+import java.util.Locale
 
 /**
  * EXIF values read straight from a Canon CR3's `CMT1` (IFD0) and `CMT2`
@@ -60,11 +61,13 @@ internal class Cr3Metadata(
                 fun i(tag: Int) = exif?.get(tag)?.long()?.toInt()?.takeIf { it > 0 }
                 val lat = parseGpsCoord(
                     gps?.get(Tags.GPS_LATITUDE)?.doubles(),
-                    gps?.get(Tags.GPS_LATITUDE_REF)?.string()
+                    gps?.get(Tags.GPS_LATITUDE_REF)?.string(),
+                    limit = 90.0
                 )
                 val lon = parseGpsCoord(
                     gps?.get(Tags.GPS_LONGITUDE)?.doubles(),
-                    gps?.get(Tags.GPS_LONGITUDE_REF)?.string()
+                    gps?.get(Tags.GPS_LONGITUDE_REF)?.string(),
+                    limit = 180.0
                 )
                 val gpsUtc = parseGpsUtc(
                     gps?.get(Tags.GPS_DATE_STAMP)?.string(),
@@ -101,7 +104,7 @@ internal class Cr3Metadata(
             null
         }
 
-        private fun parseGpsCoord(dms: DoubleArray?, ref: String?): Double? {
+        private fun parseGpsCoord(dms: DoubleArray?, ref: String?, limit: Double): Double? {
             if (dms == null || dms.size < 3) return null
             val deg = dms[0]
             val min = dms[1]
@@ -109,7 +112,8 @@ internal class Cr3Metadata(
             if (!deg.isFinite() || !min.isFinite() || !sec.isFinite()) return null
             val abs = deg + (min / 60.0) + (sec / 3600.0)
             val sign = if (ref?.trim()?.uppercase() in setOf("S", "W")) -1.0 else 1.0
-            return abs * sign
+            val value = abs * sign
+            return value.takeIf { it in -limit..limit }
         }
 
         private fun parseGpsUtc(dateStamp: String?, timeRationals: DoubleArray?): String? {
@@ -118,8 +122,7 @@ internal class Cr3Metadata(
             val h = timeRationals[0].toInt().coerceIn(0, 23)
             val m = timeRationals[1].toInt().coerceIn(0, 59)
             val s = timeRationals[2].toInt().coerceIn(0, 59)
-            return "%s %02d:%02d:%02d".format(cleanDate, h, m, s)
+            return String.format(Locale.ROOT, "%s %02d:%02d:%02d", cleanDate, h, m, s)
         }
     }
 }
-

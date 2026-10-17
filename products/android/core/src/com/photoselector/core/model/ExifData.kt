@@ -20,10 +20,10 @@ data class ExifData(
     val model: String? = null,
     val gpsLatitude: Double? = null,
     val gpsLongitude: Double? = null,
+    /** GPS UTC time as the EXIF date stamp and time, `YYYY:MM:DD HH:MM:SS`. Location data: never log, persist or transmit. */
     val gpsDateTimeUtc: String? = null,
     val dateTimeOriginal: String? = null,
     val offsetTimeOriginal: String? = null,
     val focalPlaneXResolution: Double? = null,
     val focalPlaneResolutionUnit: Int? = null,
 )
-

@@ -319,4 +319,23 @@ class AndroidExifReaderTest {
         assertEquals(3840.0, result.focalPlaneXResolution!!, 1e-3)
         assertEquals(3, result.focalPlaneResolutionUnit)
     }
+
+    @Test
+    fun `readExif drops out-of-range GPS coordinates`() = runTest {
+        val jpegFile = tempFolder.newFile("gps_range_test.jpg")
+        val bmp = android.graphics.Bitmap.createBitmap(16, 16, android.graphics.Bitmap.Config.ARGB_8888)
+        jpegFile.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+
+        val exifInterface = androidx.exifinterface.media.ExifInterface(jpegFile.absolutePath)
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE, "200/1,0/1,0/1")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE_REF, "N")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE, "10/1,0/1,0/1")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE_REF, "E")
+        exifInterface.saveAttributes()
+
+        val result = reader.readExif(jpegFile)
+        assertNotNull(result)
+        assertNull(result!!.gpsLatitude)
+        assertEquals(10.0, result.gpsLongitude!!, 1e-4)
+    }
 }
