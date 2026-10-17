@@ -10,6 +10,7 @@ Adheres to:
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import datetime, timezone
 import errno
 import logging
@@ -1019,6 +1020,13 @@ class FileCullingManager:
                 candidate.display_names.pop(orig_src, None)
                 candidate.display_names[restore_target] = restore_target.name
 
+    @staticmethod
+    def _safe_resolve(path: Path) -> Path:
+        try:
+            return path.resolve()
+        except OSError:
+            return path
+
     def undo_culling(self, record: CullingRecord, candidate: Optional[CandidatePhoto] = None) -> bool:
         """Atomically reverse culling operation with absolute source preservation (R-LINUX-CULL-06/07)."""
         if record.action_type == CullingActionType.COPY:
@@ -1040,7 +1048,25 @@ class FileCullingManager:
         elif record.action_type == CullingActionType.MOVE:
             # === Transactional Move Undo (R-LINUX-CULL-07) ===
             # Restore files from Selection/ back to original source directory (with collision suffix if occupied)
-            undo_targets = self._resolve_undo_targets(record, candidate)
+            #
+            # A partial move (copy verified, original not removable) left some originals in
+            # place. Restoring their copies would put a "-2" duplicate next to the original
+            # (D-3), so those copies are deleted instead (docs/shared/FILE_OPERATIONS.md §3);
+            # a copy whose original has meanwhile disappeared is the only one left and is
+            # restored like any other member.
+            still_home: List[Tuple[Path, Path]] = []
+            to_restore: List[Tuple[Path, Path]] = list(record.affected_paths)
+            if record.unremoved_sources:
+                to_restore = []
+                unremoved = {self._safe_resolve(p) for p in record.unremoved_sources}
+                for pair in record.affected_paths:
+                    src_of_pair = pair[0]
+                    if self._safe_resolve(src_of_pair) in unremoved and src_of_pair.exists():
+                        still_home.append(pair)
+                    else:
+                        to_restore.append(pair)
+            restore_record = dataclasses.replace(record, affected_paths=to_restore)
+            undo_targets = self._resolve_undo_targets(restore_record, candidate)
             restored_pairs: List[Tuple[Path, Path]] = []
             completed_moves: List[Tuple[Path, Path]] = []
             try:
@@ -1070,6 +1096,15 @@ class FileCullingManager:
                         except Exception:
                             pass
                 raise FileCullingError(f"Failed to restore moved file during undo: {e}") from e
+
+            for src, dst in still_home:
+                if dst.exists() and self._safe_resolve(dst) != self._safe_resolve(src):
+                    try:
+                        dst.unlink()
+                    except Exception as e:
+                        raise FileCullingError(
+                            f"Failed to delete the copy of {src.name} during undo: {e}"
+                        ) from e
 
             if candidate:
                 self._update_candidate_restored_paths(candidate, restored_pairs)

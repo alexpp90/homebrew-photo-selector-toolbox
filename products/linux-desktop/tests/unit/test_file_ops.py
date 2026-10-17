@@ -1213,3 +1213,73 @@ def test_gio_trash_that_cannot_be_located_or_restored_tells_the_user_where_the_f
 
     assert "IMG_10.JPG" in str(exc_info.value)
     assert "Trash" in str(exc_info.value)
+# ── B-3: undo of a partial move (D-3) ───────────────────────────────────────────
+
+
+def _partial_move(tmp_path: Path, names, undeletable):
+    """Cross-mount move of ``names`` from a fake card where the sources in ``undeletable`` stay."""
+    card = tmp_path / "card"
+    card.mkdir()
+    for n in names:
+        (card / n).write_bytes(n.encode() * 20)
+    mgr = FileCullingManager(
+        name_resolver=_NoNames(),
+        trash_dir=tmp_path / "Trash",
+        dev_of=lambda p: 2 if "Selection" in str(p) else 1,
+        mount_root_for=lambda p: None,
+    )
+    real_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self.parent == card and self.name in undeletable:
+            raise PermissionError("read-only card")
+        return real_unlink(self, *args, **kwargs)
+
+    candidate = CandidatePhoto(
+        primary_path=card / names[0], companion_paths=[card / n for n in names[1:]]
+    )
+    with patch.object(Path, "unlink", failing_unlink):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.move_candidate(candidate, card)
+    return mgr, card, candidate, exc_info.value.partial_record
+
+
+def test_undo_of_a_fully_unremoved_partial_move_deletes_the_copy_and_creates_no_duplicate(tmp_path: Path):
+    """D-3: the originals never left, so undo must delete the copies it created instead of
+    restoring them next to the originals as IMG_1-2.JPG."""
+    mgr, card, candidate, record = _partial_move(tmp_path, ["IMG_1.JPG"], {"IMG_1.JPG"})
+
+    assert mgr.undo_culling(record, candidate) is True
+
+    assert sorted(p.name for p in card.iterdir() if p.is_file()) == ["IMG_1.JPG"]
+    assert (card / "IMG_1.JPG").read_bytes() == b"IMG_1.JPG" * 20
+    assert list((card / "Selection").iterdir()) == []
+
+
+def test_undo_of_a_mixed_partial_move_restores_removed_members_and_deletes_only_surviving_copies(tmp_path: Path):
+    mgr, card, candidate, record = _partial_move(
+        tmp_path, ["IMG_2.CR3", "IMG_2.JPG"], {"IMG_2.JPG"}
+    )
+    assert not (card / "IMG_2.CR3").exists()      # moved
+    assert (card / "IMG_2.JPG").exists()          # stayed behind
+
+    assert mgr.undo_culling(record, candidate) is True
+
+    # The member that was really moved is back under its own name; the one that never left
+    # keeps its original and loses only the copy this operation made.
+    assert (card / "IMG_2.CR3").read_bytes() == b"IMG_2.CR3" * 20
+    assert (card / "IMG_2.JPG").read_bytes() == b"IMG_2.JPG" * 20
+    assert sorted(p.name for p in card.iterdir() if p.is_file()) == ["IMG_2.CR3", "IMG_2.JPG"]
+    assert list((card / "Selection").iterdir()) == []
+
+
+def test_undo_of_a_partial_move_never_deletes_a_copy_whose_original_is_gone(tmp_path: Path):
+    """Only copies whose original still exists are deleted; if the original has meanwhile been
+    removed by the user, the copy is the only one left and is restored, not deleted."""
+    mgr, card, candidate, record = _partial_move(tmp_path, ["IMG_3.JPG"], {"IMG_3.JPG"})
+    (card / "IMG_3.JPG").unlink()   # the user deleted the stuck original later
+
+    assert mgr.undo_culling(record, candidate) is True
+
+    assert (card / "IMG_3.JPG").read_bytes() == b"IMG_3.JPG" * 20
+    assert list((card / "Selection").iterdir()) == []
