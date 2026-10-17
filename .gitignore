@@ -63,6 +63,8 @@ products/android/.kotlin/
 /.agents
 /.gemini
 /CLAUDE.local.md
+# Hand-over folder of Claude (Cowork) sessions — belongs in private/docs/handover/
+/Claude outputs/
 /docs/**/REQUIREMENTS.md
 /docs/**/DESIGN_PROMPT.md
 /docs/**/UX_INVESTIGATION.md
