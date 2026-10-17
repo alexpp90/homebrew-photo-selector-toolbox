@@ -31,6 +31,7 @@ def dummy_image_file(tmp_path):
 
 
 @patch("urllib.request.OpenerDirector.open")
+@pytest.mark.requirement("REQ-DESK-AESTH.07")
 def test_ollama_tool_success(mock_open, dummy_image_file, temp_config_dir):
     # Mock Ollama HTTP response payload
     mock_resp_payload = {"response": "[SCORE: 8.5] [ANALYSIS: Great lighting] The photo has nice lighting."}
@@ -53,6 +54,7 @@ def test_ollama_tool_success(mock_open, dummy_image_file, temp_config_dir):
 
 
 @patch("urllib.request.OpenerDirector.open")
+@pytest.mark.requirement("REQ-DESK-AESTH.08")
 def test_ollama_tool_custom_config(mock_open, dummy_image_file, temp_config_dir):
     # Setup custom configuration
     custom_config = {
@@ -96,6 +98,7 @@ def test_ollama_tool_connection_error(mock_open, dummy_image_file, temp_config_d
 
 
 @patch("urllib.request.OpenerDirector.open")
+@pytest.mark.requirement("REQ-DESK-AESTH.10")
 def test_ollama_tool_parsing_error(mock_open, dummy_image_file, temp_config_dir):
     # Mock response with no float scores in text
     mock_resp_payload = {"response": "This is a photo of a sunset, it looks great but I can't give a number."}

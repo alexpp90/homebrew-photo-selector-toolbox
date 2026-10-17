@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
+import pytest
 from photo_selector_toolbox.core.cache import ScoreCache, set_default_db_path
 
 
+@pytest.mark.requirement("REQ-DESK-CACHE.01")
 def test_score_cache_basic_get_set(tmp_path):
     db_file = tmp_path / "test_cache.db"
     cache = ScoreCache(db_file)
@@ -58,6 +60,7 @@ def test_score_cache_bulk(tmp_path):
     assert p3 not in retrieved
 
 
+@pytest.mark.requirement("REQ-DESK-CACHE.02")
 def test_score_cache_pruning(tmp_path):
     db_file = tmp_path / "test_cache.db"
     cache = ScoreCache(db_file)
@@ -102,6 +105,7 @@ def test_score_cache_pruning(tmp_path):
         assert lowest[0][0] == "/tmp/img10.jpg"
 
 
+@pytest.mark.requirement("REQ-DESK-CACHE.04")
 def test_controller_uses_cache(tmp_path):
     db_file = tmp_path / "test_cache.db"
     set_default_db_path(db_file)
@@ -151,6 +155,7 @@ def test_controller_uses_cache(tmp_path):
         set_default_db_path(None)
 
 
+@pytest.mark.requirement("REQ-DESK-CACHE.05")
 def test_score_cache_clear(tmp_path):
     db_file = tmp_path / "test_cache.db"
     cache = ScoreCache(db_file)
