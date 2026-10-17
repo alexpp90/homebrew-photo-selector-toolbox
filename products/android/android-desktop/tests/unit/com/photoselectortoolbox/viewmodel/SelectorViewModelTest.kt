@@ -557,6 +557,52 @@ class SelectorViewModelTest {
     // ── U-04b: Bundle filing, undo to parentDocumentId, and bundle delete ─
 
     @Test
+    fun `a move that had to add a suffix tells the user which name the file got`() = runTest {
+        val item = image("IMG_0001.jpg")
+        val copy = "content://test/folder/Selection/JPEG/IMG_0001-2.jpg"
+        coEvery { imageRepository.moveBundle(any(), item, any(), any()) } returns
+            FileOperationResult.success(item.uri, copy, listOf(copy), null)
+
+        val viewModel = loadFolder(item, image("b.jpg"))
+        viewModel.moveToSelection()
+
+        assertEquals("Moved to Selection as IMG_0001-2.jpg", viewModel.uiState.value.snackbarMessage)
+    }
+
+    @Test
+    fun `a move that kept its name keeps the plain message`() = runTest {
+        val item = image("IMG_0002.jpg")
+        val copy = "content://test/folder/Selection/JPEG/IMG_0002.jpg"
+        coEvery { imageRepository.moveBundle(any(), item, any(), any()) } returns
+            FileOperationResult.success(item.uri, copy, listOf(copy), null)
+
+        val viewModel = loadFolder(item, image("b.jpg"))
+        viewModel.moveToSelection()
+
+        assertEquals("Moved to Selection", viewModel.uiState.value.snackbarMessage)
+    }
+
+    @Test
+    fun `an undo that restored under a suffix says so`() = runTest {
+        val item = image("IMG_0003.jpg")
+        val copy = "content://test/folder/Selection/JPEG/IMG_0003.jpg"
+        val restored = "content://test/folder/IMG_0003-2.jpg"
+        coEvery { imageRepository.moveBundle(any(), item, any(), any()) } returns
+            FileOperationResult.success(item.uri, copy, listOf(copy), null)
+        coEvery { imageRepository.undoMoveBundle(any(), listOf(copy), Uri.parse(FOLDER_URI), any(), any()) } returns
+            FileOperationResult.success(copy, restored, listOf(restored), null)
+
+        val viewModel = loadFolder(item, image("b.jpg"))
+        viewModel.moveToSelection()
+        viewModel.undoLastOperation()
+
+        assertEquals(
+            "Restored as IMG_0003-2.jpg (original name was in use)",
+            viewModel.uiState.value.snackbarMessage,
+        )
+    }
+
+    @Test
     fun `an undo that fell back to the opened folder tells the user`() = runTest {
         val item = image("a")
         val copy = "content://test/folder/Selection/JPEG/a.jpg"

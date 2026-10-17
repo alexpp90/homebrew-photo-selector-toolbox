@@ -162,4 +162,39 @@ class SelectionActionLabelsTest {
         assertTrue(SelectionActionLabels.advancesAfter(FilingAction.MOVE))
         assertFalse(SelectionActionLabels.advancesAfter(FilingAction.COPY))
     }
+
+    @Test
+    fun `a collision-suffixed move names the file it became and counts the companions`() {
+        assertEquals(
+            "Moved to Selection as IMG_0001-2.JPG (+2 related)",
+            SelectionActionLabels.suffixedConfirmation(
+                action = FilingAction.MOVE,
+                selectionFolderName = "Selection",
+                resultName = "IMG_0001-2.JPG",
+                relatedCount = 2,
+            ),
+        )
+    }
+
+    @Test
+    fun `a collision-suffixed copy without companions has no related count`() {
+        assertEquals(
+            "Copied to Picks as IMG_0001-3.JPG",
+            SelectionActionLabels.suffixedConfirmation(FilingAction.COPY, "Picks", "IMG_0001-3.JPG", 0),
+        )
+    }
+
+    @Test
+    fun `an undo that had to suffix says so`() {
+        assertEquals(
+            "Restored as IMG_0001-2.JPG (original name was in use)",
+            SelectionActionLabels.restoredAs("IMG_0001-2.JPG"),
+        )
+    }
+
+    @Test
+    fun `display name is the last path segment of a document id`() {
+        assertEquals("IMG_0001-2.JPG", SelectionActionLabels.displayNameOf("content://x/tree/root/document/root%2FSelection%2FJPEG%2FIMG_0001-2.JPG"))
+        assertEquals("IMG_1.JPG", SelectionActionLabels.displayNameOf("content://x/tree/primary%3ADCIM/document/primary%3ADCIM%2FIMG_1.JPG"))
+    }
 }

@@ -73,6 +73,39 @@ object SelectionActionLabels {
         "${action.pastTense} to ${FilingAction.selectionFolderOrDefault(selectionFolderName)}"
 
     /**
+     * The snackbar after a transfer whose primary file had to be renamed to avoid a collision
+     * (`docs/shared/FILE_OPERATIONS.md`, feedback templates):
+     * "Moved to Selection as IMG_0001-2.JPG (+2 related)".
+     */
+    fun suffixedConfirmation(
+        action: FilingAction,
+        selectionFolderName: String,
+        resultName: String,
+        relatedCount: Int,
+    ): String {
+        val related = if (relatedCount > 0) " (+$relatedCount related)" else ""
+        return "${confirmation(action, selectionFolderName)} as $resultName$related"
+    }
+
+    /** The snackbar after an undo that had to add a suffix because the original name was taken. */
+    fun restoredAs(resultName: String): String =
+        "Restored as $resultName (original name was in use)"
+
+    /**
+     * File name of a document URI string: the last path segment of the (percent-decoded) document
+     * id, so `…/document/primary%3ADCIM%2FIMG_1.JPG` gives `IMG_1.JPG`. Pure string work, no Android.
+     */
+    fun displayNameOf(uri: String): String {
+        val last = uri.substringAfterLast('/')
+        val decoded = try {
+            java.net.URLDecoder.decode(last, "UTF-8")
+        } catch (_: Exception) {
+            last
+        }
+        return decoded.substringAfterLast('/').substringAfterLast(':')
+    }
+
+    /**
      * Whether the frame advances after this action.
      *
      * A moved frame is finished with; a copied one may still be worth comparing
