@@ -243,5 +243,6 @@ class CullingRecord:
     original_primary_path: Path
     affected_paths: List[Tuple[Path, Path]]  # [(original_source, target_destination), ...]
     previous_status: PhotoStatus = PhotoStatus.CANDIDATE
+    trash_info_paths: Dict[Path, Path] = field(default_factory=dict)  # {trashed_files_path: trashinfo_path}
     timestamp: float = field(default_factory=time.time)
     id: str = field(default_factory=lambda: str(uuid.uuid4()))

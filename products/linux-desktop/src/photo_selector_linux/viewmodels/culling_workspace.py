@@ -133,6 +133,7 @@ class CullingWorkspaceViewModel:
         on_success: Callable[[Any], None],
         failure: str,
         on_failure: Optional[Callable[[], None]] = None,
+        on_error: Optional[Callable[[BaseException], None]] = None,
     ) -> bool:
         """Run a file operation through the dispatcher; False when one is already running.
 
@@ -151,6 +152,8 @@ class CullingWorkspaceViewModel:
             if generation != self._folder_generation:
                 pass
             elif error is not None:
+                if on_error is not None:
+                    on_error(error)
                 if on_failure is not None:
                     on_failure()
                 self._notify(f"{failure}: {error}")
@@ -234,11 +237,20 @@ class CullingWorkspaceViewModel:
             self.trashed_count += 1
             self._notify(f"Moved {photo.filename} to Trash")
 
+        def preserve_partial_on_error(error: BaseException) -> None:
+            partial_record = getattr(error, "partial_record", None)
+            if partial_record is not None:
+                idx = self._index_of(photo)
+                self.undo_stack.append(
+                    (partial_record, photo, idx if idx is not None else self.current_index)
+                )
+
         self._run(
             f"Moving {photo.filename} to Trash…",
             lambda: self.file_manager.trash_candidate(photo),
             trashed,
             f"Could not move {photo.filename} to Trash",
+            on_error=preserve_partial_on_error,
         )
 
     def undo(self) -> bool:
@@ -258,13 +270,14 @@ class CullingWorkspaceViewModel:
             if not success:
                 return
             if record.action_type in (CullingActionType.MOVE, CullingActionType.TRASH):
-                insert_pos = min(orig_idx, len(self.candidates))
-                self.candidates.insert(insert_pos, photo)
-                self.current_index = insert_pos
-                if record.action_type == CullingActionType.MOVE:
-                    self.selected_count = max(0, self.selected_count - 1)
-                else:
-                    self.trashed_count = max(0, self.trashed_count - 1)
+                if self._index_of(photo) is None:
+                    insert_pos = min(orig_idx, len(self.candidates))
+                    self.candidates.insert(insert_pos, photo)
+                    self.current_index = insert_pos
+                    if record.action_type == CullingActionType.MOVE:
+                        self.selected_count = max(0, self.selected_count - 1)
+                    else:
+                        self.trashed_count = max(0, self.trashed_count - 1)
             elif record.action_type == CullingActionType.COPY:
                 self.selected_count = max(0, self.selected_count - 1)
                 self.copied_count = max(0, self.copied_count - 1)
