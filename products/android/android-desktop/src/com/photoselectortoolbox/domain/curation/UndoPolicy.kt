@@ -42,6 +42,11 @@ sealed interface UndoableOperation {
         val destinationUri: String,
         val destinationUris: List<String> = listOf(destinationUri),
         val parentDocumentId: String? = null,
+        /**
+         * Set after a *partial* move: destination copy → original that could not be removed.
+         * Undo deletes those copies (while the original exists) instead of restoring them.
+         */
+        val copiesOfSurvivingOriginals: Map<String, String> = emptyMap(),
     ) : UndoableOperation
 }
 
@@ -135,6 +140,7 @@ object UndoPolicy {
         destinationUri: String?,
         destinationUris: List<String> = listOfNotNull(destinationUri),
         parentDocumentId: String? = null,
+        copiesOfSurvivingOriginals: Map<String, String> = emptyMap(),
     ): UndoableOperation? {
         if (action != CurationAction.MOVE) return null
         val effectiveDestinations = if (destinationUris.isNotEmpty()) {
@@ -149,6 +155,7 @@ object UndoPolicy {
             destinationUri = primaryDestination,
             destinationUris = effectiveDestinations,
             parentDocumentId = parentDocumentId,
+            copiesOfSurvivingOriginals = copiesOfSurvivingOriginals,
         )
     }
 }

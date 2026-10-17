@@ -29,6 +29,12 @@ data class FileOperationResult(
     val partial: Boolean = false,
     val destinationUris: List<String> = listOfNotNull(destinationUri),
     val parentDocumentId: String? = null,
+    /**
+     * For a partial move: destination copy URI → URI of the original that could not be removed.
+     * Undo deletes exactly these copies (while their originals still exist) instead of restoring
+     * them next to the originals, which would only create a `-N` duplicate (finding D-3).
+     */
+    val copiesOfSurvivingOriginals: Map<String, String> = emptyMap(),
 ) {
     companion object {
         fun success(
@@ -63,6 +69,7 @@ data class FileOperationResult(
             error: String = "Copied, but the original could not be removed",
             destinationUris: List<String> = listOf(destinationUri),
             parentDocumentId: String? = null,
+            copiesOfSurvivingOriginals: Map<String, String> = mapOf(destinationUri to sourceUri),
         ) = FileOperationResult(
             sourceUri = sourceUri,
             destinationUri = destinationUri,
@@ -71,6 +78,7 @@ data class FileOperationResult(
             partial = true,
             destinationUris = destinationUris,
             parentDocumentId = parentDocumentId,
+            copiesOfSurvivingOriginals = copiesOfSurvivingOriginals,
         )
     }
 }

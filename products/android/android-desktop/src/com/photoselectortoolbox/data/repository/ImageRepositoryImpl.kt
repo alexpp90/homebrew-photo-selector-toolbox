@@ -413,6 +413,7 @@ class ImageRepositoryImpl @Inject constructor(
         destinationUris = listOf(movedTo.toString()),
         rootFolderUri = restoreFolderUri,
         parentDocumentId = null,
+        copiesOfSurvivingOriginals = emptyMap(),
     )
 
     override suspend fun undoMoveBundle(
@@ -420,6 +421,7 @@ class ImageRepositoryImpl @Inject constructor(
         destinationUris: List<String>,
         rootFolderUri: Uri,
         parentDocumentId: String?,
+        copiesOfSurvivingOriginals: Map<String, String>,
     ): FileOperationResult = transferSemaphore.withPermit {
         withContext(ioDispatcher) {
             val primarySource = destinationUris.firstOrNull().orEmpty()
@@ -431,13 +433,39 @@ class ImageRepositoryImpl @Inject constructor(
                 )
             }
             try {
+                // A copy whose original is still there (partial move) is deleted rather than
+                // restored: restoring would put a duplicate next to the original. A copy whose
+                // original has since disappeared is the only one left, so it is restored.
+                val deletableCopies = copiesOfSurvivingOriginals.filter { (_, original) ->
+                    DocumentFile.fromSingleUri(context, Uri.parse(original))?.exists() == true
+                }.keys
+                var deleteFailed: String? = null
+                deletableCopies.forEach { copyUri ->
+                    if (!deleteImage(context, Uri.parse(copyUri))) deleteFailed = copyUri
+                }
+                deleteFailed?.let {
+                    return@withContext FileOperationResult.failure(
+                        sourceUri = it,
+                        error = "Could not delete the copy in the destination folder",
+                        parentDocumentId = parentDocumentId,
+                    )
+                }
+                val toRestore = destinationUris.filterNot { it in deletableCopies }
+                if (toRestore.isEmpty()) {
+                    return@withContext FileOperationResult.success(
+                        sourceUri = primarySource,
+                        destinationUri = null,
+                        destinationUris = emptyList(),
+                        parentDocumentId = parentDocumentId,
+                    )
+                }
                 val restoreFolder = resolveRestoreFolder(context, rootFolderUri, parentDocumentId)
                     ?: return@withContext FileOperationResult.failure(
                         sourceUri = primarySource,
                         error = "Could not resolve the original folder",
                         parentDocumentId = parentDocumentId,
                     )
-                val sourceUris = destinationUris.map { Uri.parse(it) }
+                val sourceUris = toRestore.map { Uri.parse(it) }
                 val results = executeBundleTransfer(
                     context = context,
                     sourceUris = sourceUris,
@@ -550,6 +578,9 @@ class ImageRepositoryImpl @Inject constructor(
                     ?: "Copied, but the original could not be removed",
                 destinationUris = destUris,
                 parentDocumentId = parentDocumentId,
+                copiesOfSurvivingOriginals = results
+                    .filter { it.partial }
+                    .fold(emptyMap()) { acc, r -> acc + r.copiesOfSurvivingOriginals },
             )
             else -> FileOperationResult.failure(
                 sourceUri = primarySourceUri,
@@ -725,7 +756,8 @@ class ImageRepositoryImpl @Inject constructor(
         // source files; if any source deletion fails, keep the verified copies
         // and report a partial outcome.
         var anyDeleteFailed = false
-        for ((src, _) in stagedCopies) {
+        val survivingOriginals = LinkedHashMap<String, String>() // destination copy -> original kept
+        for ((src, destDoc) in stagedCopies) {
             val deleted = try {
                 deleteImage(context, src.uri)
             } catch (e: CancellationException) {
@@ -736,6 +768,7 @@ class ImageRepositoryImpl @Inject constructor(
             }
             if (!deleted) {
                 anyDeleteFailed = true
+                survivingOriginals[destDoc.uri.toString()] = src.uri.toString()
             }
         }
 
@@ -757,6 +790,7 @@ class ImageRepositoryImpl @Inject constructor(
                     error = partialError,
                     destinationUris = allDestUris,
                     parentDocumentId = parentDocumentId,
+                    copiesOfSurvivingOriginals = survivingOriginals,
                 )
             }
         }

@@ -1230,29 +1230,43 @@ class SelectorViewModel @Inject constructor(
                     destinationUris = result.destinationUris,
                     parentDocumentId = result.parentDocumentId ?: currentItem.parentDocumentId,
                 )
-                if (undo != null) {
-                    var evictedPendings: List<PendingDeletion> = emptyList()
-                    _uiState.update { current ->
-                        val pushResult = UndoPolicy.push(current.undoHistory, undo)
-                        evictedPendings = pushResult.evictedPendingDeletions
-                        current.copy(
-                            undoHistory = pushResult.history,
-                            snackbarUndoAvailable = current.snackbarMessage != null,
-                        )
-                    }
-                    evictedPendings.forEach { evicted ->
-                        commitPendingDeletion(evicted, folderUri)
-                    }
-                }
+                if (undo != null) pushFilingUndo(undo, folderUri, snackbarOffersUndo = true)
             } else if (result?.partial == true) {
                 rollbackFiling(edit.action, edit.slots)
                 val folder = FilingAction.selectionFolderOrDefault(_uiState.value.selectionFolderName)
                 reportError(result.error ?: "Copied to $folder — original could not be removed")
+                // The verified copies in the destination are the photographer's data now, so the
+                // partial move stays undoable (Ctrl+Z): undo deletes exactly those copies while
+                // their originals still exist. The list item was restored above, hence no slots.
+                UndoPolicy.forFiling(
+                    action = action,
+                    slots = emptyList(),
+                    sourceUri = sourceUri,
+                    destinationUri = result.destinationUri,
+                    destinationUris = result.destinationUris,
+                    parentDocumentId = result.parentDocumentId ?: currentItem.parentDocumentId,
+                    copiesOfSurvivingOriginals = result.copiesOfSurvivingOriginals,
+                )?.let { pushFilingUndo(it, folderUri, snackbarOffersUndo = false) }
             } else {
                 rollbackFiling(edit.action, edit.slots)
                 val verb = if (action == CurationAction.COPY) "Copy" else "Move"
                 reportError("$verb failed: ${result?.error ?: "the file could not be transferred"}")
             }
+        }
+    }
+
+    private fun pushFilingUndo(undo: UndoableOperation, folderUri: String?, snackbarOffersUndo: Boolean) {
+        var evictedPendings: List<PendingDeletion> = emptyList()
+        _uiState.update { current ->
+            val pushResult = UndoPolicy.push(current.undoHistory, undo)
+            evictedPendings = pushResult.evictedPendingDeletions
+            current.copy(
+                undoHistory = pushResult.history,
+                snackbarUndoAvailable = snackbarOffersUndo && current.snackbarMessage != null,
+            )
+        }
+        evictedPendings.forEach { evicted ->
+            commitPendingDeletion(evicted, folderUri)
         }
     }
 
@@ -1343,6 +1357,7 @@ class SelectorViewModel @Inject constructor(
                             destinationUris = operation.destinationUris,
                             rootFolderUri = Uri.parse(folderUri),
                             parentDocumentId = operation.parentDocumentId,
+                            copiesOfSurvivingOriginals = operation.copiesOfSurvivingOriginals,
                         )
                     } catch (e: Exception) {
                         Log.e("SelectorViewModel", "Undo move failed", e)
