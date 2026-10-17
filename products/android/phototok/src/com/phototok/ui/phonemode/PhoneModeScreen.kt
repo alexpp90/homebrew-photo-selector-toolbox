@@ -159,20 +159,27 @@ fun PhoneModeScreen(
         val currentImage = uiState.images.getOrNull(uiState.currentIndex)
         AlertDialog(
             onDismissRequest = { showDirectDeleteConfirmDialog = false },
+            modifier = Modifier.testTag("direct_delete_dialog"),
             title = { Text("Delete Permanently", color = colors.error) },
             text = {
                 Text("This picture will be directly deleted (permanently) because trash is not supported for this location.\n\nHint: You can disable this confirmation in Settings.")
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showDirectDeleteConfirmDialog = false
-                    viewModel.requestDelete()
-                }) {
+                TextButton(
+                    onClick = {
+                        showDirectDeleteConfirmDialog = false
+                        viewModel.requestDelete()
+                    },
+                    modifier = Modifier.testTag("direct_delete_confirm_button"),
+                ) {
                     Text("Delete", color = colors.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDirectDeleteConfirmDialog = false }) {
+                TextButton(
+                    onClick = { showDirectDeleteConfirmDialog = false },
+                    modifier = Modifier.testTag("direct_delete_cancel_button"),
+                ) {
                     Text("Cancel")
                 }
             },

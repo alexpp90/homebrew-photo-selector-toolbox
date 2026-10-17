@@ -1,0 +1,5 @@
+appId: com.phototok.lab
+---
+- tapOn:
+    id: "direct_delete_confirm_button"
+    optional: true

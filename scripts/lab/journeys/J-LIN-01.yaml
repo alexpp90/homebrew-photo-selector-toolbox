@@ -1,0 +1,37 @@
+id: J-LIN-01
+product: linux
+title: Linux Desktop 3-Up comparison, keyboard navigation, move, trash, and undo
+fixture: burst-jpeg
+configs: [fhd, hidpi, small, dark, large-text]
+fresh_install: false
+steps:
+  - wait_ms: 1000
+  - checkpoint: opened
+  - keys: ["3"]
+  - checkpoint: three-up
+  - keys: [Right, Right]
+  - checkpoint: moved
+  - keys: [m]
+  - wait_ms: 800
+  - checkpoint: after-keep
+  - keys: [Delete]
+  - wait_ms: 800
+  - checkpoint: after-trash
+  - keys: [ctrl+z]
+  - wait_ms: 800
+  - checkpoint: after-undo
+fs_expect:
+  after-keep:
+    present: ["Selection/DSC_0003.JPG"]
+    absent:  ["DSC_0003.JPG"]
+  after-trash:
+    present: ["Selection/DSC_0003.JPG"]
+    absent:  ["DSC_0003.JPG", "DSC_0004.JPG"]
+    trashed: ["*DSC_0004.JPG"]
+  after-undo:
+    present: ["Selection/DSC_0003.JPG", "DSC_0004.JPG"]
+    absent:  ["DSC_0003.JPG"]
+layout_expect:
+  three-up:
+    required: [slot_previous, slot_current, slot_next, action_bar]
+    frames: [slot_previous, slot_current, slot_next]

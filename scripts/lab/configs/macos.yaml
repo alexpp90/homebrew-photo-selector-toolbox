@@ -1,0 +1,12 @@
+w1440:
+  size: 1440x900
+  dark: false
+w1280:
+  size: 1280x800
+  dark: false
+w1024:
+  size: 1024x700
+  dark: false
+dark:
+  size: 1440x900
+  dark: true

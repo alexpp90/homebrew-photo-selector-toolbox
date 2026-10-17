@@ -1,0 +1,4 @@
+appId: com.phototok.lab
+---
+- doubleTapOn:
+    id: "viewer.photo"

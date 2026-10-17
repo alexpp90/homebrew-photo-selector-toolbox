@@ -1,0 +1,23 @@
+min_target: 48
+overlay_ids:
+  - gesture_tutorial_overlay
+  - selector_coach_overlay
+  - coach_callout
+  - neighbour_overlay
+  - composition_overlay_canvas
+  - composition_overlay_container
+  - maximise_badge
+  - selector_snackbar
+frame_ids:
+  - image_region
+  - maximised_frame
+  - selector.frame.current
+  - selector.frame.previous
+  - selector.frame.next
+ignore_ids: []
+frame_size:
+  tab-landscape:
+    min_w: 590
+    min_h: 440
+    ids:
+      - image_region

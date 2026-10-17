@@ -17,15 +17,22 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.SwipeAction
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 
 @RunWith(AndroidJUnit4::class)
 class GestureTutorialOverlayTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Before
+    fun enableAccessibilityChecks() {
+        composeTestRule.enableAccessibilityChecks()
+    }
 
     /** Scope assertions to the overlay so app-bar labels behind it cannot match. */
     private fun inGuide(text: String) =

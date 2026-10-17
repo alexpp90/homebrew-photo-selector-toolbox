@@ -35,6 +35,7 @@ class ActionBarView(Gtk.ActionBar if HAS_GI else object):
 
         if HAS_GI:
             super().__init__()
+            self.set_name("action_bar")
             self.add_css_class("studio-actionbar")
             self._build_ui()
 
@@ -74,6 +75,7 @@ class ActionBarView(Gtk.ActionBar if HAS_GI else object):
         center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
 
         self.btn_move = Gtk.Button(label="Move to Selection (M)")
+        self.btn_move.set_name("btn_move")
         self.btn_move.add_css_class("action-btn-move")
         self.btn_move.add_css_class("suggested-action")
         self.btn_move.set_tooltip_text("Move photo & companions to Selection/ (M)")
@@ -81,12 +83,14 @@ class ActionBarView(Gtk.ActionBar if HAS_GI else object):
         center_box.append(self.btn_move)
 
         self.btn_copy = Gtk.Button(label="Copy to Selection (C)")
+        self.btn_copy.set_name("btn_copy")
         self.btn_copy.add_css_class("action-btn-copy")
         self.btn_copy.set_tooltip_text("Copy photo & companions to Selection/ (C)")
         self.btn_copy.connect("clicked", lambda b: self.viewmodel.cull_copy())
         center_box.append(self.btn_copy)
 
         self.btn_trash = Gtk.Button(label="Move to Trash (Del)")
+        self.btn_trash.set_name("btn_trash")
         self.btn_trash.add_css_class("action-btn-trash")
         self.btn_trash.add_css_class("destructive-action")
         self.btn_trash.set_tooltip_text("Move photo & companions to Trash (Delete/Backspace)")
@@ -97,6 +101,7 @@ class ActionBarView(Gtk.ActionBar if HAS_GI else object):
 
         # End: Transactional Undo
         self.btn_undo = Gtk.Button(label=self.undo_label_text)
+        self.btn_undo.set_name("btn_undo")
         self.btn_undo.set_icon_name("edit-undo-symbolic")
         self.btn_undo.set_tooltip_text("Undo last culling action (Ctrl+Z)")
         self.btn_undo.connect("clicked", lambda b: self.viewmodel.undo())

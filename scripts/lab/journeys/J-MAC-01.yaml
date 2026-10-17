@@ -1,0 +1,24 @@
+id: J-MAC-01
+product: macos
+title: Open folder, 3-Up comparison, keyboard navigation, keep to Selection, and undo
+fixture: burst-jpeg
+configs: [w1440, w1280, w1024, dark]
+fresh_install: false
+steps:
+  - scenario: products/macos-desktop/tests/e2e/J-MAC-01.scenario.json
+  - checkpoint: opened
+  - checkpoint: three-up
+  - checkpoint: after-keep
+  - checkpoint: after-undo
+  - checkpoint: zoomed
+fs_expect:
+  after-keep:
+    present: ["Selection/DSC_0003.JPG"]
+    absent:  ["DSC_0003.JPG"]
+  after-undo:
+    present: ["DSC_0003.JPG"]
+    absent:  ["Selection/DSC_0003.JPG"]
+layout_expect:
+  three-up:
+    required: [slot_previous, slot_current, slot_next]
+    frames: [slot_previous, slot_current, slot_next]

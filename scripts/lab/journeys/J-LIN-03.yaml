@@ -1,0 +1,19 @@
+id: J-LIN-03
+product: linux
+title: Linux Desktop GVFS mount move, trash, and undo
+fixture: smoke
+configs: [fhd]
+fresh_install: false
+steps:
+  - wait_ms: 1000
+  - checkpoint: gvfs-opened
+  - keys: [m, Delete, ctrl+z]
+  - wait_ms: 800
+  - checkpoint: gvfs-after-cull
+fs_expect:
+  gvfs-after-cull:
+    present: ["Selection/DSC_0001.JPG", "DSC_0002.JPG"]
+    absent:  ["DSC_0001.JPG"]
+layout_expect:
+  gvfs-opened:
+    required: [slot_current, action_bar]

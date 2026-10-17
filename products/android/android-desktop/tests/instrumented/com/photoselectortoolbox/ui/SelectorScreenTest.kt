@@ -13,6 +13,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -114,6 +115,7 @@ class SelectorScreenTest {
     @Before
     fun setup() {
         hiltRule.inject()
+        composeRule.enableAccessibilityChecks()
         // A settled folder is the default: enumeration finished, so the
         // position readout carries no `+`.
         fakeRepo.completeAfterFirstBatch = true

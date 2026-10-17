@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Photo Selector Lab Report — {{COMMIT}}</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f8f9fa;
+      --fg: #1a1d20;
+      --card: #ffffff;
+      --border: #dee2e6;
+      --muted: #5c636a;
+      --blocker: #d92626;
+      --major: #e66a00;
+      --minor: #2563eb;
+      --pass: #15803d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111315;
+        --fg: #e9ecef;
+        --card: #1a1d21;
+        --border: #2e343b;
+        --muted: #9aa0a6;
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px;
+      line-height: 1.5;
+    }
+    h1, h2, h3 { margin-top: 1.4em; }
+    .meta-card, .finding-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .finding-row {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .finding-thumb img {
+      max-width: 360px;
+      max-height: 360px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: block;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .badge-blocker { background: var(--blocker); }
+    .badge-major { background: var(--major); }
+    .badge-minor, .badge-polish { background: var(--minor); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      margin-bottom: 16px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 14px;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+    }
+    details {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+  </style>
+</head>
+<body>
+{{BODY}}
+</body>
+</html>

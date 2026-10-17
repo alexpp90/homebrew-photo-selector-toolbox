@@ -1,0 +1,6 @@
+appId: com.phototok.lab
+---
+- assertVisible:
+    id: "landing_phone_camera_card"
+- assertVisible:
+    id: "landing_custom_folder_card"

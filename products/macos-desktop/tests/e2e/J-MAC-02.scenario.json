@@ -1,0 +1,16 @@
+{
+  "name": "J-MAC-02",
+  "window": {"w": 1440, "h": 900},
+  "steps": [
+    {"waitFor": "single_image_viewport", "timeout": 10},
+    {"key": "space"},
+    {"sleep": 0.4},
+    {"checkpoint": "zoomed-1to1"},
+    {"key": "s"},
+    {"sleep": 0.3},
+    {"checkpoint": "pan-locked"},
+    {"click": "toolbar_next"},
+    {"sleep": 0.3},
+    {"checkpoint": "toolbar-while-zoomed"}
+  ]
+}

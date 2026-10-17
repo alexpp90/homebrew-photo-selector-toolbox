@@ -1,0 +1,4 @@
+appId: com.photoselectortoolbox.lab
+---
+- assertVisible:
+    id: "selector_sidebar"

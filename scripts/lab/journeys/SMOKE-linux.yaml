@@ -1,0 +1,20 @@
+id: SMOKE-linux
+product: linux
+title: Launch Linux Desktop in private Xvfb session, capture checkpoint, and step next
+fixture: smoke
+configs: [fhd, hidpi, small, dark, large-text]
+fresh_install: false
+steps:
+  - wait_ms: 1000
+  - checkpoint: opened
+  - keys: [Right]
+  - wait_ms: 500
+  - checkpoint: next
+fs_expect:
+  opened:
+    unchanged: true
+  next:
+    unchanged: true
+layout_expect:
+  opened:
+    required: [slot_current, action_bar]

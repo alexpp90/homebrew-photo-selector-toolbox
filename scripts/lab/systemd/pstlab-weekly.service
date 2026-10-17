@@ -1,0 +1,7 @@
+[Unit]
+Description=Photo Selector Toolbox weekly automated device lab run (Linux + AVD)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Coding/PhotoSelector/homebrew-photo-selector-toolbox
+ExecStart=/usr/bin/python3 scripts/lab/lab.py run --product linux

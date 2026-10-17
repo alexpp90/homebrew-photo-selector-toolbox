@@ -1,0 +1,18 @@
+id: SMOKE-android-desktop
+product: android-desktop
+title: Launch and verify sidebar
+fixture: smoke
+configs: [tab-landscape, tab-portrait]
+fresh_install: false
+steps:
+  - {maestro: products/android/android-desktop/tests/e2e/SMOKE/01_launch.yaml}
+  - {checkpoint: launched}
+fs_expect:
+  launched:
+    unchanged: true
+layout_expect:
+  launched:
+    required: [selector_sidebar]
+timing_expect:
+  launched:
+    trend: true

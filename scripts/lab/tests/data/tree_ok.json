@@ -1,0 +1,66 @@
+{
+  "platform": "android",
+  "window": {"w": 1480, "h": 844, "unit": "dp", "scale": 2.0},
+  "nodes": [
+    {
+      "id": "selector_sidebar",
+      "parent": null,
+      "role": "container",
+      "name": "Sidebar",
+      "bounds": [0, 0, 88, 844],
+      "interactive": false,
+      "visible": true,
+      "overlay": false,
+      "text": "",
+      "clipped": null
+    },
+    {
+      "id": "sidebar_open_folder",
+      "parent": "selector_sidebar",
+      "role": "button",
+      "name": "Open folder",
+      "bounds": [12, 16, 64, 56],
+      "interactive": true,
+      "visible": true,
+      "overlay": false,
+      "text": "Folder",
+      "clipped": false
+    },
+    {
+      "id": "image_region",
+      "parent": null,
+      "role": "container",
+      "name": "",
+      "bounds": [212, 0, 1056, 844],
+      "interactive": false,
+      "visible": true,
+      "overlay": false,
+      "text": "",
+      "clipped": null
+    },
+    {
+      "id": "position_counter",
+      "parent": null,
+      "role": "text",
+      "name": "1 / 6",
+      "bounds": [1300, 24, 140, 32],
+      "interactive": false,
+      "visible": true,
+      "overlay": false,
+      "text": "1 / 6",
+      "clipped": false
+    },
+    {
+      "id": "reject_button",
+      "parent": null,
+      "role": "button",
+      "name": "Delete",
+      "bounds": [1300, 700, 80, 56],
+      "interactive": true,
+      "visible": true,
+      "overlay": false,
+      "text": "Delete",
+      "clipped": false
+    }
+  ]
+}

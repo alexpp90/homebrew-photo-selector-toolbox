@@ -1,0 +1,8 @@
+{
+  "run_id": "2026-10-17T0830_526fb59",
+  "commit": "526fb59",
+  "started_at": "2026-10-17T08:30:00Z",
+  "finished_at": "2026-10-17T08:35:00Z",
+  "host": "sample-hub",
+  "products": ["android-desktop", "phototok"]
+}
