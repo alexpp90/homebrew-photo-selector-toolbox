@@ -1342,6 +1342,22 @@ class SelectorViewModel @Inject constructor(
                     parentDocumentId = result.parentDocumentId ?: currentItem.parentDocumentId,
                 )
                 if (undo != null) pushFilingUndo(undo, folderUri, snackbarOffersUndo = true)
+                // A bundle that had to take a "-2" says which name it got; a plain transfer keeps
+                // the optimistic "Moved to Selection" already on screen.
+                val resultName = (result.destinationUri ?: result.destinationUris.firstOrNull())
+                    ?.let(SelectionActionLabels::displayNameOf)
+                if (resultName != null && resultName != currentItem.fileName) {
+                    _uiState.update {
+                        it.copy(
+                            snackbarMessage = SelectionActionLabels.suffixedConfirmation(
+                                action = if (action == CurationAction.MOVE) FilingAction.MOVE else FilingAction.COPY,
+                                selectionFolderName = it.selectionFolderName,
+                                resultName = resultName,
+                                relatedCount = (result.destinationUris.size - 1).coerceAtLeast(0),
+                            ),
+                        )
+                    }
+                }
             } else if (result?.partial == true) {
                 rollbackFiling(edit.action, edit.slots)
                 val folder = FilingAction.selectionFolderOrDefault(_uiState.value.selectionFolderName)
@@ -1476,6 +1492,18 @@ class SelectorViewModel @Inject constructor(
                     }
                     if (result?.success == true && result.notice != null) {
                         _uiState.update { it.copy(snackbarMessage = result.notice, snackbarUndoAvailable = false) }
+                    }
+                    if (result?.success == true && result.notice == null) {
+                        val restoredName = (result.destinationUri ?: result.destinationUris.firstOrNull())
+                            ?.let(SelectionActionLabels::displayNameOf)
+                        if (restoredName != null && restoredName != SelectionActionLabels.displayNameOf(operation.sourceUri)) {
+                            _uiState.update {
+                                it.copy(
+                                    snackbarMessage = SelectionActionLabels.restoredAs(restoredName),
+                                    snackbarUndoAvailable = false,
+                                )
+                            }
+                        }
                     }
                     if (result == null || !result.success) {
                         _uiState.update { current ->

@@ -97,8 +97,15 @@ class FakeImageRepository @Inject constructor() : ImageRepository {
     ): FileOperationResult =
         FileOperationResult.success(movedTo.toString(), movedTo.toString())
 
-    /** A stand-in Selection destination, so undo paths have a URI to work with. */
-    private fun destinationOf(sourceUri: Uri): String = "$sourceUri.selection"
+    /**
+     * A stand-in Selection destination, so undo paths have a URI to work with. The file keeps its
+     * name, as a real transfer without a collision does (a different name would be reported to the
+     * user as a collision-suffixed copy).
+     */
+    private fun destinationOf(sourceUri: Uri): String {
+        val uri = sourceUri.toString()
+        return uri.substringBeforeLast('/') + "/Selection/" + uri.substringAfterLast('/')
+    }
 
     override suspend fun getImageDimensions(context: Context, uri: Uri): Pair<Int, Int> {
         val img = imagesFlow.value.find { it.uri == uri.toString() }
