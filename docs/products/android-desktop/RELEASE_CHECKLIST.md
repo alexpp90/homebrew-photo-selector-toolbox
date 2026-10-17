@@ -6,14 +6,14 @@ This checklist is the **single source of truth** for Google Play release readine
 
 ## 1. Architecture & Privacy Invariants (Repo-Side)
 
-- [x] **100% Local On-Device SAF Architecture:** Photo Selector Toolbox accesses user photos exclusively via Android Storage Access Framework (`Intent.ACTION_OPEN_DOCUMENT_TREE`). All sharpness, noise, exposure, aesthetic (TFLite), composition (OpenCV), and duplicate analyses execute locally on-device.
+- [x] **100% Local On-Device SAF Architecture:** Photo Selector Toolbox accesses user photos exclusively via Android Storage Access Framework (`Intent.ACTION_OPEN_DOCUMENT_TREE`). All sharpness, noise, exposure, aesthetic (TFLite), subject/composition/technique detection (OpenCV), and duplicate analyses execute locally on-device with 16 KB native page alignment preserved (`useLegacyPackaging = false`).
 - [x] **Zero Runtime Permissions:** `products/android/android-desktop/AndroidManifest.xml` declares zero `<uses-permission>` entries.
-- [x] **Cloud Auto-Backup Hardened:** `AndroidManifest.xml` configures `android:dataExtractionRules="@xml/data_extraction_rules"` and `android:fullBackupContent="@xml/backup_rules"` so the local Room score cache (`photo_selector_database`) and persisted SAF URI grants are never uploaded to cloud backup.
+- [x] **Cloud Auto-Backup Hardened:** `AndroidManifest.xml` configures `android:allowBackup="false"`, `android:dataExtractionRules="@xml/data_extraction_rules"`, and `android:fullBackupContent="@xml/backup_rules"` so the local Room database (`photo_selector_database`: `scores_cache`, `user_ratings`, `technique_facts`) and persisted SAF URI grants are never uploaded to cloud backup.
 - [x] **Target & Compile SDK:** `targetSdk = 36` (meets Google Play August 31, 2026 API 36 requirement) and `compileSdk = 37` in `products/android/android-desktop/build.gradle.kts`.
 - [x] **Hosted Legal Documents Present in Repo:**
   - `docs/products/android-desktop/privacy-policy.html` (bilingual EN/DE GDPR/DSGVO Art. 13 policy)
   - `docs/products/android-desktop/impressum.html` (bilingual DE/EN § 5 DDG legal notice)
-- [x] **In-App Legal Links Wired:** `products/android/android-desktop/src/com/photoselectortoolbox/domain/LegalLinks.kt` defines `PRIVACY_POLICY_URL`, `IMPRESSUM_URL`, and `SOURCE_CODE_URL`, surfaced in `SettingsScreen.kt` ("About" section).
+- [x] **In-App Legal Links Wired:** `products/android/android-desktop/src/com/photoselectortoolbox/domain/LegalLinks.kt` defines `PRIVACY_POLICY`, `IMPRESSUM`, and `SOURCE_CODE`, surfaced in `SettingsScreen.kt` ("About" section).
 
 ---
 
