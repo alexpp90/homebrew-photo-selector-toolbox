@@ -15,3 +15,6 @@ dex-960x600:         {size: 1920x1200, density: 320, rotation: landscape}
 # Real Samsung DeX on the tablet's own screen (devices with `supports: [dex]` only). The
 # dex-WxH configs above only emulate DeX window geometry with `wm size` and run with DeX off.
 dex-on-device:       {dex: true}
+# ChromeOS ARC (devices with `supports: [arc]`): the app's own ChromeOS window; ChromeOS owns
+# size, density and rotation.
+chromebook-window:   {native_display: true}

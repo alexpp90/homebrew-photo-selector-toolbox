@@ -34,7 +34,7 @@ ROLE_DEFAULT_PRODUCTS: dict[str, list[str]] = {
 }
 
 # Android configs that need a device feature (see `supports:` in devices.yaml).
-CONFIG_FEATURES: dict[str, str] = {"dex-on-device": "dex"}
+CONFIG_FEATURES: dict[str, str] = {"dex-on-device": "dex", "chromebook-window": "arc"}
 
 RunFn = Callable[[list[str], int], subprocess.CompletedProcess[str]]
 
@@ -165,7 +165,11 @@ def select_android_devices(
     return chosen
 
 
-_MDNS_RE = re.compile(r"^adb-(?P<serial>[A-Za-z0-9]+)-\S*\s+_adb-tls-connect\._tcp\.?\s+(?P<addr>\S+)$")
+# `_adb-tls-connect._tcp` is Android 11+ wireless debugging (name `adb-<serial>-<suffix>`);
+# `_adb._tcp` is classic network adb on port 5555 (ChromeOS ARC; name `adb-<serial>`).
+_MDNS_RE = re.compile(
+    r"^adb-(?P<serial>[A-Za-z0-9]+)(?:-\S*)?\s+_adb(?:-tls-connect)?\._tcp\.?\s+(?P<addr>\S+)$"
+)
 
 
 def parse_mdns_services(text: str) -> dict[str, str]:

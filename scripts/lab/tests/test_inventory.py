@@ -77,10 +77,15 @@ class InventoryTests(unittest.TestCase):
             "adb-R52Y90AF4LE-fAYuME\t_adb-tls-connect._tcp\t192.168.0.117:46567\n"
             "adb-3620105H804AS8-BswZ64\t_adb-tls-connect._tcp\t192.168.0.199:34661\n"
             "adb-XYZ-abc\t_adb-tls-pairing._tcp\t192.168.0.5:3333\n"
+            "adb-16FE89264DD1E9CAC0AD\t_adb._tcp\t192.168.0.224:5555\n"
         )
         self.assertEqual(
             parse_mdns_services(text),
-            {"R52Y90AF4LE": "192.168.0.117:46567", "3620105H804AS8": "192.168.0.199:34661"},
+            {
+                "R52Y90AF4LE": "192.168.0.117:46567",
+                "3620105H804AS8": "192.168.0.199:34661",
+                "16FE89264DD1E9CAC0AD": "192.168.0.224:5555",
+            },
         )
 
     def test_resolve_connects_via_mdns_and_matches_serial(self) -> None:
@@ -252,6 +257,21 @@ class DexTests(unittest.TestCase):
         finally:
             android_configs.set_verified_rotation = orig
         self.assertFalse(adb.dex)
+
+    def test_chromebook_window_leaves_the_display_alone_and_is_not_dex(self) -> None:
+        adb = _DexAdb()
+        adb.dex = True  # ARC is always freeform
+
+        def run(*args: str, timeout: int = 30) -> str:
+            if args == ("shell", "getprop", "ro.product.manufacturer"):
+                return "Google\n"
+            return _DexAdb.run(adb, *args, timeout=timeout)
+
+        adb.run = run  # type: ignore[method-assign]
+        self.assertFalse(android_configs.dex_active(adb))  # type: ignore[arg-type]
+        apply_config(adb, "chromebook-window")  # type: ignore[arg-type]
+        self.assertFalse(any(c[:2] == ("shell", "wm") for c in adb.calls))
+        self.assertFalse(any(c[:3] == ("shell", "cmd", "statusbar") for c in adb.calls))
 
     def test_dex_that_does_not_switch_is_not_run(self) -> None:
         with self.assertRaises(ConfigNotRunError):

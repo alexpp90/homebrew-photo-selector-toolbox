@@ -2,7 +2,7 @@ id: J-AD-02
 product: android-desktop
 title: Keyboard navigation, move, delete, undo, and frame maximise
 fixture: burst-raw-jpeg
-configs: [tab-landscape, tab-landscape-kbd, dex-1280x800, dex-on-device]
+configs: [tab-landscape, tab-landscape-kbd, dex-1280x800, dex-on-device, chromebook-window]
 fresh_install: false
 steps:
   - {maestro: products/android/android-desktop/tests/e2e/J-AD-02/01_wait_ready.yaml}

@@ -102,7 +102,12 @@ DEX_TILE_TAPPER: Callable[[str | None], int] | None = _maestro_dex_tile
 
 
 def dex_active(adb: AdbClient) -> bool:
-    """True while Samsung DeX runs on the default display (its windowing mode turns freeform)."""
+    """True while Samsung DeX runs on the default display (its windowing mode turns freeform).
+
+    Only Samsung devices count: ChromeOS ARC is always freeform and has no DeX.
+    """
+    if adb.run("shell", "getprop", "ro.product.manufacturer").strip().lower() not in ("samsung", ""):
+        return False
     out = adb.run("shell", "dumpsys", "window", "displays")
     m = re.search(r"mWindowingMode=([a-z]+)", out)
     return bool(m and m.group(1) == "freeform")
@@ -203,6 +208,13 @@ def apply_config(
     if cfg.get("keyboard") and not is_avd_kbd:
         raise ConfigNotRunError("needs AVD with hw.keyboard=yes")
 
+    if cfg.get("native_display"):
+        # ChromeOS ARC: the app runs in a ChromeOS window on a virtual display; size, density
+        # and rotation belong to ChromeOS (and resetting ARC's own density override would
+        # rescale every app). Only text and theme settings apply.
+        adb.run("shell", "settings", "put", "system", "font_scale", f"{float(cfg.get('font_scale', 1.0))}")
+        adb.run("shell", "cmd", "uimode", "night", "yes" if cfg.get("night") else "no")
+        return
     if cfg.get("dex"):
         # Real DeX on the device screen: DeX owns size, density and rotation; only text and
         # theme settings apply.
