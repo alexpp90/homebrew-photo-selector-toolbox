@@ -1283,4 +1283,42 @@ class PhoneModeViewModelTest {
         assertTrue(state.lastActionFeedback?.isError == true)
         assertTrue(state.lastActionFeedback?.message?.contains("a.jpg") == true)
     }
+
+    @Test
+    fun `a move that had to add a suffix tells the user which name the file got`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(collectionAction = CollectionAction.MOVE)
+        coEvery {
+            imageRepository.moveImageDetailed(any(), any(), any(), any())
+        } answers {
+            FileOperationResult.success(
+                firstArg<Uri>().toString(),
+                "content://tree/photos/Selection/a-2.jpg",
+            )
+        }
+        val viewModel = loadFolder(image("a.jpg", 2), image("b.jpg", 1))
+
+        viewModel.addToCollection()
+        advanceUntilIdle()
+
+        assertEquals("Moved to collection as a-2.jpg", viewModel.uiState.value.lastActionFeedback?.message)
+    }
+
+    @Test
+    fun `a move that kept its name keeps the plain message`() = runTest {
+        phoneSettingsFlow.value = PhoneSettings(collectionAction = CollectionAction.MOVE)
+        coEvery {
+            imageRepository.moveImageDetailed(any(), any(), any(), any())
+        } answers {
+            FileOperationResult.success(
+                firstArg<Uri>().toString(),
+                "content://tree/photos/Selection/a.jpg",
+            )
+        }
+        val viewModel = loadFolder(image("a.jpg", 2), image("b.jpg", 1))
+
+        viewModel.addToCollection()
+        advanceUntilIdle()
+
+        assertEquals("Moved to collection", viewModel.uiState.value.lastActionFeedback?.message)
+    }
 }
