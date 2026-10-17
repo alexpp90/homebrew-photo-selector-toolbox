@@ -20,6 +20,10 @@ class ViolationsTest(unittest.TestCase):
         found = cpp.violations(["Claude outputs/x", "Claude outputs/history-rewrite/a.txt"])
         self.assertEqual(len(found), 2)
 
+    def test_traceability_script_is_denied(self):
+        found = cpp.violations(["scripts/verify_requirements_traceability.py"])
+        self.assertEqual(len(found), 1)
+
     def test_public_paths_pass(self):
         self.assertEqual(cpp.violations(["README.md", "docs/shared/FILE_OPERATIONS.md"]), [])
 
