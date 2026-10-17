@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(SCRIPTS_DIR) not in sys.path:
@@ -137,6 +138,12 @@ class VersionTest(unittest.TestCase):
 
 class RepoTestCase(unittest.TestCase):
     def setUp(self):
+        # release.py runs git itself (e.g. `git tag -a`), so the identity and the isolation
+        # from the user's git config must hold for the whole process, not only Repo.git():
+        # CI runners have no user.name / user.email.
+        env = mock.patch.dict(os.environ, GIT_ENV)
+        env.start()
+        self.addCleanup(env.stop)
         self._tmp = tempfile.TemporaryDirectory()
         self.repo = Repo(self._tmp.name)
         self.root = self.repo.root
