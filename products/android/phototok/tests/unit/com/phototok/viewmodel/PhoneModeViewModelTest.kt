@@ -1262,4 +1262,25 @@ class PhoneModeViewModelTest {
         assertTrue(state.lastActionFeedback?.message?.contains("Deleted 1 of 2") == true)
         assertTrue(state.lastActionFeedback?.message?.contains("IMG_001.arw") == true)
     }
+
+    @Test
+    fun `a failed delete commit after the folder changed reports the error and leaves the new feed alone`() = runTest {
+        val gate = CompletableDeferred<Boolean>()
+        coEvery { imageRepository.deleteImage(any()) } coAnswers { gate.await() }
+        val viewModel = loadFolder(image("a.jpg", 20), image("b.jpg", 10))
+
+        viewModel.requestDelete()
+        every { imageRepository.discoverImages(any()) } returns flowOf(listOf(image("x.jpg", 5)))
+        viewModel.selectSourceFolder(Uri.parse("content://tree/other"))
+        advanceUntilIdle()
+
+        gate.complete(false)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("x.jpg"), state.images.map { it.fileName })
+        assertEquals(listOf("x.jpg"), state.allImages.map { it.fileName })
+        assertTrue(state.lastActionFeedback?.isError == true)
+        assertTrue(state.lastActionFeedback?.message?.contains("a.jpg") == true)
+    }
 }
