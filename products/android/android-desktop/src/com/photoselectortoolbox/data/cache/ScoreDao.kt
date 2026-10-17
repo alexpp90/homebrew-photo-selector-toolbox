@@ -47,4 +47,19 @@ interface ScoreDao {
 
     @Query("SELECT COUNT(*) FROM scores_cache")
     suspend fun getCount(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertUserRating(entity: UserRatingEntity)
+
+    @Query("SELECT * FROM user_ratings WHERE uri = :uri LIMIT 1")
+    suspend fun getUserRating(uri: String): UserRatingEntity?
+
+    @Query("SELECT * FROM user_ratings WHERE uri IN (:uris)")
+    suspend fun getUserRatings(uris: List<String>): List<UserRatingEntity>
+
+    @Query("SELECT * FROM user_ratings WHERE rating >= :minRating")
+    suspend fun getUserRatingsWithMinRating(minRating: Int): List<UserRatingEntity>
+
+    @Query("SELECT * FROM user_ratings WHERE rating = :rating")
+    suspend fun getUserRatingsWithRating(rating: Int): List<UserRatingEntity>
 }

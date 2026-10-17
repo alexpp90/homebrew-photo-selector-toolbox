@@ -304,9 +304,9 @@ class ScoresDatabaseMigrationTest {
         rawDb.execSQL("INSERT INTO scores_cache (filePath, fileSize, lastModified, aestheticScore, lastAccessTime) VALUES ('photo_r4', 100, 200, 9.1, 1003)")
         rawDb.close()
 
-        // 2. Open via Room with MIGRATION_2_3 — this validates the full Room schema integrity!
+        // 2. Open via Room with MIGRATION_2_3 and MIGRATION_3_4 — this validates the full Room v4 schema integrity!
         val roomDb = Room.databaseBuilder(context, ScoresDatabase::class.java, dbName)
-            .addMigrations(ScoresDatabase.MIGRATION_2_3)
+            .addMigrations(ScoresDatabase.MIGRATION_2_3, ScoresDatabase.MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
 
@@ -476,6 +476,210 @@ class ScoresDatabaseMigrationTest {
         // Pruning works seamlessly on migrated DB
         dao.pruneToMru(1)
         assertEquals(1, dao.getCount())
+
+        roomDb.close()
+    }
+
+    @Test
+    fun `migration 1 to 2 adds nullable aestheticScore column and preserves existing technical scores`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_test_1_2.db"
+        context.deleteDatabase(dbName)
+
+        val config = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : SupportSQLiteOpenHelper.Callback(1) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `scores_cache` (
+                            `filePath` TEXT NOT NULL,
+                            `fileSize` INTEGER NOT NULL,
+                            `lastModified` INTEGER NOT NULL,
+                            `sharpnessScore` REAL,
+                            `noiseLevel` REAL,
+                            `highlightClipping` REAL,
+                            `shadowClipping` REAL,
+                            `lastAccessTime` INTEGER NOT NULL,
+                            PRIMARY KEY(`filePath`)
+                        )
+                        """.trimIndent()
+                    )
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+
+        val helper = FrameworkSQLiteOpenHelperFactory().create(config)
+        val db = helper.writableDatabase
+
+        db.execSQL(
+            """
+            INSERT INTO scores_cache (filePath, fileSize, lastModified, sharpnessScore, noiseLevel, highlightClipping, shadowClipping, lastAccessTime)
+            VALUES ('content://photo/v1_only', 4096, 8192, 91.5, 0.4, 0.01, 0.02, 12345)
+            """.trimIndent()
+        )
+
+        ScoresDatabase.MIGRATION_1_2.migrate(db)
+
+        val cursor = db.query("SELECT filePath, sharpnessScore, noiseLevel, aestheticScore FROM scores_cache WHERE filePath = 'content://photo/v1_only'")
+        assertTrue(cursor.moveToFirst())
+        assertEquals("content://photo/v1_only", cursor.getString(0))
+        assertEquals(91.5, cursor.getDouble(1), 1e-6)
+        assertEquals(0.4, cursor.getDouble(2), 1e-6)
+        assertTrue(cursor.isNull(3))
+        cursor.close()
+        db.close()
+    }
+
+    @Test
+    fun `migration 3 to 4 creates user_ratings table and copies only non-zero ratings from scores_cache`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_test_3_4.db"
+        context.deleteDatabase(dbName)
+
+        val config = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : SupportSQLiteOpenHelper.Callback(3) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `scores_cache` (
+                            `filePath` TEXT NOT NULL,
+                            `fileSize` INTEGER NOT NULL,
+                            `lastModified` INTEGER NOT NULL,
+                            `sharpnessScore` REAL,
+                            `noiseLevel` REAL,
+                            `highlightClipping` REAL,
+                            `shadowClipping` REAL,
+                            `aestheticScore` REAL,
+                            `rating` INTEGER NOT NULL,
+                            `compositionAnalysis` TEXT,
+                            `lastAccessTime` INTEGER NOT NULL,
+                            PRIMARY KEY(`filePath`)
+                        )
+                        """.trimIndent()
+                    )
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+
+        val helper = FrameworkSQLiteOpenHelperFactory().create(config)
+        val db = helper.writableDatabase
+
+        // Seed v3 rows: 5-star, reject (-1), and unrated (0)
+        db.execSQL(
+            """
+            INSERT INTO scores_cache (filePath, fileSize, lastModified, sharpnessScore, rating, lastAccessTime)
+            VALUES ('content://photo/five_star', 1000, 2000, 80.0, 5, 9001)
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO scores_cache (filePath, fileSize, lastModified, sharpnessScore, rating, lastAccessTime)
+            VALUES ('content://photo/rejected', 1000, 2000, 30.0, -1, 9002)
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO scores_cache (filePath, fileSize, lastModified, sharpnessScore, rating, lastAccessTime)
+            VALUES ('content://photo/unrated', 1000, 2000, 60.0, 0, 9003)
+            """.trimIndent()
+        )
+
+        ScoresDatabase.MIGRATION_3_4.migrate(db)
+
+        val cursor = db.query("SELECT uri, rating, updatedAt FROM user_ratings ORDER BY uri ASC")
+        assertEquals(2, cursor.count)
+
+        assertTrue(cursor.moveToFirst())
+        assertEquals("content://photo/five_star", cursor.getString(0))
+        assertEquals(5, cursor.getInt(1))
+        assertEquals(9001L, cursor.getLong(2))
+
+        assertTrue(cursor.moveToNext())
+        assertEquals("content://photo/rejected", cursor.getString(0))
+        assertEquals(-1, cursor.getInt(1))
+        assertEquals(9002L, cursor.getLong(2))
+        cursor.close()
+
+        db.close()
+    }
+
+    @Test
+    fun `migration 3 to 4 opens cleanly with Room v4 and preserves ratings across deleteAll and pruneToMru`() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_test_3_4_room.db"
+        context.deleteDatabase(dbName)
+
+        val config = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : SupportSQLiteOpenHelper.Callback(3) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `scores_cache` (
+                            `filePath` TEXT NOT NULL,
+                            `fileSize` INTEGER NOT NULL,
+                            `lastModified` INTEGER NOT NULL,
+                            `sharpnessScore` REAL,
+                            `noiseLevel` REAL,
+                            `highlightClipping` REAL,
+                            `shadowClipping` REAL,
+                            `aestheticScore` REAL,
+                            `rating` INTEGER NOT NULL,
+                            `compositionAnalysis` TEXT,
+                            `lastAccessTime` INTEGER NOT NULL,
+                            PRIMARY KEY(`filePath`)
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)")
+                    db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '95846fa727e71f40900f75e079e55cdc')")
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+
+        val helper = FrameworkSQLiteOpenHelperFactory().create(config)
+        val rawDb = helper.writableDatabase
+        rawDb.execSQL("INSERT INTO scores_cache (filePath, fileSize, lastModified, sharpnessScore, rating, lastAccessTime) VALUES ('photo_a', 100, 200, 75.0, 4, 1000)")
+        rawDb.execSQL("INSERT INTO scores_cache (filePath, fileSize, lastModified, sharpnessScore, rating, lastAccessTime) VALUES ('photo_b', 100, 200, 85.0, 0, 2000)")
+        rawDb.close()
+
+        val roomDb = Room.databaseBuilder(context, ScoresDatabase::class.java, dbName)
+            .addMigrations(ScoresDatabase.MIGRATION_3_4)
+            .allowMainThreadQueries()
+            .build()
+
+        val dao = roomDb.scoreDao()
+
+        // Migrated rating is in user_ratings
+        val migratedRating = dao.getUserRating("photo_a")
+        assertNotNull(migratedRating)
+        assertEquals(4, migratedRating!!.rating)
+        assertEquals(1000L, migratedRating.updatedAt)
+        assertNull(dao.getUserRating("photo_b"))
+
+        // Unscanned photo rating can be upserted directly into user_ratings
+        dao.upsertUserRating(UserRatingEntity(uri = "unscanned_photo", rating = 5, updatedAt = 3000L))
+        assertEquals(5, dao.getUserRating("unscanned_photo")?.rating)
+
+        // MRU pruning evicts photo_a from scores_cache (oldest access time), but user_ratings keeps it
+        dao.pruneToMru(1)
+        assertNull(dao.getScore("photo_a"))
+        assertEquals(4, dao.getUserRating("photo_a")?.rating)
+
+        // Clearing all scan cache wipes scores_cache, but user_ratings survives untouched
+        dao.deleteAll()
+        assertEquals(0, dao.getCount())
+        val survivingRatings = dao.getUserRatings(listOf("photo_a", "unscanned_photo")).associateBy { it.uri }
+        assertEquals(4, survivingRatings["photo_a"]?.rating)
+        assertEquals(5, survivingRatings["unscanned_photo"]?.rating)
 
         roomDb.close()
     }

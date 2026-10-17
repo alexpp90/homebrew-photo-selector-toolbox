@@ -160,10 +160,12 @@ class SelectorViewModelRatingTest {
         assertEquals(4, viewModel.uiState.value.currentImage?.rating)
         assertEquals(4, viewModel.uiState.value.images[0].rating)
 
-        // Verify Room cache update called
+        // Verify Room cache update called immediately
         coVerify { cacheRepository.updateRating("content://test/folder/a.jpg", 4) }
 
-        // Verify async metadata write-back called
+        advanceUntilIdle()
+
+        // Verify async debounced metadata write-back called
         coVerify { metadataWriter.writeRating(any(), 4) }
     }
 
@@ -180,6 +182,8 @@ class SelectorViewModelRatingTest {
         assertEquals(5, viewModel.uiState.value.nextImage?.rating)
         assertEquals(5, viewModel.uiState.value.images[1].rating)
         coVerify { cacheRepository.updateRating("content://test/folder/b.jpg", 5) }
+
+        advanceUntilIdle()
         coVerify { metadataWriter.writeRating(any(), 5) }
     }
 
@@ -267,5 +271,71 @@ class SelectorViewModelRatingTest {
         val cachedImage = viewModel.uiState.value.images.firstOrNull { it.fileName == "cached.jpg" }
         assertNotNull(cachedImage)
         assertEquals(4, cachedImage?.rating)
+    }
+
+    @Test
+    fun `unscanned photo rating is restored from user_ratings when scores_cache has no entry`() = runTest {
+        coEvery { scoreDao.getScore("content://test/folder/unscanned.jpg") } returns null
+        coEvery {
+            cacheRepository.getRatings(listOf("content://test/folder/unscanned.jpg"))
+        } returns mapOf("content://test/folder/unscanned.jpg" to 5)
+
+        val viewModel = loadFolder(image("unscanned.jpg", rating = 0))
+        advanceUntilIdle()
+
+        val unscannedImage = viewModel.uiState.value.images.firstOrNull { it.fileName == "unscanned.jpg" }
+        assertNotNull(unscannedImage)
+        assertEquals(5, unscannedImage?.rating)
+    }
+
+    @Test
+    fun `clearScores clears scanResult and scores_cache while preserving user ratings`() = runTest {
+        val viewModel = loadFolder(image("rated.jpg", rating = 4))
+
+        viewModel.clearScores()
+        advanceUntilIdle()
+
+        coVerify { cacheRepository.clearAll() }
+        assertEquals(4, viewModel.uiState.value.currentImage?.rating)
+    }
+
+    @Test
+    fun `rapid setRating calls within debounce window coalesce disk write to final rating while updating Room immediately`() = runTest {
+        val viewModel = loadFolder(image("burst.jpg", rating = 0))
+
+        for (r in listOf(1, 2, 3, 4, 5)) {
+            viewModel.setRatingForCurrent(r)
+        }
+
+        // In-memory state is 5 immediately
+        assertEquals(5, viewModel.uiState.value.currentImage?.rating)
+
+        // Room receives each rating update immediately without waiting for debounce
+        for (r in listOf(1, 2, 3, 4, 5)) {
+            coVerify(exactly = 1) { cacheRepository.updateRating("content://test/folder/burst.jpg", r) }
+        }
+
+        // Before the 500 ms debounce window expires, no disk metadata write has occurred
+        coVerify(exactly = 0) { metadataWriter.writeRating(any(), any()) }
+
+        // Advance past debounce window -> exactly one disk write for final rating (5)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { metadataWriter.writeRating(any(), any()) }
+        coVerify(exactly = 1) { metadataWriter.writeRating(any(), 5) }
+    }
+
+    @Test
+    fun `debounced rating write-back runs on appScope and completes even after ViewModel is cleared`() = runTest {
+        val viewModel = loadFolder(image("survive_clear.jpg", rating = 0))
+
+        viewModel.setRatingForCurrent(5)
+        // Cancel viewModelScope before the 500ms debounce expires
+        viewModel.viewModelScope.cancel()
+
+        // Advance virtual time on appScope
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { cacheRepository.updateRating("content://test/folder/survive_clear.jpg", 5) }
+        coVerify(exactly = 1) { metadataWriter.writeRating(any(), 5) }
     }
 }

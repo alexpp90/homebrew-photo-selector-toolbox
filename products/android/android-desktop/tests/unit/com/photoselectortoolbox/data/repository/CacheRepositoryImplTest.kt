@@ -2,6 +2,7 @@ package com.photoselectortoolbox.data.repository
 
 import com.photoselectortoolbox.data.cache.ScoreDao
 import com.photoselectortoolbox.data.cache.ScoreEntity
+import com.photoselectortoolbox.data.cache.UserRatingEntity
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -93,12 +94,33 @@ class CacheRepositoryImplTest {
     }
 
     @Test
-    fun `updateRating delegates to DAO`() = runTest {
+    fun `updateRating upserts UserRatingEntity and updates scores_cache`() = runTest {
+        coEvery { dao.upsertUserRating(any()) } just Runs
         coEvery { dao.updateRating("path", 5) } just Runs
 
         repo.updateRating("path", 5)
 
+        coVerify { dao.upsertUserRating(match { it.uri == "path" && it.rating == 5 }) }
         coVerify { dao.updateRating("path", 5) }
+    }
+
+    @Test
+    fun `getRating returns user_ratings entry even when scores_cache row is absent`() = runTest {
+        coEvery { dao.getUserRating("unscanned") } returns UserRatingEntity("unscanned", 4, 100L)
+        coEvery { dao.getScore("unscanned") } returns null
+
+        assertEquals(4, repo.getRating("unscanned"))
+    }
+
+    @Test
+    fun `getRatings chunks queries and returns map of user ratings`() = runTest {
+        coEvery { dao.getUserRatings(listOf("a", "b")) } returns listOf(
+            UserRatingEntity("a", 5, 100L),
+            UserRatingEntity("b", -1, 101L)
+        )
+
+        val result = repo.getRatings(listOf("a", "b"))
+        assertEquals(mapOf("a" to 5, "b" to -1), result)
     }
 
     @Test
