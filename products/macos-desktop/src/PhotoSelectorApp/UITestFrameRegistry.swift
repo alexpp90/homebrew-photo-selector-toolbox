@@ -11,14 +11,21 @@ final class UITestFrameRegistry {
 
     var isEnabled = false
     private(set) var frames: [String: CGRect] = [:]
+    /// Which modifier instance recorded each identifier's frame. SwiftUI runs the replacement
+    /// view's `onAppear` before the old view's `onDisappear` when a slot switches content
+    /// (photo pane <-> boundary pane), so removal must only apply to the owner that recorded it.
+    private var owners: [String: UUID] = [:]
 
-    func record(_ identifier: String, frame: CGRect) {
+    func record(_ identifier: String, frame: CGRect, owner: UUID) {
         guard isEnabled else { return }
         frames[identifier] = frame
+        owners[identifier] = owner
     }
 
-    func remove(_ identifier: String) {
+    func remove(_ identifier: String, owner: UUID) {
+        guard owners[identifier] == owner else { return }
         frames.removeValue(forKey: identifier)
+        owners.removeValue(forKey: identifier)
     }
 
     func frame(_ identifier: String) -> CGRect? {
@@ -26,8 +33,13 @@ final class UITestFrameRegistry {
     }
 }
 
+private final class FrameOwner: ObservableObject {
+    let id = UUID()
+}
+
 private struct UITestFrameModifier: ViewModifier {
     let identifier: String
+    @StateObject private var owner = FrameOwner()
 
     func body(content: Content) -> some View {
         if UITestFrameRegistry.shared.isEnabled {
@@ -37,13 +49,13 @@ private struct UITestFrameModifier: ViewModifier {
                     GeometryReader { proxy in
                         Color.clear
                             .onAppear {
-                                UITestFrameRegistry.shared.record(identifier, frame: proxy.frame(in: .global))
+                                UITestFrameRegistry.shared.record(identifier, frame: proxy.frame(in: .global), owner: owner.id)
                             }
                             .onChange(of: proxy.frame(in: .global)) { _, newFrame in
-                                UITestFrameRegistry.shared.record(identifier, frame: newFrame)
+                                UITestFrameRegistry.shared.record(identifier, frame: newFrame, owner: owner.id)
                             }
                             .onDisappear {
-                                UITestFrameRegistry.shared.remove(identifier)
+                                UITestFrameRegistry.shared.remove(identifier, owner: owner.id)
                             }
                     }
                 )

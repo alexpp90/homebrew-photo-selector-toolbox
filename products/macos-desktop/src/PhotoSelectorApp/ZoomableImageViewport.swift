@@ -299,6 +299,7 @@ struct ZoomExitPill: View {
                 .font(.system(size: 11, weight: .bold))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
+                .frame(minHeight: 24)
             }
             .buttonStyle(.borderedProminent)
             .focusable(false)

@@ -298,6 +298,39 @@ final class UISelfTestRunner {
             current.width * current.height > previous.width * previous.height,
             "current area \(Int(current.width * current.height)) vs previous \(Int(previous.width * previous.height))"
         )
+
+        let toolbarIds = [
+            "toolbar_previous", "toolbar_next",
+            "toolbar_mode_1", "toolbar_mode_2", "toolbar_mode_3",
+            "toolbar_zoom", "toolbar_pan_link"
+        ]
+        let undersized = toolbarIds.compactMap { id -> String? in
+            guard let rect = registry.frame(id) else { return "\(id)=missing" }
+            return (rect.width >= 24 - tolerance && rect.height >= 24 - tolerance)
+                ? nil
+                : "\(id)=\(Int(rect.width.rounded()))x\(Int(rect.height.rounded()))"
+        }
+        record("layout.toolbar_targets_at_least_24pt", undersized.isEmpty, undersized.isEmpty ? "all >=24x24 pt" : undersized.joined(separator: ", "))
+
+        if let panLink = registry.frame("toolbar_pan_link") {
+            let overlap = panLink.intersection(current)
+            record(
+                "layout.pan_link_outside_current_slot",
+                overlap.isNull || overlap.isEmpty,
+                "toolbar_pan_link=\(panLink) current=\(current)"
+            )
+        } else {
+            record("layout.pan_link_outside_current_slot", false, "toolbar_pan_link not registered in 3-Up")
+        }
+
+        // Navigating to the last photo swaps slot_next from ComparisonSlotPane to BoundarySlotPane;
+        // the outgoing pane's onDisappear must not wipe the incoming boundary pane's frame.
+        viewModel.selectPhoto(at: viewModel.photos.count - 1)
+        await settle()
+        let boundaryNext = registry.frame("slot_next")
+        record("layout.boundary_slot_retains_frame", boundaryNext != nil, "slot_next at last photo=\(String(describing: boundaryNext))")
+        viewModel.selectPhoto(at: 1)
+        await settle()
     }
 
     // MARK: - 5. Zoom: exits and buttons while zoomed
