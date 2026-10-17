@@ -11,6 +11,8 @@ import coil.request.ImageRequest
 import coil.size.Precision
 import coil.size.Scale
 import com.photoselector.core.model.ExifData
+import com.photoselector.core.storage.SourceKind
+import com.photoselector.core.storage.SourceKindClassifier
 import com.photoselectortoolbox.data.cache.ScoreDao
 import java.io.File
 import com.photoselectortoolbox.data.metadata.MetadataWriter
@@ -76,6 +78,17 @@ import kotlinx.coroutines.withContext
  * read before.
  */
 enum class SelectorFrame { PREVIOUS, CURRENT, NEXT }
+
+val SourceKind.isCloudProvider: Boolean
+    get() = this == SourceKind.CLOUD_OTHER
+
+val SourceKind.providerLabel: String
+    get() = when (this) {
+        SourceKind.PHONE_LIBRARY -> "local storage"
+        SourceKind.REMOVABLE -> "removable storage"
+        SourceKind.CAMERA_MTP -> "camera (MTP)"
+        SourceKind.CLOUD_OTHER -> "cloud storage"
+    }
 
 /**
  * Recovery prompt raised on startup when uncommitted pending deletions from a
@@ -178,7 +191,32 @@ data class SelectorUiState(
     val ratingFilter: RatingFilter = RatingFilter.All,
     /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
     val missingGrantPrompt: Boolean = false,
+    /** Storage provider classification for the opened folder (`U-30`). */
+    val sourceKind: SourceKind = SourceKind.PHONE_LIBRARY,
+    /** Whether a full cloud scan confirmation prompt is pending (`U-30`). */
+    val showCloudScanConfirmation: Boolean = false,
+    /** Whether images are sorted ascending by sharpness for worst-first reject triage (`U-34`). */
+    val sortWorstFirst: Boolean = false,
+    /** Optional sharpness stop-line threshold for worst-first reject triage (`U-34`). */
+    val sharpnessStopThreshold: Double? = null,
+    /** Session decision log counters (`U-33`, `U-35`). */
+    val sessionMovedCount: Int = 0,
+    val sessionCopiedCount: Int = 0,
+    val sessionDeletedCount: Int = 0,
+    val sessionKeptFileNames: Set<String> = emptySet(),
 ) {
+    /** Whether worst-first triage has reached or passed the configured sharpness stop-line (`U-34`). */
+    val hasReachedSharpnessThreshold: Boolean
+        get() {
+            if (!sortWorstFirst) return false
+            val threshold = sharpnessStopThreshold ?: return false
+            val score = currentImage?.scanResult?.sharpnessScore ?: return false
+            return score >= threshold
+        }
+
+    /** Total photos kept (moved + copied) in the current culling session (`U-33`, `U-35`). */
+    val sessionKeptCount: Int
+        get() = sessionMovedCount + sessionCopiedCount
     /**
      * What, if anything, the snackbar's UNDO would actually reverse.
      *
@@ -509,12 +547,24 @@ class SelectorViewModel @Inject constructor(
                 snackbarUndoAvailable = false,
                 ratingFilter = RatingFilter.All,
                 missingGrantPrompt = false,
+                sourceKind = SourceKind.PHONE_LIBRARY,
+                showCloudScanConfirmation = false,
+                sortWorstFirst = false,
+                sessionMovedCount = 0,
+                sessionCopiedCount = 0,
+                sessionDeletedCount = 0,
+                sessionKeptFileNames = emptySet(),
             )
         }
     }
 
     fun selectFolder(uri: Uri) {
         resetSession()
+        val classifiedKind = runCatching {
+            val auth = uri.authority
+            if (auth.isNullOrBlank() || auth == "test") SourceKind.PHONE_LIBRARY
+            else SourceKindClassifier.classify(uri)
+        }.getOrDefault(SourceKind.PHONE_LIBRARY)
         discoveryJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -522,7 +572,8 @@ class SelectorViewModel @Inject constructor(
                     isEnumerating = true,
                     error = null,
                     missingGrantPrompt = false,
-                    folderUri = uri.toString()
+                    folderUri = uri.toString(),
+                    sourceKind = classifiedKind,
                 )
             }
 
@@ -789,9 +840,53 @@ class SelectorViewModel @Inject constructor(
 
     // ── Scanning, grouping, and the queue between them ───────────────────
 
-    fun startScan() {
-        if (_uiState.value.images.isEmpty()) return
+    fun startScan(forceCloudScan: Boolean = false) {
+        val state = _uiState.value
+        if (state.images.isEmpty()) return
+        if (!forceCloudScan && state.sourceKind.isCloudProvider) {
+            _uiState.update { it.copy(showCloudScanConfirmation = true) }
+            return
+        }
         applyWorkDecision(SelectorWorkQueue.request(workQueue, SelectorWork.SCAN))
+    }
+
+    fun confirmCloudScan() {
+        _uiState.update { it.copy(showCloudScanConfirmation = false) }
+        startScan(forceCloudScan = true)
+    }
+
+    fun dismissCloudScanConfirmation() {
+        _uiState.update { it.copy(showCloudScanConfirmation = false) }
+    }
+
+    /**
+     * Toggle Worst-First Reject Triage (`U-34`): sorts photos ascending by
+     * sharpness score (lowest sharpness first, unscored photos at the end) so
+     * obvious blurry/accidental shots can be deleted rapidly up to the stop-line.
+     */
+    fun toggleSortWorstFirst() {
+        _uiState.update { state ->
+            val enableWorstFirst = !state.sortWorstFirst
+            val sorted = if (enableWorstFirst) {
+                state.images.sortedWith(
+                    compareBy<ImageItem> { it.scanResult?.sharpnessScore == null }
+                        .thenBy { it.scanResult?.sharpnessScore ?: Double.MAX_VALUE }
+                        .thenBy { it.fileName.lowercase() }
+                )
+            } else {
+                state.images.sortedBy { it.fileName.lowercase() }
+            }
+            state.copy(
+                images = sorted,
+                currentIndex = 0,
+                sortWorstFirst = enableWorstFirst,
+            )
+        }
+        onFrameChanged()
+    }
+
+    fun setSharpnessStopThreshold(threshold: Double?) {
+        _uiState.update { it.copy(sharpnessStopThreshold = threshold) }
     }
 
     private fun requestGrouping(level: GroupingLevel) {
@@ -1015,6 +1110,7 @@ class SelectorViewModel @Inject constructor(
                 snackbarMessage = SelectorLabels.deletedMessage(pending.slots.size),
                 undoHistory = pushResult.history,
                 snackbarUndoAvailable = true,
+                sessionDeletedCount = current.sessionDeletedCount + pending.slots.size,
             )
         }
         onFrameChanged()
@@ -1222,6 +1318,21 @@ class SelectorViewModel @Inject constructor(
             }
 
             if (result != null && result.success) {
+                _uiState.update { current ->
+                    current.copy(
+                        sessionMovedCount = if (action == CurationAction.MOVE) {
+                            current.sessionMovedCount + 1
+                        } else {
+                            current.sessionMovedCount
+                        },
+                        sessionCopiedCount = if (action == CurationAction.COPY) {
+                            current.sessionCopiedCount + 1
+                        } else {
+                            current.sessionCopiedCount
+                        },
+                        sessionKeptFileNames = current.sessionKeptFileNames + currentItem.fileName,
+                    )
+                }
                 val undo = UndoPolicy.forFiling(
                     action = action,
                     slots = edit.slots,

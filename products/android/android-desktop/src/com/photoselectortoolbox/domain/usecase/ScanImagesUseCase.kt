@@ -51,6 +51,8 @@ class ScanImagesUseCase @Inject constructor(
     private val scoreDao: ScoreDao,
     private val settingsRepository: SettingsRepository,
     private val bitmapDecoder: PhotoBitmapDecoder,
+    private val techniqueFactDetector: com.photoselectortoolbox.domain.learn.TechniqueFactDetector =
+        com.photoselectortoolbox.domain.learn.TechniqueFactDetector(),
 ) {
 
     /**
@@ -212,10 +214,62 @@ class ScanImagesUseCase @Inject constructor(
             val clippingResult = clippingDeferred.await()
             val sharpness = sharpnessDeferred.await()
 
+            val noise = noiseDeferred.await()
+
+            try {
+                val sampleW = bitmap.width.coerceIn(1, 64)
+                val sampleH = bitmap.height.coerceIn(1, 64)
+                val (luma, rgb) = if (bitmap.width >= 8 && bitmap.height >= 8) {
+                    val pixels = IntArray(sampleW * sampleH)
+                    val lumaArr = FloatArray(sampleW * sampleH)
+                    val stepX = (bitmap.width.toFloat() / sampleW).coerceAtLeast(1f)
+                    val stepY = (bitmap.height.toFloat() / sampleH).coerceAtLeast(1f)
+                    for (sy in 0 until sampleH) {
+                        val py = (sy * stepY).toInt().coerceIn(0, bitmap.height - 1)
+                        for (sx in 0 until sampleW) {
+                            val px = (sx * stepX).toInt().coerceIn(0, bitmap.width - 1)
+                            val argb = bitmap.getPixel(px, py)
+                            val idx = sy * sampleW + sx
+                            pixels[idx] = argb
+                            val r = (argb shr 16) and 0xFF
+                            val g = (argb shr 8) and 0xFF
+                            val b = argb and 0xFF
+                            lumaArr[idx] = 0.299f * r + 0.587f * g + 0.114f * b
+                        }
+                    }
+                    lumaArr to pixels
+                } else {
+                    null to null
+                }
+
+                val isRaw = image.hasRawCompanion ||
+                    com.photoselectortoolbox.domain.format.ImageFormats.isRaw(image.fileName)
+                val facts = techniqueFactDetector.detectAll(
+                    uri = image.uri,
+                    fileSize = image.fileSize,
+                    lastModified = image.lastModified,
+                    exif = image.exifData,
+                    luma = luma,
+                    rgbPixels = rgb,
+                    width = if (luma != null) sampleW else (image.imageWidth ?: 0),
+                    height = if (luma != null) sampleH else (image.imageHeight ?: 0),
+                    sharpnessScore = sharpness,
+                    noiseLevel = noise,
+                    highlightClipping = clippingResult?.first,
+                    shadowClipping = clippingResult?.second,
+                    isRawOrHasRawCompanion = isRaw,
+                )
+                if (facts.isNotEmpty()) {
+                    scoreDao.upsertTechniqueFacts(facts)
+                }
+            } catch (_: Exception) {
+                // Non-critical: technique facts can be recomputed on demand
+            }
+
             ScanResult(
                 filePath = image.uri,
                 sharpnessScore = sharpness,
-                noiseLevel = noiseDeferred.await(),
+                noiseLevel = noise,
                 highlightClipping = clippingResult?.first,
                 shadowClipping = clippingResult?.second,
                 aestheticScore = null

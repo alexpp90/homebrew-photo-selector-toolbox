@@ -56,6 +56,10 @@ public final class DirectoryScanner: DirectoryScanning, @unchecked Sendable {
         "selection", "selected", "phototok_selection", "phototok_leftswipe"
     ]
 
+    /// Marker file written into Selection folders so custom-named destination folders remain
+    /// excluded on subsequent recursive scans even if the user later renames the setting.
+    public static let selectionMarkerFilename = ".photoselector-selection"
+
     private let fileManager: FileManager
     private let userDefaults: UserDefaults
 
@@ -72,6 +76,20 @@ public final class DirectoryScanner: DirectoryScanning, @unchecked Sendable {
             names.insert(custom.lowercased())
         }
         return names
+    }
+
+    /// Returns `true` when `directory` is an excluded Selection folder either by name or because
+    /// it contains the `.photoselector-selection` marker file.
+    public static func isExcludedSubdirectory(
+        _ directory: URL,
+        excludedNames: Set<String>,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        if excludedNames.contains(directory.lastPathComponent.lowercased()) {
+            return true
+        }
+        let markerPath = directory.appendingPathComponent(selectionMarkerFilename).path
+        return fileManager.fileExists(atPath: markerPath)
     }
 
     /// Progressively streams discovered photo items in batches.
@@ -114,7 +132,7 @@ public final class DirectoryScanner: DirectoryScanning, @unchecked Sendable {
 
                     if recursive {
                         let subdirectories = listing.directories
-                            .filter { !excluded.contains($0.lastPathComponent.lowercased()) }
+                            .filter { !Self.isExcludedSubdirectory($0, excludedNames: excluded, fileManager: self.fileManager) }
                             .sorted { Self.naturalOrder($0.lastPathComponent, $1.lastPathComponent) }
                         // Push in reverse so the naturally-first subfolder is visited first.
                         pending.append(contentsOf: subdirectories.reversed())

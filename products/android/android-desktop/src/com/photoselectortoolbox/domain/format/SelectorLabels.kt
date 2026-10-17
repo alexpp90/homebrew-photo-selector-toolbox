@@ -71,11 +71,35 @@ object SelectorLabels {
      * Body text for the one-time per-folder delete confirmation dialog.
      *
      * Never says "cannot be undone" while UNDO / Ctrl+Z is offered; states the
-     * 20-step undo history and folder-commit boundary honestly.
+     * 20-step undo history and folder-commit boundary honestly, and appends a
+     * cloud-sync warning when [isCloudProvider] is true (`U-30`).
      */
-    fun deleteConfirmationMessage(fileName: String): String =
-        "Delete \"$fileName\"? Deletions in this folder are permanent once committed. " +
+    fun deleteConfirmationMessage(
+        fileName: String,
+        isCloudProvider: Boolean = false,
+        providerLabel: String? = null,
+    ): String {
+        val base = "Delete \"$fileName\"? Deletions in this folder are permanent once committed. " +
             "You can undo up to 20 actions with Ctrl+Z before leaving the folder."
+        return if (isCloudProvider) {
+            val provider = providerLabel?.takeIf { it.isNotBlank() } ?: "a cloud provider"
+            "$base Warning: This folder is backed by $provider — deleting here may permanently remove the photo across all synced devices."
+        } else {
+            base
+        }
+    }
+
+    /** Confirmation prompt before running a full pixel scan on a cloud provider (`U-30`). */
+    fun cloudScanConfirmationMessage(providerLabel: String, imageCount: Int): String =
+        "Scanning $imageCount photos in $providerLabel will download every image over the network to compute sharpness scores. Continue?"
+
+    /** Banner text when worst-first reject triage reaches the sharpness stop-line (`U-34`). */
+    fun worstFirstStopLineMessage(threshold: Double): String =
+        String.format(
+            java.util.Locale.US,
+            "Reached sharpness stop-line (%.0f) — remaining photos meet or exceed your threshold.",
+            threshold,
+        )
 
     /** Recovery prompt text when a previous session had uncommitted pending deletions. */
     fun uncompletedDeletionsMessage(count: Int): String =

@@ -39,7 +39,7 @@ class SettingsRepositoryTest {
     @Test
     fun `default values match initial state`() = runTest {
         assertEquals("Selection", repository.selectionFolderName.first())
-        assertTrue(repository.sortingEnabled.first())
+        assertFalse(repository.sortingEnabled.first())
         assertNull(repository.lastFolderUri.first())
         assertEquals(CollectionAction.DEFAULT, repository.phoneCollectionAction.first())
         assertNull(repository.phoneCollectionUri.first())
@@ -57,7 +57,6 @@ class SettingsRepositoryTest {
         assertTrue(repository.phoneRecentPaths.first().isEmpty())
         assertTrue(repository.phoneSeenFirstRunHints.first().isEmpty())
         assertEquals(0L, repository.lastAppUsedTs.first())
-        assertFalse(repository.selectionUseSourceRoot.first())
     }
 
     @Test
@@ -65,6 +64,8 @@ class SettingsRepositoryTest {
         repository.setSelectionFolderName("CustomSelection")
         assertEquals("CustomSelection", repository.selectionFolderName.first())
 
+        repository.setSortingEnabled(true)
+        assertTrue(repository.sortingEnabled.first())
         repository.setSortingEnabled(false)
         assertFalse(repository.sortingEnabled.first())
 
@@ -118,9 +119,33 @@ class SettingsRepositoryTest {
 
         repository.recordAppUsed(555555L)
         assertEquals(555555L, repository.lastAppUsedTs.first())
+    }
 
-        repository.setSelectionUseSourceRoot(true)
-        assertTrue(repository.selectionUseSourceRoot.first())
+    @Test
+    fun `sourceSettingsFlow returns tailored defaults per SourceKind and updates independently`() = runTest {
+        val phoneDefaults = repository.sourceSettingsFlow(com.photoselector.core.storage.SourceKind.PHONE_LIBRARY).first()
+        val sdDefaults = repository.sourceSettingsFlow(com.photoselector.core.storage.SourceKind.REMOVABLE).first()
+
+        assertEquals(com.phototok.domain.FeedOrderMode.NEWEST_FIRST, phoneDefaults.feedOrder)
+        assertFalse(phoneDefaults.sortingEnabled)
+
+        assertEquals(com.phototok.domain.FeedOrderMode.SHOOTING, sdDefaults.feedOrder)
+        assertEquals(FileTypeFilter.ONE_PER_SHOT, sdDefaults.fileTypeFilter)
+        assertTrue(sdDefaults.sortingEnabled)
+        assertTrue(sdDefaults.moveRelatedFiles)
+
+        repository.setSourceFeedOrder(
+            com.photoselector.core.storage.SourceKind.PHONE_LIBRARY,
+            com.phototok.domain.FeedOrderMode.SHUFFLE,
+        )
+        assertEquals(
+            com.phototok.domain.FeedOrderMode.SHUFFLE,
+            repository.sourceSettingsFlow(com.photoselector.core.storage.SourceKind.PHONE_LIBRARY).first().feedOrder,
+        )
+        assertEquals(
+            com.phototok.domain.FeedOrderMode.SHOOTING,
+            repository.sourceSettingsFlow(com.photoselector.core.storage.SourceKind.REMOVABLE).first().feedOrder,
+        )
     }
 
     @Test

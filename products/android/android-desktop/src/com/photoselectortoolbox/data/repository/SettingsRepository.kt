@@ -73,10 +73,16 @@ class SettingsRepository @Inject constructor(
          * so a killed process can offer recovery on next startup (PRP WP-11 / U-05).
          */
         private val KEY_PENDING_DELETE_JOURNAL = stringSetPreferencesKey("pending_delete_journal")
+        private val KEY_SECONDARY_SELECTION_FOLDER_NAME = stringPreferencesKey("secondary_selection_folder_name")
+        private val KEY_CUSTOM_SELECTION_DESTINATION_URI = stringPreferencesKey("custom_selection_destination_uri")
+        private val KEY_TV_DISPLAY_SCALE_ENABLED = booleanPreferencesKey("tv_display_scale_enabled")
 
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
+        const val DEFAULT_SECONDARY_SELECTION_FOLDER_NAME = "Final"
         const val DEFAULT_SORTING_ENABLED = true
         const val DEFAULT_GROUPING_ENABLED = false
+        const val DEFAULT_TV_DISPLAY_SCALE_ENABLED = false
+        const val TV_DISPLAY_SCALE_FACTOR = 1.25f
 
         /**
          * The filmstrip starts hidden.
@@ -525,6 +531,42 @@ class SettingsRepository @Inject constructor(
     suspend fun clearPendingDeleteJournal() {
         context.dataStore.edit { prefs ->
             prefs.remove(KEY_PENDING_DELETE_JOURNAL)
+        }
+    }
+
+    // ── Multi-pass culling, portable culling station, and TV display scale (U-32, U-33, U-36) ──
+
+    val secondarySelectionFolderName: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SECONDARY_SELECTION_FOLDER_NAME] ?: DEFAULT_SECONDARY_SELECTION_FOLDER_NAME
+    }
+
+    suspend fun setSecondarySelectionFolderName(name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SECONDARY_SELECTION_FOLDER_NAME] = name
+        }
+    }
+
+    val customSelectionDestinationUri: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CUSTOM_SELECTION_DESTINATION_URI]
+    }
+
+    suspend fun setCustomSelectionDestinationUri(uri: String?) {
+        context.dataStore.edit { prefs ->
+            if (uri != null) {
+                prefs[KEY_CUSTOM_SELECTION_DESTINATION_URI] = uri
+            } else {
+                prefs.remove(KEY_CUSTOM_SELECTION_DESTINATION_URI)
+            }
+        }
+    }
+
+    val tvDisplayScaleEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_TV_DISPLAY_SCALE_ENABLED] ?: DEFAULT_TV_DISPLAY_SCALE_ENABLED
+    }
+
+    suspend fun setTvDisplayScaleEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_TV_DISPLAY_SCALE_ENABLED] = enabled
         }
     }
 }

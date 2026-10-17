@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -122,6 +123,8 @@ class ImageRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = "ImageRepositoryImpl"
         private const val SELECTION_FOLDER_NAME = "Selection"
+        private const val SECONDARY_SELECTION_FOLDER_NAME = "Final"
+        const val SELECTION_MARKER_FILE_NAME = ".photoselector-selection"
         private const val RAW_SUBFOLDER = "RAW"
         private const val JPEG_SUBFOLDER = "JPEG"
         private const val SINGLE_FOLDER_KEY = "TARGET"
@@ -227,6 +230,58 @@ class ImageRepositoryImpl @Inject constructor(
                 }
                 n++
             }
+        }
+
+        data class SafeToFormatVerdict(
+            val isSafe: Boolean,
+            val verifiedCount: Int,
+            val missingOrEmptyFiles: List<String>,
+            val summaryMessage: String,
+        )
+
+        /**
+         * Verify that all kept filenames from a culling session are present and non-empty
+         * in the destination folder before formatting an OTG SD card (`U-33`).
+         */
+        internal fun verifySafeToFormat(
+            keptFileNames: Collection<String>,
+            destinationFilesWithSizes: Map<String, Long>,
+        ): SafeToFormatVerdict {
+            if (keptFileNames.isEmpty()) {
+                return SafeToFormatVerdict(
+                    isSafe = false,
+                    verifiedCount = 0,
+                    missingOrEmptyFiles = emptyList(),
+                    summaryMessage = "No kept photos recorded in this session yet.",
+                )
+            }
+            val lowerDest = destinationFilesWithSizes.entries.associate { (k, v) -> k.lowercase() to v }
+            val missing = mutableListOf<String>()
+            var verified = 0
+            for (name in keptFileNames) {
+                val stem = extractPrimaryStem(name).lowercase()
+                val matchedSize = lowerDest[name.lowercase()]
+                    ?: lowerDest.entries.firstOrNull { (destName, _) ->
+                        extractPrimaryStem(destName).lowercase() == stem
+                    }?.value
+                if (matchedSize != null && matchedSize > 0L) {
+                    verified++
+                } else {
+                    missing.add(name)
+                }
+            }
+            val safe = missing.isEmpty() && verified == keptFileNames.size
+            val msg = if (safe) {
+                "Safe to format SD card: all $verified kept photo(s) verified on destination storage."
+            } else {
+                "Do NOT format SD card: ${missing.size} of ${keptFileNames.size} kept photo(s) missing or empty (${missing.take(3).joinToString()})."
+            }
+            return SafeToFormatVerdict(
+                isSafe = safe,
+                verifiedCount = verified,
+                missingOrEmptyFiles = missing,
+                summaryMessage = msg,
+            )
         }
     }
 
@@ -511,17 +566,41 @@ class ImageRepositoryImpl @Inject constructor(
         withContext(ioDispatcher) {
             if (sourceUris.isEmpty()) return@withContext emptyList()
             try {
-                val folderName = settingsRepository.selectionFolderName.first()
+                val primaryFolderName = settingsRepository.selectionFolderName.first()
                     .trim().ifEmpty { SELECTION_FOLDER_NAME }
+                val secondaryFolderName = try {
+                    settingsRepository.secondarySelectionFolderName.firstOrNull()
+                        ?.trim()?.ifEmpty { SECONDARY_SELECTION_FOLDER_NAME }
+                        ?: SECONDARY_SELECTION_FOLDER_NAME
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    SECONDARY_SELECTION_FOLDER_NAME
+                }
+                val customDestUriStr = try {
+                    settingsRepository.customSelectionDestinationUri.firstOrNull()
+                        ?.trim()?.takeIf { it.isNotEmpty() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+                val effectiveDestRootUri = customDestUriStr?.let { Uri.parse(it) } ?: destFolderUri
 
-                val destFolder = DocumentFile.fromTreeUri(context, destFolderUri)
+                val destFolder = DocumentFile.fromTreeUri(context, effectiveDestRootUri)
                     ?: return@withContext sourceUris.map { uri ->
                         FileOperationResult.failure(
                             sourceUri = uri.toString(),
-                            error = "Could not write to the $folderName folder",
+                            error = "Could not write to the $primaryFolderName folder",
                             parentDocumentId = parentDocumentId,
                         )
                     }
+
+                val isSecondPass = customDestUriStr == null && (
+                    destFolder.name?.equals(primaryFolderName, ignoreCase = true) == true ||
+                        runCatching { destFolder.findFile(SELECTION_MARKER_FILE_NAME) != null }.getOrDefault(false)
+                    )
+                val folderName = if (isSecondPass) secondaryFolderName else primaryFolderName
 
                 val selectionDir = destFolder.findFile(folderName)
                     ?: destFolder.createDirectory(folderName)
@@ -533,16 +612,20 @@ class ImageRepositoryImpl @Inject constructor(
                         )
                     }
 
-                executeBundleTransfer(
+                val results = executeBundleTransfer(
                     context = context,
                     sourceUris = sourceUris,
-                    treeRootUri = destFolderUri,
+                    treeRootUri = effectiveDestRootUri,
                     baseTargetFolder = selectionDir,
                     sorting = sorting,
                     targetFolderLabel = folderName,
                     isMove = isMove,
                     parentDocumentId = parentDocumentId,
                 )
+                if (results.any { it.success || it.partial }) {
+                    ensureSelectionMarkerFile(selectionDir)
+                }
+                results
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -551,6 +634,16 @@ class ImageRepositoryImpl @Inject constructor(
                     FileOperationResult.failure(uri.toString(), e.message, parentDocumentId)
                 }
             }
+        }
+    }
+
+    private fun ensureSelectionMarkerFile(selectionDir: DocumentFile) {
+        try {
+            if (selectionDir.findFile(SELECTION_MARKER_FILE_NAME) == null) {
+                selectionDir.createFile("application/octet-stream", SELECTION_MARKER_FILE_NAME)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Could not create marker file in ${selectionDir.uri}: ${e.message}")
         }
     }
 

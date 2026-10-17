@@ -9,7 +9,11 @@ import com.phototok.domain.PhotoFolders
 import kotlinx.coroutines.flow.Flow
 
 interface ImageRepository {
-    fun discoverImages(folderUri: Uri): Flow<List<ImageItem>>
+    fun discoverImages(
+        folderUri: Uri,
+        excludedFolderNames: Set<String> = emptySet(),
+        shuffleFirstBatch: Boolean = false,
+    ): Flow<List<ImageItem>>
 
     /**
      * Prepare a folder for use as the swipe source (persist permission, verify

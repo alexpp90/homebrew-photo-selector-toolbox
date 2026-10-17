@@ -53,9 +53,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.phototok.domain.CollectionAction
+import com.photoselector.core.storage.SourceKind
+import com.phototok.domain.FeedOrderMode
 import com.phototok.domain.FileTypeFilter
 import com.phototok.domain.SwipeAction
+import com.phototok.domain.SwipeRightVerb
 import com.phototok.viewmodel.SettingsViewModel
 
 @Composable
@@ -168,21 +170,21 @@ fun SettingsScreen(
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
             SettingsToggleItem(
-                title = "Store Selection in Scanned Folder",
-                description = if (uiState.selectionUseSourceRoot) {
-                    "Selection folder created inside each scanned folder"
-                } else {
-                    "Selection saved in central location or custom folder"
-                },
-                checked = uiState.selectionUseSourceRoot,
-                onCheckedChange = { viewModel.updateSelectionUseSourceRoot(it) },
+                title = "Organize Selection by RAW / JPEG",
+                description = "Create RAW/ and JPEG/ subfolders inside Selection",
+                checked = uiState.sortingEnabled,
+                onCheckedChange = { viewModel.updateSortingEnabled(it) },
             )
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
             SettingsClickItem(
                 title = "Custom Collection Location",
-                description = if (uiState.collectionUri != null) "Using custom folder" else if (uiState.selectionUseSourceRoot) "Default: subfolder in scanned folder" else "Default: central selection folder",
+                description = if (uiState.collectionUri != null) {
+                    "Using custom folder"
+                } else {
+                    "Default: subfolder in source folder"
+                },
                 onClick = { selectionFolderPickerLauncher.launch(null) },
                 trailing = {
                     if (uiState.collectionUri != null) {
@@ -204,6 +206,43 @@ fun SettingsScreen(
                         }
                     }
                 },
+            )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            var seenFolderReset by remember(uiState.sourceFolderUri) { mutableStateOf(false) }
+            if (uiState.sourceFolderUri != null) {
+                SettingsClickItem(
+                    title = "Reset Seen History for Current Folder",
+                    description = if (seenFolderReset) {
+                        "Seen history cleared for ${uiState.sourceFolderName.ifEmpty { "current folder" }}"
+                    } else {
+                        "Mark all photos in ${uiState.sourceFolderName.ifEmpty { "current folder" }} as unseen"
+                    },
+                    onClick = {
+                        viewModel.resetSeenForCurrentFolder {
+                            seenFolderReset = true
+                        }
+                    },
+                    icon = Icons.Default.RestartAlt,
+                )
+                HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+            }
+
+            var allSeenReset by remember { mutableStateOf(false) }
+            SettingsClickItem(
+                title = "Reset All Seen History",
+                description = if (allSeenReset) {
+                    "All seen history cleared"
+                } else {
+                    "Reset reviewed photo progress across all folders and cards"
+                },
+                onClick = {
+                    viewModel.resetAllSeenHistory {
+                        allSeenReset = true
+                    }
+                },
+                icon = Icons.Default.RestartAlt,
             )
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
@@ -232,22 +271,31 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // ── Browsing ─────────────────────────────────────────────────
+        // ── Browsing (per-SourceKind presets + global toggles) ───────
         SettingsSection(title = "Browsing", icon = Icons.Default.BrowseGallery) {
-            SettingsToggleItem(
-                title = "Sort by Orientation",
-                description = "Prioritize portraits in feed",
-                checked = uiState.sortByOrientation,
-                onCheckedChange = { viewModel.updateSortByOrientation(it) },
+            SettingsRadioGroup(
+                title = "Source Preset",
+                options = listOf(
+                    SourceKind.PHONE_LIBRARY to "Phone",
+                    SourceKind.REMOVABLE to "SD / Card",
+                    SourceKind.CAMERA_MTP to "Camera",
+                ),
+                selected = uiState.selectedSourceKind,
+                onSelect = { viewModel.selectSourceKindTab(it) },
             )
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
-            SettingsToggleItem(
-                title = "Randomize Order",
-                description = "Shuffle photos on every load",
-                checked = uiState.randomizeOrder,
-                onCheckedChange = { viewModel.updateRandomizeOrder(it) },
+            SettingsRadioGroup(
+                title = "Feed Order",
+                options = listOf(
+                    FeedOrderMode.NEWEST_FIRST to "Newest first",
+                    FeedOrderMode.SHOOTING to "Shooting order (filename)",
+                    FeedOrderMode.SHUFFLE to "Shuffle (unseen first)",
+                    FeedOrderMode.ORIENTATION_THEN_NEWEST to "Group by orientation",
+                ),
+                selected = uiState.feedOrder,
+                onSelect = { viewModel.updateFeedOrder(it) },
             )
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
@@ -323,6 +371,15 @@ fun SettingsScreen(
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
             SettingsToggleItem(
+                title = "Milestone Celebrations",
+                description = "Celebrate space freed and photo review milestones",
+                checked = uiState.celebrationsEnabled,
+                onCheckedChange = { viewModel.updateCelebrationsEnabled(it) },
+            )
+
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
+
+            SettingsToggleItem(
                 title = "Move Related Files",
                 description = "Also move/delete same-name files (e.g. .JPG + .RAW)",
                 checked = uiState.moveRelatedFiles,
@@ -331,10 +388,10 @@ fun SettingsScreen(
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
-            // Format filter (moved here from the landing screen; default Both)
             SettingsRadioGroup(
                 title = "Format Filter",
                 options = listOf(
+                    FileTypeFilter.ONE_PER_SHOT to "1 per shot (Recommended)",
                     FileTypeFilter.ALL to "Both",
                     FileTypeFilter.RAW to "RAW only",
                     FileTypeFilter.JPG to "JPG only",
@@ -345,15 +402,15 @@ fun SettingsScreen(
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))
 
-            // Add-to-collection action (triggered by swipe-right or the Star button)
             SettingsRadioGroup(
-                title = "Add to Collection Action",
+                title = "Swipe Right Action",
                 options = listOf(
-                    CollectionAction.COPY to "Copy to Collection",
-                    CollectionAction.MOVE to "Move to Collection",
+                    SwipeRightVerb.FAVOURITE to "★ Favourite (in-place)",
+                    SwipeRightVerb.COPY to "Copy to Selection",
+                    SwipeRightVerb.MOVE to "Move to Selection",
                 ),
-                selected = uiState.collectionAction,
-                onSelect = { viewModel.updateCollectionAction(it) },
+                selected = uiState.swipeRightVerb,
+                onSelect = { viewModel.updateSwipeRightVerb(it) },
             )
 
             HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.2f))

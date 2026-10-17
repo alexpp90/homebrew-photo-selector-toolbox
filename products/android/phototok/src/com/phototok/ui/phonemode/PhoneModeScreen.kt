@@ -33,20 +33,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.CollectionsBookmark
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lens
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestoreFromTrash
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.ui.platform.testTag
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarDuration
@@ -67,6 +71,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.photoselector.core.model.ExifData
+import com.photoselector.core.storage.SourceKind
 import com.phototok.data.model.ImageItem
 import com.phototok.domain.FileTypeFilter
 import com.phototok.domain.SwipeAction
@@ -82,8 +89,11 @@ import com.phototok.ui.components.ViewerBottomBar
 import com.phototok.ui.settings.SettingsScreen
 import com.phototok.viewmodel.PhoneModeViewModel
 import com.phototok.viewmodel.ReloadPrompt
+import com.phototok.viewmodel.SelectionViewerTab
 import com.phototok.viewmodel.SelectionViewerViewModel
 import com.phototok.viewmodel.canRevert
+import com.phototok.viewmodel.rawCompanionUris
+import com.phototok.viewmodel.unmountedRecentUris
 
 /**
  * Root composable for the phone-mode experience.
@@ -99,14 +109,20 @@ fun PhoneModeScreen(
     val selectionState by selectionViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
 
     val openSelectionViewer = {
         viewModel.finalizePendingDelete()
-        selectionViewModel.open(uiState.collectionFolderUri ?: uiState.sourceFolderUri)
+        selectionViewModel.openWithFavourites(
+            targetFolderUri = uiState.collectionFolderUri ?: uiState.sourceFolderUri,
+            sourceImages = uiState.images,
+            favouritedUris = uiState.favouritedUris,
+        )
     }
 
     var showSettingsSheet by remember { mutableStateOf(false) }
     var showDirectDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showClearAllCardConfirm by remember { mutableStateOf(false) }
 
     val performDeleteSwipe = {
         if (uiState.leftSwipeAction == SwipeAction.DELETE) {
@@ -129,6 +145,10 @@ fun PhoneModeScreen(
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri: Uri? -> uri?.let { viewModel.selectSourceFolder(it) } }
+
+    val copyFavouritesPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri: Uri? -> uri?.let { selectionViewModel.copyFavouritesToFolder(it) } }
 
     // Error snackbar
     LaunchedEffect(uiState.error) {
@@ -154,9 +174,19 @@ fun PhoneModeScreen(
         }
     }
 
+    // Milestone celebration snackbar (U-19)
+    LaunchedEffect(uiState.celebrationBanner) {
+        uiState.celebrationBanner?.let { banner ->
+            snackbarHostState.showSnackbar(
+                message = banner,
+                duration = SnackbarDuration.Short,
+            )
+            viewModel.dismissCelebrationBanner()
+        }
+    }
+
     // Direct Delete Confirmation Dialog
     if (showDirectDeleteConfirmDialog) {
-        val currentImage = uiState.images.getOrNull(uiState.currentIndex)
         AlertDialog(
             onDismissRequest = { showDirectDeleteConfirmDialog = false },
             modifier = Modifier.testTag("direct_delete_dialog"),
@@ -184,6 +214,71 @@ fun PhoneModeScreen(
                 }
             },
             containerColor = colors.surfaceContainerHigh,
+        )
+    }
+
+    // U-14c: "Done with this card" sheet
+    if (uiState.showCardDoneSheet) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCardDoneSheet() },
+            title = { Text("Done with this card") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Choose how to wrap up this SD / USB card session:")
+                    Button(
+                        onClick = { viewModel.keepAllFilesOnCard() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Leave card as-is (Recommended)")
+                    }
+                    if (uiState.undoStack.isNotEmpty() || uiState.pendingDelete != null) {
+                        TextButton(
+                            onClick = { viewModel.deleteQueuedRejectsOnCard() },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Delete rejected photos from card")
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            viewModel.dismissCardDoneSheet()
+                            showClearAllCardConfirm = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Clear all photos from card (${uiState.images.size})", color = colors.error)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissCardDoneSheet() }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showClearAllCardConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearAllCardConfirm = false },
+            title = { Text("Clear All Photos from Card?", color = colors.error) },
+            text = {
+                Text("This permanently deletes ${uiState.images.size} photos from ${uiState.sourceFolderName}. Uncopied photos cannot be recovered.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearAllCardConfirm = false
+                    viewModel.confirmClearEntireCard()
+                }) {
+                    Text("Delete All", color = colors.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllCardConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 
@@ -220,13 +315,23 @@ fun PhoneModeScreen(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // ── Read-only Selection-folder viewer (view + back only) ────────────
+        // ── Read-only Selection / Favourites viewer ─────────────────────────
         if (isViewingSelection) {
             SelectionFolderViewer(
                 images = selectionState.images,
                 currentIndex = selectionState.currentIndex,
                 folderName = selectionState.folderName,
+                activeTab = selectionState.activeTab,
                 showExifOverlay = uiState.showExifOverlay,
+                onSelectTab = selectionViewModel::selectTab,
+                onShareBatch = {
+                    selectionViewModel.buildBatchShareIntent(uiState.images)?.let {
+                        context.startActivity(it)
+                    }
+                },
+                onCopyFavouritesToFolder = {
+                    copyFavouritesPickerLauncher.launch(null)
+                },
                 onNavigate = selectionViewModel::navigateTo,
                 onClose = selectionViewModel::close,
             )
@@ -268,7 +373,6 @@ fun PhoneModeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Sources (back to landing)
                         SidePanelButton(
                             icon = Icons.Default.FolderOpen,
                             description = "Sources",
@@ -276,7 +380,6 @@ fun PhoneModeScreen(
                             enabled = true,
                             onClick = { viewModel.goBackToLanding() },
                         )
-                        // Selection
                         SidePanelButton(
                             icon = Icons.Default.CollectionsBookmark,
                             description = "Selection",
@@ -292,7 +395,6 @@ fun PhoneModeScreen(
                             enabled = uiState.canRevert,
                             onClick = { viewModel.revertDelete() },
                         )
-                        // Info: the full list of available controls
                         SidePanelButton(
                             icon = Icons.AutoMirrored.Filled.HelpOutline,
                             description = "Help",
@@ -322,10 +424,21 @@ fun PhoneModeScreen(
                         leftSwipeAction = uiState.leftSwipeAction,
                         leftSwipeFolderName = uiState.leftSwipeFolderName,
                         collectionAction = uiState.collectionAction,
+                        swipeRightVerb = uiState.swipeRightVerb,
                         collectionFolderName = uiState.collectionFolderName,
                         showExifOverlay = false,
                         showPageCounter = false,
                         isDiscovering = uiState.isDiscovering,
+                        isCloudSource = uiState.sourceKind == SourceKind.CLOUD_OTHER,
+                        rawCompanionUris = uiState.rawCompanionUris,
+                        favouriteUris = uiState.favouritedUris,
+                        onCardDwelled = viewModel::onCardDwelled,
+                        onShareCurrentPhoto = {
+                            viewModel.buildCurrentShareIntent()?.let { context.startActivity(it) }
+                        },
+                        onOpenWithCurrentPhoto = {
+                            viewModel.buildCurrentOpenWithIntent()?.let { context.startActivity(it) }
+                        },
                         onFirstRunHint = viewModel::maybeShowFirstRunHint,
                     )
                 }
@@ -430,9 +543,20 @@ fun PhoneModeScreen(
                     leftSwipeAction = uiState.leftSwipeAction,
                     leftSwipeFolderName = uiState.leftSwipeFolderName,
                     collectionAction = uiState.collectionAction,
+                    swipeRightVerb = uiState.swipeRightVerb,
                     collectionFolderName = uiState.collectionFolderName,
                     showExifOverlay = uiState.showExifOverlay,
                     isDiscovering = uiState.isDiscovering,
+                    isCloudSource = uiState.sourceKind == SourceKind.CLOUD_OTHER,
+                    rawCompanionUris = uiState.rawCompanionUris,
+                    favouriteUris = uiState.favouritedUris,
+                    onCardDwelled = viewModel::onCardDwelled,
+                    onShareCurrentPhoto = {
+                        viewModel.buildCurrentShareIntent()?.let { context.startActivity(it) }
+                    },
+                    onOpenWithCurrentPhoto = {
+                        viewModel.buildCurrentOpenWithIntent()?.let { context.startActivity(it) }
+                    },
                     onFirstRunHint = viewModel::maybeShowFirstRunHint,
                 )
             } else if (uiState.isLoading) {
@@ -450,6 +574,9 @@ fun PhoneModeScreen(
                             folderPickerLauncher.launch(cameraUri)
                         }
                     },
+                    onSelectSdCard = { launchPicker ->
+                        viewModel.selectSdCardFolder(launchPicker)
+                    },
                     onSelectSource = { viewModel.selectSourceFolder(it) },
                     onSelectCollection = { viewModel.selectCollectionFolder(it) },
                     onStart = {
@@ -460,6 +587,8 @@ fun PhoneModeScreen(
                     recentPaths = uiState.recentPaths,
                     recentPathsEnabled = uiState.recentPathsEnabled,
                     recentPathsCount = uiState.recentPathsCount,
+                    unmountedRecentUris = uiState.unmountedRecentUris,
+                    folderSeenProgress = uiState.folderSeenProgress,
                     onSelectRecentPath = { viewModel.selectRecentPath(it) },
                 )
             }
@@ -494,6 +623,7 @@ fun PhoneModeScreen(
         if (!uiState.showGestureTutorial && !uiState.showControlsGuide) {
             RawJpegSuggestionCard(
                 visible = uiState.showRawJpegSuggestion,
+                onShowOnePerShot = { viewModel.applyRawJpegFilter(FileTypeFilter.ONE_PER_SHOT) },
                 onFilterRaw = { viewModel.applyRawJpegFilter(FileTypeFilter.RAW) },
                 onFilterJpg = { viewModel.applyRawJpegFilter(FileTypeFilter.JPG) },
                 onEnableMoveRelatedFiles = { viewModel.enableMoveRelatedFiles() },
@@ -523,11 +653,6 @@ fun PhoneModeScreen(
         }
 
         // ── Overlay App Bars (Only when not in Landscape Viewer / selection) ──
-        // Deliberately still rendered while the controls guide is up: the guide is
-        // a set of coach marks that label these very buttons, so it draws its
-        // callouts *around* the bars and needs the real icons visible above the
-        // scrim. The guide reserves the bars' height (TOP/BOTTOM_BAR_HEIGHT), so
-        // nothing overlaps.
         if (!isViewingSelection && !(isLandscape && isViewing)) {
             val isHelpOrTutorialActive = uiState.showGestureTutorial || uiState.showControlsGuide
             val topIconTint = if (isHelpOrTutorialActive) {
@@ -546,7 +671,6 @@ fun PhoneModeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Logo toggles the EXIF overlay
                 Image(
                     painter = painterResource(id = com.phototok.R.mipmap.ic_launcher_foreground),
                     contentDescription = "Toggle EXIF stats",
@@ -560,6 +684,20 @@ fun PhoneModeScreen(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isViewing) {
+                        if (uiState.sourceKind == SourceKind.REMOVABLE) {
+                            IconButton(
+                                onClick = { viewModel.openCardDoneSheet() },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("done_with_card_button"),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SdCard,
+                                    contentDescription = "Done with this card",
+                                    tint = topIconTint,
+                                )
+                            }
+                        }
                         IconButton(
                             onClick = { viewModel.reloadSourceFolder() },
                             modifier = Modifier
@@ -572,9 +710,6 @@ fun PhoneModeScreen(
                                 tint = topIconTint,
                             )
                         }
-                        // Help: toggles the coach-mark guide. It is a toggle because the
-                        // button stays visible and labelled while the guide is open, so
-                        // tapping it again must be the way back out.
                         IconButton(
                             onClick = {
                                 when {
@@ -591,7 +726,6 @@ fun PhoneModeScreen(
                                 tint = topIconTint,
                             )
                         }
-                        // Info: toggles the EXIF stats overlay
                         IconButton(
                             onClick = { viewModel.toggleExifOverlay() },
                             modifier = Modifier
@@ -754,13 +888,17 @@ private fun SidePanelButton(
     }
 }
 
-/** Read-only viewer for the PhotoTok_Selection folder: scroll through and go back. */
+/** Read-only viewer for the Favourites and PhotoTok_Selection tabs (U-13, U-17). */
 @Composable
 private fun SelectionFolderViewer(
     images: List<ImageItem>,
     currentIndex: Int,
     folderName: String,
+    activeTab: SelectionViewerTab,
     showExifOverlay: Boolean,
+    onSelectTab: (SelectionViewerTab) -> Unit,
+    onShareBatch: () -> Unit,
+    onCopyFavouritesToFolder: () -> Unit,
     onNavigate: (Int) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -775,7 +913,11 @@ private fun SelectionFolderViewer(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "No photos in the selection folder yet",
+                    text = if (activeTab == SelectionViewerTab.FAVOURITES) {
+                        "No favourites yet — swipe right in ★ mode to mark favourites"
+                    } else {
+                        "No photos in the selection folder yet"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSurfaceVariant,
                 )
@@ -793,7 +935,7 @@ private fun SelectionFolderViewer(
             )
         }
 
-        // Top bar: back + title (view + back only)
+        // Top bar: back + Favourites | Selection tabs + batch share & copy
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -801,22 +943,49 @@ private fun SelectionFolderViewer(
                 .statusBarsPadding()
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Start,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            IconButton(onClick = onClose) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = colors.onSurface,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onClose) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = colors.onSurface,
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                FilterChip(
+                    selected = activeTab == SelectionViewerTab.FAVOURITES,
+                    onClick = { onSelectTab(SelectionViewerTab.FAVOURITES) },
+                    label = { Text("★ Favourites") },
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                FilterChip(
+                    selected = activeTab == SelectionViewerTab.SELECTION,
+                    onClick = { onSelectTab(SelectionViewerTab.SELECTION) },
+                    label = { Text(folderName.ifEmpty { "Selection" }) },
                 )
             }
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = folderName.ifEmpty { "Selection" },
-                style = MaterialTheme.typography.titleMedium,
-                color = colors.onSurface,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (activeTab == SelectionViewerTab.FAVOURITES && images.isNotEmpty()) {
+                    IconButton(onClick = onCopyFavouritesToFolder) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy favourites to folder",
+                            tint = colors.onSurface,
+                        )
+                    }
+                }
+                if (images.isNotEmpty()) {
+                    IconButton(onClick = onShareBatch) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share all",
+                            tint = colors.onSurface,
+                        )
+                    }
+                }
+            }
         }
     }
 }

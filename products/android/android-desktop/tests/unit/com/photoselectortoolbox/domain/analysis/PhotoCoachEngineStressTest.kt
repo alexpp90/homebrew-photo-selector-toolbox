@@ -26,30 +26,30 @@ class PhotoCoachEngineStressTest {
 
     @Test
     fun shutterSpeed_zero_handledGracefullyWithoutDivisionByZeroOrCrash() {
-        val exif = ExifData(shutterSpeed = 0.0, focalLength = 50.0)
+        val exif = ExifData(shutterSpeed = 0.0, focalLength = 50.0, focalLength35mm = 50.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 50.0)
 
         val report = engine.evaluate(exif, scan)
 
         assertEquals(0.0f, report.cameraShakeRisk, 0.001f)
-        assertTrue(report.tips.none { it.category == "Camera Shake" })
+        assertTrue(report.tips.none { it.category == "Shutter Speed" })
         assertEquals(0.02, report.safeShutterSpeed!!, 1e-4)
     }
 
     @Test
     fun shutterSpeed_negative_handledGracefullyWithoutCrash() {
-        val exif = ExifData(shutterSpeed = -0.01, focalLength = 50.0)
+        val exif = ExifData(shutterSpeed = -0.01, focalLength = 50.0, focalLength35mm = 50.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 15.0)
 
         val report = engine.evaluate(exif, scan)
 
         assertEquals(0.0f, report.cameraShakeRisk, 0.001f)
-        assertTrue(report.tips.none { it.category == "Camera Shake" })
+        assertTrue(report.tips.none { it.category == "Shutter Speed" })
     }
 
     @Test
     fun shutterSpeed_positiveInfinity_doesNotLeakInfinityOrNanIntoReport() {
-        val exif = ExifData(shutterSpeed = Double.POSITIVE_INFINITY, focalLength = 50.0)
+        val exif = ExifData(shutterSpeed = Double.POSITIVE_INFINITY, focalLength = 50.0, focalLength35mm = 50.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 10.0)
 
         val report = engine.evaluate(exif, scan)
@@ -61,7 +61,7 @@ class PhotoCoachEngineStressTest {
 
     @Test
     fun shutterSpeed_nan_handledGracefullyWithoutCrash() {
-        val exif = ExifData(shutterSpeed = Double.NaN, focalLength = 50.0)
+        val exif = ExifData(shutterSpeed = Double.NaN, focalLength = 50.0, focalLength35mm = 50.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 10.0)
 
         val report = engine.evaluate(exif, scan)
@@ -72,24 +72,24 @@ class PhotoCoachEngineStressTest {
 
     @Test
     fun shutterSpeed_extremelyFast_1_8000s_zeroShakeRisk() {
-        val exif = ExifData(shutterSpeed = 1.0 / 8000.0, focalLength = 50.0)
+        val exif = ExifData(shutterSpeed = 1.0 / 8000.0, focalLength = 50.0, focalLength35mm = 50.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 80.0)
 
         val report = engine.evaluate(exif, scan)
 
         assertEquals(0.0f, report.cameraShakeRisk, 0.001f)
-        assertTrue(report.tips.none { it.category == "Camera Shake" })
+        assertTrue(report.tips.none { it.category == "Shutter Speed" })
     }
 
     @Test
     fun shutterSpeed_longExposure_30s_clampedRiskAndValidTip() {
-        val exif = ExifData(shutterSpeed = 30.0, focalLength = 50.0)
+        val exif = ExifData(shutterSpeed = 30.0, focalLength = 50.0, focalLength35mm = 50.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 15.0)
 
         val report = engine.evaluate(exif, scan)
 
         assertTrue(report.cameraShakeRisk in 0.7f..1.0f)
-        val tip = report.tips.find { it.category == "Camera Shake" }
+        val tip = report.tips.find { it.category == "Shutter Speed" }
         assertNotNull(tip)
         assertEquals(TipSeverity.CRITICAL, tip!!.severity)
     }
@@ -100,7 +100,7 @@ class PhotoCoachEngineStressTest {
 
     @Test
     fun focalLength_zero_nullSafeShutterSpeedWithoutDivisionByZero() {
-        val exif = ExifData(shutterSpeed = 0.01, focalLength = 0.0)
+        val exif = ExifData(shutterSpeed = 0.01, focalLength = 0.0, focalLength35mm = 0.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 50.0)
 
         val report = engine.evaluate(exif, scan)
@@ -111,7 +111,7 @@ class PhotoCoachEngineStressTest {
 
     @Test
     fun focalLength_negative_nullSafeShutterSpeed() {
-        val exif = ExifData(shutterSpeed = 0.01, focalLength = -50.0)
+        val exif = ExifData(shutterSpeed = 0.01, focalLength = -50.0, focalLength35mm = -50.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 50.0)
 
         val report = engine.evaluate(exif, scan)
@@ -122,7 +122,7 @@ class PhotoCoachEngineStressTest {
 
     @Test
     fun focalLength_infinite_doesNotProduceZeroDivision() {
-        val exif = ExifData(shutterSpeed = 0.01, focalLength = Double.POSITIVE_INFINITY)
+        val exif = ExifData(shutterSpeed = 0.01, focalLength = Double.POSITIVE_INFINITY, focalLength35mm = Double.POSITIVE_INFINITY)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 50.0)
 
         val report = engine.evaluate(exif, scan)
@@ -134,7 +134,7 @@ class PhotoCoachEngineStressTest {
     @Test
     fun focalLength_ultraWide_8mm_safeSpeedCalculation() {
         // 8mm -> 1/8s = 0.125s safe threshold
-        val exif = ExifData(shutterSpeed = 0.05, focalLength = 8.0) // 1/20s (faster than 1/8s)
+        val exif = ExifData(shutterSpeed = 0.05, focalLength = 8.0, focalLength35mm = 8.0) // 1/20s (faster than 1/8s)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 75.0)
 
         val report = engine.evaluate(exif, scan)
@@ -147,14 +147,14 @@ class PhotoCoachEngineStressTest {
     fun focalLength_extremeTelephoto_800mm_requiresFastShutter() {
         // 800mm -> 1/800s = 0.00125s safe threshold
         // At 1/250s (0.004s), shutter is ~3.2x slower than safe threshold
-        val exif = ExifData(shutterSpeed = 0.004, focalLength = 800.0)
+        val exif = ExifData(shutterSpeed = 0.004, focalLength = 800.0, focalLength35mm = 800.0)
         val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 15.0)
 
         val report = engine.evaluate(exif, scan)
 
         assertEquals(0.00125, report.safeShutterSpeed!!, 1e-5)
         assertTrue(report.cameraShakeRisk >= 0.7f)
-        val tip = report.tips.find { it.category == "Camera Shake" }
+        val tip = report.tips.find { it.category == "Shutter Speed" }
         assertNotNull(tip)
         assertEquals(TipSeverity.CRITICAL, tip!!.severity)
     }

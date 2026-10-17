@@ -38,6 +38,10 @@ public final class LibraryStatisticsEngine: Sendable {
         var totalAesthetic: Double = 0
         var aestheticCount: Int = 0
 
+        var focalLengthSums: [String: (sum: Double, count: Int)] = [:]
+        var apertureSums: [String: (sum: Double, count: Int)] = [:]
+        var shutterSpeedSums: [String: (sum: Double, count: Int)] = [:]
+
         for item in photos {
             // 1. Status breakdown
             switch item.status {
@@ -63,7 +67,7 @@ public final class LibraryStatisticsEngine: Sendable {
             let existing = formatCounts[normalizedExt, default: (count: 0, bytes: 0)]
             formatCounts[normalizedExt] = (count: existing.count + 1, bytes: existing.bytes + itemBytes)
 
-            // 4. Quality distributions
+            // 4. Quality distributions & EXIF × sharpness buckets
             if let scores = item.scores {
                 totalSharpness += scores.sharpness
                 sharpnessCount += 1
@@ -77,8 +81,28 @@ public final class LibraryStatisticsEngine: Sendable {
                 if scores.isUtility {
                     utilityCount += 1
                 }
+
+                if let exif = item.exif {
+                    let focus = scores.focusScore
+                    if let flKey = exif.formattedFocalLengthOrNil {
+                        let cur = focalLengthSums[flKey, default: (sum: 0, count: 0)]
+                        focalLengthSums[flKey] = (sum: cur.sum + focus, count: cur.count + 1)
+                    }
+                    if let apKey = exif.formattedApertureOrNil {
+                        let cur = apertureSums[apKey, default: (sum: 0, count: 0)]
+                        apertureSums[apKey] = (sum: cur.sum + focus, count: cur.count + 1)
+                    }
+                    if let ssKey = exif.formattedShutterSpeedOrNil {
+                        let cur = shutterSpeedSums[ssKey, default: (sum: 0, count: 0)]
+                        shutterSpeedSums[ssKey] = (sum: cur.sum + focus, count: cur.count + 1)
+                    }
+                }
             }
         }
+
+        let focalLengthSharpness = focalLengthSums.mapValues { $0.sum / Double($0.count) }
+        let apertureSharpness = apertureSums.mapValues { $0.sum / Double($0.count) }
+        let shutterSpeedSharpness = shutterSpeedSums.mapValues { $0.sum / Double($0.count) }
 
         // 5. Format statistics list
         let totalCount = photos.count
@@ -129,7 +153,10 @@ public final class LibraryStatisticsEngine: Sendable {
             focusDistribution: focusCounts,
             utilityPhotoCount: utilityCount,
             topSharpestPhotos: Array(topSharpest),
-            topAestheticPhotos: Array(topAesthetic)
+            topAestheticPhotos: Array(topAesthetic),
+            focalLengthSharpness: focalLengthSharpness,
+            apertureSharpness: apertureSharpness,
+            shutterSpeedSharpness: shutterSpeedSharpness
         )
     }
 

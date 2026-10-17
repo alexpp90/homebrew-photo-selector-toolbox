@@ -21,19 +21,31 @@ interface PhotoCoachEngine {
      *
      * @param exif EXIF metadata parsed from the image file, or null if unavailable.
      * @param scanResult Image quality analysis metrics (sharpness, noise, clipping), or null if unanalyzed.
+     * @param isRawOrHasRawCompanion True if the image is a RAW file or has a paired RAW companion.
+     * @param nonSpecularHighlightClipPct Optional highlight clipping percentage excluding small specular glints.
+     * @param imageWidth Optional pixel width for focal-plane sensor width calculation.
+     * @param imageHeight Optional pixel height for focal-plane sensor height calculation.
      * @return Complete evaluation report containing coaching tips and risk metrics.
      */
-    fun evaluate(exif: ExifData?, scanResult: ScanResult?): PhotoCoachReport
+    fun evaluate(
+        exif: ExifData?,
+        scanResult: ScanResult?,
+        isRawOrHasRawCompanion: Boolean = false,
+        nonSpecularHighlightClipPct: Double? = null,
+        imageWidth: Int? = null,
+        imageHeight: Int? = null,
+    ): PhotoCoachReport
 }
 
 /**
  * Pure Kotlin implementation of [PhotoCoachEngine] with zero Android/OpenCV dependencies.
  *
  * Implements genuine photographic heuristics:
- * 1. Reciprocal Rule ($1 / f$) camera shake risk vs measured Laplacian sharpness.
+ * 1. Reciprocal Rule ($1 / f_{\text{eff}}$) hand-holding guideline vs measured Laplacian sharpness,
+ *    gated strictly on a verified 35mm-equivalent focal length or focal-plane sensor resolution.
  * 2. Sensor noise & high ISO critique with aperture/shutter mitigation advice.
- * 3. Dynamic range clipping with concrete EV compensation recommendations.
- * 4. Optical diffraction warnings (f/16, f/22) and wide-open shallow DoF critiques.
+ * 3. Dynamic range clipping with RAW headroom awareness, specular-highlight override, and consistent EV direction.
+ * 4. Optical diffraction warnings scaled by crop factor ($N_{\text{eq}} = N \cdot C$) and phone-sensor DoF guard.
  */
 class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
 
@@ -51,14 +63,119 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
         private const val APERTURE_DIFFRACTION_THRESHOLD = 16.0
         private const val APERTURE_DIFFRACTION_CRITICAL = 22.0
         private const val APERTURE_WIDE_OPEN_THRESHOLD = 1.8
+
+        private const val FULL_FRAME_WIDTH_MM = 36.0
+        private const val DEFAULT_REFERENCE_WIDTH_PX = 6000.0
+
+        private val PHONE_CAMERA_KEYWORDS = listOf(
+            "apple", "iphone", "google", "pixel", "samsung", "sm-", "galaxy",
+            "xiaomi", "redmi", "poco", "oneplus", "huawei", "honor", "oppo",
+            "vivo", "motorola", "nothing"
+        )
+
+        /**
+         * Computes sensor crop factor $C$ relative to 35mm full-frame (36x24mm).
+         * Returns null when neither `focalLength35mm` nor focal-plane resolution tags allow derivation.
+         */
+        fun computeCropFactor(
+            exif: ExifData?,
+            imageWidth: Int? = null,
+            @Suppress("UNUSED_PARAMETER") imageHeight: Int? = null,
+        ): Double? {
+            if (exif == null) return null
+            val f35 = exif.focalLength35mm
+            val fPhys = exif.focalLength
+            if (f35 != null && f35.isFinite() && f35 > 0.0 &&
+                fPhys != null && fPhys.isFinite() && fPhys > 0.0
+            ) {
+                val c = f35 / fPhys
+                if (c.isFinite() && c > 0.0) return c
+            }
+
+            val fpX = exif.focalPlaneXResolution
+            val unit = exif.focalPlaneResolutionUnit
+            if (fpX != null && fpX.isFinite() && fpX > 0.0 && unit != null) {
+                val unitMm = focalPlaneUnitToMm(unit)
+                if (unitMm != null) {
+                    val widthPx = (imageWidth?.takeIf { it > 0 }?.toDouble()) ?: DEFAULT_REFERENCE_WIDTH_PX
+                    val sensorWidthMm = (widthPx / fpX) * unitMm
+                    if (sensorWidthMm.isFinite() && sensorWidthMm > 0.0) {
+                        val c = FULL_FRAME_WIDTH_MM / sensorWidthMm
+                        if (c in 0.5..8.0) return c
+                    }
+                }
+            }
+            return null
+        }
+
+        /**
+         * Computes 35mm-equivalent effective focal length $f_{\text{eff}}$.
+         * Strictly returns null when neither `focalLength35mm` nor focal-plane resolution is present.
+         */
+        fun computeEffectiveFocalLength(
+            exif: ExifData?,
+            imageWidth: Int? = null,
+            imageHeight: Int? = null,
+        ): Double? {
+            if (exif == null) return null
+            val f35 = exif.focalLength35mm
+            if (f35 != null && f35.isFinite() && f35 > 0.0) {
+                return f35
+            }
+            val fPhys = exif.focalLength
+            if (fPhys != null && fPhys.isFinite() && fPhys > 0.0) {
+                val c = computeCropFactor(exif, imageWidth, imageHeight)
+                if (c != null && c.isFinite() && c > 0.0) {
+                    return fPhys * c
+                }
+            }
+            return null
+        }
+
+        /**
+         * Detects smartphone/small-sensor cameras where wide physical apertures (e.g. f/1.8 at 6mm)
+         * still have deep optical depth of field and portrait blur is synthetic.
+         */
+        fun isPhoneSensor(exif: ExifData?, cropFactor: Double?): Boolean {
+            if (cropFactor != null && cropFactor > 3.5) return true
+            if (exif == null) return false
+            val fPhys = exif.focalLength
+            if (fPhys != null && fPhys.isFinite() && fPhys > 0.0 && fPhys < 10.5) {
+                val f35 = exif.focalLength35mm
+                if (f35 != null && f35.isFinite() && f35 >= 18.0) return true
+                val model = listOfNotNull(exif.make, exif.model).joinToString(" ").lowercase()
+                if (model.isNotEmpty() && PHONE_CAMERA_KEYWORDS.any { model.contains(it) }) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        fun focalPlaneUnitToMm(unit: Int): Double? = when (unit) {
+            2 -> 25.4
+            3 -> 10.0
+            4 -> 1.0
+            5 -> 0.001
+            else -> null
+        }
     }
 
-    override fun evaluate(exif: ExifData?, scanResult: ScanResult?): PhotoCoachReport {
+    override fun evaluate(
+        exif: ExifData?,
+        scanResult: ScanResult?,
+        isRawOrHasRawCompanion: Boolean,
+        nonSpecularHighlightClipPct: Double?,
+        imageWidth: Int?,
+        imageHeight: Int?,
+    ): PhotoCoachReport {
         val resolvedExif = exif ?: scanResult?.exifData
         val tips = mutableListOf<CoachingTip>()
 
-        // 1. Reciprocal Rule & Camera Shake Risk
-        val effectiveFocalLength = resolvedExif?.focalLength35mm ?: resolvedExif?.focalLength
+        val cropFactor = computeCropFactor(resolvedExif, imageWidth, imageHeight)
+        val effectiveFocalLength = computeEffectiveFocalLength(resolvedExif, imageWidth, imageHeight)
+        val phoneSensor = isPhoneSensor(resolvedExif, cropFactor)
+
+        // 1. Reciprocal Hand-Holding Guideline (1 / f_eff)
         val safeShutterSpeed = if (effectiveFocalLength != null && effectiveFocalLength.isFinite() && effectiveFocalLength > 0.0) {
             1.0 / effectiveFocalLength
         } else {
@@ -69,17 +186,19 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
         val shutterSpeed = resolvedExif?.shutterSpeed
         val sharpness = scanResult?.sharpnessScore
 
-        if (shutterSpeed != null && shutterSpeed > 0.0 && safeShutterSpeed != null && effectiveFocalLength != null) {
+        if (shutterSpeed != null && shutterSpeed.isFinite() && shutterSpeed > 0.0 &&
+            safeShutterSpeed != null && effectiveFocalLength != null
+        ) {
             val ratio = shutterSpeed / safeShutterSpeed
             val formattedActual = ExifFormatter.shutterSpeed(shutterSpeed)
             val formattedSafe = ExifFormatter.shutterSpeed(safeShutterSpeed)
             val focalLengthStr = ExifFormatter.focalLength(effectiveFocalLength)
 
             if (ratio > 1.0001) {
-                // Slower than the reciprocal rule 1/f handheld threshold
-                if (sharpness != null) {
+                // Slower than the 1/f_eff hand-holding guideline
+                if (sharpness != null && sharpness.isFinite()) {
                     if (sharpness < SHARPNESS_BLUR_THRESHOLD) {
-                        val isCritical = ratio >= 3.0 || sharpness < SHARPNESS_CRITICAL_BLUR
+                        val isCritical = ratio >= 2.5 || sharpness < SHARPNESS_CRITICAL_BLUR
                         val severity = if (isCritical) TipSeverity.CRITICAL else TipSeverity.WARNING
                         cameraShakeRisk = if (isCritical) {
                             (0.7f + (ratio.toFloat() * 0.05f)).coerceIn(0.7f, 1.0f)
@@ -89,12 +208,16 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
 
                         tips.add(
                             CoachingTip(
-                                category = "Camera Shake",
-                                title = if (isCritical) "Severe Camera Shake Blur Likely" else "Camera Shake Blur Likely",
-                                description = "Shutter speed ($formattedActual) was slower than the safe handheld minimum " +
-                                    "($formattedSafe for $focalLengthStr) and measured sharpness is low (${sharpness.toInt()}).",
-                                recommendation = "Increase shutter speed to at least $formattedSafe, open aperture, " +
-                                    "or raise ISO to prevent camera shake motion blur.",
+                                category = "Shutter Speed",
+                                title = if (isCritical) {
+                                    "Much Slower Than Hand-Holding Guideline"
+                                } else {
+                                    "Slower Than Hand-Holding Guideline"
+                                },
+                                description = "Shutter speed ($formattedActual) was slower than the hand-holding guideline " +
+                                    "($formattedSafe for $focalLengthStr 35mm-eq) and measured sharpness is low (${sharpness.toInt()}).",
+                                recommendation = "Use a faster shutter speed (at least $formattedSafe), open the aperture, " +
+                                    "or raise ISO to reduce camera motion blur.",
                                 severity = severity
                             )
                         )
@@ -104,10 +227,10 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
                         tips.add(
                             CoachingTip(
                                 category = "Stabilization",
-                                title = "Effective Handheld Stabilization",
+                                title = "Sharp Below the Hand-Holding Guideline",
                                 description = "Image sharpness is high (${sharpness.toInt()}) despite shooting at $formattedActual, " +
-                                    "which is slower than the recommended $formattedSafe handheld threshold for $focalLengthStr.",
-                                recommendation = "Effective optical stabilization (OIS/IBIS) or steady hand support maintained sharpness.",
+                                    "which is slower than the $formattedSafe hand-holding guideline for $focalLengthStr.",
+                                recommendation = "Effective optical stabilization (OIS/IBIS) or steady support maintained sharpness.",
                                 severity = TipSeverity.INFO
                             )
                         )
@@ -116,26 +239,26 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
                     cameraShakeRisk = (0.2f + (ratio.toFloat() * 0.1f)).coerceIn(0.3f, 0.7f)
                     tips.add(
                         CoachingTip(
-                            category = "Camera Shake",
-                            title = "Slow Shutter Speed Warning",
-                            description = "Shutter speed ($formattedActual) is slower than the reciprocal safe threshold " +
+                            category = "Shutter Speed",
+                            title = "Slower Than Hand-Holding Guideline",
+                            description = "Shutter speed ($formattedActual) is slower than the reciprocal hand-holding guideline " +
                                 "($formattedSafe for $focalLengthStr).",
-                            recommendation = "Increase shutter speed to at least $formattedSafe or ensure camera stabilization is active.",
+                            recommendation = "Increase shutter speed to at least $formattedSafe or ensure optical stabilization is active.",
                             severity = TipSeverity.WARNING
                         )
                     )
                 }
             } else {
-                // Shutter speed is at or faster than safe reciprocal threshold
+                // Shutter speed is at or faster than hand-holding guideline
                 cameraShakeRisk = 0.0f
-                if (sharpness != null && sharpness < SHARPNESS_BLUR_THRESHOLD) {
+                if (sharpness != null && sharpness.isFinite() && sharpness < SHARPNESS_BLUR_THRESHOLD) {
                     tips.add(
                         CoachingTip(
                             category = "Focus",
-                            title = "Soft Image at Safe Shutter Speed",
-                            description = "Image is soft (${sharpness.toInt()}) despite a safe shutter speed ($formattedActual). " +
-                                "Softness is likely due to missed focus or shallow depth of field rather than camera shake.",
-                            recommendation = "Verify autofocus point placement or stop down aperture for greater depth of field.",
+                            title = "Low Detail at Fast Shutter Speed",
+                            description = "Image is soft (${sharpness.toInt()}) despite a fast shutter speed ($formattedActual). " +
+                                "Softness is likely due to missed focus, subject motion, or shallow depth of field.",
+                            recommendation = "Verify autofocus point placement or stop down the aperture for greater depth of field.",
                             severity = TipSeverity.INFO
                         )
                     )
@@ -169,7 +292,7 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
         }
 
         // 3. Dynamic Range & Clipping Critique
-        val highlight = scanResult?.highlightClipping
+        val highlight = nonSpecularHighlightClipPct ?: scanResult?.highlightClipping
         val shadow = scanResult?.shadowClipping
 
         // ScanResult clipping values are percentage scale (0.0..100.0%) from ClippingAnalyzer.
@@ -178,15 +301,15 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
             (shadow != null && shadow.isFinite() && shadow in 0.015..0.095)
         val allSubTenth = (highlight == null || !highlight.isFinite() || (highlight >= 0.0 && highlight < 0.1)) &&
             (shadow == null || !shadow.isFinite() || (shadow >= 0.0 && shadow < 0.1))
-        val isFractionalScale = hasFractionCandidate && allSubTenth
+        val isFractionalScale = nonSpecularHighlightClipPct == null && hasFractionCandidate && allSubTenth
 
         val highlightPct = when {
-            highlight == null -> null
+            highlight == null || !highlight.isFinite() -> null
             isFractionalScale -> highlight * 100.0
             else -> highlight
         }
         val shadowPct = when {
-            shadow == null -> null
+            shadow == null || !shadow.isFinite() -> null
             isFractionalScale -> shadow * 100.0
             else -> shadow
         }
@@ -197,11 +320,16 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
             highlightPct > HIGHLIGHT_CLIPPING_THRESHOLD_PCT &&
             shadowPct > SHADOW_CLIPPING_THRESHOLD_PCT
         ) {
+            val drDescription = if (isRawOrHasRawCompanion) {
+                "Both highlight and shadow clipping detected. While 1–2 EV of highlight headroom may still be recoverable in RAW development, the scene contrast exceeds single-exposure latitude."
+            } else {
+                "Both highlight and shadow clipping detected. The dynamic range of the scene exceeds sensor latitude."
+            }
             tips.add(
                 CoachingTip(
                     category = "Dynamic Range",
                     title = "Scene Contrast Exceeds Dynamic Range",
-                    description = "Both highlight and shadow clipping detected. The dynamic range of the scene exceeds sensor latitude.",
+                    description = drDescription,
                     recommendation = "Recommend bracketed HDR exposure (+/- 2 EV) or graduated neutral density (GND) filter.",
                     severity = TipSeverity.WARNING
                 )
@@ -210,12 +338,17 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
         } else if (highlightPct != null && highlightPct > HIGHLIGHT_CLIPPING_THRESHOLD_PCT) {
             val severe = highlightPct > HIGHLIGHT_CLIPPING_SEVERE_PCT
             recommendedEv = if (severe) -1.0 else -0.7
+            val highlightDescription = if (isRawOrHasRawCompanion) {
+                "Highlight clipping detected in bright areas of the frame; 1–2 EV of highlight headroom may still be recoverable in RAW development."
+            } else {
+                "Highlight clipping detected in bright areas of the frame. Clipped 8-bit highlights cannot be recovered in post-processing."
+            }
             tips.add(
                 CoachingTip(
                     category = "Exposure",
                     title = "Blown Highlights Detected",
-                    description = "Highlight clipping detected in bright areas of the frame. Detail in clipped highlights is permanently unrecoverable.",
-                    recommendation = "Apply negative EV compensation ($recommendedEv EV) or use ETTR (Expose To The Right) to protect highlight details.",
+                    description = highlightDescription,
+                    recommendation = "Apply negative EV compensation ($recommendedEv EV) or meter for the brightest important subject to protect highlight details.",
                     severity = TipSeverity.WARNING
                 )
             )
@@ -232,22 +365,26 @@ class PhotoCoachEngineImpl @Inject constructor() : PhotoCoachEngine {
             )
         }
 
-        // 4. Optical Sweet Spot & Diffraction Warnings
+        // 4. Optical Sweet Spot & Diffraction Warnings (scaled by crop factor C; phone-sensor guarded)
         val aperture = resolvedExif?.aperture
-        if (aperture != null && aperture.isFinite()) {
-            if (aperture >= APERTURE_DIFFRACTION_THRESHOLD) {
-                val isNarrow = aperture >= APERTURE_DIFFRACTION_CRITICAL
+        if (aperture != null && aperture.isFinite() && aperture > 0.0) {
+            val effectiveCrop = cropFactor?.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
+            val equivalentAperture = aperture * effectiveCrop
+            if (!phoneSensor && equivalentAperture >= APERTURE_DIFFRACTION_THRESHOLD) {
+                val isNarrow = equivalentAperture >= APERTURE_DIFFRACTION_CRITICAL
                 tips.add(
                     CoachingTip(
                         category = "Optics",
                         title = "Optical Diffraction Softening",
                         description = "Shooting at narrow aperture (${ExifFormatter.aperture(aperture)}) causes optical diffraction, " +
                             "softening fine details across the sensor.",
-                        recommendation = "Use lens sweet spot (f/5.6 - f/8) for optimal sharpness unless maximum depth of field is required.",
+                        recommendation = "Use lens sweet spot (f/5.6 - f/8 equivalent) for optimal sharpness unless maximum depth of field is required.",
                         severity = if (isNarrow) TipSeverity.WARNING else TipSeverity.INFO
                     )
                 )
-            } else if (aperture > 0.0 && aperture <= APERTURE_WIDE_OPEN_THRESHOLD && sharpness != null && sharpness < SHARPNESS_BLUR_THRESHOLD) {
+            } else if (!phoneSensor && aperture <= APERTURE_WIDE_OPEN_THRESHOLD &&
+                sharpness != null && sharpness.isFinite() && sharpness < SHARPNESS_BLUR_THRESHOLD
+            ) {
                 tips.add(
                     CoachingTip(
                         category = "Optics",

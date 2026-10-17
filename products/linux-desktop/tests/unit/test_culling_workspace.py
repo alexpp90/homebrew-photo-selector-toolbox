@@ -544,29 +544,96 @@ def _record(photo, action):
     )
 
 
-def test_running_file_operation_shows_busy_and_blocks_further_culls():
-    """A slow cloud upload must not freeze the window: busy state while it runs, no second cull."""
+def test_rapid_culls_queue_in_order_and_update_queue_indicator():
+    """Rapid M, M, M during a slow file operation queues all three actions in FIFO order (U-08)."""
     manager = MagicMock()
     dispatcher = DeferredDispatcher()
     vm = CullingWorkspaceViewModel(file_manager=manager, dispatcher=dispatcher)
-    a, b = make_candidate("a.jpg"), make_candidate("b.jpg")
-    vm.candidates, vm.current_folder = [a, b], Path("/tmp/test_dir")
-    manager.copy_candidate.return_value = _record(a, CullingActionType.COPY)
+    a, b, c, d = (
+        make_candidate("a.jpg"),
+        make_candidate("b.jpg"),
+        make_candidate("c.jpg"),
+        make_candidate("d.jpg"),
+    )
+    vm.candidates = [a, b, c, d]
+    vm.current_folder = Path("/tmp/test_dir")
+    manager.move_candidate.side_effect = lambda photo, folder, **kwargs: _record(
+        photo, CullingActionType.MOVE
+    )
     bar = ActionBarView(viewmodel=vm)
 
-    vm.cull_copy()
+    # Press M three times rapidly while the worker is still running the first job
+    assert vm.cull_move() is True
+    assert vm.cull_move() is True
+    assert vm.cull_move() is True
 
-    assert vm.is_busy and vm.busy_message == "Copying a.jpg to Selection/…"
-    assert bar.busy_text == "Copying a.jpg to Selection/…"
-    assert not bar.cull_sensitive and not bar.undo_sensitive
-    vm.cull_trash()
-    assert vm.undo() is False
-    assert len(dispatcher.pending) == 1 and not manager.trash_candidate.called
+    # Optimistic UI state already advanced to d.jpg with 3 queued actions and buttons still sensitive
+    assert [p.filename for p in vm.candidates] == ["d.jpg"]
+    assert vm.current_photo is d
+    assert vm.selected_count == 3
+    assert vm.queued_count == 3
+    assert vm.queue_status_label == "3 queued"
+    assert bar.queue_label_text == "3 queued"
+    assert bar.cull_sensitive is True
+    assert bar.undo_sensitive is True
+
+    # Finish each job in FIFO order
+    dispatcher.finish()
+    assert vm.queued_count == 2
+    assert vm.queue_status_label == "2 queued"
 
     dispatcher.finish()
+    assert vm.queued_count == 1
+    assert vm.queue_status_label == "1 queued"
 
-    assert not vm.is_busy and bar.cull_sensitive and bar.busy_text == ""
-    assert vm.copied_count == 1 and vm.current_index == 1
+    dispatcher.finish()
+    assert vm.queued_count == 0
+    assert vm.queue_status_label is None
+    assert not vm.is_busy and bar.busy_text == ""
+    assert [call.args[0].filename for call in manager.move_candidate.call_args_list] == [
+        "a.jpg",
+        "b.jpg",
+        "c.jpg",
+    ]
+    assert len(vm.undo_stack) == 3
+
+
+def test_undo_during_running_job_cancels_queued_or_enqueues_disk_undo():
+    """Ctrl+Z while jobs are queued cancels unstarted queued actions and enqueues disk undo for started ones (U-08)."""
+    manager = MagicMock()
+    dispatcher = DeferredDispatcher()
+    vm = CullingWorkspaceViewModel(file_manager=manager, dispatcher=dispatcher)
+    a, b, c = make_candidate("a.jpg"), make_candidate("b.jpg"), make_candidate("c.jpg")
+    vm.candidates = [a, b, c]
+    vm.current_folder = Path("/tmp/test_dir")
+    manager.move_candidate.side_effect = lambda photo, folder, **kwargs: _record(
+        photo, CullingActionType.MOVE
+    )
+    manager.undo_culling.return_value = True
+
+    vm.cull_move()  # a.jpg (started in worker)
+    vm.cull_move()  # b.jpg (waiting in queue)
+    assert vm.queued_count == 2
+    assert [p.filename for p in vm.candidates] == ["c.jpg"]
+
+    # First Ctrl+Z cancels b.jpg before it ever touches disk
+    assert vm.undo() is True
+    assert vm.queued_count == 1
+    assert [p.filename for p in vm.candidates] == ["b.jpg", "c.jpg"]
+    assert vm.selected_count == 1
+
+    # Second Ctrl+Z targets a.jpg (currently running on disk), so it queues a disk undo job
+    assert vm.undo() is True
+    assert vm.queued_count == 2
+
+    dispatcher.finish()  # finishes move of a.jpg
+    dispatcher.finish()  # finishes undo of a.jpg
+
+    assert vm.queued_count == 0
+    assert [p.filename for p in vm.candidates] == ["a.jpg", "b.jpg", "c.jpg"]
+    assert vm.selected_count == 0
+    assert manager.move_candidate.call_count == 1
+    assert manager.undo_culling.call_count == 1
 
 
 def test_outcome_applies_to_the_culled_photo_when_the_user_browsed_meanwhile():
@@ -578,12 +645,12 @@ def test_outcome_applies_to_the_culled_photo_when_the_user_browsed_meanwhile():
     manager.move_candidate.return_value = _record(b, CullingActionType.MOVE)
     manager.undo_culling.return_value = True
 
-    vm.cull_move()  # moving b
-    vm.nav_next()  # user looks at c while the upload runs
+    vm.cull_move()  # moving b (optimistically removed, active becomes c)
+    vm.nav_previous()  # user looks at a while the upload runs
     dispatcher.finish()
 
     assert [p.filename for p in vm.candidates] == ["a.jpg", "c.jpg"]
-    assert vm.current_photo is c
+    assert vm.current_photo is a
     assert vm.undo_stack[-1][1] is b
 
     assert vm.undo() is True  # started in the background
@@ -613,19 +680,56 @@ def test_failed_background_undo_is_kept_for_retry():
     assert messages[-1] == "Could not undo trash for a.jpg: Drive offline"
 
 
-def test_outcome_from_a_previous_folder_is_dropped(tmp_path):
+def test_folder_change_completes_queued_jobs_without_dropping(tmp_path):
+    """Changing folders drains/completes queued jobs for the previous folder rather than dropping them (U-08)."""
     manager = MagicMock()
     dispatcher = DeferredDispatcher()
     vm = CullingWorkspaceViewModel(file_manager=manager, dispatcher=dispatcher)
-    a = make_candidate("a.jpg")
-    vm.candidates, vm.current_folder = [a], Path("/tmp/test_dir")
-    manager.trash_candidate.return_value = _record(a, CullingActionType.TRASH)
+    a, b = make_candidate("a.jpg"), make_candidate("b.jpg")
+    vm.candidates, vm.current_folder = [a, b], Path("/tmp/test_dir")
+    manager.trash_candidate.side_effect = lambda photo: _record(photo, CullingActionType.TRASH)
 
     vm.cull_trash()
+    vm.cull_trash()
     vm.load_directory(tmp_path)
+
+    # Both queued trash jobs still execute to completion on disk
+    dispatcher.finish()
     dispatcher.finish()
 
-    assert vm.undo_stack == [] and vm.trashed_count == 0 and not vm.is_busy
+    assert manager.trash_candidate.call_count == 2
+    assert vm.queued_count == 0 and not vm.is_busy
+    # New folder's workspace remains clean
+    assert vm.candidates == [] and vm.trashed_count == 0
+
+
+def test_failed_queued_action_rolls_back_and_cancels_dependent_actions_on_same_photo():
+    """If a queued Copy fails, both the Copy and a subsequent queued Trash on the same photo roll back (U-08)."""
+    from photo_selector_linux.core.file_ops import FileCullingError
+
+    manager = MagicMock()
+    dispatcher = DeferredDispatcher()
+    vm = CullingWorkspaceViewModel(file_manager=manager, dispatcher=dispatcher, auto_advance=False)
+    a, b = make_candidate("a.jpg"), make_candidate("b.jpg")
+    vm.candidates, vm.current_folder = [a, b], Path("/tmp/test_dir")
+    manager.copy_candidate.side_effect = FileCullingError("Disk full")
+    messages = []
+    vm.connect("notification", lambda _vm, message: messages.append(message))
+
+    # With auto_advance=False, user queues Copy on a.jpg and then Trash on a.jpg
+    vm.cull_copy()
+    vm.cull_trash()
+    assert vm.queued_count == 2
+    assert [p.filename for p in vm.candidates] == ["b.jpg"]
+
+    # First job (Copy on a.jpg) fails -> rolls back Copy AND cancels dependent Trash on a.jpg
+    dispatcher.finish()
+
+    assert vm.queued_count == 0
+    assert not manager.trash_candidate.called
+    assert [p.filename for p in vm.candidates] == ["a.jpg", "b.jpg"]
+    assert vm.selected_count == 0 and vm.copied_count == 0 and vm.trashed_count == 0
+    assert messages == ["Could not copy a.jpg: Disk full"]
 
 
 def test_file_worker_runs_jobs_off_the_calling_thread_and_delivers_through_idle_add():

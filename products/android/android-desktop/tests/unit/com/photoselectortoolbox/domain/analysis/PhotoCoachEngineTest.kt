@@ -17,11 +17,12 @@ class PhotoCoachEngineTest {
 
     @Test
     fun fastShutterSpeed_noCameraShakeRisk() {
-        // 50mm focal length -> safe shutter speed = 1/50s (0.02s).
+        // 50mm 35mm-eq focal length -> safe shutter speed = 1/50s (0.02s).
         // Actual shutter speed = 1/500s (0.002s), which is much faster than safe speed.
         val exif = ExifData(
             shutterSpeed = 0.002,
             focalLength = 50.0,
+            focalLength35mm = 50.0,
             aperture = 2.8,
             iso = 100
         )
@@ -37,12 +38,12 @@ class PhotoCoachEngineTest {
 
         assertEquals(0.02, report.safeShutterSpeed!!, 1e-4)
         assertEquals(0.0f, report.cameraShakeRisk, 0.001f)
-        assertTrue(report.tips.none { it.category == "Camera Shake" })
+        assertTrue(report.tips.none { it.category == "Shutter Speed" })
     }
 
     @Test
     fun slowShutterSpeed_lowSharpness_cameraShakeWarningOrCritical() {
-        // 100mm focal length -> safe shutter speed = 1/100s (0.01s).
+        // 100mm 35mm-eq focal length -> safe shutter speed = 1/100s (0.01s).
         // Actual shutter speed = 1/10s (0.1s) -> 10x slower than safe shutter speed.
         // Sharpness is low (18.0 < 20.0 critical threshold).
         val exif = ExifData(
@@ -60,20 +61,22 @@ class PhotoCoachEngineTest {
 
         assertEquals(0.01, report.safeShutterSpeed!!, 1e-4)
         assertTrue(report.cameraShakeRisk >= 0.7f)
-        val shakeTip = report.tips.find { it.category == "Camera Shake" }
-        assertNotNull("Expected camera shake tip", shakeTip)
-        assertEquals(TipSeverity.CRITICAL, shakeTip!!.severity)
-        assertTrue(shakeTip.recommendation.contains("shutter speed", ignoreCase = true))
+        val shutterTip = report.tips.find { it.category == "Shutter Speed" }
+        assertNotNull("Expected shutter speed guideline tip", shutterTip)
+        assertEquals(TipSeverity.CRITICAL, shutterTip!!.severity)
+        assertEquals("Much Slower Than Hand-Holding Guideline", shutterTip.title)
+        assertTrue(shutterTip.recommendation.contains("shutter speed", ignoreCase = true))
     }
 
     @Test
     fun slowShutterSpeed_moderateBlur_cameraShakeWarning() {
-        // 50mm focal length -> safe shutter speed = 0.02s (1/50s).
+        // 50mm 35mm-eq focal length -> safe shutter speed = 0.02s (1/50s).
         // Actual shutter speed = 0.04s (1/25s, 2x slower).
         // Sharpness is 32.0 (below 40.0, but above 20.0 critical).
         val exif = ExifData(
             shutterSpeed = 0.04,
-            focalLength = 50.0
+            focalLength = 50.0,
+            focalLength35mm = 50.0
         )
         val scan = ScanResult(
             filePath = "test.jpg",
@@ -84,9 +87,10 @@ class PhotoCoachEngineTest {
 
         assertEquals(0.02, report.safeShutterSpeed!!, 1e-4)
         assertEquals(0.6f, report.cameraShakeRisk, 0.01f)
-        val shakeTip = report.tips.find { it.category == "Camera Shake" }
-        assertNotNull("Expected camera shake tip", shakeTip)
-        assertEquals(TipSeverity.WARNING, shakeTip!!.severity)
+        val shutterTip = report.tips.find { it.category == "Shutter Speed" }
+        assertNotNull("Expected shutter speed guideline tip", shutterTip)
+        assertEquals(TipSeverity.WARNING, shutterTip!!.severity)
+        assertEquals("Slower Than Hand-Holding Guideline", shutterTip.title)
     }
 
     @Test
@@ -110,16 +114,18 @@ class PhotoCoachEngineTest {
         val stabTip = report.tips.find { it.category == "Stabilization" }
         assertNotNull("Expected stabilization tip", stabTip)
         assertEquals(TipSeverity.INFO, stabTip!!.severity)
+        assertEquals("Sharp Below the Hand-Holding Guideline", stabTip.title)
         assertTrue(stabTip.recommendation.contains("stabilization", ignoreCase = true))
     }
 
     @Test
     fun fastShutterSpeed_lowSharpness_reportsMissedFocusRatherThanShake() {
         // 50mm -> safe shutter speed 0.02s. Actual 0.001s (1/1000s, fast).
-        // Low sharpness (25.0) -> not camera shake, but missed focus.
+        // Low sharpness (25.0) -> not slow shutter, but missed focus.
         val exif = ExifData(
             shutterSpeed = 0.001,
-            focalLength = 50.0
+            focalLength = 50.0,
+            focalLength35mm = 50.0
         )
         val scan = ScanResult(
             filePath = "test.jpg",
@@ -132,6 +138,7 @@ class PhotoCoachEngineTest {
         val focusTip = report.tips.find { it.category == "Focus" }
         assertNotNull("Expected focus tip", focusTip)
         assertEquals(TipSeverity.INFO, focusTip!!.severity)
+        assertEquals("Low Detail at Fast Shutter Speed", focusTip.title)
         assertTrue(focusTip.description.contains("missed focus", ignoreCase = true))
     }
 
@@ -361,5 +368,118 @@ class PhotoCoachEngineTest {
         )
         val reportShadow = engine.evaluate(null, scanShadow)
         assertEquals(0.7, reportShadow.recommendedEvCompensation!!, 0.01)
+    }
+
+    @Test
+    fun missing35mmAndFocalPlaneResolution_strictlyEmitsNoHandHoldingTipAndNullSafeSpeed() {
+        val exif = ExifData(
+            shutterSpeed = 0.1,
+            focalLength = 50.0,
+            focalLength35mm = null,
+            focalPlaneXResolution = null,
+            focalPlaneResolutionUnit = null
+        )
+        val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 12.0)
+
+        val report = engine.evaluate(exif, scan)
+
+        assertNull(report.safeShutterSpeed)
+        assertEquals(0.0f, report.cameraShakeRisk, 0.001f)
+        assertTrue(report.tips.none { it.category == "Shutter Speed" || it.category == "Stabilization" })
+    }
+
+    @Test
+    fun focalPlaneResolutionFallback_derivesCropFactorAndEffectiveFocalLength() {
+        // APS-C 24mm width at 6000px -> 250 px/mm (unit = 4 -> mm) -> cropFactor = 36 / 24 = 1.5
+        // focalLength = 50mm -> f_eff = 75mm -> safeShutterSpeed = 1/75s = 0.01333s
+        val exif = ExifData(
+            shutterSpeed = 0.05,
+            focalLength = 50.0,
+            focalLength35mm = null,
+            focalPlaneXResolution = 250.0,
+            focalPlaneResolutionUnit = 4
+        )
+        val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 15.0)
+
+        val report = engine.evaluate(exif, scan, imageWidth = 6000, imageHeight = 4000)
+
+        assertEquals(1.0 / 75.0, report.safeShutterSpeed!!, 1e-4)
+        assertTrue(report.cameraShakeRisk >= 0.7f)
+        assertNotNull(report.tips.find { it.category == "Shutter Speed" })
+    }
+
+    @Test
+    fun noCoachingTipContainsWordShake() {
+        val exif = ExifData(
+            shutterSpeed = 0.2,
+            focalLength = 50.0,
+            focalLength35mm = 75.0,
+            aperture = 1.4,
+            iso = 12800
+        )
+        val scan = ScanResult(
+            filePath = "test.jpg",
+            sharpnessScore = 12.0,
+            noiseLevel = 30.0,
+            highlightClipping = 6.0,
+            shadowClipping = 1.0
+        )
+        val report = engine.evaluate(exif, scan)
+        for (tip in report.tips) {
+            assertTrue("Category must not contain 'shake'", !tip.category.contains("shake", ignoreCase = true))
+            assertTrue("Title must not contain 'shake'", !tip.title.contains("shake", ignoreCase = true))
+            assertTrue("Description must not contain 'shake'", !tip.description.contains("shake", ignoreCase = true))
+            assertTrue("Recommendation must not contain 'shake'", !tip.recommendation.contains("shake", ignoreCase = true))
+        }
+    }
+
+    @Test
+    fun phoneSensorGuard_suppressesWideOpenShallowDofTip() {
+        val phoneExif = ExifData(
+            focalLength = 6.86,
+            focalLength35mm = 24.0,
+            aperture = 1.78,
+            model = "iPhone 15 Pro"
+        )
+        val scan = ScanResult(filePath = "test.jpg", sharpnessScore = 25.0)
+
+        val report = engine.evaluate(phoneExif, scan)
+
+        assertTrue(report.tips.none { it.title.contains("Wide-Open") || it.title.contains("Shallow Depth of Field") })
+    }
+
+    @Test
+    fun cropScaledDiffraction_apsC_triggersAtF11AndF16() {
+        // APS-C C = 1.5: f/11 * 1.5 = 16.5 (>= 16.0 INFO), f/16 * 1.5 = 24.0 (>= 22.0 WARNING)
+        val exifF11 = ExifData(focalLength = 35.0, focalLength35mm = 52.5, aperture = 11.0)
+        val reportF11 = engine.evaluate(exifF11, null)
+        val tipF11 = reportF11.tips.find { it.category == "Optics" && it.title.contains("Diffraction") }
+        assertNotNull(tipF11)
+        assertEquals(TipSeverity.INFO, tipF11!!.severity)
+
+        val exifF16 = ExifData(focalLength = 35.0, focalLength35mm = 52.5, aperture = 16.0)
+        val reportF16 = engine.evaluate(exifF16, null)
+        val tipF16 = reportF16.tips.find { it.category == "Optics" && it.title.contains("Diffraction") }
+        assertNotNull(tipF16)
+        assertEquals(TipSeverity.WARNING, tipF16!!.severity)
+    }
+
+    @Test
+    fun rawCompanionHighlightClipping_mentionsRecoverableHeadroomAndNeverPermanentlyUnrecoverable() {
+        val scan = ScanResult(filePath = "test.arw", highlightClipping = 4.0, shadowClipping = 0.2)
+        val reportRaw = engine.evaluate(null, scan, isRawOrHasRawCompanion = true)
+        val expTip = reportRaw.tips.find { it.category == "Exposure" }
+        assertNotNull(expTip)
+        assertTrue(expTip!!.description.contains("1–2 EV", ignoreCase = true))
+        assertTrue(!expTip.description.contains("permanently unrecoverable", ignoreCase = true))
+        assertTrue(!expTip.recommendation.contains("ETTR", ignoreCase = true))
+    }
+
+    @Test
+    fun nonSpecularHighlightOverride_suppressesFalseBlownHighlightTipFromGlints() {
+        // Raw highlightClipping is 3.5% due to tiny specular chrome glints, but nonSpecularHighlightClipPct is 0.4%
+        val scan = ScanResult(filePath = "test.jpg", highlightClipping = 3.5, shadowClipping = 0.1)
+        val report = engine.evaluate(null, scan, nonSpecularHighlightClipPct = 0.4)
+        assertTrue(report.tips.none { it.title.contains("Blown Highlights") })
     }
 }

@@ -255,6 +255,17 @@ public final class FileCullingManager: @unchecked Sendable {
 
     // MARK: - Move to Selection
 
+    /// Marker filename placed inside any Selection folder created or used as a destination.
+    public static let selectionMarkerFilename = DirectoryScanner.selectionMarkerFilename
+
+    /// Writes an empty `.photoselector-selection` marker file inside `selectionDir` if not already present.
+    private func writeSelectionMarkerIfNeeded(in selectionDir: URL) {
+        let markerURL = selectionDir.appendingPathComponent(Self.selectionMarkerFilename)
+        if !fileManager.fileExists(atPath: markerURL.path) {
+            try? Data().write(to: markerURL, options: .atomic)
+        }
+    }
+
     /// Moves the primary photo and all associated companion files to `<rootURL>/Selection/`.
     /// Never overwrites existing files: if any bundle member collides in `Selection/`, the entire
     /// bundle receives a shared numeric suffix (`-2`, `-3`, …).
@@ -280,6 +291,7 @@ public final class FileCullingManager: @unchecked Sendable {
                 throw FileCullingError.directoryCreationFailed(selectionDir, error.localizedDescription)
             }
         }
+        writeSelectionMarkerIfNeeded(in: selectionDir)
 
         let targets = findCompanionFiles(for: photoURL)
         let primaryStem = photoURL.deletingPathExtension().lastPathComponent
@@ -386,6 +398,7 @@ public final class FileCullingManager: @unchecked Sendable {
                 throw FileCullingError.directoryCreationFailed(selectionDir, error.localizedDescription)
             }
         }
+        writeSelectionMarkerIfNeeded(in: selectionDir)
 
         let targets = findCompanionFiles(for: photoURL)
         let primaryStem = photoURL.deletingPathExtension().lastPathComponent

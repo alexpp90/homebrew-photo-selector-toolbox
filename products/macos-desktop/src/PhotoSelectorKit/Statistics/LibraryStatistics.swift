@@ -27,6 +27,11 @@ public struct LibraryStatistics: Sendable, Equatable {
     public let topSharpestPhotos: [PhotoItem]
     public let topAestheticPhotos: [PhotoItem]
 
+    // 6. EXIF × Sharpness Breakdown (Mean focusScore per EXIF bucket)
+    public let focalLengthSharpness: [String: Double]
+    public let apertureSharpness: [String: Double]
+    public let shutterSpeedSharpness: [String: Double]
+
     public init(
         totalPhotoCount: Int,
         candidateCount: Int,
@@ -42,7 +47,10 @@ public struct LibraryStatistics: Sendable, Equatable {
         focusDistribution: [SharpnessCategory: Int],
         utilityPhotoCount: Int,
         topSharpestPhotos: [PhotoItem],
-        topAestheticPhotos: [PhotoItem]
+        topAestheticPhotos: [PhotoItem],
+        focalLengthSharpness: [String: Double] = [:],
+        apertureSharpness: [String: Double] = [:],
+        shutterSpeedSharpness: [String: Double] = [:]
     ) {
         self.totalPhotoCount = totalPhotoCount
         self.candidateCount = candidateCount
@@ -59,6 +67,9 @@ public struct LibraryStatistics: Sendable, Equatable {
         self.utilityPhotoCount = utilityPhotoCount
         self.topSharpestPhotos = topSharpestPhotos
         self.topAestheticPhotos = topAestheticPhotos
+        self.focalLengthSharpness = focalLengthSharpness
+        self.apertureSharpness = apertureSharpness
+        self.shutterSpeedSharpness = shutterSpeedSharpness
     }
 
     /// Empty baseline representation for uninitialized or cleared libraries.
@@ -78,7 +89,10 @@ public struct LibraryStatistics: Sendable, Equatable {
             focusDistribution: [.blurry: 0, .acceptable: 0, .sharp: 0],
             utilityPhotoCount: 0,
             topSharpestPhotos: [],
-            topAestheticPhotos: []
+            topAestheticPhotos: [],
+            focalLengthSharpness: [:],
+            apertureSharpness: [:],
+            shutterSpeedSharpness: [:]
         )
     }
 
@@ -100,5 +114,41 @@ public struct LibraryStatistics: Sendable, Equatable {
         guard totalPhotoCount > 0 else { return 0.0 }
         let culled = Double(selectedCount + copiedCount + trashedCount)
         return (culled / Double(totalPhotoCount)) * 100.0
+    }
+}
+
+/// Lightweight local decision log entry capturing a user's culling action alongside optical EXIF
+/// and sharpness metrics (UC-14).
+public struct CullingDecisionLogEntry: Sendable, Codable, Equatable, Identifiable {
+    public let id: UUID
+    public let timestamp: Date
+    public let filename: String
+    public let action: CullingActionType
+    public let focusScore: Double?
+    public let iso: Int?
+    public let shutterSpeed: Double?
+    public let aperture: Double?
+    public let focalLength: Double?
+
+    public init(
+        id: UUID = UUID(),
+        timestamp: Date = Date(),
+        filename: String,
+        action: CullingActionType,
+        focusScore: Double? = nil,
+        iso: Int? = nil,
+        shutterSpeed: Double? = nil,
+        aperture: Double? = nil,
+        focalLength: Double? = nil
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.filename = filename
+        self.action = action
+        self.focusScore = focusScore
+        self.iso = iso
+        self.shutterSpeed = shutterSpeed
+        self.aperture = aperture
+        self.focalLength = focalLength
     }
 }

@@ -8,6 +8,9 @@ Adheres to:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -75,6 +78,9 @@ class LibraryStatistics:
     aperture_histogram: Dict[str, int] = field(default_factory=dict)
     iso_histogram: Dict[str, int] = field(default_factory=dict)
     shutter_speed_histogram: Dict[str, int] = field(default_factory=dict)
+    sharpness_by_focal_length: Dict[str, float] = field(default_factory=dict)
+    sharpness_by_aperture: Dict[str, float] = field(default_factory=dict)
+    sharpness_by_shutter_speed: Dict[str, float] = field(default_factory=dict)
 
 
 def calculate_library_statistics(photos: List[Any]) -> LibraryStatistics:
@@ -114,6 +120,10 @@ def calculate_library_statistics(photos: List[Any]) -> LibraryStatistics:
         "1/60s-1/2s": 0,
         ">= 1/2s": 0,
     }
+
+    fl_sharp_acc: Dict[str, Tuple[float, int]] = {}
+    ap_sharp_acc: Dict[str, Tuple[float, int]] = {}
+    ss_sharp_acc: Dict[str, Tuple[float, int]] = {}
 
     scored_photos = []
 
@@ -177,31 +187,39 @@ def calculate_library_statistics(photos: List[Any]) -> LibraryStatistics:
             fl = exif.focal_length
             if fl is not None and fl > 0:
                 if fl < 24.0:
-                    fl_hist["< 24mm"] += 1
+                    fl_bucket = "< 24mm"
                 elif fl < 35.0:
-                    fl_hist["24-34mm"] += 1
+                    fl_bucket = "24-34mm"
                 elif fl < 70.0:
-                    fl_hist["35-69mm"] += 1
+                    fl_bucket = "35-69mm"
                 elif fl < 200.0:
-                    fl_hist["70-199mm"] += 1
+                    fl_bucket = "70-199mm"
                 else:
-                    fl_hist[">= 200mm"] += 1
+                    fl_bucket = ">= 200mm"
+                fl_hist[fl_bucket] += 1
+                if scores is not None:
+                    s_sum, s_cnt = fl_sharp_acc.get(fl_bucket, (0.0, 0))
+                    fl_sharp_acc[fl_bucket] = (s_sum + float(scores.sharpness), s_cnt + 1)
 
             # Aperture
             ap = exif.aperture
             if ap is not None and ap > 0:
                 if ap < 2.0:
-                    ap_hist["< f/2.0"] += 1
+                    ap_bucket = "< f/2.0"
                 elif ap < 2.8:
-                    ap_hist["f/2.0-f/2.8"] += 1
+                    ap_bucket = "f/2.0-f/2.8"
                 elif ap < 4.0:
-                    ap_hist["f/2.8-f/4.0"] += 1
+                    ap_bucket = "f/2.8-f/4.0"
                 elif ap < 5.6:
-                    ap_hist["f/4.0-f/5.6"] += 1
+                    ap_bucket = "f/4.0-f/5.6"
                 elif ap < 8.0:
-                    ap_hist["f/5.6-f/8.0"] += 1
+                    ap_bucket = "f/5.6-f/8.0"
                 else:
-                    ap_hist[">= f/8.0"] += 1
+                    ap_bucket = ">= f/8.0"
+                ap_hist[ap_bucket] += 1
+                if scores is not None:
+                    s_sum, s_cnt = ap_sharp_acc.get(ap_bucket, (0.0, 0))
+                    ap_sharp_acc[ap_bucket] = (s_sum + float(scores.sharpness), s_cnt + 1)
 
             # ISO
             iso = exif.iso
@@ -221,15 +239,19 @@ def calculate_library_statistics(photos: List[Any]) -> LibraryStatistics:
             ss = exif.shutter_speed
             if ss is not None and ss > 0:
                 if ss < 0.001:
-                    ss_hist["< 1/1000s"] += 1
+                    ss_bucket = "< 1/1000s"
                 elif ss < 0.004:
-                    ss_hist["1/1000s-1/250s"] += 1
+                    ss_bucket = "1/1000s-1/250s"
                 elif ss < 0.0167:
-                    ss_hist["1/250s-1/60s"] += 1
+                    ss_bucket = "1/250s-1/60s"
                 elif ss < 0.5:
-                    ss_hist["1/60s-1/2s"] += 1
+                    ss_bucket = "1/60s-1/2s"
                 else:
-                    ss_hist[">= 1/2s"] += 1
+                    ss_bucket = ">= 1/2s"
+                ss_hist[ss_bucket] += 1
+                if scores is not None:
+                    s_sum, s_cnt = ss_sharp_acc.get(ss_bucket, (0.0, 0))
+                    ss_sharp_acc[ss_bucket] = (s_sum + float(scores.sharpness), s_cnt + 1)
 
     # Format statistics list
     fmt_list = []
@@ -257,6 +279,10 @@ def calculate_library_statistics(photos: List[Any]) -> LibraryStatistics:
         reverse=True,
     )[:5]
 
+    sharpness_by_fl = {k: round(total / cnt, 1) for k, (total, cnt) in fl_sharp_acc.items() if cnt > 0}
+    sharpness_by_ap = {k: round(total / cnt, 1) for k, (total, cnt) in ap_sharp_acc.items() if cnt > 0}
+    sharpness_by_ss = {k: round(total / cnt, 1) for k, (total, cnt) in ss_sharp_acc.items() if cnt > 0}
+
     return LibraryStatistics(
         total_photo_count=total_photos,
         candidate_count=cand_cnt,
@@ -274,4 +300,42 @@ def calculate_library_statistics(photos: List[Any]) -> LibraryStatistics:
         aperture_histogram=ap_hist,
         iso_histogram=iso_hist,
         shutter_speed_histogram=ss_hist,
+        sharpness_by_focal_length=sharpness_by_fl,
+        sharpness_by_aperture=sharpness_by_ap,
+        sharpness_by_shutter_speed=sharpness_by_ss,
     )
+
+
+def default_decision_log_path() -> Path:
+    """Return ``$XDG_DATA_HOME/photo-selector-linux/decisions.jsonl``."""
+    xdg_data = os.environ.get("XDG_DATA_HOME")
+    base = Path(xdg_data) if xdg_data else (Path.home() / ".local" / "share")
+    return base / "photo-selector-linux" / "decisions.jsonl"
+
+
+def record_decision_log(
+    action: str,
+    photo: Any,
+    log_path: Optional[Path] = None,
+) -> Optional[Path]:
+    """Append a local culling decision entry (move/copy/trash) to a JSONL file (U-35)."""
+    target = Path(log_path) if log_path is not None else default_decision_log_path()
+    scores = getattr(photo, "scores", None)
+    exif = getattr(photo, "exif", None)
+    entry: Dict[str, Any] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": str(action).lower(),
+        "filename": getattr(photo, "filename", str(getattr(photo, "primary_path", ""))),
+        "sharpness": round(float(scores.sharpness), 1) if scores is not None else None,
+        "focal_length": getattr(exif, "focal_length", None) if exif is not None else None,
+        "aperture": getattr(exif, "aperture", None) if exif is not None else None,
+        "iso": getattr(exif, "iso", None) if exif is not None else None,
+        "shutter_speed": getattr(exif, "shutter_speed", None) if exif is not None else None,
+    }
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, sort_keys=True) + "\n")
+        return target
+    except OSError:
+        return None

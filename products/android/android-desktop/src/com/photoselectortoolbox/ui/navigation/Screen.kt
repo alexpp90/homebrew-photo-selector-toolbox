@@ -36,8 +36,8 @@ sealed class Screen(
         route = "inspect",
         meaning = "Inspect composition, exposure technique, and coaching guidance for the selected photograph.",
         icon = Icons.Default.CenterFocusStrong,
-        label = "Inspect & Learn",
-        shortLabel = "Inspect",
+        label = "Learn",
+        shortLabel = "Learn",
     )
 
     data object Statistics : Screen(

@@ -31,7 +31,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,10 +39,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,12 +51,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.photoselector.core.storage.SourceKind
+import com.phototok.data.model.RecentPath
 
 /**
- * Landing screen: hero branding, source pickers (Phone Camera / Custom folder),
- * recent folders, and empty-state messaging.
+ * Landing screen: hero branding, source pickers (Phone Camera / SD Card / Folder or Cloud),
+ * recent folders with source-kind badges, unmounted dimming, and seen/total progress.
  */
 @Composable
 fun PhoneModeLanding(
@@ -68,13 +71,16 @@ fun PhoneModeLanding(
     missingGrantPrompt: Boolean = false,
     onReselectFolder: (() -> Unit)? = null,
     onSelectCamera: () -> Unit = {},
+    onSelectSdCard: ((Uri?) -> Unit) -> Unit = { launchPicker -> launchPicker(null) },
     onSelectSource: (Uri) -> Unit,
     onSelectCollection: (Uri) -> Unit,
     onStart: () -> Unit,
-    recentPaths: List<com.phototok.data.model.RecentPath> = emptyList(),
+    recentPaths: List<RecentPath> = emptyList(),
     recentPathsEnabled: Boolean = true,
     recentPathsCount: Int = 3,
-    onSelectRecentPath: (com.phototok.data.model.RecentPath) -> Unit = {},
+    unmountedRecentUris: Set<String> = emptySet(),
+    folderSeenProgress: Map<String, Pair<Int, Int>> = emptyMap(),
+    onSelectRecentPath: (RecentPath) -> Unit = {},
 ) {
     val sourcePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -220,8 +226,21 @@ fun PhoneModeLanding(
             Spacer(modifier = Modifier.height(12.dp))
 
             SourceCard(
+                icon = Icons.Default.SdCard,
+                label = "SD Card / USB Reader",
+                supportingText = "Removable camera card or USB drive",
+                isActive = false,
+                onClick = { onSelectSdCard { seedUri -> sourcePickerLauncher.launch(seedUri) } },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("landing_sd_card_card"),
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            SourceCard(
                 icon = Icons.Default.FolderOpen,
-                label = "Custom Folder",
+                label = "Folder or Cloud",
                 supportingText = "Phone storage, SD card or cloud",
                 isActive = hasSourceFolder,
                 onClick = { sourcePickerLauncher.launch(null) },
@@ -356,7 +375,17 @@ fun PhoneModeLanding(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     recentToShow.forEach { recent ->
-                        RecentPathRow(recent = recent, onClick = { onSelectRecentPath(recent) })
+                        val isUnmounted = recent.uri in unmountedRecentUris
+                        val progressPair = folderSeenProgress[recent.uri]
+                        val progressText = progressPair?.let { (seen, total) ->
+                            "$seen / $total seen"
+                        }
+                        RecentPathRow(
+                            recent = recent,
+                            isUnmounted = isUnmounted,
+                            progressText = progressText,
+                            onClick = { onSelectRecentPath(recent) },
+                        )
                     }
                 }
             }
@@ -460,9 +489,18 @@ private fun SourceCard(
     }
 }
 
+private fun sourceKindBadgeLabel(kind: SourceKind): String = when (kind) {
+    SourceKind.PHONE_LIBRARY -> "Phone"
+    SourceKind.REMOVABLE -> "SD / USB"
+    SourceKind.CAMERA_MTP -> "Camera"
+    SourceKind.CLOUD_OTHER -> "Cloud"
+}
+
 @Composable
 private fun RecentPathRow(
-    recent: com.phototok.data.model.RecentPath,
+    recent: RecentPath,
+    isUnmounted: Boolean = false,
+    progressText: String? = null,
     onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -470,6 +508,7 @@ private fun RecentPathRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (isUnmounted) 0.55f else 1f)
             .clip(RoundedCornerShape(12.dp))
             .border(1.dp, colors.outlineVariant, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
@@ -484,17 +523,41 @@ private fun RecentPathRow(
             Icon(
                 imageVector = Icons.Default.History,
                 contentDescription = null,
-                tint = colors.primary,
+                tint = if (isUnmounted) colors.onSurfaceVariant else colors.primary,
                 modifier = Modifier.size(20.dp),
             )
-            Text(
-                text = recent.name.ifEmpty { "Folder" },
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurface,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = recent.name.ifEmpty { "Folder" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val subtitle = when {
+                    isUnmounted -> "Not connected"
+                    progressText != null -> progressText
+                    else -> null
+                }
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isUnmounted) colors.error else colors.onSurfaceVariant,
+                    )
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = colors.surfaceContainerHighest,
+            ) {
+                Text(
+                    text = sourceKindBadgeLabel(recent.kind),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
