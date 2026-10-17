@@ -64,6 +64,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -388,6 +390,15 @@ class SelectorViewModel @Inject constructor(
     private val imageGrouper = ImageGrouper(context)
 
     init {
+        // While the undo history holds entries, the folder they operate on keeps its SAF grant even
+        // if the user opens another folder (finding D-10).
+        viewModelScope.launch {
+            _uiState
+                .map { state -> state.folderUri.takeIf { state.undoHistory.isNotEmpty() } }
+                .distinctUntilChanged()
+                .collect { folder -> settingsRepository.pinUndoHistoryFolder(folder) }
+        }
+
         viewModelScope.launch {
             settingsRepository.pendingDeleteJournal.take(1).collect { recovered ->
                 if (recovered.isNotEmpty()) {
@@ -1168,6 +1179,8 @@ class SelectorViewModel @Inject constructor(
                 if (!deleted) failures++
             }
             settingsRepository.removePendingDeletes(pending.uris)
+            // The folder may have been left meanwhile; its grant was kept only for these entries.
+            originFolderUri?.let { settingsRepository.releaseFolderGrantIfUnreferenced(it) }
 
             if (failures > 0) {
                 val failedName = pending.slots.firstOrNull()?.image?.fileName ?: "image"

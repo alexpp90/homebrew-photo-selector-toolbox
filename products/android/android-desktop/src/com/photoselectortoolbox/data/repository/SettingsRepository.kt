@@ -409,6 +409,22 @@ class SettingsRepository @Inject constructor(
      * Reconcile OS persisted URI grants against the URIs currently referenced in
      * DataStore, releasing any orphaned grants from earlier sessions.
      */
+    /**
+     * Release the persisted grant of [folderUri] now if nothing references it any more — called
+     * after the last journal entry of a folder that was left was committed or recovered.
+     */
+    suspend fun releaseFolderGrantIfUnreferenced(folderUri: String) {
+        val prefs = context.dataStore.data.first()
+        val referenced = referencedUrisByPurpose(prefs)
+        folderAccessManager.syncReferences(referenced)
+        folderAccessManager.releaseIfUnreferenced(folderUri, referenced.values.flatten().toSet())
+    }
+
+    /** Keep (or drop) the grant of the folder the in-memory undo history still operates on. */
+    fun pinUndoHistoryFolder(folderUri: String?) {
+        folderAccessManager.pin(FolderAccessPurpose.UNDO_HISTORY, setOfNotNull(folderUri))
+    }
+
     suspend fun reconcilePersistedGrants(): Set<String> {
         val prefs = context.dataStore.data.first()
         return folderAccessManager.reconcilePersistedGrants(referencedUrisByPurpose(prefs))
@@ -420,9 +436,12 @@ class SettingsRepository @Inject constructor(
             ?.let(::setOf)
             .orEmpty()
         val selection = prefs[KEY_PHONE_COLLECTION_URI]?.let(::setOf).orEmpty()
+        // Uncommitted deletions still need the grant of the folder they live in (finding D-10).
+        val journal = prefs[KEY_PENDING_DELETE_JOURNAL].orEmpty()
         return mapOf(
             FolderAccessPurpose.SOURCE to source,
             FolderAccessPurpose.SELECTION_TARGET to selection,
+            FolderAccessPurpose.PENDING_DELETE_JOURNAL to journal,
         )
     }
 
