@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
+import com.photoselectortoolbox.data.model.CompanionFile
 import com.photoselectortoolbox.data.model.ImageDimensions
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.domain.format.ImageFormats
@@ -250,6 +251,7 @@ class LocalImageSourceImpl @Inject constructor(
             coroutineContext.ensureActive()
             val parentId = queue.removeFirst()
             val cursor = queryChildren(treeUri, parentId) ?: continue
+            val directoryEntries = mutableListOf<RawDirectoryEntry>()
 
             cursor.use { c ->
                 val idIndex = c.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
@@ -279,10 +281,10 @@ class LocalImageSourceImpl @Inject constructor(
                     }
 
                     if (name.startsWith(".")) continue
-                    if (!ImageFormats.isSupported(name)) continue
+                    if (!ImageFormats.isCompanionOrSupported(name)) continue
 
-                    onImage(
-                        ImageItem(
+                    directoryEntries.add(
+                        RawDirectoryEntry(
                             uri = DocumentsContract
                                 .buildDocumentUriUsingTree(treeUri, documentId)
                                 .toString(),
@@ -294,15 +296,14 @@ class LocalImageSourceImpl @Inject constructor(
                                 0L
                             },
                             mimeType = mimeType,
-                            // Deliberately unresolved: reading a header here is
-                            // an extra stream open per photograph, which is the
-                            // difference between a folder opening in a second
-                            // and in a minute. See resolveDimensions().
-                            imageWidth = 0,
-                            imageHeight = 0,
                         )
                     )
                 }
+            }
+
+            for (item in groupCompanionsInDirectory(directoryEntries, parentId)) {
+                coroutineContext.ensureActive()
+                onImage(item)
             }
         }
     }
@@ -329,4 +330,101 @@ class LocalImageSourceImpl @Inject constructor(
 
     private fun Cursor.getLongOrZero(index: Int): Long =
         if (isNull(index)) 0L else getLong(index)
+}
+
+/**
+ * Unprocessed file entry read from a single SAF directory cursor before
+ * companion grouping.
+ */
+internal data class RawDirectoryEntry(
+    val uri: String,
+    val fileName: String,
+    val fileSize: Long = 0L,
+    val lastModified: Long = 0L,
+    val mimeType: String? = null,
+)
+
+/**
+ * Groups files from a single directory listing ([parentDocumentId]) by their
+ * canonical shot stem (`IMG_0001.CR3`, `IMG_0001.JPG`, `IMG_0001.CR3.xmp`,
+ * `IMG_0001-Edit.tif` → one [ImageItem]).
+ *
+ * - Standalone `.xmp` files with no matching supported image in the same
+ *   directory are ignored.
+ * - When both a processed image (JPEG/HEIC/PNG/TIFF) and a RAW exist for the
+ *   same shot stem, the processed non-`-Edit` image is selected as the primary
+ *   [ImageItem] so the UI decodes and displays it rapidly, while the RAW twin,
+ *   `.xmp` sidecars, and `-Edit` derivatives are attached in [ImageItem.companions].
+ */
+internal fun groupCompanionsInDirectory(
+    entries: List<RawDirectoryEntry>,
+    parentDocumentId: String?,
+): List<ImageItem> {
+    if (entries.isEmpty()) return emptyList()
+
+    val byStem = LinkedHashMap<String, MutableList<RawDirectoryEntry>>()
+    for (entry in entries) {
+        if (!ImageFormats.isCompanionOrSupported(entry.fileName)) continue
+        val stem = ImageFormats.shotStemOf(entry.fileName)
+        if (stem.isEmpty()) continue
+        byStem.getOrPut(stem) { mutableListOf() }.add(entry)
+    }
+
+    val result = ArrayList<ImageItem>(byStem.size)
+    for (group in byStem.values) {
+        val supportedImages = group.filter { ImageFormats.isSupported(it.fileName) }
+        if (supportedImages.isEmpty()) {
+            // Orphan .xmp sidecar(s) with no matching photo in this directory.
+            continue
+        }
+
+        val primary = supportedImages.minWith(
+            compareBy<RawDirectoryEntry> { primaryPriorityRank(it.fileName) }
+                .thenBy { it.fileName.lowercase() }
+        )
+
+        val companions = group
+            .filter { it !== primary }
+            .sortedBy { it.fileName.lowercase() }
+            .map {
+                CompanionFile(
+                    uri = it.uri,
+                    fileName = it.fileName,
+                    fileSize = it.fileSize,
+                    lastModified = it.lastModified,
+                    mimeType = it.mimeType,
+                )
+            }
+
+        result.add(
+            ImageItem(
+                uri = primary.uri,
+                fileName = primary.fileName,
+                fileSize = primary.fileSize,
+                lastModified = primary.lastModified,
+                mimeType = primary.mimeType,
+                // Deliberately unresolved: reading a header here is
+                // an extra stream open per photograph, which is the
+                // difference between a folder opening in a second
+                // and in a minute. See resolveDimensions().
+                imageWidth = 0,
+                imageHeight = 0,
+                companions = companions,
+                parentDocumentId = parentDocumentId,
+            )
+        )
+    }
+    return result
+}
+
+private fun primaryPriorityRank(fileName: String): Int {
+    val isRaw = ImageFormats.isRaw(fileName)
+    val isEdit = ImageFormats.isEditDerivative(fileName)
+    return when {
+        !isRaw && !isEdit && ImageFormats.isJpeg(fileName) -> 0
+        !isRaw && !isEdit -> 1
+        !isRaw && isEdit -> 2
+        isRaw && !isEdit -> 3
+        else -> 4
+    }
 }
