@@ -1216,6 +1216,11 @@ def test_gio_trash_that_cannot_be_located_or_restored_tells_the_user_where_the_f
 # ── B-3: undo of a partial move (D-3) ───────────────────────────────────────────
 
 
+def _selection_files(card: Path):
+    """Files in Selection/ (the folder's hidden hand-over marker is not a photo)."""
+    return [p for p in (card / "Selection").iterdir() if not p.name.startswith(".photoselector")]
+
+
 def _partial_move(tmp_path: Path, names, undeletable):
     """Cross-mount move of ``names`` from a fake card where the sources in ``undeletable`` stay."""
     card = tmp_path / "card"
@@ -1253,7 +1258,7 @@ def test_undo_of_a_fully_unremoved_partial_move_deletes_the_copy_and_creates_no_
 
     assert sorted(p.name for p in card.iterdir() if p.is_file()) == ["IMG_1.JPG"]
     assert (card / "IMG_1.JPG").read_bytes() == b"IMG_1.JPG" * 20
-    assert list((card / "Selection").iterdir()) == []
+    assert _selection_files(card) == []
 
 
 def test_undo_of_a_mixed_partial_move_restores_removed_members_and_deletes_only_surviving_copies(tmp_path: Path):
@@ -1270,7 +1275,7 @@ def test_undo_of_a_mixed_partial_move_restores_removed_members_and_deletes_only_
     assert (card / "IMG_2.CR3").read_bytes() == b"IMG_2.CR3" * 20
     assert (card / "IMG_2.JPG").read_bytes() == b"IMG_2.JPG" * 20
     assert sorted(p.name for p in card.iterdir() if p.is_file()) == ["IMG_2.CR3", "IMG_2.JPG"]
-    assert list((card / "Selection").iterdir()) == []
+    assert _selection_files(card) == []
 
 
 def test_undo_of_a_partial_move_never_deletes_a_copy_whose_original_is_gone(tmp_path: Path):
@@ -1282,4 +1287,4 @@ def test_undo_of_a_partial_move_never_deletes_a_copy_whose_original_is_gone(tmp_
     assert mgr.undo_culling(record, candidate) is True
 
     assert (card / "IMG_3.JPG").read_bytes() == b"IMG_3.JPG" * 20
-    assert list((card / "Selection").iterdir()) == []
+    assert _selection_files(card) == []

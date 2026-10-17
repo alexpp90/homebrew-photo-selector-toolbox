@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.photoselector.core.model.ExifData
+import com.photoselectortoolbox.data.repository.CacheRepository
 import com.photoselectortoolbox.data.repository.ImageRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -20,6 +22,22 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
+/**
+ * Mean and median sharpness summary for a single EXIF parameter bucket (`U-35`).
+ */
+data class ExifSharpnessStats(
+    val bucketLabel: String,
+    val sampleCount: Int,
+    val meanSharpness: Double,
+    val medianSharpness: Double,
+)
+
+data class ExifSharpnessBreakdowns(
+    val byShutterSpeed: Map<String, ExifSharpnessStats> = emptyMap(),
+    val byAperture: Map<String, ExifSharpnessStats> = emptyMap(),
+    val byFocalLength: Map<String, ExifSharpnessStats> = emptyMap(),
+)
+
 data class StatisticsUiState(
     val isLoading: Boolean = false,
     val folderUri: String? = null,
@@ -30,6 +48,9 @@ data class StatisticsUiState(
     val isoDistribution: Map<String, Int> = emptyMap(),
     val focalLengthDistribution: Map<String, Int> = emptyMap(),
     val lensDistribution: Map<String, Int> = emptyMap(),
+    val shutterSpeedSharpness: Map<String, ExifSharpnessStats> = emptyMap(),
+    val apertureSharpness: Map<String, ExifSharpnessStats> = emptyMap(),
+    val focalLengthSharpness: Map<String, ExifSharpnessStats> = emptyMap(),
     val error: String? = null,
     val scanProgress: Float = 0f,
     val progressText: String = "",
@@ -39,8 +60,18 @@ data class StatisticsUiState(
 @HiltViewModel
 class StatisticsViewModel @Inject constructor(
     private val imageRepository: ImageRepository,
-    @ApplicationContext private val context: Context
+    private val cacheRepository: CacheRepository?,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    constructor(
+        imageRepository: ImageRepository,
+        context: Context,
+    ) : this(
+        imageRepository = imageRepository,
+        cacheRepository = null,
+        context = context,
+    )
 
     private val _uiState = MutableStateFlow(StatisticsUiState())
     val uiState: StateFlow<StatisticsUiState> = _uiState.asStateFlow()
@@ -88,7 +119,10 @@ class StatisticsViewModel @Inject constructor(
                     apertureDistribution = emptyMap(),
                     isoDistribution = emptyMap(),
                     focalLengthDistribution = emptyMap(),
-                    lensDistribution = emptyMap()
+                    lensDistribution = emptyMap(),
+                    shutterSpeedSharpness = emptyMap(),
+                    apertureSharpness = emptyMap(),
+                    focalLengthSharpness = emptyMap(),
                 )
             }
 
@@ -109,7 +143,7 @@ class StatisticsViewModel @Inject constructor(
                 }
 
                 val processedCount = java.util.concurrent.atomic.AtomicInteger(0)
-                val exifDataList = withContext(Dispatchers.IO) {
+                val analyzedPairs = withContext(Dispatchers.IO) {
                     coroutineScope {
                         val semaphore = Semaphore(8)
                         images.map { image ->
@@ -120,6 +154,11 @@ class StatisticsViewModel @Inject constructor(
                                     } catch (e: Exception) {
                                         null
                                     }
+                                    val cachedScore = try {
+                                        cacheRepository?.getCachedScore(image.uri)?.sharpnessScore
+                                    } catch (_: Exception) {
+                                        null
+                                    } ?: image.scanResult?.sharpnessScore
                                     val count = processedCount.incrementAndGet()
                                     val progress = count.toFloat() / images.size.toFloat()
                                     _uiState.update {
@@ -128,11 +167,16 @@ class StatisticsViewModel @Inject constructor(
                                             progressText = "Analyzing metadata ($count/${images.size})"
                                         )
                                     }
-                                    exif
+                                    if (exif != null) exif to cachedScore else null
                                 }
                             }
                         }.mapNotNull { it.await() }
                     }
+                }
+
+                val exifDataList = analyzedPairs.map { it.first }
+                val scoredEntries = analyzedPairs.mapNotNull { (exif, score) ->
+                    if (score != null) exif to score else null
                 }
 
                 val shutterSpeeds = mutableMapOf<String, Int>()
@@ -168,6 +212,8 @@ class StatisticsViewModel @Inject constructor(
                     }
                 }
 
+                val sharpnessBreakdowns = computeExifSharpnessBreakdowns(scoredEntries)
+
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -175,7 +221,10 @@ class StatisticsViewModel @Inject constructor(
                         apertureDistribution = apertures.toSortedMap(),
                         isoDistribution = isoValues.toSortedMap(),
                         focalLengthDistribution = focalLengths.toSortedMap(),
-                        lensDistribution = lenses.toSortedMap()
+                        lensDistribution = lenses.toSortedMap(),
+                        shutterSpeedSharpness = sharpnessBreakdowns.byShutterSpeed,
+                        apertureSharpness = sharpnessBreakdowns.byAperture,
+                        focalLengthSharpness = sharpnessBreakdowns.byFocalLength,
                     )
                 }
             } catch (e: Exception) {
@@ -193,21 +242,72 @@ class StatisticsViewModel @Inject constructor(
         _uiState.update { it.copy(error = null) }
     }
 
-    /**
-     * Format a shutter speed value (in seconds) as a human-readable string.
-     * Values < 1 second are displayed as fractions (e.g., "1/250s").
-     * Values >= 1 second are displayed with quotes (e.g., "2\"").
-     */
-    private fun formatShutterSpeed(speed: Double): String {
-        return if (speed >= 1.0) {
-            if (speed == speed.toLong().toDouble()) {
-                "${speed.toLong()}\""
+    companion object {
+        /**
+         * Format a shutter speed value (in seconds) as a human-readable string.
+         * Values < 1 second are displayed as fractions (e.g., "1/250s").
+         * Values >= 1 second are displayed with quotes (e.g., "2\"").
+         */
+        internal fun formatShutterSpeed(speed: Double): String {
+            return if (speed >= 1.0) {
+                if (speed == speed.toLong().toDouble()) {
+                    "${speed.toLong()}\""
+                } else {
+                    "%.1f\"".format(java.util.Locale.US, speed)
+                }
             } else {
-                "%.1f\"".format(java.util.Locale.US, speed)
+                val denominator = (1.0 / speed).toLong()
+                "1/${denominator}s"
             }
-        } else {
-            val denominator = (1.0 / speed).toLong()
-            "1/${denominator}s"
+        }
+
+        /**
+         * Compute mean and median sharpness per shutter speed, aperture, and focal length bucket (`U-35`).
+         */
+        internal fun computeExifSharpnessBreakdowns(
+            entries: List<Pair<ExifData, Double>>,
+        ): ExifSharpnessBreakdowns {
+            if (entries.isEmpty()) return ExifSharpnessBreakdowns()
+
+            val byShutter = mutableMapOf<String, MutableList<Double>>()
+            val byAperture = mutableMapOf<String, MutableList<Double>>()
+            val byFocal = mutableMapOf<String, MutableList<Double>>()
+
+            for ((exif, sharpness) in entries) {
+                exif.shutterSpeed?.let { s ->
+                    byShutter.getOrPut(formatShutterSpeed(s)) { mutableListOf() }.add(sharpness)
+                }
+                exif.aperture?.let { a ->
+                    byAperture.getOrPut("f/%.1f".format(java.util.Locale.US, a)) { mutableListOf() }.add(sharpness)
+                }
+                exif.focalLength?.let { f ->
+                    byFocal.getOrPut("${f.toInt()}mm") { mutableListOf() }.add(sharpness)
+                }
+            }
+
+            fun summarize(map: Map<String, List<Double>>): Map<String, ExifSharpnessStats> =
+                map.toSortedMap().mapValues { (label, values) ->
+                    val sorted = values.sorted()
+                    val mean = sorted.average()
+                    val mid = sorted.size / 2
+                    val median = if (sorted.size % 2 == 1) {
+                        sorted[mid]
+                    } else {
+                        (sorted[mid - 1] + sorted[mid]) / 2.0
+                    }
+                    ExifSharpnessStats(
+                        bucketLabel = label,
+                        sampleCount = sorted.size,
+                        meanSharpness = mean,
+                        medianSharpness = median,
+                    )
+                }
+
+            return ExifSharpnessBreakdowns(
+                byShutterSpeed = summarize(byShutter),
+                byAperture = summarize(byAperture),
+                byFocalLength = summarize(byFocal),
+            )
         }
     }
 }

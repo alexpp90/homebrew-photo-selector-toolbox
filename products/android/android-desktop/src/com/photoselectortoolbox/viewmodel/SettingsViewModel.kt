@@ -17,14 +17,17 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val selectionFolderName: String = "Selection",
+    val secondarySelectionFolderName: String = SettingsRepository.DEFAULT_SECONDARY_SELECTION_FOLDER_NAME,
     val sortingEnabled: Boolean = true,
     val groupingEnabled: Boolean = false,
     val groupingLevel: GroupingLevel = GroupingLevel.TIME_FILENAME,
     val analysisThreadCount: Int = 4,
     val cachedScoreCount: Int = 0,
     val phoneCollectionUri: String? = null,
+    val customSelectionDestinationUri: String? = null,
     val fullscreenButtonsEnabled: Boolean = true,
     val filingAction: FilingAction = FilingAction.DEFAULT,
+    val tvDisplayScaleEnabled: Boolean = SettingsRepository.DEFAULT_TV_DISPLAY_SCALE_ENABLED,
 )
 
 @HiltViewModel
@@ -47,7 +50,8 @@ class SettingsViewModel @Inject constructor(
                 settingsRepository.fullscreenButtonsEnabled,
                 settingsRepository.filingAction
             ) { arrays ->
-                SettingsUiState(
+                val current = _uiState.value
+                current.copy(
                     selectionFolderName = arrays[0] as String,
                     sortingEnabled = arrays[1] as Boolean,
                     groupingEnabled = arrays[2] as Boolean,
@@ -55,8 +59,6 @@ class SettingsViewModel @Inject constructor(
                     analysisThreadCount = arrays[4] as Int,
                     fullscreenButtonsEnabled = arrays[5] as Boolean,
                     filingAction = arrays[6] as FilingAction,
-                    cachedScoreCount = _uiState.value.cachedScoreCount,
-                    phoneCollectionUri = _uiState.value.phoneCollectionUri,
                 )
             }.collect { newState ->
                 _uiState.update { newState }
@@ -69,6 +71,30 @@ class SettingsViewModel @Inject constructor(
             }
         }
 
+        viewModelScope.launch {
+            runCatching {
+                settingsRepository.secondarySelectionFolderName.collect { name ->
+                    _uiState.update { it.copy(secondarySelectionFolderName = name) }
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                settingsRepository.customSelectionDestinationUri.collect { uri ->
+                    _uiState.update { it.copy(customSelectionDestinationUri = uri) }
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                settingsRepository.tvDisplayScaleEnabled.collect { enabled ->
+                    _uiState.update { it.copy(tvDisplayScaleEnabled = enabled) }
+                }
+            }
+        }
+
         refreshCachedScoreCount()
     }
 
@@ -78,6 +104,15 @@ class SettingsViewModel @Inject constructor(
 
         viewModelScope.launch {
             settingsRepository.setSelectionFolderName(trimmed)
+        }
+    }
+
+    fun updateSecondarySelectionFolder(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+
+        viewModelScope.launch {
+            settingsRepository.setSecondarySelectionFolderName(trimmed)
         }
     }
 
@@ -117,7 +152,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updatePhoneCollectionUri(uri: String?) {
-        viewModelScope.launch { settingsRepository.setPhoneCollectionUri(uri) }
+        viewModelScope.launch {
+            settingsRepository.setPhoneCollectionUri(uri)
+            settingsRepository.setCustomSelectionDestinationUri(uri)
+        }
+    }
+
+    fun updateCustomSelectionDestinationUri(uri: String?) {
+        viewModelScope.launch {
+            settingsRepository.setCustomSelectionDestinationUri(uri)
+        }
     }
 
     fun updateFullscreenButtonsEnabled(enabled: Boolean) {
@@ -126,6 +170,10 @@ class SettingsViewModel @Inject constructor(
 
     fun updateFilingAction(action: FilingAction) {
         viewModelScope.launch { settingsRepository.setFilingAction(action) }
+    }
+
+    fun updateTvDisplayScaleEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setTvDisplayScaleEnabled(enabled) }
     }
 
     /**

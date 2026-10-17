@@ -56,12 +56,14 @@ class CacheRepositoryImplTest {
     }
 
     @Test
-    fun `clearAll delegates to DAO deleteAll`() = runTest {
+    fun `clearAll delegates to DAO deleteAll and deleteAllTechniqueFacts`() = runTest {
         coEvery { dao.deleteAll() } just Runs
+        coEvery { dao.deleteAllTechniqueFacts() } just Runs
 
         repo.clearAll()
 
         coVerify { dao.deleteAll() }
+        coVerify { dao.deleteAllTechniqueFacts() }
     }
 
     @Test

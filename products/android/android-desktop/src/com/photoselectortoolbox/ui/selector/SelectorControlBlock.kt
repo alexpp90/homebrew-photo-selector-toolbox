@@ -233,25 +233,6 @@ fun SelectorControlBlock(
                 )
             }
 
-        // Star rating bar for current image
-        if (position > 0) {
-            StarRatingBar(
-                rating = currentRating,
-                onRatingChanged = onSetRating,
-                starSize = 18.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp),
-            )
-        }
-
-        // Rating Filter Selector
-        RatingFilterSelector(
-            currentFilter = ratingFilter,
-            onFilterSelected = onRatingFilterSelected,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-
         // `127 / 842+` while the folder is still enumerating. Discovery streams,
         // so the total is a running total for the first seconds of a large
         // shoot; printing it bare would state a folder size nobody has counted.

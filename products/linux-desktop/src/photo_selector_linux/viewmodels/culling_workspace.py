@@ -2,21 +2,30 @@
 
 Adheres to:
 - R-LINUX-UI-04/05/06: 1-Up, 2-Up, and 3-Up Focus Mode transitions
+- R-LINUX-UI-10: Queued non-blocking background file operations with optimistic UI updates
+- R-LINUX-CULL-01/02: Streaming directory ingestion in depth-first per-folder natural order
 - R-LINUX-CULL-03/04/05/06/07: Transactional Move, Copy, Trash, and Undo operations
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple
+import threading
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from photo_selector_linux.core.file_ops import FileCullingManager
+from photo_selector_linux.core.gvfs_names import is_remote_filesystem
 from photo_selector_linux.core.models import (
     CandidatePhoto,
     CullingActionType,
     CullingRecord,
+    QualityScores,
+    SharpnessCategory,
 )
-from photo_selector_linux.core.scanner import DirectoryScanner
+from photo_selector_linux.core.scanner import DirectoryScanner, natural_sort_key
+from photo_selector_linux.core.settings import SettingsStore
+from photo_selector_linux.core.statistics import record_decision_log
 
 
 # A file operation, and what to do with its (result, error) once it finished.
@@ -35,39 +44,144 @@ def run_inline(job: Job, done: JobDone) -> None:
     done(result, None)
 
 
+@dataclass
+class _QueuedAction:
+    """Represents a pending, running, or completed file operation in the FIFO queue (U-08)."""
+
+    kind: str  # "move", "copy", "trash", "undo"
+    action_type: CullingActionType
+    photo: CandidatePhoto
+    orig_idx: int
+    folder: Path
+    selection_folder: str
+    generation: int
+    busy_message: str
+    status: str = "pending"  # "pending", "running", "done", "cancelled", "failed"
+    record: Optional[CullingRecord] = None
+    target_action: Optional[_QueuedAction] = None
+
+
 class CullingWorkspaceViewModel:
     """Decoupled presentation state machine driving navigation, comparison, and culling.
 
-    File operations go through ``dispatcher``. The app passes one that runs them on a background
-    worker and calls back on the main loop, so a Google Drive upload (16 s for a 25 MB RAW) does
-    not freeze the window; one operation runs at a time, so the undo stack keeps its order.
+    File operations go through a FIFO queue dispatched to ``dispatcher`` one at a time so rapid
+    culling keys (``M``, ``C``, ``Delete``, ``Ctrl+Z``) never drop while preserving undo order.
     """
 
     def __init__(
         self,
         file_manager: Optional[FileCullingManager] = None,
         dispatcher: Optional[Dispatcher] = None,
+        settings: Optional[SettingsStore] = None,
+        scan_idle_add: Optional[Callable[..., Any]] = None,
+        scanner: Optional[DirectoryScanner] = None,
+        scanner_factory: Optional[Callable[[str], DirectoryScanner]] = None,
+        auto_advance: Optional[bool] = None,
+        external_destination_root: Optional[Path] = None,
+        decision_log_path: Optional[Path] = None,
     ):
         self.candidates: List[CandidatePhoto] = []
         self.current_index: int = 0
         self.comparison_mode: int = 1  # 1: 1-Up, 2: 2-Up, 3: 3-Up Focus Mode
         self.current_folder: Optional[Path] = None
         self.current_folder_name: str = ""
-        self.selection_folder_name: str = "Selection"
+        self.is_remote_folder: bool = False
+        self.is_scanning: bool = False
+
+        self.settings: Optional[SettingsStore] = settings
+        self.selection_folder_name: str = settings.selection_folder_name if settings else "Selection"
+        self.auto_advance: bool = (
+            bool(auto_advance)
+            if auto_advance is not None
+            else (settings.auto_advance if settings else True)
+        )
+        self.blurry_threshold: float = settings.blurry_threshold if settings else 35.0
+        self.sharp_threshold: float = settings.sharp_threshold if settings else 70.0
+        self.cache_limit_mb: float = settings.cache_limit_mb if settings else 512.0
+        self.external_destination_root: Optional[Path] = (
+            Path(external_destination_root)
+            if external_destination_root is not None
+            else (
+                Path(settings.external_destination_folder)
+                if (settings and settings.external_destination_folder)
+                else None
+            )
+        )
+        self.stop_sharpness_threshold: Optional[float] = (
+            settings.stop_sharpness_threshold if settings else None
+        )
+        self.sort_order: str = "natural"
+        self.decision_log_path: Optional[Path] = decision_log_path
 
         self.selected_count: int = 0
         self.copied_count: int = 0
         self.trashed_count: int = 0
         self.undo_stack: List[Tuple[CullingRecord, CandidatePhoto, int]] = []
+        self._undo_actions: Dict[str, _QueuedAction] = {}
+        self.completed_previous_folder_records: List[CullingRecord] = []
 
         self.file_manager = file_manager or FileCullingManager()
         self.dispatcher: Dispatcher = dispatcher or run_inline
-        # What the running file operation is doing ("Copying DSC0001.ARW…"), or None when idle.
+        self._scan_idle_add: Optional[Callable[..., Any]] = scan_idle_add
+        self._custom_scanner: Optional[DirectoryScanner] = scanner
+        self._scanner_factory = scanner_factory
+        self.scanner: DirectoryScanner = scanner or DirectoryScanner(
+            custom_selection_folder=self.selection_folder_name
+        )
+        self._scan_thread: Optional[threading.Thread] = None
+
+        self._queue: List[_QueuedAction] = []
+        self._running_action: Optional[_QueuedAction] = None
         self.busy_message: Optional[str] = None
-        self._folder_generation = 0
+        self._folder_generation: int = 0
 
         self._state_callbacks: List[Callable[[CullingWorkspaceViewModel], None]] = []
         self._notification_callbacks: List[Callable[[CullingWorkspaceViewModel, str], None]] = []
+
+        if self.settings is not None:
+            self.settings.connect(self._on_settings_changed)
+
+    @property
+    def scan_idle_add(self) -> Optional[Callable[..., Any]]:
+        return self._scan_idle_add
+
+    @scan_idle_add.setter
+    def scan_idle_add(self, value: Optional[Callable[..., Any]]) -> None:
+        self._scan_idle_add = value
+
+    def _on_settings_changed(self, store: SettingsStore) -> None:
+        self.selection_folder_name = store.selection_folder_name
+        self.auto_advance = store.auto_advance
+        self.blurry_threshold = store.blurry_threshold
+        self.sharp_threshold = store.sharp_threshold
+        self.cache_limit_mb = store.cache_limit_mb
+        self.external_destination_root = (
+            Path(store.external_destination_folder)
+            if store.external_destination_folder
+            else None
+        )
+        self.stop_sharpness_threshold = store.stop_sharpness_threshold
+        if self._custom_scanner is None:
+            self.scanner = DirectoryScanner(custom_selection_folder=self.selection_folder_name)
+
+        # Re-evaluate focus categories on already-scored photos when thresholds change (U-06c).
+        for candidate in self.candidates:
+            if candidate.scores is not None:
+                s = candidate.scores
+                new_cat = SharpnessCategory.from_score(
+                    s.sharpness,
+                    blurry_threshold=self.blurry_threshold,
+                    sharp_threshold=self.sharp_threshold,
+                )
+                candidate.scores = QualityScores(
+                    sharpness=s.sharpness,
+                    noise=s.noise,
+                    highlight_clipping=s.highlight_clipping,
+                    shadow_clipping=s.shadow_clipping,
+                    raw_variance=s.raw_variance,
+                    category_override=new_cat,
+                )
+        self._notify_state_changed()
 
     @property
     def candidate_count(self) -> int:
@@ -78,14 +192,40 @@ class CullingWorkspaceViewModel:
         return len(self.candidates)
 
     @property
+    def queued_count(self) -> int:
+        """Total number of file operations currently running or waiting in the FIFO queue (U-08)."""
+        return len(self._queue) + (1 if self._running_action is not None else 0)
+
+    @property
+    def queue_status_label(self) -> Optional[str]:
+        """Human-readable queue depth pill text (e.g. ``'2 queued'``), or ``None`` when idle."""
+        count = self.queued_count
+        return f"{count} queued" if count > 0 else None
+
+    @property
+    def remote_badge_label(self) -> Optional[str]:
+        """Header badge text when the active folder is on GVFS/FUSE/remote storage (U-31)."""
+        return "Cloud / Remote" if self.is_remote_folder else None
+
+    @property
     def is_busy(self) -> bool:
-        return self.busy_message is not None
+        return self._running_action is not None or bool(self._queue) or self.busy_message is not None
 
     @property
     def current_photo(self) -> Optional[CandidatePhoto]:
         if 0 <= self.current_index < len(self.candidates):
             return self.candidates[self.current_index]
         return None
+
+    def card_summary(self) -> Dict[str, Any]:
+        """Return ingest/culling tally summary and whether the source card is safe to format (U-33)."""
+        return {
+            "kept": self.selected_count,
+            "trashed": self.trashed_count,
+            "remaining": self.remaining_count,
+            "queued": self.queued_count,
+            "safe_to_format": self.queued_count == 0 and self.remaining_count == 0,
+        }
 
     def connect(self, signal: str, callback: Callable) -> None:
         """Register callbacks for state changes or notifications."""
@@ -108,6 +248,42 @@ class CullingWorkspaceViewModel:
             except Exception:
                 pass
 
+    def _check_stop_sharpness_threshold(self) -> None:
+        """Notify when navigating/advancing onto a photo at or above the stop threshold (U-34)."""
+        if self.stop_sharpness_threshold is None:
+            return
+        photo = self.current_photo
+        if photo is not None and photo.scores is not None:
+            if photo.scores.sharpness >= self.stop_sharpness_threshold:
+                self._notify(f"Reached sharpness threshold ({self.stop_sharpness_threshold:.1f})")
+
+    def set_sort_order(self, order: str) -> None:
+        """Set candidate ordering ('natural' or 'lowest_sharpness_first') and re-sort (U-34)."""
+        if order not in ("natural", "lowest_sharpness_first"):
+            return
+        self.sort_order = order
+        self._apply_sort_order()
+        self.current_index = 0
+        self._check_stop_sharpness_threshold()
+        self._notify_state_changed()
+
+    def _apply_sort_order(self) -> None:
+        if self.sort_order == "lowest_sharpness_first":
+            self.candidates.sort(
+                key=lambda c: (
+                    (0, float(c.scores.sharpness), natural_sort_key(c.filename))
+                    if c.scores is not None
+                    else (1, float("inf"), natural_sort_key(c.filename))
+                )
+            )
+        else:
+            self.candidates.sort(
+                key=lambda c: (
+                    natural_sort_key(str(c.primary_path.parent)),
+                    natural_sort_key(c.filename),
+                )
+            )
+
     def set_comparison_mode(self, mode: int) -> None:
         """Switch comparison mode (1: 1-Up, 2: 2-Up, 3: 3-Up Focus Mode)."""
         if mode in (1, 2, 3) and mode != self.comparison_mode:
@@ -118,6 +294,7 @@ class CullingWorkspaceViewModel:
         """Navigate to the next candidate photo."""
         if self.current_index < len(self.candidates) - 1:
             self.current_index += 1
+            self._check_stop_sharpness_threshold()
             self._notify_state_changed()
 
     def nav_previous(self) -> None:
@@ -125,48 +302,6 @@ class CullingWorkspaceViewModel:
         if self.current_index > 0:
             self.current_index -= 1
             self._notify_state_changed()
-
-    def _run(
-        self,
-        busy_message: str,
-        job: Job,
-        on_success: Callable[[Any], None],
-        failure: str,
-        on_failure: Optional[Callable[[], None]] = None,
-        on_error: Optional[Callable[[BaseException], None]] = None,
-        failure_message: Optional[Callable[[BaseException], Optional[str]]] = None,
-    ) -> bool:
-        """Run a file operation through the dispatcher; False when one is already running.
-
-        The outcome is applied when the job finishes, to the photo itself rather than to an
-        index, because the user may browse meanwhile. A folder change drops the outcome.
-        """
-        if self.is_busy:
-            return False
-        self.busy_message = busy_message
-        generation = self._folder_generation
-        finished = []
-
-        def done(result: Any, error: Optional[BaseException]) -> None:
-            finished.append(True)
-            self.busy_message = None
-            if generation != self._folder_generation:
-                pass
-            elif error is not None:
-                if on_error is not None:
-                    on_error(error)
-                if on_failure is not None:
-                    on_failure()
-                custom = failure_message(error) if failure_message is not None else None
-                self._notify(custom if custom is not None else f"{failure}: {error}")
-            else:
-                on_success(result)
-            self._notify_state_changed()
-
-        self.dispatcher(job, done)
-        if not finished:
-            self._notify_state_changed()  # show the busy state while the job runs in the background
-        return True
 
     def _index_of(self, photo: CandidatePhoto) -> Optional[int]:
         for i, candidate in enumerate(self.candidates):
@@ -182,151 +317,443 @@ class CullingWorkspaceViewModel:
         self.candidates.pop(idx)
         if idx < self.current_index:
             self.current_index -= 1
+        elif not self.auto_advance and self.current_index > 0:
+            self.current_index = max(0, self.current_index - 1)
         if self.current_index >= len(self.candidates) and self.current_index > 0:
             self.current_index = len(self.candidates) - 1
         return idx
 
-    def cull_move(self) -> None:
-        """Move active candidate and all companions to Selection/ with auto-advance."""
-        photo, folder = self.current_photo, self.current_folder
-        if not photo or not folder:
+    def _rollback_optimistic(self, action: _QueuedAction) -> None:
+        """Revert the optimistic UI state mutation of ``action``."""
+        if action.generation != self._folder_generation:
             return
-        selection = self.selection_folder_name
-
-        def moved(record: CullingRecord) -> None:
-            self.undo_stack.append((record, photo, self._remove(photo)))
-            self.selected_count += 1
-            self._notify(f"Moved {photo.filename} to {selection}/")
-
-        def keep_partial_for_undo(error: BaseException) -> None:
-            # Copy verified, original not removable: the copy is the user's data now. Keep the
-            # record so it can be undone, and keep the photo (it is still where it was).
-            partial_record = getattr(error, "partial_record", None)
-            if partial_record is not None:
-                idx = self._index_of(photo)
-                self.undo_stack.append(
-                    (partial_record, photo, idx if idx is not None else self.current_index)
-                )
-
-        self._run(
-            f"Moving {photo.filename} to {selection}/…",
-            lambda: self.file_manager.move_candidate(photo, folder, selection_folder=selection),
-            moved,
-            f"Could not move {photo.filename}",
-            on_error=keep_partial_for_undo,
-            failure_message=lambda error: (
-                f"Copied {photo.filename} to {selection}/ — original could not be removed"
-                if getattr(error, "partial_record", None) is not None
-                else None
-            ),
-        )
-
-    def cull_copy(self) -> None:
-        """Copy active candidate and all companions to Selection/ with auto-advance."""
-        photo, folder = self.current_photo, self.current_folder
-        if not photo or not folder:
-            return
-        selection = self.selection_folder_name
-
-        def copied(record: CullingRecord) -> None:
+        photo = action.photo
+        if action.kind == "move":
+            self.selected_count = max(0, self.selected_count - 1)
+            if self._index_of(photo) is None:
+                insert_pos = min(action.orig_idx, len(self.candidates))
+                self.candidates.insert(insert_pos, photo)
+                self.current_index = insert_pos
+        elif action.kind == "copy":
+            self.selected_count = max(0, self.selected_count - 1)
+            self.copied_count = max(0, self.copied_count - 1)
             idx = self._index_of(photo)
-            self.undo_stack.append((record, photo, idx if idx is not None else self.current_index))
-            self.copied_count += 1
-            self.selected_count += 1
-            if self.current_photo is photo and self.current_index < len(self.candidates) - 1:
-                self.current_index += 1
-            self._notify(f"Copied {photo.filename} to {selection}/")
+            if idx is not None:
+                self.current_index = idx
+        elif action.kind == "trash":
+            self.trashed_count = max(0, self.trashed_count - 1)
+            if self._index_of(photo) is None:
+                insert_pos = min(action.orig_idx, len(self.candidates))
+                self.candidates.insert(insert_pos, photo)
+                self.current_index = insert_pos
 
-        self._run(
-            f"Copying {photo.filename} to {selection}/…",
-            lambda: self.file_manager.copy_candidate(photo, folder, selection_folder=selection),
-            copied,
-            f"Could not copy {photo.filename}",
+    def _remove_from_undo_stack(self, action: _QueuedAction) -> None:
+        if action.record is None:
+            return
+        rec_id = action.record.id
+        self._undo_actions.pop(rec_id, None)
+        for i in range(len(self.undo_stack) - 1, -1, -1):
+            if self.undo_stack[i][0].id == rec_id:
+                self.undo_stack.pop(i)
+                break
+
+    def _replace_undo_record(self, action: _QueuedAction, real_record: CullingRecord) -> None:
+        old_id = action.record.id if action.record is not None else None
+        action.record = real_record
+        if old_id is not None:
+            self._undo_actions.pop(old_id, None)
+        self._undo_actions[real_record.id] = action
+        for i in range(len(self.undo_stack) - 1, -1, -1):
+            rec, p, idx = self.undo_stack[i]
+            if (old_id is not None and rec.id == old_id) or p is action.photo:
+                self.undo_stack[i] = (real_record, p, idx)
+                break
+
+    def _enqueue_action(self, action: _QueuedAction) -> None:
+        if action.kind in ("move", "copy", "trash"):
+            placeholder = CullingRecord(
+                photo_id=action.photo.id,
+                action_type=action.action_type,
+                original_primary_path=action.photo.primary_path,
+                affected_paths=[],
+            )
+            action.record = placeholder
+            self._undo_actions[placeholder.id] = action
+            self.undo_stack.append((placeholder, action.photo, action.orig_idx))
+
+        self._queue.append(action)
+        completed_sync = self._pump_queue()
+        if not completed_sync:
+            self._notify_state_changed()
+
+    def _pump_queue(self) -> bool:
+        """Start the next pending action if no action is currently running.
+
+        Returns True if an action ran synchronously to completion during this call.
+        """
+        if self._running_action is not None or not self._queue:
+            if self._running_action is None and not self._queue:
+                self.busy_message = None
+            return False
+
+        action = self._queue.pop(0)
+        if action.status == "cancelled":
+            return self._pump_queue()
+
+        self._running_action = action
+        action.status = "running"
+        self.busy_message = action.busy_message
+        finished_sync: List[bool] = []
+
+        def job() -> Any:
+            if action.kind == "move":
+                return self.file_manager.move_candidate(
+                    action.photo,
+                    action.folder,
+                    selection_folder=action.selection_folder,
+                )
+            if action.kind == "copy":
+                return self.file_manager.copy_candidate(
+                    action.photo,
+                    action.folder,
+                    selection_folder=action.selection_folder,
+                )
+            if action.kind == "trash":
+                return self.file_manager.trash_candidate(action.photo)
+            if action.kind == "undo":
+                target = action.target_action
+                rec = (
+                    target.record
+                    if (target is not None and target.record is not None)
+                    else action.record
+                )
+                return self.file_manager.undo_culling(rec, action.photo)
+            return None
+
+        def done(result: Any, error: Optional[BaseException]) -> None:
+            finished_sync.append(True)
+            self._running_action = None
+            self._handle_action_done(action, result, error)
+            self._pump_queue()
+            self._notify_state_changed()
+
+        self.dispatcher(job, done)
+        return bool(finished_sync)
+
+    def _handle_action_done(
+        self,
+        action: _QueuedAction,
+        result: Any,
+        error: Optional[BaseException],
+    ) -> None:
+        if action.kind in ("move", "copy", "trash"):
+            if error is not None:
+                action.status = "failed"
+                # Cancel and roll back any later queued actions on the same photo (U-08).
+                dependent = [
+                    q for q in self._queue
+                    if q.photo is action.photo and q.status == "pending"
+                ]
+                for dep in reversed(dependent):
+                    dep.status = "cancelled"
+                    self._queue.remove(dep)
+                    if dep.kind in ("move", "copy", "trash"):
+                        self._remove_from_undo_stack(dep)
+                        self._rollback_optimistic(dep)
+
+                self._remove_from_undo_stack(action)
+                self._rollback_optimistic(action)
+
+                partial_record = getattr(error, "partial_record", None)
+                if partial_record is not None and action.generation == self._folder_generation:
+                    self.undo_stack.append((partial_record, action.photo, action.orig_idx))
+
+                if (
+                    action.kind == "move"
+                    and partial_record is not None
+                    and partial_record.unremoved_sources
+                ):
+                    # Verified copy in Selection/, original not removable (FILE_OPERATIONS.md §4).
+                    self._notify(
+                        f"Copied {action.photo.filename} to {action.selection_folder}/ "
+                        f"— original could not be removed"
+                    )
+                    return
+
+                if action.kind == "move":
+                    prefix = f"Could not move {action.photo.filename}"
+                elif action.kind == "copy":
+                    prefix = f"Could not copy {action.photo.filename}"
+                else:
+                    prefix = f"Could not move {action.photo.filename} to Trash"
+                self._notify(f"{prefix}: {error}")
+                return
+
+            action.status = "done"
+            if isinstance(result, CullingRecord):
+                if action.generation == self._folder_generation:
+                    self._replace_undo_record(action, result)
+                else:
+                    action.record = result
+                    self.completed_previous_folder_records.append(result)
+
+            if self.decision_log_path is not None:
+                record_decision_log(action.kind, action.photo, self.decision_log_path)
+
+            if action.generation == self._folder_generation:
+                if action.kind == "move":
+                    self._notify(f"Moved {action.photo.filename} to {action.selection_folder}/")
+                elif action.kind == "copy":
+                    self._notify(f"Copied {action.photo.filename} to {action.selection_folder}/")
+                elif action.kind == "trash":
+                    self._notify(f"Moved {action.photo.filename} to Trash")
+
+        elif action.kind == "undo":
+            target = action.target_action
+            rec = (
+                target.record
+                if (target is not None and target.record is not None)
+                else action.record
+            )
+            if error is not None or not result:
+                action.status = "failed"
+                if rec is not None and action.generation == self._folder_generation:
+                    self.undo_stack.append((rec, action.photo, action.orig_idx))
+                    if target is not None:
+                        self._undo_actions[rec.id] = target
+                if error is not None and rec is not None:
+                    self._notify(
+                        f"Could not undo {rec.action_type.value} for {action.photo.filename}: {error}"
+                    )
+                return
+
+            action.status = "done"
+            if rec is not None and action.generation == self._folder_generation:
+                if rec.action_type in (CullingActionType.MOVE, CullingActionType.TRASH):
+                    if self._index_of(action.photo) is None:
+                        insert_pos = min(action.orig_idx, len(self.candidates))
+                        self.candidates.insert(insert_pos, action.photo)
+                        self.current_index = insert_pos
+                        if rec.action_type == CullingActionType.MOVE:
+                            self.selected_count = max(0, self.selected_count - 1)
+                        else:
+                            self.trashed_count = max(0, self.trashed_count - 1)
+                elif rec.action_type == CullingActionType.COPY:
+                    self.selected_count = max(0, self.selected_count - 1)
+                    self.copied_count = max(0, self.copied_count - 1)
+                self._notify(f"Undid {rec.action_type.value} for {action.photo.filename}")
+
+    def cull_move(self) -> bool:
+        """Queue moving active candidate and companions to Selection/ with optimistic advance."""
+        photo, folder = self.current_photo, self.current_folder
+        if not photo or not folder:
+            return False
+        selection = self.selection_folder_name
+        dest_root = self.external_destination_root or folder
+        orig_idx = self._remove(photo)
+        self.selected_count += 1
+        self._check_stop_sharpness_threshold()
+
+        action = _QueuedAction(
+            kind="move",
+            action_type=CullingActionType.MOVE,
+            photo=photo,
+            orig_idx=orig_idx,
+            folder=dest_root,
+            selection_folder=selection,
+            generation=self._folder_generation,
+            busy_message=f"Moving {photo.filename} to {selection}/…",
         )
+        self._enqueue_action(action)
+        return True
 
-    def cull_trash(self) -> None:
-        """Send active candidate and all companions to Trash with auto-advance."""
+    def cull_copy(self) -> bool:
+        """Queue copying active candidate and companions to Selection/ with optimistic advance."""
+        photo, folder = self.current_photo, self.current_folder
+        if not photo or not folder:
+            return False
+        selection = self.selection_folder_name
+        dest_root = self.external_destination_root or folder
+        idx = self._index_of(photo)
+        orig_idx = idx if idx is not None else self.current_index
+        self.copied_count += 1
+        self.selected_count += 1
+        if self.auto_advance and self.current_photo is photo and self.current_index < len(self.candidates) - 1:
+            self.current_index += 1
+            self._check_stop_sharpness_threshold()
+
+        action = _QueuedAction(
+            kind="copy",
+            action_type=CullingActionType.COPY,
+            photo=photo,
+            orig_idx=orig_idx,
+            folder=dest_root,
+            selection_folder=selection,
+            generation=self._folder_generation,
+            busy_message=f"Copying {photo.filename} to {selection}/…",
+        )
+        self._enqueue_action(action)
+        return True
+
+    def cull_trash(self) -> bool:
+        """Queue sending active candidate and companions to Trash with optimistic advance."""
         photo = self.current_photo
         if not photo:
-            return
+            return False
+        folder = self.current_folder or photo.primary_path.parent
+        orig_idx = self._remove(photo)
+        self.trashed_count += 1
+        self._check_stop_sharpness_threshold()
 
-        def trashed(record: CullingRecord) -> None:
-            self.undo_stack.append((record, photo, self._remove(photo)))
-            self.trashed_count += 1
-            self._notify(f"Moved {photo.filename} to Trash")
-
-        def preserve_partial_on_error(error: BaseException) -> None:
-            partial_record = getattr(error, "partial_record", None)
-            if partial_record is not None:
-                idx = self._index_of(photo)
-                self.undo_stack.append(
-                    (partial_record, photo, idx if idx is not None else self.current_index)
-                )
-
-        self._run(
-            f"Moving {photo.filename} to Trash…",
-            lambda: self.file_manager.trash_candidate(photo),
-            trashed,
-            f"Could not move {photo.filename} to Trash",
-            on_error=preserve_partial_on_error,
+        action = _QueuedAction(
+            kind="trash",
+            action_type=CullingActionType.TRASH,
+            photo=photo,
+            orig_idx=orig_idx,
+            folder=folder,
+            selection_folder=self.selection_folder_name,
+            generation=self._folder_generation,
+            busy_message=f"Moving {photo.filename} to Trash…",
         )
+        self._enqueue_action(action)
+        return True
 
     def undo(self) -> bool:
-        """Atomically reverse the last culling operation (R-LINUX-CULL-06/07).
+        """Reverse the newest queued or completed culling operation (R-LINUX-CULL-06/07, U-08).
 
-        Returns False when there is nothing to undo, an operation is still running, or the undo
-        failed synchronously; True once it succeeded or was started in the background.
+        If the newest operation is still pending in the queue (not yet started on disk), cancels it
+        in-memory and reverts its optimistic UI change immediately. Otherwise enqueues a disk undo
+        operation in FIFO order.
         """
-        if not self.undo_stack or self.is_busy:
+        if not self.undo_stack:
             return False
 
         record, photo, orig_idx = self.undo_stack.pop()
-        outcome = []
+        source_action = self._undo_actions.pop(record.id, None)
 
-        def undone(success: bool) -> None:
-            outcome.append(bool(success))
-            if not success:
-                return
-            if record.action_type in (CullingActionType.MOVE, CullingActionType.TRASH):
-                if self._index_of(photo) is None:
-                    insert_pos = min(orig_idx, len(self.candidates))
-                    self.candidates.insert(insert_pos, photo)
-                    self.current_index = insert_pos
-                    if record.action_type == CullingActionType.MOVE:
-                        self.selected_count = max(0, self.selected_count - 1)
-                    else:
-                        self.trashed_count = max(0, self.trashed_count - 1)
-            elif record.action_type == CullingActionType.COPY:
-                self.selected_count = max(0, self.selected_count - 1)
-                self.copied_count = max(0, self.copied_count - 1)
+        # Case 1: Still waiting in the queue (disk operation has not started yet)
+        if source_action is not None and source_action.status == "pending" and source_action in self._queue:
+            source_action.status = "cancelled"
+            self._queue.remove(source_action)
+            self._rollback_optimistic(source_action)
             self._notify(f"Undid {record.action_type.value} for {photo.filename}")
+            self._pump_queue()
+            self._notify_state_changed()
+            return True
 
-        def keep_for_retry() -> None:
-            outcome.append(False)
-            self.undo_stack.append((record, photo, orig_idx))
-
-        self._run(
-            f"Undoing {record.action_type.value} of {photo.filename}…",
-            lambda: self.file_manager.undo_culling(record, photo),
-            undone,
-            f"Could not undo {record.action_type.value} for {photo.filename}",
-            on_failure=keep_for_retry,
+        # Case 2: Currently running on disk or already completed on disk -> enqueue disk undo in FIFO order
+        undo_action = _QueuedAction(
+            kind="undo",
+            action_type=record.action_type,
+            photo=photo,
+            orig_idx=orig_idx,
+            folder=self.current_folder or photo.primary_path.parent,
+            selection_folder=self.selection_folder_name,
+            generation=self._folder_generation,
+            busy_message=f"Undoing {record.action_type.value} of {photo.filename}…",
+            record=record,
+            target_action=source_action,
         )
-        return outcome[0] if outcome else self.is_busy
+        self._queue.append(undo_action)
+        completed_sync = self._pump_queue()
+        if not completed_sync:
+            self._notify_state_changed()
+            return True
+        return undo_action.status == "done"
+
+    def _make_scanner(self) -> DirectoryScanner:
+        if self._scanner_factory is not None:
+            return self._scanner_factory(self.selection_folder_name)
+        if self._custom_scanner is None:
+            self.scanner = DirectoryScanner(custom_selection_folder=self.selection_folder_name)
+        return self.scanner
 
     def load_directory(self, folder: Path) -> None:
-        """Load and sort photographs from folder."""
+        """Stream photographs from ``folder`` in depth-first per-folder natural order (U-06b, UD-9).
+
+        Cancels any in-flight scan from a previous folder via ``_folder_generation``, while allowing
+        queued file operations from the previous folder to finish draining on the worker.
+        """
         self.current_folder = folder.resolve()
         self._folder_generation += 1
-        scanner = DirectoryScanner(custom_selection_folder=self.selection_folder_name)
-        # GVFS cloud mounts list folders under opaque IDs; show the folder's real name.
+        generation = self._folder_generation
+        self.is_remote_folder = is_remote_filesystem(self.current_folder)
+
+        scanner = self._make_scanner()
         parent_names = scanner.name_resolver.names_in(self.current_folder.parent)
-        self.current_folder_name = parent_names.get(self.current_folder.name, self.current_folder.name)
-        self.candidates = scanner.scan_directory(self.current_folder)
+        self.current_folder_name = parent_names.get(
+            self.current_folder.name,
+            self.current_folder.name,
+        )
+
+        self.candidates = []
         self.current_index = 0
         self.undo_stack.clear()
+        self._undo_actions.clear()
         self.selected_count = 0
         self.copied_count = 0
         self.trashed_count = 0
+        self.is_scanning = True
+
+        if self.scan_idle_add is not None:
+            folder_to_scan = self.current_folder
+
+            def _scan_worker() -> None:
+                for batch in scanner.scan_stream(
+                    folder_to_scan,
+                    batch_size=30,
+                    first_batch_size=1,
+                ):
+                    if generation != self._folder_generation:
+                        return
+                    self.scan_idle_add(self._on_scan_batch, generation, list(batch))
+                if generation == self._folder_generation:
+                    self.scan_idle_add(self._on_scan_complete, generation)
+
+            thread = threading.Thread(
+                target=_scan_worker,
+                name="directory-scanner",
+                daemon=True,
+            )
+            self._scan_thread = thread
+            thread.start()
+            return
+
+        # Synchronous streaming path (default when scan_idle_add is None)
+        notified_any = False
+        for batch in scanner.scan_stream(
+            self.current_folder,
+            batch_size=30,
+            first_batch_size=1,
+        ):
+            if generation != self._folder_generation:
+                return
+            self.candidates.extend(batch)
+            if self.sort_order == "lowest_sharpness_first":
+                self._apply_sort_order()
+            notified_any = True
+            self._notify_state_changed()
+
+        if generation != self._folder_generation:
+            return
+        self.is_scanning = False
+        self._notify(f"Loaded {len(self.candidates)} photographs from {self.current_folder_name}")
+        if not notified_any:
+            self._notify_state_changed()
+
+    def _on_scan_batch(self, generation: int, batch: List[CandidatePhoto]) -> bool:
+        if generation != self._folder_generation:
+            return False
+        self.candidates.extend(batch)
+        if self.sort_order == "lowest_sharpness_first":
+            self._apply_sort_order()
+        self._notify_state_changed()
+        return False
+
+    def _on_scan_complete(self, generation: int) -> bool:
+        if generation != self._folder_generation:
+            return False
+        self.is_scanning = False
         self._notify(f"Loaded {len(self.candidates)} photographs from {self.current_folder_name}")
         self._notify_state_changed()
+        return False

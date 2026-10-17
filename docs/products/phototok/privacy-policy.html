@@ -61,13 +61,14 @@
     <li>
       <strong>Photos and EXIF Metadata (Local Only):</strong>
       You select folders explicitly using the Android System Storage Access Framework (SAF) folder picker (<code>ACTION_OPEN_DOCUMENT_TREE</code>).
-      PhotoTok reads image headers, EXIF tags, and thumbnails locally in device memory to display photos and perform file operations (Copy, Move to Selection, or Delete/Trash) inside the folder you selected.
+      PhotoTok reads image headers, EXIF tags, and thumbnails locally in device memory to display photos and perform file operations (Copy, Move to Selection, or Delete/Trash) inside the folder you selected, as well as optional system-confirmed <code>MediaStore</code> favourite and recycle-bin requests on Android 11+.
+      When you explicitly invoke <em>Share</em> or <em>Open with…</em>, Android's system chooser (<code>Intent.createChooser</code>) grants temporary read access solely for the selected photo(s) to the target app you choose.
       No images, thumbnails, file names, GPS coordinates, or EXIF tags are ever transmitted over the network.
     </li>
     <li>
-      <strong>App Preferences (Local DataStore):</strong>
-      User settings (such as swipe filing action, custom folder names, sort order, and persisted SAF folder URI grants) are stored locally in the app's private Android Jetpack DataStore sandbox.
-      Cloud auto-backup of app data is disabled for folder grants and photo databases so local paths are not uploaded to cloud backups.
+      <strong>App Preferences, Seen-Photo Fingerprints &amp; Local Statistics (App-Private Storage):</strong>
+      User settings (such as swipe filing action, custom folder names, sort order, local favourites, pending-delete recovery journals, session/lifetime culling counters, and persisted SAF folder URI grants) are stored locally in the app's private Android Jetpack DataStore sandbox, alongside an on-device log of 64-bit seen-photo fingerprints (<code>seen_photos.log</code>).
+      Cloud auto-backup of app data is disabled (<code>android:allowBackup="false"</code>) so local paths, fingerprints, and statistics are never uploaded to cloud backups.
     </li>
     <li>
       <strong>No Network / No Third-Party SDKs:</strong>
@@ -114,11 +115,11 @@
     <li>
       <strong>Fotos und EXIF-Metadaten (ausschließlich lokal):</strong>
       Der Zugriff auf Fotoordner erfolgt ausschließlich über die vom Nutzer explizit im Android Storage Access Framework (SAF, <code>ACTION_OPEN_DOCUMENT_TREE</code>) ausgewählten Verzeichnisse.
-      Die Auswertung von Bilddaten, EXIF-Informationen sowie Dateioperationen (Kopieren, Verschieben in den Auswahl-Ordner oder Löschen) finden vollständig lokal auf Ihrem Gerät statt. Es erfolgt keinerlei Übertragung an den Entwickler oder Dritte.
+      Die Auswertung von Bilddaten, EXIF-Informationen, vom System bestätigte <code>MediaStore</code>-Favoriten-/Papierkorb-Aktionen (ab Android 11) sowie Dateioperationen (Kopieren, Verschieben in den Auswahl-Ordner oder Löschen) finden vollständig lokal auf Ihrem Gerät statt. Nutzen Sie aktiv die Funktion <em>Teilen</em> oder <em>Öffnen mit…</em>, übergibt der Android-Systemdialog (<code>Intent.createChooser</code>) die ausgewählte Datei ausschließlich an die von Ihnen gewählte Ziel-App. Es erfolgt keinerlei Übertragung an den Entwickler oder unbeteiligte Dritte.
     </li>
     <li>
-      <strong>App-Einstellungen (lokaler DataStore):</strong>
-      Einstellungen (z.&nbsp;B. Wisch-Aktion, Zielordnername, Sortierung und gespeicherte Ordner-URIs) werden ausschließlich lokal im privaten App-Speicher (Jetpack DataStore) abgelegt. Ein automatischer Cloud-Backup-Export dieser Datenbanken ist deaktiviert.
+      <strong>App-Einstellungen, Gesehen-Status &amp; lokale Statistiken (privater App-Speicher):</strong>
+      Einstellungen (z.&nbsp;B. Wisch-Aktion, Zielordnername, Sortierung, lokale Favoriten, Lösch-Journale, lokale Sichtungsstatistiken und gespeicherte Ordner-URIs) sowie lokale 64-Bit-Prüfsummen bereits gesichteter Fotos (<code>seen_photos.log</code>) werden ausschließlich lokal im privaten App-Speicher abgelegt. Ein automatischer Cloud-Backup-Export ist deaktiviert (<code>android:allowBackup="false"</code>).
     </li>
   </ul>
 

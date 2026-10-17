@@ -185,4 +185,44 @@ struct DirectoryScannerTests {
         #expect(items.count == 1)
         #expect(items.first?.filename == "DSC0005.ARW")
     }
+
+    @Test("U-32: Custom Selection folder with .photoselector-selection marker is excluded even after destination folder setting is renamed")
+    func testCustomSelectionFolderWithMarkerExcludedAfterSettingRename() async throws {
+        let root = try createTempDir(prefix: "SelectionMarkerScan")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let candidateURL = root.appendingPathComponent("CANDIDATE.JPG")
+        let toMoveURL = root.appendingPathComponent("KEEPER.JPG")
+        try Data("CAND".utf8).write(to: candidateURL)
+        try Data("KEEP".utf8).write(to: toMoveURL)
+
+        let suiteName = "com.photoselector.tests.marker.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        // 1. User configures custom destination folder "ClientPicks" and moves KEEPER.JPG into it
+        defaults.cullingDestinationFolderName = "ClientPicks"
+        let manager = FileCullingManager()
+        _ = try manager.moveToSelection(
+            photoURL: toMoveURL,
+            rootURL: root,
+            destinationFolderName: defaults.cullingDestinationFolderName
+        )
+
+        let markerURL = root
+            .appendingPathComponent("ClientPicks", isDirectory: true)
+            .appendingPathComponent(DirectoryScanner.selectionMarkerFilename)
+        #expect(FileManager.default.fileExists(atPath: markerURL.path), "FileCullingManager must write .photoselector-selection marker")
+
+        // 2. User later changes custom destination folder to "FinalWinners"
+        defaults.cullingDestinationFolderName = "FinalWinners"
+
+        // 3. Recursive scan must STILL skip "ClientPicks/" because of the .photoselector-selection marker!
+        let scanner = DirectoryScanner(userDefaults: defaults)
+        let items = try await scanner.scanDirectory(at: root, recursive: true)
+
+        #expect(items.count == 1)
+        #expect(items.first?.filename == "CANDIDATE.JPG")
+        #expect(!items.contains(where: { $0.filename == "KEEPER.JPG" }))
+    }
 }

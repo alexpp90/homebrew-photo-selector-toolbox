@@ -226,4 +226,41 @@ struct LibraryStatisticsEngineTests {
         #expect(names.contains("TIFF"))
         #expect(names.contains("JPEG"))
     }
+
+    @Test("U-35: EXIF × sharpness aggregates mean focusScore per focal length, aperture, and shutter speed bucket")
+    func testExifBySharpnessBucketAggregation() {
+        let u = URL(fileURLWithPath: "/tmp/exif_sharp.jpg")
+        let items: [PhotoItem] = [
+            PhotoItem(
+                url: u,
+                scores: QualityScores(sharpness: 80.0, noise: 1, highlightClipping: 0, shadowClipping: 0),
+                exif: ExifData(shutterSpeed: 1.0 / 500.0, aperture: 2.8, iso: 100, focalLength: 50.0)
+            ),
+            PhotoItem(
+                url: u,
+                scores: QualityScores(sharpness: 60.0, noise: 1, highlightClipping: 0, shadowClipping: 0),
+                exif: ExifData(shutterSpeed: 1.0 / 500.0, aperture: 2.8, iso: 200, focalLength: 50.0)
+            ),
+            PhotoItem(
+                url: u,
+                scores: QualityScores(sharpness: 30.0, noise: 2, highlightClipping: 0, shadowClipping: 0),
+                exif: ExifData(shutterSpeed: 1.0 / 30.0, aperture: 1.4, iso: 1600, focalLength: 85.0)
+            ),
+            // Photo without EXIF should be ignored in EXIF × sharpness buckets
+            PhotoItem(
+                url: u,
+                scores: QualityScores(sharpness: 95.0, noise: 1, highlightClipping: 0, shadowClipping: 0),
+                exif: nil
+            )
+        ]
+
+        let stats = LibraryStatisticsEngine.calculate(from: items)
+
+        #expect(stats.focalLengthSharpness["50mm"] == 70.0)
+        #expect(stats.focalLengthSharpness["85mm"] == 30.0)
+        #expect(stats.apertureSharpness["f/2.8"] == 70.0)
+        #expect(stats.apertureSharpness["f/1.4"] == 30.0)
+        #expect(stats.shutterSpeedSharpness["1/500s"] == 70.0)
+        #expect(stats.shutterSpeedSharpness["1/30s"] == 30.0)
+    }
 }

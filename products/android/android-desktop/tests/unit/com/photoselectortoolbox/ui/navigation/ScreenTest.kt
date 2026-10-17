@@ -36,8 +36,8 @@ class ScreenTest {
     @Test
     fun `Inspect route and label`() {
         assertEquals("inspect", Screen.Inspect.route)
-        assertEquals("Inspect & Learn", Screen.Inspect.label)
-        assertEquals("Inspect", Screen.Inspect.shortLabel)
+        assertEquals("Learn", Screen.Inspect.label)
+        assertEquals("Learn", Screen.Inspect.shortLabel)
     }
 
     @Test

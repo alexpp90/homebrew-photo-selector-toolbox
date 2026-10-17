@@ -95,4 +95,37 @@ class RecentPathCodecTest {
 
         assertTrue(RecentPathCodec.evictedUris(before, after).isEmpty())
     }
+
+    @Test
+    fun `encode and decode preserves SourceKind and volumeUuid`() {
+        val paths = listOf(
+            RecentPath(
+                uri = "content://com.android.externalstorage.documents/tree/1A2B-3C4D%3ADCIM",
+                name = "SD Card",
+                kind = com.photoselector.core.storage.SourceKind.REMOVABLE,
+                volumeUuid = "1A2B-3C4D",
+            ),
+            RecentPath(
+                uri = "content://com.google.android.apps.docs.storage/tree/drive",
+                name = "Drive",
+                kind = com.photoselector.core.storage.SourceKind.CLOUD_OTHER,
+                volumeUuid = null,
+            ),
+        )
+
+        val decoded = RecentPathCodec.decode(RecentPathCodec.encode(paths))
+        assertEquals(paths, decoded)
+    }
+
+    @Test
+    fun `legacy 2-field entry decodes with default PHONE_LIBRARY and null volumeUuid`() {
+        val legacyEncoded = "content://tree/dcim\u001FCamera"
+        val decoded = RecentPathCodec.decode(legacyEncoded)
+
+        assertEquals(1, decoded.size)
+        assertEquals("content://tree/dcim", decoded[0].uri)
+        assertEquals("Camera", decoded[0].name)
+        assertEquals(com.photoselector.core.storage.SourceKind.PHONE_LIBRARY, decoded[0].kind)
+        assertEquals(null, decoded[0].volumeUuid)
+    }
 }

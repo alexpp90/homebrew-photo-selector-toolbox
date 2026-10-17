@@ -173,8 +173,8 @@ public actor ThumbnailLoader {
     ) {
         guard !items.isEmpty, items.indices.contains(currentIndex) else { return }
 
-        let clampedBefore = max(1, min(windowBefore, 5))
-        let clampedAfter = max(2, min(windowAfter, 10))
+        let clampedBefore = max(0, min(windowBefore, 5))
+        let clampedAfter = max(1, min(windowAfter, 10))
 
         let startIndex = max(0, currentIndex - clampedBefore)
         let endIndex = min(items.count - 1, currentIndex + clampedAfter)
@@ -217,6 +217,11 @@ public actor ThumbnailLoader {
             inFlightTasks[key] = task
             prefetchKeys.insert(key)
         }
+    }
+
+    /// URLs currently tracked in the active prefetch window.
+    public func activePrefetchURLs() -> Set<URL> {
+        Set(prefetchKeys.map(\.url))
     }
 
     /// Cancels all in-flight decode tasks.

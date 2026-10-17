@@ -73,8 +73,9 @@ BLUE='\033[0;34m'
 DIM='\033[2m'
 NC='\033[0m'
 
-# Keep in sync with `--cov-fail-under` in .github/workflows/desktop.yml.
+# Keep in sync with `--cov-fail-under` in .github/workflows/desktop.yml and linux.yml.
 COV_FAIL_UNDER=60
+LINUX_COV_FAIL_UNDER=70
 
 have() { command -v "$1" &>/dev/null; }
 
@@ -508,12 +509,21 @@ if $run_linux; then
             fi
             if ! have pytest && ! have poetry; then
                 skip "pytest (linux-desktop)" "linux.yml:test" "neither poetry nor pytest found"
+            elif $quick; then
+                gate "pytest (products/linux-desktop, quick)" "$linux_ci_ref" \
+                    pyx pytest tests/ --tb=short -q
             elif py pytest --version &>/dev/null; then
-                gate "pytest (products/linux-desktop)" "$linux_ci_ref" \
-                    pyx pytest tests/ --tb=short -q
+                gate "pytest --cov-fail-under=$LINUX_COV_FAIL_UNDER (products/linux-desktop)" "$linux_ci_ref" \
+                    pyx pytest tests/ --tb=short -q \
+                        --cov=photo_selector_linux \
+                        --cov-report=term-missing:skip-covered \
+                        --cov-fail-under="$LINUX_COV_FAIL_UNDER"
             elif have pytest; then
-                gate "pytest (products/linux-desktop)" "$linux_ci_ref" \
-                    pyx pytest tests/ --tb=short -q
+                gate "pytest --cov-fail-under=$LINUX_COV_FAIL_UNDER (products/linux-desktop)" "$linux_ci_ref" \
+                    pyx pytest tests/ --tb=short -q \
+                        --cov=photo_selector_linux \
+                        --cov-report=term-missing:skip-covered \
+                        --cov-fail-under="$LINUX_COV_FAIL_UNDER"
             else
                 skip "pytest (linux-desktop)" "linux.yml:test" "pytest runner not found"
             fi
