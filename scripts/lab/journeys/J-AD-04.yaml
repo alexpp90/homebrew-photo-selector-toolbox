@@ -2,7 +2,7 @@ id: J-AD-04
 product: android-desktop
 title: Touch navigation, delete button, and coach overlay dismissal
 fixture: smoke
-configs: [tab-landscape, tab-portrait, tab-native-landscape, tab-native-portrait, dex-on-device, chromebook-window]
+configs: [tab-landscape, tab-portrait, tab-native-landscape, tab-native-portrait, dex-on-device, chromebook-window, chromebook-large, chromebook-medium, chromebook-small]
 fresh_install: true
 steps:
   - {maestro: products/android/android-desktop/tests/e2e/J-AD-01/01_open_picker.yaml}

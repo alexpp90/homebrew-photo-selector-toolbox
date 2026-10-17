@@ -280,3 +280,34 @@ def reset_config(adb: AdbClient, saved: SavedDeviceState | None = None) -> None:
             "accelerometer_rotation",
             str(saved.accelerometer_rotation),
         )
+
+
+def resize_app_window(adb: AdbClient, app_id: str, size: str) -> tuple[int, int]:
+    """Resize the app's freeform window to `size` (`<W>x<H>` in dp, or `max`); return dp size.
+
+    Only freeform windows (Samsung DeX, ChromeOS ARC) can be resized; a fullscreen app raises
+    `ConfigNotRunError`. The window is placed at the top-left corner and clamped to the area a
+    window may cover; the new bounds are polled because the resize is asynchronous.
+    """
+    task_id, mode, _, max_px = adb.app_task(app_id)
+    if mode != "freeform":
+        raise ConfigNotRunError(f"window resize needs a freeform window (DeX or ChromeOS); app is {mode}")
+    dpi = adb.density()
+    max_w, max_h = max_px or (10_000, 10_000)
+    if size == "max":
+        w_px, h_px = max_w, max_h
+    else:
+        w_dp, h_dp = (int(x) for x in size.lower().split("x"))
+        w_px, h_px = min(max_w, round(w_dp * dpi / 160)), min(max_h, round(h_dp * dpi / 160))
+    adb.resize_task(task_id, 0, 0, w_px, h_px)
+    for _ in range(ROTATION_POLLS):
+        _, _, bounds, _ = adb.app_task(app_id)
+        if bounds and (bounds[2] - bounds[0], bounds[3] - bounds[1]) == (w_px, h_px):
+            break
+        if ROTATION_POLL_S > 0:
+            time.sleep(ROTATION_POLL_S)
+    else:
+        raise RuntimeError(f"window of {app_id} did not reach {w_px}x{h_px} px on {adb.serial}")
+    if ROTATION_POLL_S > 0:
+        time.sleep(2 * ROTATION_POLL_S)  # let Compose re-lay out at the new size
+    return round(w_px * 160 / dpi), round(h_px * 160 / dpi)

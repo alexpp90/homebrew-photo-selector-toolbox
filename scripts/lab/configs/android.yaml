@@ -18,3 +18,8 @@ dex-on-device:       {dex: true}
 # ChromeOS ARC (devices with `supports: [arc]`): the app's own ChromeOS window; ChromeOS owns
 # size, density and rotation.
 chromebook-window:   {native_display: true}
+# Freeform window sizes (dp) applied right after launch with `am task resize`, so the layout is
+# checked at the sizes people actually drag a ChromeOS window to, not only the launch size.
+chromebook-large:    {native_display: true, window: max}
+chromebook-medium:   {native_display: true, window: 1100x760}
+chromebook-small:    {native_display: true, window: 720x560}

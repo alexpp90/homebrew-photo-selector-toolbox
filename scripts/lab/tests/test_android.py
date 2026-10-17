@@ -47,6 +47,9 @@ class FakeAdbExec:
             buf = io.BytesIO()
             Image.new("RGB", (100, 60), (20, 40, 60)).save(buf, format="PNG")
             return subprocess.CompletedProcess(cmd, 0, stdout=buf.getvalue(), stderr=b"")
+        if "resolve-activity" in joined:
+            pkg = cmd[-1]
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"priority=0\n{pkg}/.MainActivity\n".encode(), stderr=b"")
         if "find . -type f" in joined:
             return subprocess.CompletedProcess(cmd, 0, stdout=b"1024 ./DSC_0001.JPG\n", stderr=b"")
         return subprocess.CompletedProcess(cmd, 0, stdout=b"0\n", stderr=b"")
@@ -114,6 +117,10 @@ class TestAndroidLayer(unittest.TestCase):
             self.assertIn(status, ("pass", "fail"))
             png_file = run_dir / "android-desktop" / "tab-landscape" / "SMOKE-android-desktop" / "01_launched.png"
             self.assertTrue(png_file.is_file())
+            # Launch via the resolved launcher activity, never `monkey` (aborts on ChromeOS ARC).
+            launches = [c for c in recorder.commands if "am" in c and "start" in c]
+            self.assertTrue(any("com.photoselectortoolbox.lab/.MainActivity" in c for c in launches))
+            self.assertFalse(any("monkey" in c for c in recorder.commands))
         finally:
             if run_dir.exists():
                 shutil.rmtree(run_dir)

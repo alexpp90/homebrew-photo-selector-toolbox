@@ -92,6 +92,28 @@ class AdbClient:
             return None
         return top
 
+    def app_task(self, app_id: str) -> tuple[int, str, tuple[int, int, int, int] | None, tuple[int, int] | None]:
+        """`(task id, windowing mode, bounds px, max size px)` of the app's top task.
+
+        Bounds exist only for freeform windows (Samsung DeX, ChromeOS ARC); the max size is the
+        area a window may cover (`mMaxBounds`).
+        """
+        out = self.run("shell", "dumpsys", "activity", "activities")
+        head = re.search(r"Task\{\w+ #(\d+) [^}]*A=\d+:" + re.escape(app_id) + r"[^}]*mode=(\w+)", out)
+        if not head:
+            raise RuntimeError(f"{app_id} has no task on {self.serial} (not running?)")
+        rest = out[head.end():]
+        nxt = re.search(r"\n\s*\* Task\{", rest)
+        block = rest[: nxt.start()] if nxt else rest
+        b = re.search(r"mBounds=Rect\((-?\d+), (-?\d+) - (-?\d+), (-?\d+)\)", block)
+        mx = re.search(r"mMaxBounds=Rect\(0, 0 - (\d+), (\d+)\)", block)
+        bounds = tuple(int(x) for x in b.groups()) if b else None
+        max_px = (int(mx.group(1)), int(mx.group(2))) if mx else None
+        return int(head.group(1)), head.group(2), bounds, max_px  # type: ignore[return-value]
+
+    def resize_task(self, task_id: int, left: int, top: int, right: int, bottom: int) -> str:
+        return self.run("shell", "am", "task", "resize", str(task_id), str(left), str(top), str(right), str(bottom))
+
     def current_user(self) -> int:
         out = self.run("shell", "am", "get-current-user").strip()
         return int(out.splitlines()[-1].strip())
@@ -115,15 +137,18 @@ class AdbClient:
         return self.run("shell", "am", "force-stop", app_id)
 
     def start(self, app_id: str) -> str:
-        return self.run(
-            "shell",
-            "monkey",
-            "-p",
-            app_id,
-            "-c",
-            "android.intent.category.LAUNCHER",
-            "1",
+        """Launch the app's launcher activity with `am start`.
+
+        Not `monkey`: on ChromeOS ARC it aborts ("SYS_KEYS has no physical keys").
+        """
+        out = self.run(
+            "shell", "cmd", "package", "resolve-activity", "--brief",
+            "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", app_id,
         )
+        component = next((ln.strip() for ln in reversed(out.splitlines()) if "/" in ln), "")
+        if not component:
+            raise RuntimeError(f"{app_id} has no launcher activity on {self.serial} (not installed?)")
+        return self.run("shell", "am", "start", "-W", "-n", component, timeout=60)
 
     def home(self) -> str:
         return self.run("shell", "input", "keyevent", "KEYCODE_HOME")

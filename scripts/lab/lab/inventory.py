@@ -34,7 +34,13 @@ ROLE_DEFAULT_PRODUCTS: dict[str, list[str]] = {
 }
 
 # Android configs that need a device feature (see `supports:` in devices.yaml).
-CONFIG_FEATURES: dict[str, str] = {"dex-on-device": "dex", "chromebook-window": "arc"}
+CONFIG_FEATURES: dict[str, str] = {
+    "dex-on-device": "dex",
+    "chromebook-window": "arc",
+    "chromebook-large": "arc",
+    "chromebook-medium": "arc",
+    "chromebook-small": "arc",
+}
 
 RunFn = Callable[[list[str], int], subprocess.CompletedProcess[str]]
 

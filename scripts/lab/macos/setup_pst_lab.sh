@@ -26,7 +26,18 @@ if ! xcrun --find swift >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$HOME/pst/trigger" "$HOME/pst/out" "$HOME/PSTLab" "$HOME/Library/LaunchAgents"
+free_gb=$(df -g "$HOME" | awk 'NR==2 {print $4}')
+if [[ "${free_gb:-0}" -lt 4 ]]; then
+  echo "error: only ${free_gb} GB free on this disk; the clone and a release build need about 3 GB." >&2
+  echo "       Free some space (or set PST_LAB_ALLOW_LOW_DISK=1 to try anyway)." >&2
+  [[ -n "${PST_LAB_ALLOW_LOW_DISK:-}" ]] || exit 1
+fi
+
+# The lab writes real JPEG fixtures with Pillow and reads its YAML with PyYAML; the
+# Command Line Tools' python3 has neither.
+/usr/bin/python3 -m pip install --user --quiet --disable-pip-version-check pillow pyyaml
+
+mkdir -p "$HOME/pst/trigger" "$HOME/pst/out" "$HOME/Library/LaunchAgents"
 if [[ -d "$REPO_DIR/.git" ]]; then
   git -C "$REPO_DIR" fetch --all --prune
 else

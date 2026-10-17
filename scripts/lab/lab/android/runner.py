@@ -18,7 +18,15 @@ from ..model import Finding
 from ..paths import repo_root
 from ..timing import evaluate_timing, find_previous_timing
 from .adb import AdbClient
-from .configs import ConfigNotRunError, apply_config, record_device_state, reset_config, set_verified_rotation
+from .configs import (
+    ConfigNotRunError,
+    apply_config,
+    load_android_configs,
+    record_device_state,
+    reset_config,
+    resize_app_window,
+    set_verified_rotation,
+)
 from .tree_android import parse_uiautomator_xml
 
 
@@ -156,6 +164,14 @@ def run_android_journey(
         if manifest.get("fresh_install"):
             adb.clear(app_id, user=user_id)
         adb.start(app_id)
+        window = load_android_configs().get(config_name, {}).get("window")
+        if window:
+            try:
+                resize_app_window(adb, app_id, str(window))
+            except ConfigNotRunError as exc:
+                res_obj = {"status": "not-run", "reason": str(exc), "findings": 0}
+                (out_dir / "result.json").write_text(json.dumps(res_obj, indent=2), encoding="utf-8")
+                return "not-run", []
 
         ensure_flow = r / "products" / "android" / product / "tests" / "e2e" / ENSURE_FOLDER_FLOW
         if not manifest.get("fresh_install") and ensure_flow.is_file():
@@ -262,6 +278,8 @@ def run_android_journey(
                 capture_checkpoint(str(step["checkpoint"]))
             elif "rotate" in step:
                 set_verified_rotation(adb, str(step["rotate"]))
+            elif "resize" in step:
+                resize_app_window(adb, app_id, str(step["resize"]))
             elif "background" in step:
                 bg_ms = int(step["background"])
                 adb.home()
