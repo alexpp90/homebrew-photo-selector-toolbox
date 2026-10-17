@@ -51,6 +51,9 @@ interface ScoreDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertUserRating(entity: UserRatingEntity)
 
+    @Query("DELETE FROM user_ratings WHERE uri = :uri")
+    suspend fun deleteUserRating(uri: String)
+
     @Query("SELECT * FROM user_ratings WHERE uri = :uri LIMIT 1")
     suspend fun getUserRating(uri: String): UserRatingEntity?
 
