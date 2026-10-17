@@ -55,5 +55,32 @@ class ExifDataTest {
         assertEquals(0, exif.rating)
         assertEquals(400, exif.iso)
         assertEquals("FE 50mm F1.8", exif.lens)
+        org.junit.Assert.assertNull(exif.gpsLatitude)
+        org.junit.Assert.assertNull(exif.gpsLongitude)
+        org.junit.Assert.assertNull(exif.gpsDateTimeUtc)
+        org.junit.Assert.assertNull(exif.dateTimeOriginal)
+        org.junit.Assert.assertNull(exif.offsetTimeOriginal)
+        org.junit.Assert.assertNull(exif.focalPlaneXResolution)
+        org.junit.Assert.assertNull(exif.focalPlaneResolutionUnit)
+    }
+
+    @Test
+    fun exifData_withGpsTimeAndFocalPlaneFields_preservesValues() {
+        val exif = ExifData(
+            gpsLatitude = 48.137154,
+            gpsLongitude = 11.576124,
+            gpsDateTimeUtc = "2026:06:21 18:30:00",
+            dateTimeOriginal = "2026:06:21 20:30:00",
+            offsetTimeOriginal = "+02:00",
+            focalPlaneXResolution = 3840.0,
+            focalPlaneResolutionUnit = 3
+        )
+        assertEquals(48.137154, exif.gpsLatitude!!, 1e-6)
+        assertEquals(11.576124, exif.gpsLongitude!!, 1e-6)
+        assertEquals("2026:06:21 18:30:00", exif.gpsDateTimeUtc)
+        assertEquals("2026:06:21 20:30:00", exif.dateTimeOriginal)
+        assertEquals("+02:00", exif.offsetTimeOriginal)
+        assertEquals(3840.0, exif.focalPlaneXResolution!!, 1e-4)
+        assertEquals(3, exif.focalPlaneResolutionUnit)
     }
 }

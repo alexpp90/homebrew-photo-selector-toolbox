@@ -16,6 +16,7 @@ data class ExternalVolume(
     val path: String,
     val isRemovable: Boolean,
     val isPrimary: Boolean,
+    val uuid: String? = null,
 )
 
 @Singleton
@@ -28,7 +29,6 @@ class ExternalStorageDetector @Inject constructor(
 
     /**
      * Returns a list of mounted external storage volumes (SD cards, USB drives, etc.).
-     * Excludes the primary internal storage.
      */
     fun detectExternalVolumes(): List<ExternalVolume> {
         val results = mutableListOf<ExternalVolume>()
@@ -44,18 +44,32 @@ class ExternalStorageDetector @Inject constructor(
                 ) continue
 
                 val description = volume.getDescription(context) ?: "External Storage"
-                val directory = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    volume.directory
+                val volumeUuid = try {
+                    volume.uuid
+                } catch (_: Throwable) {
+                    null
+                }
+                val directoryPath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    volume.directory?.absolutePath
                 } else {
                     null
+                } ?: when {
+                    volume.isPrimary -> try {
+                        Environment.getExternalStorageDirectory().absolutePath
+                    } catch (_: Throwable) {
+                        "/storage/emulated/0"
+                    }
+                    !volumeUuid.isNullOrBlank() -> "/storage/$volumeUuid"
+                    else -> null
                 } ?: continue
 
                 results.add(
                     ExternalVolume(
                         description = description,
-                        path = directory.absolutePath,
+                        path = directoryPath,
                         isRemovable = volume.isRemovable,
                         isPrimary = volume.isPrimary,
+                        uuid = volumeUuid ?: extractVolumeIdFromPath(directoryPath, volume.isPrimary),
                     )
                 )
             }
@@ -84,12 +98,21 @@ class ExternalStorageDetector @Inject constructor(
                         path = storageRoot,
                         isRemovable = !isInternal,
                         isPrimary = isInternal,
+                        uuid = if (isInternal) null else rootFile.name,
                     )
                 )
             }
         }
 
         return results
+    }
+
+    private fun extractVolumeIdFromPath(path: String, isPrimary: Boolean): String? {
+        if (isPrimary) return null
+        val prefix = "/storage/"
+        if (!path.startsWith(prefix)) return null
+        val id = path.substring(prefix.length).substringBefore('/')
+        return id.takeIf { it.isNotBlank() && it != "emulated" && it != "self" }
     }
 
     /**

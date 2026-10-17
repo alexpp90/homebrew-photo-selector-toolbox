@@ -73,6 +73,7 @@ internal object IsoBmff {
 internal class Cr3Structure(
     val cmt1: Box?,
     val cmt2: Box?,
+    val cmt4: Box?,
     val xmp: Box?,
     /** Candidate JPEG streams as (absolute offset, length). */
     val jpegs: List<Pair<Long, Long>>,
@@ -86,6 +87,7 @@ internal class Cr3Structure(
             if (!isCr3(reader)) return null
             var cmt1: Box? = null
             var cmt2: Box? = null
+            var cmt4: Box? = null
             var xmp: Box? = null
             val jpegs = mutableListOf<Pair<Long, Long>>()
 
@@ -99,6 +101,7 @@ internal class Cr3Structure(
                                     when (m.type) {
                                         "CMT1" -> cmt1 = m
                                         "CMT2" -> cmt2 = m
+                                        "CMT4" -> cmt4 = m
                                         "THMB" -> findJpegIn(reader, m)?.let(jpegs::add)
                                     }
                                 }
@@ -117,7 +120,7 @@ internal class Cr3Structure(
                     }
                 }
             }
-            return Cr3Structure(cmt1, cmt2, xmp, jpegs)
+            return Cr3Structure(cmt1, cmt2, cmt4, xmp, jpegs)
         }
 
         /** The first JPEG SOI inside the first 64 payload bytes of [box], to the box end. */

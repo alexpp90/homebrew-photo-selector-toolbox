@@ -292,4 +292,50 @@ class AndroidExifReaderTest {
         assertEquals(4.0, result.aperture!!, 1e-4)
         assertEquals(400, result.iso)
     }
+
+    @Test
+    fun `readExif extracts GPS coordinates, UTC timestamp, DateTimeOriginal and focal plane resolution`() = runTest {
+        val jpegFile = tempFolder.newFile("gps_fp_test.jpg")
+        val bmp = android.graphics.Bitmap.createBitmap(16, 16, android.graphics.Bitmap.Config.ARGB_8888)
+        jpegFile.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+
+        val exifInterface = androidx.exifinterface.media.ExifInterface(jpegFile.absolutePath)
+        exifInterface.setLatLong(48.137154, -11.576124)
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_DATESTAMP, "2026:06:21")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_TIMESTAMP, "18:30:05")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_DATETIME_ORIGINAL, "2026:06:21 20:30:05")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_OFFSET_TIME_ORIGINAL, "+02:00")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_FOCAL_PLANE_X_RESOLUTION, "38400/10")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_FOCAL_PLANE_RESOLUTION_UNIT, "3")
+        exifInterface.saveAttributes()
+
+        val result = reader.readExif(jpegFile)
+        assertNotNull(result)
+        assertEquals(48.137154, result!!.gpsLatitude!!, 1e-4)
+        assertEquals(-11.576124, result.gpsLongitude!!, 1e-4)
+        assertEquals("2026:06:21 18:30:05", result.gpsDateTimeUtc)
+        assertEquals("2026:06:21 20:30:05", result.dateTimeOriginal)
+        assertEquals("+02:00", result.offsetTimeOriginal)
+        assertEquals(3840.0, result.focalPlaneXResolution!!, 1e-3)
+        assertEquals(3, result.focalPlaneResolutionUnit)
+    }
+
+    @Test
+    fun `readExif drops out-of-range GPS coordinates`() = runTest {
+        val jpegFile = tempFolder.newFile("gps_range_test.jpg")
+        val bmp = android.graphics.Bitmap.createBitmap(16, 16, android.graphics.Bitmap.Config.ARGB_8888)
+        jpegFile.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+
+        val exifInterface = androidx.exifinterface.media.ExifInterface(jpegFile.absolutePath)
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE, "200/1,0/1,0/1")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_LATITUDE_REF, "N")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE, "10/1,0/1,0/1")
+        exifInterface.setAttribute(androidx.exifinterface.media.ExifInterface.TAG_GPS_LONGITUDE_REF, "E")
+        exifInterface.saveAttributes()
+
+        val result = reader.readExif(jpegFile)
+        assertNotNull(result)
+        assertNull(result!!.gpsLatitude)
+        assertEquals(10.0, result.gpsLongitude!!, 1e-4)
+    }
 }
