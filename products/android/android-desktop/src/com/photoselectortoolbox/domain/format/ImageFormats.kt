@@ -64,7 +64,8 @@ object ImageFormats {
         val extension = extensionOf(name)
         val stem = name.substringBeforeLast('.')
         return when {
-            stem.endsWith(EDIT_SUFFIX) -> SelectionSubfolder.RAW
+            stem.endsWith(EDIT_SUFFIX, ignoreCase = true) ||
+                stem.endsWith("_Edit", ignoreCase = true) -> SelectionSubfolder.RAW
             extension in RAW_EXTENSIONS -> SelectionSubfolder.RAW
             extension in JPEG_EXTENSIONS -> SelectionSubfolder.JPEG
             extension == XMP_EXTENSION ->
