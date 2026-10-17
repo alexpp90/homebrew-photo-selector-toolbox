@@ -54,13 +54,20 @@ object ImageFormats {
     fun isCompanionOrSupported(fileName: String): Boolean =
         isSupported(fileName) || isXmp(fileName)
 
-    /** True when [fileName] is a Lightroom-style `-Edit` / `_Edit` derivative. */
-    fun isEditDerivative(fileName: String): Boolean {
-        val baseStem = baseStemWithoutExtensions(fileName)
-        return (baseStem.endsWith(EDIT_SUFFIX, ignoreCase = true) ||
-            baseStem.endsWith("_Edit", ignoreCase = true)) &&
-            baseStem.length > EDIT_SUFFIX.length
-    }
+    /**
+     * Name suffixes of a shot's derivatives: Lightroom edits (`-Edit`, `_Edit`) and Adobe Denoise
+     * results (`-Enhanced-NR`, `_Enhanced-NR`). They travel with their shot on Move, Trash and Undo
+     * (shared table `testdata/formats/companions.json`).
+     */
+    private val DERIVATIVE_SUFFIXES = listOf(EDIT_SUFFIX, "_Edit", "-Enhanced-NR", "_Enhanced-NR")
+
+    /** The derivative suffix [baseStem] ends with (it must have a shot name in front of it), or null. */
+    private fun derivativeSuffixOf(baseStem: String): String? =
+        DERIVATIVE_SUFFIXES.firstOrNull { baseStem.length > it.length && baseStem.endsWith(it, ignoreCase = true) }
+
+    /** True when [fileName] is a `-Edit` / `_Edit` / `-Enhanced-NR` / `_Enhanced-NR` derivative. */
+    fun isEditDerivative(fileName: String): Boolean =
+        derivativeSuffixOf(baseStemWithoutExtensions(fileName)) != null
 
     /**
      * Canonical lower-case shot stem used to group a shot's files within a single directory:
@@ -70,13 +77,8 @@ object ImageFormats {
      */
     fun shotStemOf(fileName: String): String {
         val baseStem = baseStemWithoutExtensions(fileName)
-        val stripped = when {
-            (baseStem.endsWith(EDIT_SUFFIX, ignoreCase = true) ||
-                baseStem.endsWith("_Edit", ignoreCase = true)) &&
-                baseStem.length > EDIT_SUFFIX.length ->
-                baseStem.dropLast(EDIT_SUFFIX.length)
-            else -> baseStem
-        }
+        val suffix = derivativeSuffixOf(baseStem)
+        val stripped = if (suffix != null) baseStem.dropLast(suffix.length) else baseStem
         return stripped.lowercase()
     }
 

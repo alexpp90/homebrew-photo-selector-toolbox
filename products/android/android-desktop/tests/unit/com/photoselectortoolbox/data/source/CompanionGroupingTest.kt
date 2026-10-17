@@ -213,4 +213,37 @@ class CompanionGroupingTest {
             day1Paired.companions.map { it.fileName }
         )
     }
+
+    @Test
+    fun `grouping follows the shared companion table`() {
+        val table = org.json.JSONObject(
+            File(FormatManifest.repoRoot, "testdata/formats/companions.json").readText()
+        ).getJSONArray("cases")
+        for (c in 0 until table.length()) {
+            val case = table.getJSONObject(c)
+            val files = (0 until case.getJSONArray("files").length()).map { case.getJSONArray("files").getString(it) }
+            val expected = (0 until case.getJSONArray("bundles").length()).map { b ->
+                val bundle = case.getJSONArray("bundles").getJSONArray(b)
+                (0 until bundle.length()).map { bundle.getString(it).lowercase() }.toSet()
+            }.toSet()
+
+            val items = groupCompanionsInDirectory(
+                files.mapIndexed { i, name ->
+                    RawDirectoryEntry(
+                        uri = "content://test/doc/$name",
+                        fileName = name,
+                        fileSize = 1_000L,
+                        lastModified = 1000L + i,
+                        mimeType = "application/octet-stream",
+                    )
+                },
+                parentDocumentId = "dir",
+            )
+            val actual = items.map { item ->
+                (listOf(item.fileName) + item.companions.map { it.fileName }).map { it.lowercase() }.toSet()
+            }.toSet()
+
+            assertEquals(case.getString("name"), expected, actual)
+        }
+    }
 }

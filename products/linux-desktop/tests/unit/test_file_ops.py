@@ -452,6 +452,7 @@ def test_apply_bundle_suffix_companion_variants():
     assert _apply_bundle_suffix("IMG_0001-Edit.tif", "IMG_0001", 2) == "IMG_0001-2-Edit.tif"
     assert _apply_bundle_suffix("IMG_0001_Edit.tif", "IMG_0001", 2) == "IMG_0001-2_Edit.tif"
     assert _apply_bundle_suffix("IMG_0001-Enhanced-NR.dng", "IMG_0001", 2) == "IMG_0001-2-Enhanced-NR.dng"
+    assert _apply_bundle_suffix("IMG_0001_Enhanced-NR.dng", "IMG_0001", 2) == "IMG_0001-2_Enhanced-NR.dng"
 
 
 def test_move_two_same_named_bundles_in_sequence_preserves_both_and_pairing(tmp_path: Path):

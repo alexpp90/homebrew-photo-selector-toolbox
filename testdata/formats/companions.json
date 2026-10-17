@@ -1,0 +1,30 @@
+{
+  "_doc": "Companion-file grouping contract shared by the products (docs/shared/FILE_OPERATIONS.md, finding D-6). Each case lists the files of ONE directory and the bundles that must travel together (Move, Trash, Undo). The first file of a bundle is the shot itself (the RAW or camera JPEG); the rest are its companions in any order. Files in no bundle (orphan sidecars) are ignored. Names match case-insensitively. Read by macOS FileCullingManagerTests, Android Desktop CompanionGroupingTest and Linux test_scanner.py.",
+  "cases": [
+    {
+      "name": "raw, jpeg and both sidecar styles are one shot",
+      "files": ["IMG_0001.CR3", "IMG_0001.JPG", "IMG_0001.xmp", "IMG_0001.CR3.xmp"],
+      "bundles": [["IMG_0001.CR3", "IMG_0001.JPG", "IMG_0001.xmp", "IMG_0001.CR3.xmp"]]
+    },
+    {
+      "name": "Lightroom -Edit and _Edit derivatives follow their shot",
+      "files": ["IMG_0002.CR3", "IMG_0002-Edit.tif", "IMG_0002_Edit.jpg", "IMG_0002-Edit.xmp"],
+      "bundles": [["IMG_0002.CR3", "IMG_0002-Edit.tif", "IMG_0002_Edit.jpg", "IMG_0002-Edit.xmp"]]
+    },
+    {
+      "name": "Enhanced-NR derivatives follow their shot",
+      "files": ["IMG_0003.CR3", "IMG_0003-Enhanced-NR.dng", "IMG_0003_Enhanced-NR.dng", "IMG_0003-Enhanced-NR.xmp"],
+      "bundles": [["IMG_0003.CR3", "IMG_0003-Enhanced-NR.dng", "IMG_0003_Enhanced-NR.dng", "IMG_0003-Enhanced-NR.xmp"]]
+    },
+    {
+      "name": "neighbouring shots and longer stems stay apart",
+      "files": ["IMG_0004.CR3", "IMG_0004-Enhanced-NR.dng", "IMG_0005.CR3", "IMG_00040.JPG"],
+      "bundles": [["IMG_0004.CR3", "IMG_0004-Enhanced-NR.dng"], ["IMG_0005.CR3"], ["IMG_00040.JPG"]]
+    },
+    {
+      "name": "names and extensions match case-insensitively",
+      "files": ["img_0007.cr3", "IMG_0007.JPG", "Img_0007-ENHANCED-NR.DNG"],
+      "bundles": [["img_0007.cr3", "IMG_0007.JPG", "Img_0007-ENHANCED-NR.DNG"]]
+    }
+  ]
+}

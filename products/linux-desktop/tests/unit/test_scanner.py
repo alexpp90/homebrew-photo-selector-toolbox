@@ -8,6 +8,7 @@ Adheres to:
 - R-LINUX-CULL-02: Natural alphanumeric sorting
 """
 
+import json
 from pathlib import Path
 import pytest
 
@@ -242,3 +243,27 @@ def test_candidate_file_size_prepopulated_during_scan(tmp_path: Path):
     test_file.unlink()
     # file_size property should still return cached 10 bytes because _file_size was pre-populated
     assert candidates[0].file_size == 10
+
+
+# ── Shared companion-grouping table (testdata/formats/companions.json, finding D-6) ─────────────
+
+
+def _companion_cases():
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        table = parent / "testdata" / "formats" / "companions.json"
+        if table.is_file():
+            return json.loads(table.read_text())["cases"]
+    raise AssertionError("testdata/formats/companions.json not found")
+
+
+@pytest.mark.parametrize("case", _companion_cases(), ids=lambda c: c["name"])
+def test_companion_grouping_follows_the_shared_table(tmp_path: Path, case):
+    for name in case["files"]:
+        (tmp_path / name).write_bytes(b"x")
+
+    candidates = DirectoryScanner().scan_directory(tmp_path, recursive=False)
+    groups = sorted(sorted(p.name.lower() for p in c.all_paths) for c in candidates)
+    expected = sorted(sorted(n.lower() for n in bundle) for bundle in case["bundles"])
+
+    assert groups == expected

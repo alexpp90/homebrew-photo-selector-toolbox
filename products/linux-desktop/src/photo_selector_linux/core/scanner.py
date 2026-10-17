@@ -127,7 +127,12 @@ class DirectoryScanner:
         target_lower = target_name.lower()
         stem_lower = Path(target_lower).stem
         dot_xmp = f"{target_lower}.xmp"
-        edit_prefixes = (f"{stem_lower}-edit", f"{stem_lower}_edit", f"{stem_lower}-enhanced-nr")
+        edit_prefixes = (
+            f"{stem_lower}-edit",
+            f"{stem_lower}_edit",
+            f"{stem_lower}-enhanced-nr",
+            f"{stem_lower}_enhanced-nr",
+        )
 
         companions: Dict[Path, str] = {target: target_name}
         for entry_path, entry_name in entries:
@@ -237,7 +242,7 @@ class DirectoryScanner:
                 search_target, search_name = file_path, file_name
                 if self.handle_companions:
                     stem_lower = Path(file_name).stem.lower()
-                    for edit_marker in ("-edit", "_edit", "-enhanced-nr"):
+                    for edit_marker in ("-edit", "_edit", "-enhanced-nr", "_enhanced-nr"):
                         if edit_marker in stem_lower:
                             base_stem = stem_lower.split(edit_marker)[0]
                             for base_path, base_name in valid_files:
