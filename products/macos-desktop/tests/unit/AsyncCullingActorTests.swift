@@ -75,7 +75,7 @@ struct AsyncCullingActorTests {
         let photoURL = root.appendingPathComponent("TEST_003.JPG")
         try "JPEG".data(using: .utf8)!.write(to: photoURL)
 
-        let actor = AsyncCullingActor()
+        let actor = AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
         let job = CullingJob(
             photoID: UUID(),
             actionType: .trash,
@@ -293,7 +293,7 @@ struct AsyncCullingActorTests {
         #expect(try String(contentsOf: rawURL, encoding: .utf8) == rawPayload)
         #expect(try String(contentsOf: xmpURL, encoding: .utf8) == xmpMetadata)
 
-        let actor = AsyncCullingActor()
+        let actor = AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
         let job = CullingJob(
             photoID: UUID(),
             actionType: .trash,
@@ -368,7 +368,7 @@ struct AsyncCullingActorTests {
         }
 
         let primaryURL = urls["DSC0001.ARW"]!
-        let actor = AsyncCullingActor()
+        let actor = AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
         let job = CullingJob(
             photoID: UUID(),
             actionType: .trash,
@@ -465,6 +465,140 @@ struct AsyncCullingActorTests {
                 #expect(restoredDestination.path != primaryURL.path, "Companion \(vector.originalName) must not collide with primary destination")
             }
         }
+    }
+
+    @Test("REQ-MAC-CULL.04, REQ-MAC-CULL.05: Undo .move when original destination is occupied restores bundle under -2 suffix without deleting occupying file")
+    func testUndoMoveWithOccupiedDestinationRestoresUnderSuffixedNames() async throws {
+        let root = try createTempDir(prefix: "AsyncUndoMoveOccupiedTest")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let primaryURL = root.appendingPathComponent("IMG_0001.CR3")
+        let jpgURL = root.appendingPathComponent("IMG_0001.JPG")
+        let xmpURL = root.appendingPathComponent("IMG_0001.CR3.xmp")
+        let editURL = root.appendingPathComponent("IMG_0001-Edit.tif")
+
+        try Data("MOVED_RAW".utf8).write(to: primaryURL)
+        try Data("MOVED_JPG".utf8).write(to: jpgURL)
+        try Data("MOVED_XMP".utf8).write(to: xmpURL)
+        try Data("MOVED_EDIT".utf8).write(to: editURL)
+
+        let actor = AsyncCullingActor()
+        let job = CullingJob(
+            photoID: UUID(),
+            actionType: .move,
+            primaryURL: primaryURL,
+            rootURL: root
+        )
+
+        guard let record = try await actor.enqueue(job) else {
+            #expect(Bool(false), "Move job failed to produce record")
+            return
+        }
+
+        // Now create a newly imported file at the original path in root
+        try Data("NEW_OCCUPYING_RAW".utf8).write(to: primaryURL)
+
+        let restored = try await actor.undo(record: record)
+        #expect(restored.count == 4)
+
+        // Occupying file must be untouched
+        #expect(FileManager.default.fileExists(atPath: primaryURL.path))
+        #expect(try String(contentsOf: primaryURL, encoding: .utf8) == "NEW_OCCUPYING_RAW")
+
+        // Restored bundle must land under -2 suffix with intact pairing
+        #expect(try String(contentsOf: root.appendingPathComponent("IMG_0001-2.CR3"), encoding: .utf8) == "MOVED_RAW")
+        #expect(try String(contentsOf: root.appendingPathComponent("IMG_0001-2.JPG"), encoding: .utf8) == "MOVED_JPG")
+        #expect(try String(contentsOf: root.appendingPathComponent("IMG_0001-2.CR3.xmp"), encoding: .utf8) == "MOVED_XMP")
+        #expect(try String(contentsOf: root.appendingPathComponent("IMG_0001-2-Edit.tif"), encoding: .utf8) == "MOVED_EDIT")
+    }
+
+    @Test("REQ-MAC-CULL.04, REQ-MAC-CULL.05: Undo .trash when original destination is occupied restores bundle under -2 suffix without deleting occupying file")
+    func testUndoTrashWithOccupiedDestinationRestoresUnderSuffixedNames() async throws {
+        let root = try createTempDir(prefix: "AsyncUndoTrashOccupiedTest")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let primaryURL = root.appendingPathComponent("IMG_0001.CR3")
+        let jpgURL = root.appendingPathComponent("IMG_0001.JPG")
+        let xmpURL = root.appendingPathComponent("IMG_0001.CR3.xmp")
+        let editURL = root.appendingPathComponent("IMG_0001-Edit.tif")
+
+        try Data("TRASHED_RAW".utf8).write(to: primaryURL)
+        try Data("TRASHED_JPG".utf8).write(to: jpgURL)
+        try Data("TRASHED_XMP".utf8).write(to: xmpURL)
+        try Data("TRASHED_EDIT".utf8).write(to: editURL)
+
+        let actor = AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
+        let job = CullingJob(
+            photoID: UUID(),
+            actionType: .trash,
+            primaryURL: primaryURL,
+            rootURL: root
+        )
+
+        guard let record = try await actor.enqueue(job) else {
+            #expect(Bool(false), "Trash job failed to produce record")
+            return
+        }
+
+        // Create an occupying companion file at IMG_0001.JPG in originalDir before undoing trash
+        try Data("NEW_OCCUPYING_JPG".utf8).write(to: jpgURL)
+
+        let restored = try await actor.undo(record: record)
+        #expect(restored.count == 4)
+
+        // Occupying file must be untouched
+        #expect(FileManager.default.fileExists(atPath: jpgURL.path))
+        #expect(try String(contentsOf: jpgURL, encoding: .utf8) == "NEW_OCCUPYING_JPG")
+
+        // Entire restored bundle must land under -2 suffix
+        #expect(try String(contentsOf: root.appendingPathComponent("IMG_0001-2.CR3"), encoding: .utf8) == "TRASHED_RAW")
+        #expect(try String(contentsOf: root.appendingPathComponent("IMG_0001-2.JPG"), encoding: .utf8) == "TRASHED_JPG")
+        #expect(try String(contentsOf: root.appendingPathComponent("IMG_0001-2.CR3.xmp"), encoding: .utf8) == "TRASHED_XMP")
+        #expect(try String(contentsOf: root.appendingPathComponent("IMG_0001-2-Edit.tif"), encoding: .utf8) == "TRASHED_EDIT")
+    }
+
+    @Test("REQ-MAC-CULL.03, REQ-MAC-CULL.04: Copy-then-undo when same-named file pre-existed in Selection/ creates -2, removes -2 on undo, and leaves pre-existing file untouched")
+    func testCopyThenUndoWithPreExistingSelectionFilePreservesPreExisting() async throws {
+        let root = try createTempDir(prefix: "AsyncCopyUndoPreExistingTest")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let selectionDir = root.appendingPathComponent("Selection", isDirectory: true)
+        try FileManager.default.createDirectory(at: selectionDir, withIntermediateDirectories: true)
+
+        let preExistingSelectionFile = selectionDir.appendingPathComponent("IMG_0001.JPG")
+        try Data("PRE_EXISTING_SELECTION_JPG".utf8).write(to: preExistingSelectionFile)
+
+        let sourceFile = root.appendingPathComponent("IMG_0001.JPG")
+        try Data("NEW_SOURCE_JPG".utf8).write(to: sourceFile)
+
+        let actor = AsyncCullingActor()
+        let job = CullingJob(
+            photoID: UUID(),
+            actionType: .copy,
+            primaryURL: sourceFile,
+            rootURL: root
+        )
+
+        guard let record = try await actor.enqueue(job) else {
+            #expect(Bool(false), "Copy job failed to produce record")
+            return
+        }
+
+        let suffixedCopy = selectionDir.appendingPathComponent("IMG_0001-2.JPG")
+        #expect(record.affectedURLs == [suffixedCopy])
+        #expect(FileManager.default.fileExists(atPath: preExistingSelectionFile.path))
+        #expect(FileManager.default.fileExists(atPath: suffixedCopy.path))
+        #expect(try String(contentsOf: preExistingSelectionFile, encoding: .utf8) == "PRE_EXISTING_SELECTION_JPG")
+        #expect(try String(contentsOf: suffixedCopy, encoding: .utf8) == "NEW_SOURCE_JPG")
+
+        // Undo the copy
+        let removed = try await actor.undo(record: record)
+        #expect(removed == [suffixedCopy])
+        #expect(!FileManager.default.fileExists(atPath: suffixedCopy.path), "Suffixed copy must be removed on undo")
+        #expect(FileManager.default.fileExists(atPath: preExistingSelectionFile.path), "Pre-existing Selection/ file must be untouched")
+        #expect(try String(contentsOf: preExistingSelectionFile, encoding: .utf8) == "PRE_EXISTING_SELECTION_JPG")
+        #expect(FileManager.default.fileExists(atPath: sourceFile.path), "Original source file must be untouched")
+        #expect(try String(contentsOf: sourceFile, encoding: .utf8) == "NEW_SOURCE_JPG")
     }
 }
 

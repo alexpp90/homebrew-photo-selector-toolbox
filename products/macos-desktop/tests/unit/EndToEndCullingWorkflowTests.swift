@@ -118,7 +118,8 @@ struct EndToEndCullingWorkflowTests {
         _ = try harness.createFile(at: "DCIM/100SONY/DSC0006_CORRUPT.JPG", data: Data())
 
         // Step 2: Progressive Streaming Ingestion via CullingWorkspaceViewModel
-        let vm = CullingWorkspaceViewModel()
+        let trashService = DirectoryTrashService(rootDirectory: harness.rootURL)
+        let vm = CullingWorkspaceViewModel(cullingActor: AsyncCullingActor(trashService: trashService))
         vm.loadFolder(at: harness.rootURL)
 
         var attempts = 0
@@ -183,6 +184,7 @@ struct EndToEndCullingWorkflowTests {
         let dupVM = DuplicateFinderViewModel(
             targetDirectoryURL: harness.rootURL,
             photos: vm.photos,
+            cullingManager: FileCullingManager(trashService: trashService),
             onPhotoTrashed: { trashedURL in
                 vm.markPhotoAsTrashed(url: trashedURL)
             }
@@ -239,7 +241,9 @@ struct EndToEndCullingWorkflowTests {
             items.append(PhotoItem(id: UUID(), url: url, status: .candidate))
         }
 
-        let vm = CullingWorkspaceViewModel()
+        let vm = CullingWorkspaceViewModel(
+            cullingActor: AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: harness.rootURL))
+        )
         vm.setPhotos(items, rootURL: harness.rootURL)
         vm.autoAdvance = false
 

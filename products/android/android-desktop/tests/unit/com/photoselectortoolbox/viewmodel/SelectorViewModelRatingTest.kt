@@ -16,7 +16,6 @@ import com.photoselectortoolbox.domain.curation.UndoableOperation
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
 import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.domain.model.RatingFilter
-import com.photoselectortoolbox.domain.usecase.MoveToSelectionUseCase
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -116,7 +115,6 @@ class SelectorViewModelRatingTest {
         val viewModel = SelectorViewModel(
             imageRepository = imageRepository,
             scanImagesUseCase = scanImagesUseCase,
-            moveToSelectionUseCase = mockk<MoveToSelectionUseCase>(relaxed = true),
             cacheRepository = cacheRepository,
             settingsRepository = settingsRepository,
             scoreDao = scoreDao,

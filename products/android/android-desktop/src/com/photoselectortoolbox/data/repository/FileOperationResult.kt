@@ -26,6 +26,7 @@ data class FileOperationResult(
     val destinationUri: String?,
     val success: Boolean,
     val error: String? = null,
+    val partial: Boolean = false,
 ) {
     companion object {
         fun success(sourceUri: String, destinationUri: String?) =
@@ -33,5 +34,17 @@ data class FileOperationResult(
 
         fun failure(sourceUri: String, error: String?) =
             FileOperationResult(sourceUri, null, success = false, error = error)
+
+        fun partial(
+            sourceUri: String,
+            destinationUri: String,
+            error: String = "Copied, but the original could not be removed",
+        ) = FileOperationResult(
+            sourceUri = sourceUri,
+            destinationUri = destinationUri,
+            success = false,
+            error = error,
+            partial = true,
+        )
     }
 }
