@@ -313,7 +313,7 @@ jobs:
         working-directory: products/android
         run: ./gradlew assembleDebug
 
-      - name: Verify 16 KB ELF page alignment (debug APK)
+      - name: Verify 16 KB ELF and zip-entry alignment (debug APK)
         run: |
           python3 scripts/check_native_alignment.py \
             products/android/android-desktop/build/outputs/apk/debug/*.apk \
@@ -404,7 +404,7 @@ jobs:
             cp products/android/phototok/build/outputs/bundle/release/*.aab products/android/release-assets/phototok-android-release.aab
           fi
 
-      - name: Verify 16 KB ELF page alignment (release APK & AAB)
+      - name: Verify 16 KB ELF and zip-entry alignment (release APK & AAB)
         if: github.event_name == 'push'
         run: |
           shopt -s nullglob
