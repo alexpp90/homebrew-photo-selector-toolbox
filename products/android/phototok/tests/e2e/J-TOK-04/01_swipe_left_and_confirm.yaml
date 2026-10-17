@@ -3,6 +3,13 @@ appId: com.phototok.lab
 - swipe:
     start: "70%,50%"
     end: "15%,50%"
+# The confirm dialog is its own window, so its test tag is not exported as a resource id;
+# while it is open the hierarchy holds only the dialog, so its "Delete" button is unambiguous.
+- extendedWaitUntil:
+    visible:
+      text: "Delete"
+    timeout: 4000
+    optional: true
 - tapOn:
-    id: "direct_delete_confirm_button"
+    text: "Delete"
     optional: true

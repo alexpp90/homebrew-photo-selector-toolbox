@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import lab.android.configs as android_configs  # noqa: E402
 from lab.android.adb import AdbClient  # noqa: E402
 from lab.android.configs import ConfigNotRunError, apply_config, record_device_state, reset_config  # noqa: E402
-from lab.android.runner import run_android_journey  # noqa: E402
+from lab.android.runner import is_infra_failure, run_android_journey  # noqa: E402
 from lab.android.tree_android import parse_uiautomator_xml  # noqa: E402
 from lab.schema import validate  # noqa: E402
 from PIL import Image  # noqa: E402
@@ -59,6 +59,11 @@ class FakeAdbExec:
 
 
 class TestAndroidLayer(unittest.TestCase):
+    def test_infra_failures_are_told_apart_from_broken_flows(self) -> None:
+        self.assertTrue(is_infra_failure("maestro.android.DeviceServerDiedException: Device server died"))
+        self.assertTrue(is_infra_failure("Device 192.168.0.117:46567 was requested, but it is not connected."))
+        self.assertFalse(is_infra_failure("[Failed] 02_open_info (20s) (Element not found: Id matching regex: x)"))
+
     def test_freeform_window_offset_is_removed(self) -> None:
         xml = (
             '<hierarchy><node bounds="[584,240][2376,1584]" resource-id="" class="android.widget.FrameLayout">'

@@ -57,8 +57,37 @@ def maestro_binary() -> str:
     return str(home_bin) if home_bin.is_file() else "maestro"
 
 
+# Maestro failures that say nothing about the app or the flow: the on-device driver or the
+# wireless adb link dropped. One retry separates these from a broken flow.
+INFRA_FAILURE_MARKERS = (
+    "DeviceServerDiedException",
+    "DEADLINE_EXCEEDED",
+    "was requested, but it is not connected",
+    "Unable to launch app",
+    "UNAVAILABLE: io exception",
+)
+
+
+def is_infra_failure(log_text: str) -> bool:
+    return any(marker in log_text for marker in INFRA_FAILURE_MARKERS)
+
+
 def default_maestro_runner(serial: str | None, flow_file: Path, junit_out: Path) -> int:
-    """Run `maestro [--device <serial>] test <flow_file> --format junit --output <junit_out>`.
+    """Run one Maestro flow; retry once when the failure is infrastructure, not the flow."""
+    rc = _run_maestro_once(serial, flow_file, junit_out)
+    log = junit_out.with_suffix(".log")
+    xml_text = junit_out.read_text(encoding="utf-8", errors="replace") if junit_out.is_file() else ""
+    log_text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+    if rc != 0 and is_infra_failure(log_text + xml_text):
+        first = log_text + "\n" + xml_text
+        rc = _run_maestro_once(serial, flow_file, junit_out)
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write("\n--- first attempt failed on infrastructure; retried once ---\n" + first[-2000:])
+    return rc
+
+
+def _run_maestro_once(serial: str | None, flow_file: Path, junit_out: Path) -> int:
+    """`maestro [--device <serial>] test <flow_file> --format junit --output <junit_out>`.
 
     Maestro's console output goes to `<junit_out>.log` so a `flow-broken` result names the
     failing command instead of just a return code.
