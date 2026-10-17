@@ -236,7 +236,7 @@ satisfy five adversarial verification gates prior to delivery:
 Of the nine consecutive `fix(test)` / `fix(android)` commits on
 `feat/score-chips-and-first-run-hints`, **one** was a compile error and
 **eight** were the same small family of semantics-tree mistakes. Following
-these four rules removes almost all of that class:
+these five rules removes almost all of that class:
 
 1. **Use `onAllNodes(...).onFirst()`, not `onNode(...)`, for anything that can
    legitimately match more than once.** `onNode` throws when a matcher hits
@@ -253,6 +253,13 @@ these four rules removes almost all of that class:
    `import androidx.compose.ui.test.*`.** The wildcard is what let `hasTag`
    (which does not exist; the real matcher is `hasTestTag`) survive review and
    reach CI.
+5. **Call `performScrollTo()` before `assertIsDisplayed()` / `performClick()` on
+   anything inside a `verticalScroll` / `LazyColumn` container.** The CI
+   emulator's screen is much smaller than a dev device or the reference tablet,
+   so content that is visible locally sits below the fold there and
+   `assertIsDisplayed` fails with "is not displayed" although the app is correct
+   (`PhoneModeScreenDialogTest`, PR #737, API 30 job). `assertExists()` passes
+   off-screen and hides the problem; `assertIsDisplayed()` does not.
 
 These rules are also part of the Android UI agent definitions in the maintainer's agent
 framework.
@@ -265,6 +272,11 @@ framework.
   test failure. The emulator cannot even boot that fast. The annotation reads
   `The process '/usr/bin/sh' failed with exit code 1` and hides the real Kotlin
   error. Run `./scripts/run_tests.sh --android` locally to see it in plain text.
+- **Emulator job runs ~15 minutes and fails** → a *test* failure, but
+  `gh run view --log-failed` shows only the Gradle summary, not which test or
+  assertion. Download the `instrumented-test-report-api<N>` artifact
+  (`gh run download <run-id> -n instrumented-test-report-api30`) and read the
+  failing test's HTML/XML report — it names the test and the assertion message.
 - **Desktop pipeline fails with no test output** → the `lint` job failed;
   everything else was skipped by `needs:`. Run flake8.
 - **macOS pipeline fails** → check `swift-test` step logs; compilation errors,
