@@ -180,27 +180,29 @@ class FormatConformanceTest {
             } catch (t: Throwable) {
                 emptyList()
             }
-            val names = discovered.map { it.fileName }.toSet()
+            val names = discovered.flatMap { it.allFiles.map { f -> f.fileName } }.toSet()
             val expectedNames = listOfNotNull(upper.name, lower.name, companion?.name).toSet()
             row[Cap.DISCOVER] = if (names == expectedNames) emptyList() else listOf("discovered $names, expected $expectedNames")
 
-            val item = discovered.firstOrNull { it.fileName == upper.name }
+            val targetFile = discovered.flatMap { it.allFiles }.firstOrNull { it.fileName == upper.name }
             row[Cap.PAIR] = if (!isRaw) emptyList() else buildList {
                 val jpg = discovered.firstOrNull { it.fileName == companion?.name }
-                if (item == null || jpg == null) add("RAW or JPEG companion not discovered")
-                if (item != null && !ImageFormats.isRaw(item.fileName)) add("RAW not classified RAW")
-                if (item != null && ImageFormats.selectionSubfolder(item.fileName) != ImageFormats.SelectionSubfolder.RAW) add("RAW not sorted into RAW/")
+                val rawCompanion = jpg?.companions?.firstOrNull { it.fileName == upper.name }
+                if (jpg == null || rawCompanion == null) add("RAW or JPEG companion not grouped under JPEG primary")
+                if (discovered.any { it.fileName == upper.name }) add("Paired RAW emitted as duplicate primary ImageItem")
+                if (rawCompanion != null && !ImageFormats.isRaw(rawCompanion.fileName)) add("RAW not classified RAW")
+                if (rawCompanion != null && ImageFormats.selectionSubfolder(rawCompanion.fileName) != ImageFormats.SelectionSubfolder.RAW) add("RAW not sorted into RAW/")
                 if (jpg != null && ImageFormats.selectionSubfolder(jpg.fileName) != ImageFormats.SelectionSubfolder.JPEG) add("JPEG not sorted into JPEG/")
             }
 
             val required = minOf(FormatManifest.minDisplayLongEdge, s.expect.longEdgePx)
-            if (item == null) {
+            if (targetFile == null) {
                 listOf(Cap.DISPLAY, Cap.EXIF, Cap.SCORE).forEach { row[it] = listOf("not discovered") }
             } else {
-                val uri = Uri.parse(item.uri)
+                val uri = Uri.parse(targetFile.uri)
                 row[Cap.DISPLAY] = capture {
                     val result = runBlocking {
-                        loader.execute(ImageRequest.Builder(context).data(item.uri).size(1024).build())
+                        loader.execute(ImageRequest.Builder(context).data(targetFile.uri).size(1024).build())
                     }
                     val bmp = ((result as? SuccessResult)?.drawable as? BitmapDrawable)?.bitmap
                     when {
@@ -214,7 +216,7 @@ class FormatConformanceTest {
                     exifProblems(exif, s.expect)
                 }
                 row[Cap.SCORE] = capture {
-                    val bmp = decoder.decodeForAnalysis(uri, item.fileName)
+                    val bmp = decoder.decodeForAnalysis(uri, targetFile.fileName)
                     when {
                         bmp == null -> listOf("analysis decode failed")
                         maxOf(bmp.width, bmp.height) < required -> listOf("analysis ${bmp.width}x${bmp.height} < $required")
