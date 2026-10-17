@@ -13,7 +13,7 @@ This checklist is the **single source of truth** for Google Play release readine
 - [x] **Hosted Legal Documents Present in Repo:**
   - `docs/products/android-desktop/privacy-policy.html` (bilingual EN/DE GDPR/DSGVO Art. 13 policy)
   - `docs/products/android-desktop/impressum.html` (bilingual DE/EN § 5 DDG legal notice)
-- [x] **In-App Legal Links Wired:** `products/android/android-desktop/src/com/photoselectortoolbox/domain/LegalLinks.kt` defines `PRIVACY_POLICY_URL`, `IMPRESSUM_URL`, and `SOURCE_CODE_URL`, surfaced in `SettingsScreen.kt` ("About" section).
+- [x] **In-App Legal Links Wired:** `products/android/android-desktop/src/com/photoselectortoolbox/domain/LegalLinks.kt` defines `PRIVACY_POLICY`, `IMPRESSUM`, and `SOURCE_CODE`, surfaced in `SettingsScreen.kt` ("About" section).
 
 ---
 
