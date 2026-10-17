@@ -298,6 +298,39 @@ final class UISelfTestRunner {
             current.width * current.height > previous.width * previous.height,
             "current area \(Int(current.width * current.height)) vs previous \(Int(previous.width * previous.height))"
         )
+
+        let toolbarIds = [
+            "toolbar_previous", "toolbar_next",
+            "toolbar_mode_1", "toolbar_mode_2", "toolbar_mode_3",
+            "toolbar_zoom", "toolbar_pan_link"
+        ]
+        let undersized = toolbarIds.compactMap { id -> String? in
+            guard let rect = registry.frame(id) else { return "\(id)=missing" }
+            return (rect.width >= 24 - tolerance && rect.height >= 24 - tolerance)
+                ? nil
+                : "\(id)=\(Int(rect.width.rounded()))x\(Int(rect.height.rounded()))"
+        }
+        record("layout.toolbar_targets_at_least_24pt", undersized.isEmpty, undersized.isEmpty ? "all >=24x24 pt" : undersized.joined(separator: ", "))
+
+        if let panLink = registry.frame("toolbar_pan_link") {
+            let overlap = panLink.intersection(current)
+            record(
+                "layout.pan_link_outside_current_slot",
+                overlap.isNull || overlap.isEmpty,
+                "toolbar_pan_link=\(panLink) current=\(current)"
+            )
+        } else {
+            record("layout.pan_link_outside_current_slot", false, "toolbar_pan_link not registered in 3-Up")
+        }
+
+        // Navigating to the last photo swaps slot_next from ComparisonSlotPane to BoundarySlotPane;
+        // the outgoing pane's onDisappear must not wipe the incoming boundary pane's frame.
+        viewModel.selectPhoto(at: viewModel.photos.count - 1)
+        await settle()
+        let boundaryNext = registry.frame("slot_next")
+        record("layout.boundary_slot_retains_frame", boundaryNext != nil, "slot_next at last photo=\(String(describing: boundaryNext))")
+        viewModel.selectPhoto(at: 1)
+        await settle()
     }
 
     // MARK: - 5. Zoom: exits and buttons while zoomed
@@ -361,57 +394,10 @@ final class UISelfTestRunner {
 
     // MARK: - Event injection
 
-    enum Key {
-        case rightArrow, leftArrow, downArrow, space, escape, three
-
-        var keyCode: UInt16 {
-            switch self {
-            case .rightArrow: return 124
-            case .leftArrow: return 123
-            case .downArrow: return 125
-            case .space: return 49
-            case .escape: return 53
-            case .three: return 20
-            }
-        }
-
-        var characters: String {
-            switch self {
-            case .rightArrow: return String(Character(UnicodeScalar(0xF703)!))
-            case .leftArrow: return String(Character(UnicodeScalar(0xF702)!))
-            case .downArrow: return String(Character(UnicodeScalar(0xF701)!))
-            case .space: return " "
-            case .escape: return "\u{1B}"
-            case .three: return "3"
-            }
-        }
-
-        var modifiers: NSEvent.ModifierFlags {
-            switch self {
-            case .rightArrow, .leftArrow, .downArrow: return [.numericPad, .function]
-            default: return []
-            }
-        }
-    }
+    typealias Key = UITestDriver.Key
 
     private func postKey(_ key: Key) async {
-        guard let window = workspaceWindow else { return }
-        for type in [NSEvent.EventType.keyDown, .keyUp] {
-            if let event = NSEvent.keyEvent(
-                with: type,
-                location: .zero,
-                modifierFlags: key.modifiers,
-                timestamp: ProcessInfo.processInfo.systemUptime,
-                windowNumber: window.windowNumber,
-                context: nil,
-                characters: key.characters,
-                charactersIgnoringModifiers: key.characters,
-                isARepeat: false,
-                keyCode: key.keyCode
-            ) {
-                NSApp.postEvent(event, atStart: false)
-            }
-        }
+        UITestDriver.postKey(key)
         await settle()
     }
 
@@ -420,53 +406,8 @@ final class UISelfTestRunner {
     private func click(_ identifier: String) async -> Bool {
         await waitUntil(timeout: 2) { UITestFrameRegistry.shared.frame(identifier) != nil }
         guard let window = workspaceWindow,
-              let frame = UITestFrameRegistry.shared.frame(identifier),
-              let contentView = window.contentView else { return false }
-        // SwiftUI `.global` is relative to the hosting view, y-down; window coordinates are y-up.
-        let point = CGPoint(x: frame.midX, y: contentView.frame.height - frame.midY)
-        let hitView = contentView.hitTest(point)
-        if ProcessInfo.processInfo.environment["PHOTO_SELECTOR_UI_DEBUG"] == "1" {
-            FileHandle.standardError.write(Data("[click-debug] id=\(identifier) frame=\(frame) point=\(point) hitView=\(String(describing: hitView))\n".utf8))
-        }
-        if NSApp.isActive {
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                if let event = NSEvent.mouseEvent(
-                    with: type,
-                    location: point,
-                    modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime,
-                    windowNumber: window.windowNumber,
-                    context: nil,
-                    eventNumber: 0,
-                    clickCount: 1,
-                    pressure: type == .leftMouseDown ? 1 : 0
-                ) {
-                    NSApp.postEvent(event, atStart: false)
-                }
-            }
-        } else if let button = hitView?.nearestButton() {
-            button.performClick(nil)
-        } else if let hitView {
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                if let event = NSEvent.mouseEvent(
-                    with: type,
-                    location: point,
-                    modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime,
-                    windowNumber: window.windowNumber,
-                    context: nil,
-                    eventNumber: 0,
-                    clickCount: 1,
-                    pressure: type == .leftMouseDown ? 1 : 0
-                ) {
-                    if type == .leftMouseDown {
-                        hitView.mouseDown(with: event)
-                    } else {
-                        hitView.mouseUp(with: event)
-                    }
-                }
-            }
-        }
+              let frame = UITestFrameRegistry.shared.frame(identifier) else { return false }
+        UITestDriver.click(in: window, at: CGPoint(x: frame.midX, y: frame.midY))
         await settle()
         return true
     }
@@ -474,8 +415,7 @@ final class UISelfTestRunner {
     // MARK: - Helpers
 
     private var workspaceWindow: NSWindow? {
-        NSApp.windows.first { $0.isVisible && $0.canBecomeKey && !$0.isSheet && $0.contentView != nil }
-            ?? NSApp.windows.first { $0.canBecomeKey && !$0.isSheet && $0.contentView != nil }
+        UITestDriver.workspaceWindow
     }
 
     private func record(_ name: String, _ passed: Bool, _ detail: String) {
@@ -484,17 +424,12 @@ final class UISelfTestRunner {
     }
 
     private func settle() async {
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        await UITestDriver.settle(0.15)
     }
 
     @discardableResult
     private func waitUntil(timeout: TimeInterval, _ condition: @MainActor () -> Bool) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if condition() { return true }
-            try? await Task.sleep(nanoseconds: 20_000_000)
-        }
-        return condition()
+        await UITestDriver.waitUntil(timeout: timeout, condition: condition)
     }
 
     private func finish() -> Bool {
@@ -518,18 +453,5 @@ private extension JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return encoder
-    }
-}
-
-private extension NSView {
-    func nearestButton() -> NSButton? {
-        var current: NSView? = self
-        while let view = current {
-            if let button = view as? NSButton {
-                return button
-            }
-            current = view.superview
-        }
-        return nil
     }
 }

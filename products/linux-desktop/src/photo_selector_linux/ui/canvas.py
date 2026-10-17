@@ -93,6 +93,8 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             self.overlay.set_child(self.slots_box)
 
             # Floating Info HUD overlay
+            if hasattr(self.hud, "set_name"):
+                self.hud.set_name("info_hud")
             self.overlay.add_overlay(self.hud)
 
         self.viewmodel.connect("state-changed", self._on_state_changed)
@@ -400,7 +402,10 @@ class CanvasView(Gtk.Box if HAS_GI else object):
                 )
                 self.slots_box.append(challenger_slot)
             else:
-                self.slots_box.append(BoundarySlotPane(slot_type="last"))
+                end_slot = BoundarySlotPane(slot_type="last")
+                if hasattr(end_slot, "set_name"):
+                    end_slot.set_name("slot_next")
+                self.slots_box.append(end_slot)
 
         elif mode == 3:
             # One-over-two layout (UD-4): active photo on top, previous & next on bottom row
@@ -434,6 +439,8 @@ class CanvasView(Gtk.Box if HAS_GI else object):
                 )
             else:
                 left_slot = BoundarySlotPane(slot_type="first")
+                if hasattr(left_slot, "set_name"):
+                    left_slot.set_name("slot_previous")
             bottom_row.append(left_slot)
 
             if idx < count - 1:
@@ -445,6 +452,8 @@ class CanvasView(Gtk.Box if HAS_GI else object):
                 )
             else:
                 right_slot = BoundarySlotPane(slot_type="last")
+                if hasattr(right_slot, "set_name"):
+                    right_slot.set_name("slot_next")
             bottom_row.append(right_slot)
 
             three_up_box.append(bottom_row)
@@ -500,7 +509,15 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             slot_offset=slot_offset,
             allow_1to1=allow_1to1,
         )
+        slot_name = (
+            "slot_previous"
+            if slot_offset < 0
+            else "slot_next"
+            if slot_offset > 0
+            else "slot_current"
+        )
         frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        frame.set_name(slot_name)
         for cls_name in desc["css_classes"]:
             frame.add_css_class(cls_name)
 
@@ -526,6 +543,7 @@ class CanvasView(Gtk.Box if HAS_GI else object):
 
         # Image view — decoded off the main loop (RAW via its embedded preview)
         picture = Gtk.Picture()
+        picture.set_name(f"{slot_name}_image")
         picture.set_hexpand(True)
         picture.set_vexpand(True)
         picture.set_can_shrink(True)

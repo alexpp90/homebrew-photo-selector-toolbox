@@ -1,0 +1,17 @@
+id: J-LIN-02
+product: linux
+title: Linux Desktop RAW and multi-format 1:1 inspection
+fixture: burst-raw-jpeg
+configs: [fhd]
+fresh_install: false
+steps:
+  - wait_ms: 1000
+  - keys: [Right, Right, space]
+  - wait_ms: 800
+  - checkpoint: raw-1to1
+fs_expect:
+  raw-1to1:
+    unchanged: true
+layout_expect:
+  raw-1to1:
+    required: [slot_current]

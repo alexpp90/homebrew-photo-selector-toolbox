@@ -122,9 +122,13 @@ fun DuplicatesScreen(
             uiState.folderUri == null -> {
                 EmptyStateCard(
                     icon = Icons.Default.FolderOpen,
-                    title = "No Folder Selected",
-                    description = "Select a folder to scan for duplicate images.",
-                    actionLabel = "Select Folder",
+                    title = if (uiState.missingGrantPrompt) "Folder Access Needed" else "No Folder Selected",
+                    description = if (uiState.missingGrantPrompt) {
+                        "Permission for this folder was revoked or the folder was moved. Re-select the folder to continue."
+                    } else {
+                        "Select a folder to scan for duplicate images."
+                    },
+                    actionLabel = if (uiState.missingGrantPrompt) "Re-select Folder" else "Select Folder",
                     onAction = { folderPickerLauncher.launch(null) },
                     modifier = Modifier.align(Alignment.Center),
                 )

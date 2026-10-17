@@ -104,7 +104,21 @@ class ImageRepositoryImpl @Inject constructor(
     private val androidExifReader: AndroidExifReader,
     private val mediaStoreReader: MediaStoreReader,
     private val settingsRepository: SettingsRepository,
+    private val folderAccessManager: FolderAccessManager,
 ) : ImageRepository {
+
+    constructor(
+        localImageSource: LocalImageSource,
+        androidExifReader: AndroidExifReader,
+        mediaStoreReader: MediaStoreReader,
+        settingsRepository: SettingsRepository,
+    ) : this(
+        localImageSource = localImageSource,
+        androidExifReader = androidExifReader,
+        mediaStoreReader = mediaStoreReader,
+        settingsRepository = settingsRepository,
+        folderAccessManager = FolderAccessManager(),
+    )
 
     companion object {
         private const val TAG = "ImageRepositoryImpl"
@@ -217,7 +231,6 @@ class ImageRepositoryImpl @Inject constructor(
                 n++
             }
         }
-
         data class SafeToFormatVerdict(
             val isSafe: Boolean,
             val verifiedCount: Int,
@@ -291,15 +304,11 @@ class ImageRepositoryImpl @Inject constructor(
      */
     override suspend fun openFolder(context: Context, folderUri: Uri): String? =
         withContext(ioDispatcher) {
-            try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(folderUri, takeFlags)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not persist URI permission for $folderUri", e)
-            }
+            folderAccessManager.takeGrant(
+                uri = folderUri,
+                purpose = FolderAccessPurpose.SOURCE,
+                fallbackContext = context,
+            )
 
             val folderDoc = try {
                 DocumentFile.fromTreeUri(context, folderUri)

@@ -1,0 +1,5 @@
+appId: com.photoselectortoolbox.lab
+---
+- tapOn:
+    id: "dialog_confirm_delete"
+    optional: true

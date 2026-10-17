@@ -1,0 +1,14 @@
+min_target: 24
+overlay_ids:
+  - info_hud
+frame_ids:
+  - slot_current_image
+  - slot_previous_image
+  - slot_next_image
+ignore_ids: []
+frame_size:
+  fhd:
+    min_w: 350
+    min_h: 240
+    ids:
+      - slot_current

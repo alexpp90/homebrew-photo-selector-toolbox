@@ -508,7 +508,7 @@ class SelectorViewModelTest {
         val exif = ExifData(iso = 800, aperture = 4.0)
         coEvery { imageRepository.getExifData(any(), any()) } returns exif
         val progress = MutableSharedFlow<ScanProgress>(replay = 1)
-        every { scanImagesUseCase(any(), any()) } returns progress
+        every { scanImagesUseCase(any()) } returns progress
 
         val viewModel = loadFolder(image("a"))
         assertEquals(exif, viewModel.uiState.value.currentImage?.exifData)
@@ -794,5 +794,26 @@ class SelectorViewModelTest {
         assertTrue(handled)
         assertEquals(listOf("a", "b"), viewModel.uiState.value.images.map { it.fileName })
         assertTrue(viewModel.uiState.value.undoHistory.isEmpty())
+    }
+
+    // ── Persisted SAF grant lifecycle ────────────────────────────────────
+
+    @Test
+    fun `startup reconciles persisted SAF grants`() = runTest {
+        buildViewModel()
+        coVerify(exactly = 1) { settingsRepository.reconcilePersistedGrants() }
+    }
+
+    @Test
+    fun `revoked or missing folder grant sets missingGrantPrompt`() = runTest {
+        coEvery { imageRepository.openFolder(any(), any()) } returns null
+        val viewModel = buildViewModel()
+
+        viewModel.selectFolder(Uri.parse(FOLDER_URI))
+
+        val state = viewModel.uiState.value
+        assertTrue(state.missingGrantPrompt)
+        assertFalse(state.isLoading)
+        assertNotNull(state.snackbarMessage)
     }
 }

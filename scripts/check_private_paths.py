@@ -28,6 +28,7 @@ PRIVATE_PATTERNS = [
     (re.compile(r"^(\.cursorrules|\.windsurfrules|ROUTING\.md|\.sync_mode|CLAUDE\.local\.md)$"),
      "generated AI-tool file"),
     (re.compile(r"^\.github/copilot-instructions\.md$"), "generated AI-tool file"),
+    (re.compile(r"^Claude outputs(/|$)"), "agent hand-over material (belongs in private/docs/handover/)"),
     (re.compile(r"(^|/)intent_ledger[^/]*\.jsonl$"), "prompt ledger"),
     (re.compile(r"^docs/.*/(REQUIREMENTS|DESIGN_PROMPT|UX_INVESTIGATION|SECURITY_AUDIT|LEGAL_COMPLIANCE)\.md$"),
      "requirement specification / prompt / audit (private overlay)"),

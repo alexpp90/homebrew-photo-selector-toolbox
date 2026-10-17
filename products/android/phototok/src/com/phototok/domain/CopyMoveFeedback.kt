@@ -37,7 +37,7 @@ object CopyMoveFeedback {
      * @param failed number of files that failed completely
      * @param relatedCount number of sibling files included beyond the primary image
      * @param partial number of move operations where the copy succeeded and verified,
-     *   but the original file could not be deleted
+     *   but the original file could not be deleted (`FileOperationResult.partial`)
      */
     fun message(
         isCopy: Boolean,
@@ -48,17 +48,18 @@ object CopyMoveFeedback {
         partial: Int = 0,
     ): String {
         val verb = if (isCopy) "Copied" else "Moved"
+        val totalFailed = failed + partial
         return when {
-            partial > 0 && failed == 0 ->
+            partial > 0 && failed == 0 && succeeded == 0 ->
                 "Copied to $destinationNoun — original could not be removed"
-            partial > 0 ->
+            partial > 0 && failed > 0 && succeeded == 0 ->
                 "Copied to $destinationNoun — original could not be removed ($failed failed)"
-            failed == 0 -> {
+            totalFailed == 0 -> {
                 val suffix = if (relatedCount > 0) " (+$relatedCount related)" else ""
                 "$verb to $destinationNoun$suffix"
             }
             succeeded == 0 -> "Failed to ${if (isCopy) "copy" else "move"} to $destinationNoun"
-            else -> "$verb $succeeded of ${succeeded + failed} to $destinationNoun, $failed failed"
+            else -> "$verb $succeeded of ${succeeded + totalFailed} to $destinationNoun, $totalFailed failed"
         }
     }
 

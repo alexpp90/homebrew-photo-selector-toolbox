@@ -1,6 +1,7 @@
 package com.phototok.data.repository
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
@@ -36,8 +37,11 @@ internal val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
 
 @Singleton
 class SettingsRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val folderAccessManager: FolderAccessManager,
 ) {
+
+    constructor(context: Context) : this(context, FolderAccessManager(context))
 
     companion object {
         private const val TAG = "SettingsRepository"
@@ -449,9 +453,21 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setLastFolderUri(uri: String?) {
+        var previousUri: String? = null
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
+            previousUri = prefs[KEY_LAST_FOLDER_URI]
             if (uri != null) prefs[KEY_LAST_FOLDER_URI] = uri
             else prefs.remove(KEY_LAST_FOLDER_URI)
+            referencedAfter = referencedUrisByPurpose(prefs)
+        }
+        folderAccessManager.syncReferences(referencedAfter)
+        if (uri != null) {
+            folderAccessManager.takeGrant(Uri.parse(uri), FolderAccessPurpose.SOURCE)
+        }
+        val old = previousUri
+        if (old != null && old != uri) {
+            folderAccessManager.releaseIfUnreferenced(old, referencedAfter.values.flatten().toSet())
         }
     }
 
@@ -569,7 +585,10 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setPhoneCollectionUri(uri: String?) {
+        var previousUri: String? = null
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
+            previousUri = prefs[KEY_COLLECTION_URI] ?: prefs[collectionUriKey(SourceKind.PHONE_LIBRARY)]
             if (uri != null) {
                 prefs[KEY_COLLECTION_URI] = uri
                 prefs[collectionUriKey(SourceKind.PHONE_LIBRARY)] = uri
@@ -577,6 +596,15 @@ class SettingsRepository @Inject constructor(
                 prefs.remove(KEY_COLLECTION_URI)
                 prefs.remove(collectionUriKey(SourceKind.PHONE_LIBRARY))
             }
+            referencedAfter = referencedUrisByPurpose(prefs)
+        }
+        folderAccessManager.syncReferences(referencedAfter)
+        if (uri != null) {
+            folderAccessManager.takeGrant(Uri.parse(uri), FolderAccessPurpose.SELECTION_TARGET)
+        }
+        val old = previousUri
+        if (old != null && old != uri) {
+            folderAccessManager.releaseIfUnreferenced(old, referencedAfter.values.flatten().toSet())
         }
     }
 
@@ -588,7 +616,10 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setPhoneLeftSwipeUri(uri: String?) {
+        var previousUri: String? = null
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
+            previousUri = prefs[KEY_LEFT_SWIPE_URI] ?: prefs[leftSwipeUriKey(SourceKind.PHONE_LIBRARY)]
             if (uri != null) {
                 prefs[KEY_LEFT_SWIPE_URI] = uri
                 prefs[leftSwipeUriKey(SourceKind.PHONE_LIBRARY)] = uri
@@ -596,6 +627,15 @@ class SettingsRepository @Inject constructor(
                 prefs.remove(KEY_LEFT_SWIPE_URI)
                 prefs.remove(leftSwipeUriKey(SourceKind.PHONE_LIBRARY))
             }
+            referencedAfter = referencedUrisByPurpose(prefs)
+        }
+        folderAccessManager.syncReferences(referencedAfter)
+        if (uri != null) {
+            folderAccessManager.takeGrant(Uri.parse(uri), FolderAccessPurpose.LEFT_SWIPE_TARGET)
+        }
+        val old = previousUri
+        if (old != null && old != uri) {
+            folderAccessManager.releaseIfUnreferenced(old, referencedAfter.values.flatten().toSet())
         }
     }
 
@@ -654,7 +694,8 @@ class SettingsRepository @Inject constructor(
     /**
      * Record a folder as recently used, moving it to the front and de-duplicating.
      * Folders evicted from the recents list also get their scan info (and any retired
-     * last-position key) removed so the preferences file does not grow without bound.
+     * last-position key) removed and their persisted SAF grant released if no other
+     * purpose still references the URI.
      */
     suspend fun addRecentPath(uri: String, name: String) {
         val parsed = android.net.Uri.parse(uri)
@@ -673,22 +714,63 @@ class SettingsRepository @Inject constructor(
         kind: SourceKind,
         volumeUuid: String? = null,
     ) {
+        var evictedUris: List<String> = emptyList()
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
             val current = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
             val updated = RecentPathCodec.add(current, uri, name, MAX_STORED_RECENT_PATHS, kind, volumeUuid)
-            RecentPathCodec.evictedUris(current, updated).forEach { evictedUri ->
+            evictedUris = RecentPathCodec.evictedUris(current, updated)
+            evictedUris.forEach { evictedUri ->
                 prefs.remove(folderPositionKey(evictedUri))
                 prefs.remove(legacyFolderPositionKey(evictedUri))
                 prefs.remove(folderScanMaxTimeKey(evictedUri))
                 prefs.remove(folderScanCountKey(evictedUri))
                 prefs.remove(folderSeenCountKey(evictedUri))
                 prefs.remove(folderTotalCountKey(evictedUri))
+                prefs.remove(folderScanLastUriKey(evictedUri))
+                prefs.remove(folderScanLastIndexKey(evictedUri))
             }
             prefs[KEY_RECENT_PATHS] = RecentPathCodec.encode(updated)
+            referencedAfter = referencedUrisByPurpose(prefs)
+        }
+        folderAccessManager.syncReferences(referencedAfter)
+        folderAccessManager.recordReference(uri, FolderAccessPurpose.RECENT_FOLDER)
+        val allRemaining = referencedAfter.values.flatten().toSet()
+        for (evictedUri in evictedUris) {
+            folderAccessManager.releaseIfUnreferenced(evictedUri, allRemaining)
         }
     }
 
-    // ── Retired per-folder last position ─────────────────────────────────
+    /**
+     * Reconcile OS persisted URI grants against the URIs currently referenced in
+     * DataStore, releasing any orphaned grants from earlier sessions.
+     */
+    suspend fun reconcilePersistedGrants(): Set<String> {
+        val prefs = context.dataStore.data.first()
+        return folderAccessManager.reconcilePersistedGrants(referencedUrisByPurpose(prefs))
+    }
+
+    internal fun referencedUrisByPurpose(prefs: Preferences): Map<FolderAccessPurpose, Set<String>> {
+        val source = prefs[KEY_LAST_FOLDER_URI]?.let(::setOf).orEmpty()
+        val selection = buildSet {
+            prefs[KEY_COLLECTION_URI]?.let(::add)
+            SourceKind.entries.forEach { kind -> prefs[collectionUriKey(kind)]?.let(::add) }
+        }
+        val leftSwipe = buildSet {
+            prefs[KEY_LEFT_SWIPE_URI]?.let(::add)
+            SourceKind.entries.forEach { kind -> prefs[leftSwipeUriKey(kind)]?.let(::add) }
+        }
+        val recents = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
+            .mapTo(LinkedHashSet()) { it.uri }
+        return mapOf(
+            FolderAccessPurpose.SOURCE to source,
+            FolderAccessPurpose.SELECTION_TARGET to selection,
+            FolderAccessPurpose.LEFT_SWIPE_TARGET to leftSwipe,
+            FolderAccessPurpose.RECENT_FOLDER to recents,
+        )
+    }
+
+    // ── Legacy per-folder last position keys (cleaned up on eviction/clear) ──
 
     /** Keyed by the full URI. */
     private fun folderPositionKey(folderUri: String) =
@@ -698,7 +780,7 @@ class SettingsRepository @Inject constructor(
     private fun legacyFolderPositionKey(folderUri: String) =
         intPreferencesKey("folder_pos_${folderUri.hashCode()}")
 
-    // ── Per-folder scan info & seen progress ─────────────────────────────
+    // ── Per-folder scan info, resume position & seen progress ────────────
 
     private fun folderScanMaxTimeKey(folderUri: String) =
         longPreferencesKey("folder_scan_time_v1_$folderUri")
@@ -712,10 +794,37 @@ class SettingsRepository @Inject constructor(
     private fun folderTotalCountKey(folderUri: String) =
         intPreferencesKey("folder_total_count_v1_$folderUri")
 
+    private fun folderScanLastUriKey(folderUri: String) =
+        stringPreferencesKey("folder_scan_last_uri_v1_$folderUri")
+
+    private fun folderScanLastIndexKey(folderUri: String) =
+        intPreferencesKey("folder_scan_last_idx_v1_$folderUri")
+
     suspend fun setFolderScanInfo(folderUri: String, info: FolderScanInfo) {
         context.dataStore.edit { prefs ->
             prefs[folderScanMaxTimeKey(folderUri)] = info.maxLastModified
             prefs[folderScanCountKey(folderUri)] = info.fileCount
+            if (info.lastViewedUri != null) {
+                prefs[folderScanLastUriKey(folderUri)] = info.lastViewedUri
+            }
+            if (info.lastViewedUri != null || info.lastViewedIndex > 0) {
+                prefs[folderScanLastIndexKey(folderUri)] = info.lastViewedIndex
+            }
+        }
+    }
+
+    suspend fun setFolderLastPosition(
+        folderUri: String,
+        lastViewedUri: String?,
+        lastViewedIndex: Int,
+    ) {
+        context.dataStore.edit { prefs ->
+            if (lastViewedUri != null) {
+                prefs[folderScanLastUriKey(folderUri)] = lastViewedUri
+            } else {
+                prefs.remove(folderScanLastUriKey(folderUri))
+            }
+            prefs[folderScanLastIndexKey(folderUri)] = lastViewedIndex
         }
     }
 
@@ -723,7 +832,14 @@ class SettingsRepository @Inject constructor(
         val prefs = context.dataStore.data.first()
         val maxTime = prefs[folderScanMaxTimeKey(folderUri)] ?: 0L
         val count = prefs[folderScanCountKey(folderUri)] ?: 0
-        return FolderScanInfo(maxLastModified = maxTime, fileCount = count)
+        val lastUri = prefs[folderScanLastUriKey(folderUri)]
+        val lastIdx = prefs[folderScanLastIndexKey(folderUri)] ?: 0
+        return FolderScanInfo(
+            maxLastModified = maxTime,
+            fileCount = count,
+            lastViewedUri = lastUri,
+            lastViewedIndex = lastIdx,
+        )
     }
 
     suspend fun setFolderSeenProgress(folderUri: String, seenCount: Int, totalCount: Int) {
@@ -749,7 +865,7 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    /** Clear per-folder scan metadata and any retired last-position keys. */
+    /** Clear per-folder scan metadata, resume positions, and any retired last-position keys. */
     suspend fun clearFolderPositions() {
         context.dataStore.edit { prefs ->
             val keysToRemove = prefs.asMap().keys.filter {

@@ -35,6 +35,7 @@ The rule that prevents it:
 | Visual regression | `desktop.yml:visual` | ⚠️ Linux + Xvfb; baselines are runner-rendered | See [Visual regression](#visual-regression-linux-only). |
 | `testDebugUnitTest` | `android.yml:unit-tests` | ✅ needs JDK 17 + Android SDK | |
 | `assembleDebugAndroidTest` | `android.yml:unit-tests` | ✅ needs JDK 17 + Android SDK | Compiles `tests/instrumented/`. Nothing else does. |
+| `check_native_alignment.py` | `android.yml:unit-tests`, `android.yml:build` | ✅ needs JDK 17 + Android SDK (unit tests run everywhere via `scripts/tests`) | Inspects every `lib/{arm64-v8a,x86_64}/*.so` in `merged_native_libs/debug` and built APK/AAB archives and fails if any ELF `PT_LOAD` segment has `p_align < 16384` (Google Play 16 KB page-size mandate). |
 | `lintDebug` | `android.yml:lint` | ✅ advisory | Non-blocking in both places, on purpose. |
 | `connectedDebugAndroidTest` | `android.yml:instrumented-tests` | ❌ **needs emulator/device** | See [Instrumented tests](#instrumented-tests-genuinely-need-a-device). |
 | `swift test (macos-desktop)` | `macos.yml:swift-test` | ⚠️ Darwin only | Native Swift 6 suite covering PhotoSelectorKit & App (release SLA benchmark included). Runs on `macos-latest` in CI. |
@@ -50,6 +51,8 @@ The rule that prevents it:
 | Format corpus (`fetch_format_corpus.py`) | `.github/actions/format-corpus`, used by `desktop.yml:test`, `android.yml:unit-tests`, `macos.yml:swift-test`, `linux.yml:test` | ⚠️ once downloaded (~280 MB, network) | Restores the real-camera RAW corpus pinned in `testdata/formats/manifest.json` (cache key = manifest hash) and sets `PST_REQUIRE_FORMAT_CORPUS=1`, so every product's format conformance tests **fail** rather than skip without it. Locally `run_tests.sh` exports the same variables when the corpus is present and reports `⊘ SKIPPED` otherwise. See [`docs/shared/SUPPORTED_FORMATS.md`](../shared/SUPPORTED_FORMATS.md). |
 | `fetch_format_corpus.py --validate` + `scripts/tests` | `repo-hygiene.yml:hygiene` | ✅ everywhere | The format contract is well-formed: every required format has a sample with ground-truth EXIF, extensions are unique, committed bitmap fixtures match their pinned SHA-256; unit tests for the fetcher (mirror fallback, hash verification) and for `verification_record.py`. |
 | PR verification record (`verification_record.py check`) | `pr-verification.yml:record` | ⚠️ PR description only — advisory | Compares the verification blocks in the PR description (written by `scripts/verification_record.py pr` from the record every `run_tests.sh` run saves) with the PR head tree and the products the PR touches; annotates missing, stale or partial verification and never fails. Not a `run_tests.sh` gate: it judges the PR description, which exists only on GitHub. Local equivalent: `python3 scripts/verification_record.py check --body-file <description.md> --base origin/main`. Its unit tests run in `scripts/tests` above. See [CONTRIBUTING.md § Verification record](../../CONTRIBUTING.md#verification-record). |
+| `lab tooling tests` (`scripts/lab/tests`) | — (local-only) | ✅ everywhere (needs Pillow + PyYAML) | Local-only unit tests (`python3 -m unittest discover -s scripts/lab/tests -q`) covering the device lab's schemas, fixture generator, layout lint, file-system/timing/log oracles, runners, and report builder without touching devices or a GUI. |
+| Device lab (`scripts/lab/lab.py`) | — (not a CI gate) | ⚠️ local, on demand, opt-in | Local, on demand, not a CI gate; opt-in; see [`scripts/lab/README.md`](../../scripts/lab/README.md). |
 | Private overlay gates (`link_overlay.py --check`, `sync_framework.py --check`, `validate_framework.py`, `gen_gemini_settings.py --check`, `verify_requirements_traceability.py --check --strict`, framework tests) | private repo `framework.yml` | ⚠️ maintainer checkout only | Run by `run_tests.sh` when `private/` is checked out; `⊘ SKIPPED` (not a risk) in a public clone. The private repository's CI checks out this repository and runs the same gates. |
 
 ---
@@ -233,7 +236,7 @@ satisfy five adversarial verification gates prior to delivery:
 Of the nine consecutive `fix(test)` / `fix(android)` commits on
 `feat/score-chips-and-first-run-hints`, **one** was a compile error and
 **eight** were the same small family of semantics-tree mistakes. Following
-these four rules removes almost all of that class:
+these five rules removes almost all of that class:
 
 1. **Use `onAllNodes(...).onFirst()`, not `onNode(...)`, for anything that can
    legitimately match more than once.** `onNode` throws when a matcher hits
@@ -250,6 +253,13 @@ these four rules removes almost all of that class:
    `import androidx.compose.ui.test.*`.** The wildcard is what let `hasTag`
    (which does not exist; the real matcher is `hasTestTag`) survive review and
    reach CI.
+5. **Call `performScrollTo()` before `assertIsDisplayed()` / `performClick()` on
+   anything inside a `verticalScroll` / `LazyColumn` container.** The CI
+   emulator's screen is much smaller than a dev device or the reference tablet,
+   so content that is visible locally sits below the fold there and
+   `assertIsDisplayed` fails with "is not displayed" although the app is correct
+   (`PhoneModeScreenDialogTest`, PR #737, API 30 job). `assertExists()` passes
+   off-screen and hides the problem; `assertIsDisplayed()` does not.
 
 These rules are also part of the Android UI agent definitions in the maintainer's agent
 framework.
@@ -262,6 +272,11 @@ framework.
   test failure. The emulator cannot even boot that fast. The annotation reads
   `The process '/usr/bin/sh' failed with exit code 1` and hides the real Kotlin
   error. Run `./scripts/run_tests.sh --android` locally to see it in plain text.
+- **Emulator job runs ~15 minutes and fails** → a *test* failure, but
+  `gh run view --log-failed` shows only the Gradle summary, not which test or
+  assertion. Download the `instrumented-test-report-api<N>` artifact
+  (`gh run download <run-id> -n instrumented-test-report-api30`) and read the
+  failing test's HTML/XML report — it names the test and the assertion message.
 - **Desktop pipeline fails with no test output** → the `lint` job failed;
   everything else was skipped by `needs:`. Run flake8.
 - **macOS pipeline fails** → check `swift-test` step logs; compilation errors,

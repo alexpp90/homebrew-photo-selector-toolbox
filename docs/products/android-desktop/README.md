@@ -56,6 +56,5 @@ Android Desktop shares the EXIF model and readers with PhotoTok through the `:co
 (`products/android/core/`, `com.photoselector.core`). Everything else — layouts, ViewModels, theme,
 storage flow — is independent. Do not copy composables between `:android-desktop` and `:phototok`.
 
-Excluded here: the Ollama VLM aesthetic tool (Desktop-only), the CLI, ExifTool bundling and SMB
-path resolution. The on-device TFLite NIMA score is this product's aesthetic engine. See
-[`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md).
+Excluded here: aesthetic scoring (Ollama VLM on legacy Desktop; Apple Vision on macOS Desktop), the CLI,
+ExifTool bundling and SMB path resolution. See [`../../shared/FEATURE_PARITY.md`](../../shared/FEATURE_PARITY.md).

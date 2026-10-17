@@ -165,15 +165,19 @@ class PhoneModeViewModelTest {
     }
 
     @Test
-    fun `selectSourceFolder reports inaccessible folders`() = runTest {
+    fun `selectSourceFolder reports inaccessible folders and sets missingGrantPrompt`() = runTest {
         coEvery { imageRepository.prepareSourceFolder(any()) } returns null
         val viewModel = buildViewModel()
+
+        coVerify(exactly = 1) { settingsRepository.reconcilePersistedGrants() }
 
         viewModel.selectSourceFolder(Uri.parse("content://tree/gone"))
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNotNull(state.error)
+        assertTrue(state.missingGrantPrompt)
+        assertNull(state.sourceFolderUri)
     }
 
     @Test
@@ -836,7 +840,7 @@ class PhoneModeViewModelTest {
     }
 
     @Test
-    fun `reloadSourceFolder with no new photos does not show prompt and shows feedback`() = runTest {
+    fun `reloadSourceFolder with no new photos shows resume prompt with zero newCount`() = runTest {
         val img1 = image("photo1.jpg", 10)
         val img2 = image("photo2.jpg", 20)
         val viewModel = loadFolder(img1, img2)
@@ -847,55 +851,100 @@ class PhoneModeViewModelTest {
         viewModel.reloadSourceFolder()
         advanceUntilIdle()
 
-        assertNull(viewModel.uiState.value.reloadPrompt)
+        val prompt = viewModel.uiState.value.reloadPrompt
+        assertNotNull(prompt)
+        assertEquals(0, prompt?.newCount)
+        assertEquals(1, prompt?.resumeIndex)
+        assertEquals(2, prompt?.totalCount)
         // img1 (older) stays on screen; newest-first puts it at index 1
         assertEquals(1, viewModel.uiState.value.currentIndex)
-        assertTrue(viewModel.uiState.value.lastActionFeedback?.message?.contains("no new photos") == true)
+
+        // User chooses to start with newest image
+        viewModel.confirmReloadJumpToLatest()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.currentIndex)
+        assertNull(viewModel.uiState.value.reloadPrompt)
     }
 
     @Test
-    fun `selectSourceFolder lands on the newest photo when new photos exist outside active session`() = runTest {
+    fun `selectSourceFolder on previously opened folder with new photos prompts to continue or start with newest`() = runTest {
         val img1 = image("photo1.jpg", 10)
         val img2 = image("photo2.jpg", 20)
         val img3 = image("photo3.jpg", 30)
         val img4 = image("photo4.jpg", 40)
 
-        // Folder previously had max timestamp 20L (img1 & img2 were scanned), last position was 0
-        coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(maxLastModified = 20L, fileCount = 2)
+        // Folder previously had max timestamp 20L (img2 & img1), user left off at img2
+        coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(
+            maxLastModified = 20L,
+            fileCount = 2,
+            lastViewedUri = img2.uri,
+            lastViewedIndex = 0,
+        )
         every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, img3, img4))
 
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
         advanceUntilIdle()
 
-        // newest first: img4 and img3 are new and sit at the start
+        // Newest-first feed: [img4(40), img3(30), img2(20), img1(10)]
+        // User left off at img2 (now index 2), and 2 newer photos (img4, img3) were added
+        val prompt = viewModel.uiState.value.reloadPrompt
+        assertNotNull(prompt)
+        assertEquals(2, prompt?.newCount)
+        assertEquals(0, prompt?.firstNewIndex)
+        assertEquals(2, prompt?.resumeIndex)
+        assertEquals(4, prompt?.totalCount)
+        assertEquals(2, viewModel.uiState.value.currentIndex)
+        assertEquals(img2.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
+
+        // Choosing Start with Newest jumps to index 0 (img4)
+        viewModel.confirmReloadJumpToLatest()
+        advanceUntilIdle()
         assertEquals(0, viewModel.uiState.value.currentIndex)
         assertEquals(img4.uri, viewModel.uiState.value.images[viewModel.uiState.value.currentIndex].uri)
+        assertNull(viewModel.uiState.value.reloadPrompt)
     }
 
     @Test
-    fun `selectSourceFolder on a fresh folder starts on the newest photo`() = runTest {
+    fun `selectSourceFolder on a fresh folder starts on the newest photo without prompt`() = runTest {
         val viewModel = loadFolder(image("a.jpg", 10), image("c.jpg", 30), image("b.jpg", 20))
 
         assertEquals(listOf("c.jpg", "b.jpg", "a.jpg"), viewModel.uiState.value.images.map { it.fileName })
         assertEquals(0, viewModel.uiState.value.currentIndex)
+        assertNull(viewModel.uiState.value.reloadPrompt)
     }
 
     @Test
-    fun `selectSourceFolder starts on the newest photo`() = runTest {
+    fun `selectSourceFolder on previously opened folder with no new photos prompts and continues where left off`() = runTest {
         val img1 = image("photo1.jpg", 10)
         val img2 = image("photo2.jpg", 20)
         val img3 = image("photo3.jpg", 30)
 
-        coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(maxLastModified = 30L, fileCount = 3)
+        coEvery { settingsRepository.getFolderScanInfo("content://tree/photos") } returns FolderScanInfo(
+            maxLastModified = 30L,
+            fileCount = 3,
+            lastViewedUri = img2.uri,
+            lastViewedIndex = 1,
+        )
         every { imageRepository.discoverImages(any()) } returns flowOf(listOf(img1, img2, img3))
 
         val viewModel = buildViewModel()
         viewModel.selectSourceFolder(Uri.parse("content://tree/photos"))
         advanceUntilIdle()
 
-        assertEquals(0, viewModel.uiState.value.currentIndex)
-        assertEquals(img3.uri, viewModel.uiState.value.images[0].uri)
+        val prompt = viewModel.uiState.value.reloadPrompt
+        assertNotNull(prompt)
+        assertEquals(0, prompt?.newCount)
+        assertEquals(1, prompt?.resumeIndex)
+        assertEquals(3, prompt?.totalCount)
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+        assertEquals(img2.uri, viewModel.uiState.value.images[1].uri)
+
+        // Dismissing / continuing keeps the user at img2 (index 1)
+        viewModel.dismissReloadPrompt()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.currentIndex)
+        assertNull(viewModel.uiState.value.reloadPrompt)
     }
 
     @Test

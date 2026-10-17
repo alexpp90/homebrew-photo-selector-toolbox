@@ -23,22 +23,31 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.phototok.domain.FirstRunHint
 import com.phototok.ui.components.ViewerBottomBar
 import com.phototok.viewmodel.FirstRunHintUi
+import com.phototok.viewmodel.ReloadPrompt
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 
 @RunWith(AndroidJUnit4::class)
 class PhoneModeScreenDialogTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Before
+    fun enableAccessibilityChecks() {
+        composeTestRule.enableAccessibilityChecks()
+    }
 
     @Test
     fun directDeleteDialog_showsWarningAndSettingsHint() {
@@ -327,41 +336,81 @@ class PhoneModeScreenDialogTest {
     }
 
     @Test
-    fun reloadJumpDialog_displaysFoundCountAndTriggersCallbacks() {
-        var jumped = false
-        var stayed = false
+    fun folderResumeDialog_withNewPhotos_displaysFoundCountAndTriggersCallbacks() {
+        var startedWithNewest = false
+        var continuedWhereLeftOff = false
 
         composeTestRule.setContent {
-            AlertDialog(
-                onDismissRequest = { stayed = true },
-                title = { Text("New Photos Found") },
-                text = { Text("5 new photos were found while reviewing. Would you like to jump to the new photos or stay at your current photo?") },
-                confirmButton = {
-                    Button(
-                        onClick = { jumped = true },
-                        modifier = Modifier.testTag("reload_jump_confirm_button"),
-                    ) {
-                        Text("Jump to Latest")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { stayed = true },
-                        modifier = Modifier.testTag("reload_jump_stay_button"),
-                    ) {
-                        Text("Stay at Current")
-                    }
-                },
-                modifier = Modifier.testTag("reload_jump_dialog"),
+            FolderResumeDialog(
+                prompt = ReloadPrompt(newCount = 5, firstNewIndex = 0, resumeIndex = 3, totalCount = 20),
+                onStartWithNewest = { startedWithNewest = true },
+                onContinueWhereLeftOff = { continuedWhereLeftOff = true },
             )
         }
 
         composeTestRule.onAllNodesWithTag("reload_jump_dialog").onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("New Photos Found").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "5 newer photos were added since you last left (at photo #4 of 20). Would you like to continue where you left off or start with the newest image?",
+        ).assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("reload_jump_confirm_button").onFirst().assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("reload_jump_stay_button").onFirst().assertIsDisplayed()
 
         composeTestRule.onAllNodesWithTag("reload_jump_confirm_button").onFirst().performClick()
-        assertTrue("Confirm button must trigger jump", jumped)
-        assertFalse("Stay button must not be triggered", stayed)
+        assertTrue("Start with Newest button must trigger callback", startedWithNewest)
+        assertFalse("Continue button must not be triggered", continuedWhereLeftOff)
+    }
+
+    @Test
+    fun folderResumeDialog_withNoNewPhotos_informsUserAndContinuesWhereLeftOff() {
+        var startedWithNewest = false
+        var continuedWhereLeftOff = false
+
+        composeTestRule.setContent {
+            FolderResumeDialog(
+                prompt = ReloadPrompt(newCount = 0, firstNewIndex = 0, resumeIndex = 7, totalCount = 15),
+                onStartWithNewest = { startedWithNewest = true },
+                onContinueWhereLeftOff = { continuedWhereLeftOff = true },
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag("reload_jump_dialog").onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Resume Folder?").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "No newer photos were added since you last left (at photo #8 of 15). Would you like to continue where you left off or start with the newest image?",
+        ).assertIsDisplayed()
+
+        composeTestRule.onAllNodesWithTag("reload_jump_stay_button").onFirst().performClick()
+        assertTrue("Continue Where I Left Off button must trigger callback", continuedWhereLeftOff)
+        assertFalse("Start with Newest button must not be triggered", startedWithNewest)
+    }
+
+    @Test
+    fun phoneModeLanding_missingGrantPrompt_displaysCardAndTriggersReselect() {
+        var pickFolderClicked = false
+
+        composeTestRule.setContent {
+            PhoneModeLanding(
+                sourceFolderUri = null,
+                sourceFolderName = "Not selected",
+                collectionFolderName = "Selection",
+                isLoading = false,
+                missingGrantPrompt = true,
+                onReselectFolder = { pickFolderClicked = true },
+                onSelectSource = {},
+                onSelectCollection = {},
+                onStart = {},
+            )
+        }
+
+        // The landing content is a vertically scrolling column; the card sits below the hero
+        // and mock cards, so on small emulators it is composed but off-screen until scrolled to.
+        composeTestRule.onNodeWithTag("missing_grant_prompt_card").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Folder Access Needed").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("reselect_folder_button").performScrollTo().assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("reselect_folder_button").performClick()
+        assertTrue("Re-select Folder button must trigger folder picker", pickFolderClicked)
     }
 }
+

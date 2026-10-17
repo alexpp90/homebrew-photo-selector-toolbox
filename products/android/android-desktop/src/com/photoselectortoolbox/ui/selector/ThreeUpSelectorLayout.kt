@@ -224,6 +224,7 @@ fun ThreeUpSelectorLayout(
                         onLongClick = onLongPressFrame,
                         onMaximise = { onMaximise(SelectorFrame.CURRENT) },
                         testTag = "column_current",
+                        outerTestTag = "selector.frame.current",
                         modifier = Modifier.comparisonSwipeNavigation(
                             canGoPrevious = previous != null,
                             canGoNext = next != null,
@@ -396,6 +397,11 @@ private fun NeighbourFrame(
     onMaximise: () -> Unit,
     testTag: String,
 ) {
+    val outerTag = if (frame == SelectorFrame.PREVIOUS) {
+        "selector.frame.previous"
+    } else {
+        "selector.frame.next"
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box {
             FrameTile(
@@ -411,6 +417,7 @@ private fun NeighbourFrame(
                 onLongClick = onLongClick,
                 onMaximise = onMaximise,
                 testTag = testTag,
+                outerTestTag = outerTag,
             )
 
             if (showValues && !overlayOutside) {
@@ -495,8 +502,13 @@ private fun FrameTile(
     onMaximise: () -> Unit,
     testTag: String,
     modifier: Modifier = Modifier,
+    outerTestTag: String? = null,
 ) {
-    Box(modifier = modifier) {
+    Box(
+        modifier = modifier.then(
+            if (outerTestTag != null) Modifier.testTag(outerTestTag) else Modifier
+        ),
+    ) {
         ImageTile(
             image = image,
             isCurrent = isCurrent,

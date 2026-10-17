@@ -1,0 +1,16 @@
+min_target: 24
+overlay_ids:
+  - zoom_exit_pill
+  - zoom_exit_button
+frame_ids:
+  - single_image_viewport
+  - slot_current_image
+  - slot_previous_image
+  - slot_next_image
+ignore_ids: []
+frame_size:
+  w1440:
+    min_w: 400
+    min_h: 250
+    ids:
+      - slot_current

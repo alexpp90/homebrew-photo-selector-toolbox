@@ -1,0 +1,193 @@
+"""Wrapper around `adb` with lab-root path guards and injectable command execution."""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import time
+from pathlib import Path
+from typing import Callable
+
+from ..paths import ensure_android_lab_path
+
+
+ExecFn = Callable[[list[str], int], subprocess.CompletedProcess[bytes]]
+
+
+def _default_exec(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(cmd, capture_output=True, timeout=timeout, check=True)
+
+
+class AdbClient:
+    """Client for one Android device serial (or general adb commands when `serial` is None)."""
+
+    def __init__(self, serial: str | None = None, exec_fn: ExecFn | None = None) -> None:
+        self.serial = serial
+        self._exec = exec_fn or _default_exec
+
+    def _cmd(self, *args: str) -> list[str]:
+        base = ["adb"]
+        if self.serial:
+            base.extend(["-s", self.serial])
+        base.extend(args)
+        return base
+
+    def run(self, *args: str, timeout: int = 30) -> str:
+        res = self._exec(self._cmd(*args), timeout)
+        return res.stdout.decode("utf-8", errors="replace")
+
+    def run_bytes(self, *args: str, timeout: int = 30) -> bytes:
+        res = self._exec(self._cmd(*args), timeout)
+        return res.stdout
+
+    def devices(self) -> list[tuple[str, str]]:
+        """Return `(serial, state)` pairs from `adb devices`."""
+        res = self._exec(["adb", "devices"], 15)
+        out = res.stdout.decode("utf-8", errors="replace")
+        found: list[tuple[str, str]] = []
+        for line in out.splitlines()[1:]:
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                found.append((parts[0], parts[1]))
+        return found
+
+    def connect(self, host_port: str) -> str:
+        res = self._exec(["adb", "connect", host_port], 15)
+        return res.stdout.decode("utf-8", errors="replace").strip()
+
+    def ensure_ready(self) -> None:
+        """Wake device, dismiss keyguard, keep screen on, and verify lockscreen is not active."""
+        self.run("shell", "input", "keyevent", "KEYCODE_WAKEUP")
+        self.run("shell", "wm", "dismiss-keyguard")
+        self.run("shell", "svc", "power", "stayon", "true")
+        win_dump = self.run("shell", "dumpsys", "window")
+        if "mDreamingLockscreen=true" in win_dump:
+            raise RuntimeError(f"Device {self.serial} is still locked (mDreamingLockscreen=true)")
+
+    def current_user(self) -> int:
+        out = self.run("shell", "am", "get-current-user").strip()
+        return int(out.splitlines()[-1].strip())
+
+    def switch_user(self, user_id: int, max_polls: int = 20, poll_interval: float = 0.25) -> None:
+        self.run("shell", "am", "switch-user", str(user_id))
+        for _ in range(max_polls):
+            if self.current_user() == user_id:
+                return
+            if poll_interval > 0:
+                time.sleep(poll_interval)
+        raise RuntimeError(f"Timed out waiting for user {user_id} to become active on {self.serial}")
+
+    def install(self, apk: Path | str, user: int = 0) -> str:
+        return self.run("install", "-r", "--user", str(user), str(apk), timeout=120)
+
+    def clear(self, app_id: str, user: int = 0) -> str:
+        return self.run("shell", "pm", "clear", "--user", str(user), app_id)
+
+    def start(self, app_id: str) -> str:
+        return self.run(
+            "shell",
+            "monkey",
+            "-p",
+            app_id,
+            "-c",
+            "android.intent.category.LAUNCHER",
+            "1",
+        )
+
+    def home(self) -> str:
+        return self.run("shell", "input", "keyevent", "KEYCODE_HOME")
+
+    def screencap(self, dest: Path | str) -> Path:
+        target = Path(dest)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        png_bytes = self.run_bytes("exec-out", "screencap", "-p", timeout=30)
+        target.write_bytes(png_bytes)
+        return target
+
+    def dump_tree(self, dest_xml: Path | str) -> Path:
+        target = Path(dest_xml)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self.run("shell", "uiautomator", "dump", "/sdcard/pst_dump.xml", timeout=30)
+        self.run("pull", "/sdcard/pst_dump.xml", str(target), timeout=30)
+        return target
+
+    def rm_rf(self, remote_dir: str) -> str:
+        guarded = ensure_android_lab_path(remote_dir)
+        if guarded == "/sdcard/PSTLab":
+            raise ValueError("refusing to delete /sdcard/PSTLab root itself; specify a subdirectory")
+        return self.run("shell", "rm", "-rf", guarded)
+
+    def push_dir(self, src: Path | str, dest: str) -> str:
+        guarded = ensure_android_lab_path(dest)
+        self.run("shell", "mkdir", "-p", guarded)
+        return self.run("push", f"{Path(src)}/.", guarded, timeout=120)
+
+    def list_files(self, root: str) -> list[dict[str, int | str]]:
+        guarded = ensure_android_lab_path(root)
+        cmd_str = f"cd {guarded} && find . -type f -exec stat -c '%s %n' {{}} +"
+        out = self.run("shell", cmd_str).strip()
+        files: list[dict[str, int | str]] = []
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(" ", 1)
+            if len(parts) != 2:
+                continue
+            try:
+                size = int(parts[0])
+            except ValueError:
+                continue
+            rel = parts[1]
+            if rel.startswith("./"):
+                rel = rel[2:]
+            files.append({"path": rel, "size": size})
+        files.sort(key=lambda e: str(e["path"]))
+        return files
+
+    def logcat_clear(self) -> str:
+        return self.run("logcat", "-c")
+
+    def logcat_dump(self, dest: Path | str) -> Path:
+        target = Path(dest)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        out = self.run("logcat", "-d", "-b", "main,crash", timeout=30)
+        target.write_text(out, encoding="utf-8")
+        return target
+
+    def density(self) -> int:
+        out = self.run("shell", "wm", "density")
+        m_over = re.search(r"Override density:\s*(\d+)", out)
+        if m_over:
+            return int(m_over.group(1))
+        m_phys = re.search(r"Physical density:\s*(\d+)", out)
+        if m_phys:
+            return int(m_phys.group(1))
+        raise RuntimeError(f"Could not parse wm density output: {out!r}")
+
+    def physical_density(self) -> int:
+        out = self.run("shell", "wm", "density")
+        m_phys = re.search(r"Physical density:\s*(\d+)", out)
+        if m_phys:
+            return int(m_phys.group(1))
+        return self.density()
+
+    def window_dp(self) -> tuple[int, int]:
+        out = self.run("shell", "dumpsys", "window")
+        m = re.search(r"sw\d+dp\s+w(\d+)dp\s+h(\d+)dp", out)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+        raise RuntimeError("Could not parse w<W>dp h<H>dp from dumpsys window")
+
+    def key(self, code: str) -> str:
+        norm = code if code.startswith("KEYCODE_") else f"KEYCODE_{code}"
+        return self.run("shell", "input", "keyboard", "keyevent", norm)
+
+    def key_combo(self, *codes: str) -> str:
+        if len(codes) < 2:
+            raise ValueError("key_combo requires at least 2 key codes")
+        norms = [c if c.startswith("KEYCODE_") else f"KEYCODE_{c}" for c in codes]
+        out = self.run("shell", "input", "keyboard", "keycombination", *norms)
+        if "Unknown command" in out or "Error" in out:
+            raise RuntimeError(f"keycombination not supported on device {self.serial}: {out.strip()}")
+        return out

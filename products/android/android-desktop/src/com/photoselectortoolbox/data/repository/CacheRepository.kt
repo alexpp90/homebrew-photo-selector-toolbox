@@ -8,6 +8,8 @@ import javax.inject.Singleton
 
 interface CacheRepository {
     suspend fun getCachedScore(filePath: String): ScoreEntity?
+    suspend fun getCachedScores(filePaths: List<String>): List<ScoreEntity>
+    suspend fun updateAccessTimes(filePaths: List<String>, time: Long = System.currentTimeMillis())
     suspend fun cacheScore(score: ScoreEntity)
     suspend fun clearAll()
     suspend fun pruneToLimit(limit: Int = DEFAULT_CACHE_LIMIT)
@@ -20,7 +22,7 @@ interface CacheRepository {
 }
 
 private const val DEFAULT_CACHE_LIMIT = 10_000
-private const val SQLITE_BIND_CHUNK_SIZE = 900
+internal const val SQLITE_BIND_CHUNK_SIZE = ScoreDao.SQLITE_MAX_BIND_PARAMS
 
 @Singleton
 class CacheRepositoryImpl @Inject constructor(
@@ -33,6 +35,20 @@ class CacheRepositoryImpl @Inject constructor(
             scoreDao.updateAccessTime(filePath, System.currentTimeMillis())
         }
         return entity
+    }
+
+    override suspend fun getCachedScores(filePaths: List<String>): List<ScoreEntity> {
+        if (filePaths.isEmpty()) return emptyList()
+        return filePaths.chunked(SQLITE_BIND_CHUNK_SIZE).flatMap { chunk ->
+            scoreDao.getScores(chunk)
+        }
+    }
+
+    override suspend fun updateAccessTimes(filePaths: List<String>, time: Long) {
+        if (filePaths.isEmpty()) return
+        filePaths.chunked(SQLITE_BIND_CHUNK_SIZE).forEach { chunk ->
+            scoreDao.updateAccessTimes(chunk, time)
+        }
     }
 
     override suspend fun cacheScore(score: ScoreEntity) {

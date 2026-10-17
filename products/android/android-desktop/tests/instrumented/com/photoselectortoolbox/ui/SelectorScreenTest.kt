@@ -13,6 +13,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -114,10 +115,12 @@ class SelectorScreenTest {
     @Before
     fun setup() {
         hiltRule.inject()
+        composeRule.enableAccessibilityChecks()
         // A settled folder is the default: enumeration finished, so the
         // position readout carries no `+`.
         fakeRepo.completeAfterFirstBatch = true
         fakeRepo.canTrashResult = false
+        fakeRepo.folderName = "Test Folder"
         runBlocking {
             scoreDao.deleteAll()
             settingsRepository.setLastFolderUri(null)
@@ -142,6 +145,7 @@ class SelectorScreenTest {
 
     @After
     fun teardown() {
+        fakeRepo.folderName = "Test Folder"
         runBlocking {
             scoreDao.deleteAll()
             settingsRepository.setLastFolderUri(null)
@@ -164,6 +168,23 @@ class SelectorScreenTest {
             substring = true,
             ignoreCase = true,
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun revokedGrant_showsReselectFolderPrompt() {
+        fakeRepo.folderName = null
+        runBlocking {
+            settingsRepository.setLastFolderUri("content://test/revoked_folder")
+        }
+
+        composeRule.waitUntil(timeoutMillis = 15000) {
+            composeRule.onAllNodesWithTag("missing_grant_prompt_card")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeRule.onNodeWithTag("missing_grant_prompt_card").assertIsDisplayed()
+        composeRule.onNodeWithText("Folder Access Needed", ignoreCase = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Re-select Folder", ignoreCase = true).assertIsDisplayed()
     }
 
     @Test

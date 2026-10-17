@@ -202,6 +202,8 @@ data class SelectorUiState(
     val sessionCopiedCount: Int = 0,
     val sessionDeletedCount: Int = 0,
     val sessionKeptFileNames: Set<String> = emptySet(),
+    /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
+    val missingGrantPrompt: Boolean = false,
 ) {
     /** Whether worst-first triage has reached or passed the configured sharpness stop-line (`U-34`). */
     val hasReachedSharpnessThreshold: Boolean
@@ -381,7 +383,6 @@ class SelectorViewModel @Inject constructor(
     private val prefetchRequests = mutableMapOf<String, Disposable>()
 
     private var workQueue = WorkQueueState()
-    private var pendingScanAesthetic = false
     private var pendingGroupingLevel: GroupingLevel = GroupingLevel.TIME_FILENAME
 
     private val imageGrouper = ImageGrouper(context)
@@ -492,6 +493,7 @@ class SelectorViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            settingsRepository.reconcilePersistedGrants()
             settingsRepository.lastFolderUri.collect { uri ->
                 if (uri != null && _uiState.value.folderUri == null) {
                     selectFolder(Uri.parse(uri))
@@ -529,7 +531,6 @@ class SelectorViewModel @Inject constructor(
         cancelAllPrefetch()
         loadedExifCache.clear()
         workQueue = SelectorWorkQueue.reset()
-        pendingScanAesthetic = false
         _ratingFilter.value = RatingFilter.All
         _uiState.update {
             it.copy(
@@ -552,6 +553,7 @@ class SelectorViewModel @Inject constructor(
                 sessionCopiedCount = 0,
                 sessionDeletedCount = 0,
                 sessionKeptFileNames = emptySet(),
+                missingGrantPrompt = false,
             )
         }
     }
@@ -569,6 +571,7 @@ class SelectorViewModel @Inject constructor(
                     isLoading = true,
                     isEnumerating = true,
                     error = null,
+                    missingGrantPrompt = false,
                     folderUri = uri.toString(),
                     sourceKind = classifiedKind,
                 )
@@ -579,18 +582,35 @@ class SelectorViewModel @Inject constructor(
             // [ImageRepository.openFolder].
             val folderName = imageRepository.openFolder(context, uri)
             if (folderName == null) {
-                _uiState.update { it.copy(isLoading = false, isEnumerating = false) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isEnumerating = false,
+                        folderUri = null,
+                        folderName = "",
+                        missingGrantPrompt = true,
+                    )
+                }
                 reportError("Failed to load folder: permission revoked or directory deleted.")
                 settingsRepository.setLastFolderUri(null)
                 return@launch
             }
 
-            _uiState.update { it.copy(folderName = folderName) }
+            _uiState.update { it.copy(folderName = folderName, missingGrantPrompt = false) }
 
             settingsRepository.setLastFolderUri(uri.toString())
 
             collectDiscovery(uri, "images") { e ->
-                if (e is SecurityException) settingsRepository.setLastFolderUri(null)
+                if (e is SecurityException) {
+                    _uiState.update {
+                        it.copy(
+                            folderUri = null,
+                            folderName = "",
+                            missingGrantPrompt = true,
+                        )
+                    }
+                    settingsRepository.setLastFolderUri(null)
+                }
             }
         }
     }
@@ -820,10 +840,9 @@ class SelectorViewModel @Inject constructor(
 
     // ── Scanning, grouping, and the queue between them ───────────────────
 
-    fun startScan(aestheticEnabled: Boolean = false, forceCloudScan: Boolean = false) {
+    fun startScan(forceCloudScan: Boolean = false) {
         val state = _uiState.value
         if (state.images.isEmpty()) return
-        pendingScanAesthetic = aestheticEnabled
         if (!forceCloudScan && state.sourceKind.isCloudProvider) {
             _uiState.update { it.copy(showCloudScanConfirmation = true) }
             return
@@ -833,7 +852,7 @@ class SelectorViewModel @Inject constructor(
 
     fun confirmCloudScan() {
         _uiState.update { it.copy(showCloudScanConfirmation = false) }
-        startScan(aestheticEnabled = pendingScanAesthetic, forceCloudScan = true)
+        startScan(forceCloudScan = true)
     }
 
     fun dismissCloudScanConfirmation() {
@@ -880,7 +899,7 @@ class SelectorViewModel @Inject constructor(
         publishWorkState()
         when (val decision = outcome.second) {
             is WorkDecision.Start -> when (decision.work) {
-                SelectorWork.SCAN -> runScan(pendingScanAesthetic)
+                SelectorWork.SCAN -> runScan()
                 SelectorWork.GROUPING -> runGrouping(pendingGroupingLevel)
             }
             is WorkDecision.Queue, WorkDecision.Idle -> Unit
@@ -907,7 +926,7 @@ class SelectorViewModel @Inject constructor(
         applyWorkDecision(SelectorWorkQueue.finish(workQueue, work))
     }
 
-    private fun runScan(aestheticEnabled: Boolean) {
+    private fun runScan() {
         val images = _uiState.value.images
         if (images.isEmpty()) {
             finishWork(SelectorWork.SCAN)
@@ -926,7 +945,7 @@ class SelectorViewModel @Inject constructor(
 
             var analysed = 0
             try {
-                scanImagesUseCase(images, aestheticEnabled).collect { progress ->
+                scanImagesUseCase(images).collect { progress ->
                     val fraction = if (progress.total > 0) {
                         progress.processed.toFloat() / progress.total.toFloat()
                     } else {

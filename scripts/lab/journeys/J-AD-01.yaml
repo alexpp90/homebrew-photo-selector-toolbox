@@ -1,0 +1,20 @@
+id: J-AD-01
+product: android-desktop
+title: Open folder and verify three-frame workspace layout
+fixture: burst-raw-jpeg
+configs: [tab-landscape]
+fresh_install: false
+steps:
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-01/01_open_picker.yaml}
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-01/_picker_grant.yaml}
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-01/02_wait_opened.yaml}
+  - {checkpoint: opened}
+fs_expect:
+  opened:
+    unchanged: true
+layout_expect:
+  opened:
+    required: [image_region, position_counter, selector_sidebar]
+timing_expect:
+  opened:
+    trend: true

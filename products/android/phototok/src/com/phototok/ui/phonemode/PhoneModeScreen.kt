@@ -32,7 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FolderOpen
@@ -40,9 +39,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lens
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,6 +88,7 @@ import com.phototok.domain.SwipeAction
 import com.phototok.ui.components.ViewerBottomBar
 import com.phototok.ui.settings.SettingsScreen
 import com.phototok.viewmodel.PhoneModeViewModel
+import com.phototok.viewmodel.ReloadPrompt
 import com.phototok.viewmodel.SelectionViewerTab
 import com.phototok.viewmodel.SelectionViewerViewModel
 import com.phototok.viewmodel.canRevert
@@ -186,20 +189,27 @@ fun PhoneModeScreen(
     if (showDirectDeleteConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showDirectDeleteConfirmDialog = false },
+            modifier = Modifier.testTag("direct_delete_dialog"),
             title = { Text("Delete Permanently", color = colors.error) },
             text = {
                 Text("This picture will be directly deleted (permanently) because trash is not supported for this location.\n\nHint: You can disable this confirmation in Settings.")
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showDirectDeleteConfirmDialog = false
-                    viewModel.requestDelete()
-                }) {
+                TextButton(
+                    onClick = {
+                        showDirectDeleteConfirmDialog = false
+                        viewModel.requestDelete()
+                    },
+                    modifier = Modifier.testTag("direct_delete_confirm_button"),
+                ) {
                     Text("Delete", color = colors.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDirectDeleteConfirmDialog = false }) {
+                TextButton(
+                    onClick = { showDirectDeleteConfirmDialog = false },
+                    modifier = Modifier.testTag("direct_delete_cancel_button"),
+                ) {
                     Text("Cancel")
                 }
             },
@@ -377,8 +387,9 @@ fun PhoneModeScreen(
                             enabled = true,
                             onClick = openSelectionViewer,
                         )
+                        // Revert (restore pending deleted photo from trash)
                         SidePanelButton(
-                            icon = Icons.AutoMirrored.Filled.Undo,
+                            icon = Icons.Default.RestoreFromTrash,
                             description = "Revert",
                             isActive = uiState.canRevert,
                             enabled = uiState.canRevert,
@@ -386,7 +397,7 @@ fun PhoneModeScreen(
                         )
                         SidePanelButton(
                             icon = Icons.AutoMirrored.Filled.HelpOutline,
-                            description = "Show controls",
+                            description = "Help",
                             isActive = false,
                             enabled = true,
                             onClick = { viewModel.showControlsGuide() },
@@ -461,7 +472,7 @@ fun PhoneModeScreen(
                                 .testTag("landscape_reload_folder_button"),
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Refresh,
+                                imageVector = Icons.Default.Sync,
                                 contentDescription = "Reload folder",
                                 tint = sideIconTint,
                             )
@@ -557,6 +568,7 @@ fun PhoneModeScreen(
                     collectionFolderName = uiState.collectionFolderName,
                     isLoading = uiState.isLoading,
                     emptyFolderMessage = uiState.emptyFolderMessage,
+                    missingGrantPrompt = uiState.missingGrantPrompt,
                     onSelectCamera = {
                         viewModel.selectCameraFolder { cameraUri ->
                             folderPickerLauncher.launch(cameraUri)
@@ -630,48 +642,13 @@ fun PhoneModeScreen(
             }
         }
 
-        // ── Reload folder & Jump to Latest confirmation dialog ──────────────
+        // ── Folder resume / reload prompt dialog ─────────────────────────────
         val reloadPrompt = uiState.reloadPrompt
         if (reloadPrompt != null) {
-            val countText = if (reloadPrompt.newCount == 1) {
-                "1 new photo was found"
-            } else {
-                "${reloadPrompt.newCount} new photos were found"
-            }
-            AlertDialog(
-                onDismissRequest = { viewModel.dismissReloadPrompt() },
-                title = {
-                    Text(
-                        text = "New Photos Found",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                },
-                text = {
-                    Text(
-                        text = "$countText while reviewing. Would you like to jump to the new photos or stay at your current photo?",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { viewModel.confirmReloadJumpToLatest() },
-                        modifier = Modifier.testTag("reload_jump_confirm_button"),
-                    ) {
-                        Text("Jump to Latest")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { viewModel.dismissReloadPrompt() },
-                        modifier = Modifier.testTag("reload_jump_stay_button"),
-                    ) {
-                        Text("Stay at Current")
-                    }
-                },
-                modifier = Modifier
-                    .widthIn(max = 460.dp)
-                    .testTag("reload_jump_dialog"),
+            FolderResumeDialog(
+                prompt = reloadPrompt,
+                onStartWithNewest = { viewModel.confirmReloadJumpToLatest() },
+                onContinueWhereLeftOff = { viewModel.dismissReloadPrompt() },
             )
         }
 
@@ -728,7 +705,7 @@ fun PhoneModeScreen(
                                 .testTag("reload_folder_button"),
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Refresh,
+                                imageVector = Icons.Default.Sync,
                                 contentDescription = "Reload folder",
                                 tint = topIconTint,
                             )
@@ -797,7 +774,68 @@ fun PhoneModeScreen(
     }
 }
 
-/** Side-panel circular button used in the landscape viewer. */
+/**
+ * Modal dialog shown when reloading PhotoTok or reopening a previously opened folder,
+ * informing the user whether newer photos were added since they left and letting them
+ * choose between continuing where they left off or starting with the newest image.
+ */
+@Composable
+fun FolderResumeDialog(
+    prompt: ReloadPrompt,
+    onStartWithNewest: () -> Unit,
+    onContinueWhereLeftOff: () -> Unit,
+) {
+    val photoNumber = (prompt.resumeIndex + 1).coerceAtLeast(1)
+    val positionContext = if (prompt.totalCount > 0) {
+        " (at photo #$photoNumber of ${prompt.totalCount})"
+    } else {
+        ""
+    }
+    val newerInfo = when {
+        prompt.newCount == 1 -> "1 newer photo was added since you last left$positionContext."
+        prompt.newCount > 1 -> "${prompt.newCount} newer photos were added since you last left$positionContext."
+        else -> "No newer photos were added since you last left$positionContext."
+    }
+    val dialogTitle = if (prompt.newCount > 0) "New Photos Found" else "Resume Folder?"
+
+    AlertDialog(
+        onDismissRequest = onContinueWhereLeftOff,
+        title = {
+            Text(
+                text = dialogTitle,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Text(
+                text = "$newerInfo Would you like to continue where you left off or start with the newest image?",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onStartWithNewest,
+                modifier = Modifier.testTag("reload_jump_confirm_button"),
+            ) {
+                Text("Start with Newest")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onContinueWhereLeftOff,
+                modifier = Modifier.testTag("reload_jump_stay_button"),
+            ) {
+                Text("Continue Where I Left Off")
+            }
+        },
+        modifier = Modifier
+            .widthIn(max = 460.dp)
+            .testTag("reload_jump_dialog"),
+    )
+}
+
+/** Side-panel labelled button used in the landscape viewer. */
 @Composable
 private fun SidePanelButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -814,9 +852,9 @@ private fun SidePanelButton(
     }
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(width = 64.dp, height = 48.dp)
             .then(
-                if (isActive) Modifier.clip(CircleShape).background(colors.primaryContainer)
+                if (isActive) Modifier.clip(RoundedCornerShape(14.dp)).background(colors.primaryContainer)
                 else Modifier
             )
             .then(
@@ -828,7 +866,25 @@ private fun SidePanelButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(imageVector = icon, contentDescription = description, tint = tint)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = description,
+                color = tint,
+                fontSize = 10.sp,
+                lineHeight = 11.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
+        }
     }
 }
 

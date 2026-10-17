@@ -22,7 +22,7 @@ public struct CullingActionBar: View {
                 isEnabled: !viewModel.photos.isEmpty,
                 action: { viewModel.cullCurrentPhoto(action: .move) }
             )
-            .accessibilityIdentifier("dock_move")
+            .uiTestFrame("dock_move")
             .help("Move active photo and companion RAW/XMP files to Selection folder (Press M)")
 
             // MARK: - 2. Copy to Selection (C)
@@ -35,7 +35,7 @@ public struct CullingActionBar: View {
                 isEnabled: !viewModel.photos.isEmpty,
                 action: { viewModel.cullCurrentPhoto(action: .copy) }
             )
-            .accessibilityIdentifier("dock_copy")
+            .uiTestFrame("dock_copy")
             .help("Copy active photo and companion files to Selection folder (Press C)")
 
             // MARK: - 3. Move to Trash (⌫)
@@ -49,7 +49,7 @@ public struct CullingActionBar: View {
                 isEnabled: !viewModel.photos.isEmpty,
                 action: { viewModel.cullCurrentPhoto(action: .trash) }
             )
-            .accessibilityIdentifier("dock_trash")
+            .uiTestFrame("dock_trash")
             .help("Move active photo and companion files to macOS Trash (Press Delete)")
 
             Divider()
@@ -66,7 +66,7 @@ public struct CullingActionBar: View {
                 isEnabled: viewModel.canUndo,
                 action: { viewModel.undoLastAction() }
             )
-            .accessibilityIdentifier("dock_undo")
+            .uiTestFrame("dock_undo")
             .help("Undo the last move, copy, or trash action (⌘Z)")
 
             Spacer()
@@ -110,6 +110,7 @@ public struct CullingActionBar: View {
                 Capsule()
                     .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
             )
+            .uiTestFrame("dock_tally")
 
             // Guide / Shortcuts Help Button
             Button(action: {
@@ -133,6 +134,7 @@ public struct CullingActionBar: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 4)
         .preferredColorScheme(.dark)
+        .uiTestFrame("dock")
     }
 }
 

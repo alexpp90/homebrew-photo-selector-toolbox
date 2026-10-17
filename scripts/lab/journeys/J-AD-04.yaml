@@ -1,0 +1,24 @@
+id: J-AD-04
+product: android-desktop
+title: Touch navigation, delete button, and coach overlay dismissal
+fixture: smoke
+configs: [tab-landscape, tab-portrait]
+fresh_install: true
+steps:
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-01/01_open_picker.yaml}
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-01/_picker_grant.yaml}
+  - {checkpoint: coach-before-dismiss}
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-04/01_dismiss_coach.yaml}
+  - {checkpoint: coach-dismissed}
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-04/02_touch_navigate_and_delete.yaml}
+  - {checkpoint: touch-deleted}
+layout_expect:
+  coach-before-dismiss:
+    required: [coach_overlay_dismiss]
+  coach-dismissed:
+    required: [image_region, reject_button]
+  touch-deleted:
+    required: [image_region]
+timing_expect:
+  coach-dismissed:
+    trend: true

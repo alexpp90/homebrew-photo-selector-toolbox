@@ -22,7 +22,7 @@ interface ImageRepository {
      * grant was revoked or the directory has gone.
      *
      * This exists so the ViewModel does not touch `DocumentFile` or
-     * `takePersistableUriPermission` itself. It did, once, and the cost was not
+     * [FolderAccessManager] itself. It did, once, and the cost was not
      * only the layering: it left the tests with no way to open a folder without
      * a real SAF grant, so both suites reached for a second URI scheme purely to
      * skip past it. A fake repository can satisfy this; a `DocumentFile` cannot

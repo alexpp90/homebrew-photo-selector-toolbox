@@ -230,7 +230,8 @@ class PhotoTextureLoader:
                 )
         except Exception:
             pixbuf = None
-        GLib.idle_add(self._deliver, key, pixbuf)
+        if GLib is not None:
+            GLib.idle_add(self._deliver, key, pixbuf)
 
     def _deliver(self, key, pixbuf) -> bool:
         texture = None

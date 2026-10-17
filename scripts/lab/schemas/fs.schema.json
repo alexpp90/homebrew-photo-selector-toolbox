@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "File System Snapshot",
+  "type": "object",
+  "required": ["root", "files", "trash"],
+  "properties": {
+    "root": {"type": "string"},
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "size"],
+        "properties": {
+          "path": {"type": "string"},
+          "size": {"type": "integer"}
+        }
+      }
+    },
+    "trash": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "size"],
+        "properties": {
+          "path": {"type": "string"},
+          "size": {"type": "integer"}
+        }
+      }
+    }
+  }
+}

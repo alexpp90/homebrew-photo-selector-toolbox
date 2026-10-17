@@ -1,0 +1,15 @@
+id: J-MAC-03
+product: macos
+title: End-of-roll boundary indicator and session tally verification
+fixture: smoke
+configs: [w1440]
+fresh_install: false
+steps:
+  - scenario: products/macos-desktop/tests/e2e/J-MAC-03.scenario.json
+  - checkpoint: last
+tally_expect:
+  last:
+    selected: 1
+layout_expect:
+  last:
+    required: [slot_current, slot_next]

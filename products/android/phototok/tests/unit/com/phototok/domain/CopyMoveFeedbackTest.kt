@@ -58,8 +58,9 @@ class CopyMoveFeedbackTest {
         assertTrue(CopyMoveFeedback.isError(failed = 0, partial = 1))
     }
 
+    // REQ-TOK-ARCH.16
     @Test
-    fun `partial move where copy succeeded but original could not be removed`() {
+    fun `partial source-delete failure reports copied with original not removed`() {
         assertEquals(
             "Copied to collection — original could not be removed",
             CopyMoveFeedback.message(

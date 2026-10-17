@@ -1,0 +1,36 @@
+id: J-TOK-02
+product: phototok
+title: Vertical feed paging, metadata overlay, and double-tap zoom
+fixture: smoke
+configs: [phone-portrait, phone-landscape, phone-large-text, phone-dark]
+fresh_install: false
+steps:
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-02/01_swipe_five.yaml}
+  - {checkpoint: fifth}
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-02/02_open_info.yaml}
+  - {checkpoint: info}
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-02/03_double_tap_zoom.yaml}
+  - {checkpoint: zoomed}
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-02/04_double_tap_fit.yaml}
+  - {checkpoint: fit}
+fs_expect:
+  fifth:
+    unchanged: true
+  info:
+    unchanged: true
+  zoomed:
+    unchanged: true
+  fit:
+    unchanged: true
+layout_expect:
+  fifth:
+    required: [viewer.photo]
+  info:
+    required: [viewer.info]
+  zoomed:
+    required: [viewer.photo]
+  fit:
+    required: [viewer.photo]
+timing_expect:
+  fifth:
+    trend: true

@@ -90,6 +90,13 @@ android {
         debug {
             isMinifyEnabled = false
         }
+        create("lab") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".lab"
+            versionNameSuffix = "-lab"
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
@@ -214,11 +221,6 @@ dependencies {
     // OpenCV
     implementation(libs.opencv.android)
 
-    // TensorFlow Lite — on-device NIMA aesthetic scoring.
-    // The .tflite model is loaded from assets at runtime; if absent the
-    // AestheticAnalyzer degrades gracefully (no aesthetic score shown).
-    implementation(libs.tensorflow.lite)
-
     // Testing — JVM unit tests
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -240,7 +242,19 @@ dependencies {
     androidTestImplementation(libs.hilt.android.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4.accessibility)
     androidTestImplementation(libs.androidx.room.testing)
     kspAndroidTest(libs.hilt.android.compiler)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    constraints {
+        implementation("androidx.concurrent:concurrent-futures:1.2.0")
+    }
+}
+
+// accessibility-test-framework (via ui-test-junit4-accessibility) pulls in guava:31.0.1-android,
+// which requests listenablefuture:9999.0-empty-to-avoid-conflict-with-guava and conflicts with
+// debugRuntimeClasspath's strictly-pinned listenablefuture:1.0 under AGP consistent resolution.
+configurations.matching { it.name.contains("AndroidTest") }.configureEach {
+    exclude(group = "com.google.guava", module = "listenablefuture")
 }

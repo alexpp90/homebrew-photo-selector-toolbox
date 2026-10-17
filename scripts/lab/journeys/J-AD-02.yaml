@@ -1,0 +1,36 @@
+id: J-AD-02
+product: android-desktop
+title: Keyboard navigation, move, delete, undo, and frame maximise
+fixture: burst-raw-jpeg
+configs: [tab-landscape, tab-landscape-kbd, dex-1280x800]
+fresh_install: false
+steps:
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-02/01_wait_ready.yaml}
+  - {keys: [DPAD_RIGHT, DPAD_RIGHT]}
+  - {checkpoint: moved}
+  - {keys: [M]}
+  - {wait_ms: 1500}
+  - {checkpoint: after-keep}
+  - {keys: [FORWARD_DEL]}
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-02/02_confirm_delete.yaml}
+  - {checkpoint: after-delete}
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-02/03_tap_undo.yaml}
+  - {checkpoint: after-undo}
+  - {keys: ["2"]}
+  - {checkpoint: maximised}
+  - {keys: [ESCAPE]}
+fs_expect:
+  after-keep:
+    present: ["Selection/*DSC_0003*"]
+    absent: ["DSC_0003.JPG"]
+  after-delete:
+    present: ["DSC_0004.JPG"]
+layout_expect:
+  moved:
+    required: [image_region]
+    frames: [image_region]
+  maximised:
+    required: [maximised_frame]
+timing_expect:
+  moved:
+    trend: true

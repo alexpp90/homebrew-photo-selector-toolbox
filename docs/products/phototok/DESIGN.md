@@ -142,24 +142,22 @@ Box(Modifier.fillMaxSize()) {
 
 **New file:** `ui/components/BottomNavBar.kt`
 
-The mockup shows a persistent 3-item bottom nav across all screens:
+The viewer bottom bar (`ViewerBottomBar`) shows 3 persistent action items paired with visible `10.sp` (`labelSmall`) micro-labels:
 
 ```
-[folder_open]  [style]  [history]
+[FolderOpen: Sources]  [CollectionsBookmark: Selection]  [RestoreFromTrash: Revert]
 ```
 
 - Container: `surfaceContainerLowest.copy(alpha=0.8f)`, backdrop blur, `RoundedCornerShape(topStart=12.dp, topEnd=12.dp)`
 - Active item: `primaryContainer` circle background, `onPrimaryContainer` icon (filled variant)
-- Inactive items: `secondary` tint
+- Inactive items: `secondary` tint; `Revert` uses `RestoreFromTrash` (trash bin with upward restore arrow) so it is visually distinct from the top-bar `Sync` Reload icon
 - Padding: 32dp horizontal, 32dp bottom (for nav bar insets)
-
-On landing: `folder_open` active. On viewer: `style` active. On history: `history` active.
 
 **Integrate in:** `ui/phonemode/PhoneModeScreen.kt` — wrap the content in a `Scaffold` or add the nav bar as a fixed overlay at `Alignment.BottomCenter`.
 
 ### Top app bar
 
-The mockup shows "PhotoTok" in `primary` color (bold) on the left, settings icon on the right. This replaces the current standalone settings `IconButton`.
+The top app bar shows the "PhotoTok" logo + wordmark in `primary` color (bold) on the left, and four action buttons on the right: `Sync` (Reload folder), `HelpOutline` (Controls guide), `Info` (EXIF metadata toggle), and `Settings`. In landscape orientation, the left and right side panels render these actions as `SidePanelButton` items with visible `9.sp` micro-labels (`Sources`, `Selection`, `Revert`, `Help`, `Reload`, `Info`, `Settings`).
 
 **Add to:** `PhoneModeScreen.kt` — fixed `Row` at `Alignment.TopStart` with statusBarsPadding.
 

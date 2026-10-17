@@ -119,7 +119,7 @@ done
 # If no product was explicitly requested, mirror CI paths: filters via git change detection
 if ! $explicit_product; then
     CHANGED_FILES=()
-    if have git && [ -d "$ROOT_DIR/.git" ]; then
+    if have git && [ -e "$ROOT_DIR/.git" ]; then
         BASE_COMMIT=""
         if git rev-parse --verify origin/main &>/dev/null; then
             BASE_COMMIT="$(git merge-base HEAD origin/main 2>/dev/null || true)"
@@ -223,14 +223,14 @@ VENV_BIN=""
 if have poetry && [ -f "$ROOT_DIR/products/desktop/poetry.lock" ]; then
     PY_RUNNER=(poetry run)
     VENV_PATH="$(poetry --directory "$ROOT_DIR/products/desktop" env info -p 2>/dev/null || true)"
-    if [ -z "$VENV_PATH" ] || [ ! -d "$VENV_PATH/bin" ]; then
-        COMMON_GIT_DIR="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-        MAIN_ROOT="${COMMON_GIT_DIR%/.git}"
-        if [ -n "$MAIN_ROOT" ] && [ -d "$MAIN_ROOT/products/desktop" ]; then
-            VENV_PATH="$(poetry --directory "$MAIN_ROOT/products/desktop" env info -p 2>/dev/null || true)"
+    if [ ! -x "$VENV_PATH/bin/pytest" ] && have git; then
+        COMMON_GIT="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+        COMMON_ROOT="${COMMON_GIT%/.git}"
+        if [ -n "$COMMON_ROOT" ] && [ -f "$COMMON_ROOT/products/desktop/poetry.lock" ]; then
+            VENV_PATH="$(poetry --directory "$COMMON_ROOT/products/desktop" env info -p 2>/dev/null || true)"
         fi
     fi
-    if [ -n "$VENV_PATH" ] && [ -d "$VENV_PATH/bin" ]; then
+    if [ -x "$VENV_PATH/bin/pytest" ]; then
         VENV_BIN="$VENV_PATH/bin"
     fi
 fi
@@ -386,6 +386,12 @@ if $run_android; then
         section "Android instrumented-test compilation"
         gate "gradlew assembleDebugAndroidTest (:android-desktop, :phototok)" "android.yml:unit-tests" \
             ./gradlew :android-desktop:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
+
+        section "Android 16 KB ELF page alignment"
+        gate "check_native_alignment.py (merged_native_libs)" "android.yml:unit-tests" \
+            python3 "$ROOT_DIR/scripts/check_native_alignment.py" \
+                "$ROOT_DIR/products/android/android-desktop/build/intermediates/merged_native_libs/debug" \
+                "$ROOT_DIR/products/android/phototok/build/intermediates/merged_native_libs/debug"
 
         # ── Android lint (advisory) ───────────────────────────────
         # Deliberately non-blocking: the CI job is `continue-on-error: true`
@@ -553,11 +559,14 @@ if have python3; then
         python3 scripts/fetch_format_corpus.py --validate
     gate "format corpus tooling tests" "repo-hygiene.yml:hygiene" \
         python3 -m unittest discover -s scripts/tests -q
+    gate "lab tooling tests" "local-only" \
+        python3 -m unittest discover -s scripts/lab/tests -q
 else
     skip "readme parity" "" "python3 not found"
     skip "no private-overlay material tracked" "" "python3 not found"
     skip "format contract manifest" "" "python3 not found"
     skip "format corpus tooling tests" "" "python3 not found"
+    skip "lab tooling tests" "" "python3 not found"
 fi
 
 # ── Private overlay gates (mirror: photo-selector-private framework.yml) ──
@@ -580,6 +589,9 @@ if [ -d "$ROOT_DIR/private/.git" ] || [ -f "$ROOT_DIR/private/.git" ]; then
         if python3 -c "import pytest" &>/dev/null; then
             gate "framework & hook tests" "framework.yml:framework" \
                 python3 -m pytest -q -p no:cacheprovider private/tests/framework
+        elif [ -n "$VENV_BIN" ] && [ -x "$VENV_BIN/pytest" ]; then
+            gate "framework & hook tests" "framework.yml:framework" \
+                "$VENV_BIN/pytest" -q -p no:cacheprovider private/tests/framework
         else
             skip "framework & hook tests" "framework.yml:framework" "pytest not importable by python3"
         fi

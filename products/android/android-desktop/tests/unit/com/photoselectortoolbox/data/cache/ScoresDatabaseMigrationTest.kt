@@ -722,5 +722,42 @@ class ScoresDatabaseMigrationTest {
 
         roomDb.close()
     }
+
+    // REQ-AND-CACHE.03, REQ-AND-CACHE.06
+    @Test
+    fun chunkedQueries_handle2500UrisWithoutExceedingSqliteBindLimit() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, ScoresDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val dao = db.scoreDao()
+        try {
+            val uris = (1..2500).map { "content://test/photo_$it.jpg" }
+            uris.forEachIndexed { idx, uri ->
+                dao.insertOrUpdate(
+                    ScoreEntity(
+                        filePath = uri,
+                        fileSize = 100L + idx,
+                        lastModified = 1000L,
+                        sharpnessScore = 50.0,
+                        lastAccessTime = 100L,
+                    )
+                )
+                dao.upsertUserRating(UserRatingEntity(uri = uri, rating = (idx % 5) + 1, updatedAt = 500L))
+            }
+
+            val scores = dao.getScoresChunked(uris)
+            assertEquals(2500, scores.size)
+
+            dao.updateAccessTimesChunked(uris, time = 9999L)
+            assertEquals(9999L, dao.getScore(uris.first())?.lastAccessTime)
+            assertEquals(9999L, dao.getScore(uris.last())?.lastAccessTime)
+
+            val ratings = dao.getUserRatingsChunked(uris)
+            assertEquals(2500, ratings.size)
+        } finally {
+            db.close()
+        }
+    }
 }
 
