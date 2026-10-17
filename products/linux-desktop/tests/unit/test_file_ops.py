@@ -717,3 +717,223 @@ def test_resolve_bundle_destinations_skips_occupied_suffixes(tmp_path: Path):
         (cr3, (sel_dir / "IMG_0001-3.CR3").resolve()),
         (jpg, (sel_dir / "IMG_0001-3.JPG").resolve()),
     ]
+
+
+def _make_card_mount_manager(card_mount: Path, home_root: Path, uid: int = 1000) -> FileCullingManager:
+    card_res = card_mount.resolve()
+
+    def _is_on_card(p: Path) -> bool:
+        try:
+            p.resolve().relative_to(card_res)
+            return True
+        except ValueError:
+            return False
+
+    return FileCullingManager(
+        mount_root_for=lambda p: card_res if _is_on_card(p) else home_root.resolve(),
+        dev_of=lambda p: 77 if _is_on_card(p) else 1,
+        uid=uid,
+    )
+
+
+def test_card_mount_trash_and_undo_restores_bundle_and_ignores_home_trash_collision(
+    tmp_path: Path, monkeypatch
+):
+    """Trashing RAW+JPG+XMP on a mounted card uses <card>/.Trash-$UID with relative Path= and restores cleanly."""
+    xdg_data = tmp_path / "xdg_data"
+    monkeypatch.setenv("XDG_DATA_HOME", str(xdg_data))
+    home_trash = xdg_data / "Trash"
+    (home_trash / "files").mkdir(parents=True)
+    (home_trash / "info").mkdir(parents=True)
+
+    # Unrelated file with the same name in the user's home trash
+    unrelated_home_cr3 = home_trash / "files" / "IMG_0001.CR3"
+    unrelated_home_info = home_trash / "info" / "IMG_0001.CR3.trashinfo"
+    unrelated_home_cr3.write_bytes(b"unrelated-home-trash-cr3")
+    unrelated_home_info.write_text(
+        "[Trash Info]\nPath=/home/user/Pictures/IMG_0001.CR3\nDeletionDate=2026-01-01T00:00:00\n",
+        encoding="utf-8",
+    )
+
+    # Mounted SD card with DCIM/100EOS/IMG_0001.{CR3,JPG,CR3.xmp}
+    card_mount = tmp_path / "EOS_DIGITAL"
+    dcim_dir = card_mount / "DCIM" / "100EOS"
+    dcim_dir.mkdir(parents=True)
+    cr3 = dcim_dir / "IMG_0001.CR3"
+    jpg = dcim_dir / "IMG_0001.JPG"
+    xmp = dcim_dir / "IMG_0001.CR3.xmp"
+    cr3.write_bytes(b"card-cr3-bytes")
+    jpg.write_bytes(b"card-jpg-bytes")
+    xmp.write_bytes(b"card-xmp-bytes")
+
+    candidate = CandidatePhoto(primary_path=cr3, companion_paths=[jpg, xmp])
+    mgr = _make_card_mount_manager(card_mount, tmp_path, uid=1000)
+
+    record = mgr.trash_candidate(candidate)
+
+    card_trash = card_mount / ".Trash-1000"
+    assert not cr3.exists() and not jpg.exists() and not xmp.exists()
+    assert (card_trash / "files" / "IMG_0001.CR3").read_bytes() == b"card-cr3-bytes"
+    assert (card_trash / "files" / "IMG_0001.JPG").read_bytes() == b"card-jpg-bytes"
+    assert (card_trash / "files" / "IMG_0001.CR3.xmp").read_bytes() == b"card-xmp-bytes"
+
+    cr3_info_text = (card_trash / "info" / "IMG_0001.CR3.trashinfo").read_text(encoding="utf-8")
+    assert "Path=DCIM/100EOS/IMG_0001.CR3\n" in cr3_info_text
+
+    # _find_trashed_entry resolves relative Path= against the card mount root, not home trash
+    found_entry = mgr._find_trashed_entry(cr3)
+    assert found_entry == (
+        (card_trash / "files" / "IMG_0001.CR3").resolve(),
+        (card_trash / "info" / "IMG_0001.CR3.trashinfo").resolve(),
+    )
+
+    # Undo restores all 3 files from card trash and leaves the unrelated home-trash file untouched
+    assert mgr.undo_culling(record, candidate) is True
+    assert cr3.exists() and cr3.read_bytes() == b"card-cr3-bytes"
+    assert jpg.exists() and jpg.read_bytes() == b"card-jpg-bytes"
+    assert xmp.exists() and xmp.read_bytes() == b"card-xmp-bytes"
+    assert not (card_trash / "files" / "IMG_0001.CR3").exists()
+    assert not (card_trash / "info" / "IMG_0001.CR3.trashinfo").exists()
+    assert unrelated_home_cr3.exists() and unrelated_home_cr3.read_bytes() == b"unrelated-home-trash-cr3"
+    assert unrelated_home_info.exists()
+
+
+def test_trash_undo_missing_recorded_item_raises_and_does_not_restore_unrelated_same_named_file(
+    tmp_path: Path,
+):
+    """If the recorded trashed item was removed before undo, undo raises FileCullingError and never guesses by name."""
+    trash_dir = tmp_path / "Trash"
+    (trash_dir / "files").mkdir(parents=True)
+    (trash_dir / "info").mkdir(parents=True)
+
+    # Pre-existing unrelated file named IMG_0001.CR3 in Trash/files (Forces candidate into IMG_0001.2.CR3)
+    unrelated_in_trash = trash_dir / "files" / "IMG_0001.CR3"
+    unrelated_info = trash_dir / "info" / "IMG_0001.CR3.trashinfo"
+    unrelated_in_trash.write_bytes(b"unrelated-older-shoot-cr3")
+    unrelated_info.write_text(
+        "[Trash Info]\nPath=/other/folder/IMG_0001.CR3\nDeletionDate=2026-01-01T00:00:00\n",
+        encoding="utf-8",
+    )
+
+    cr3 = tmp_path / "IMG_0001.CR3"
+    cr3.write_bytes(b"current-shoot-cr3")
+    candidate = CandidatePhoto(primary_path=cr3, companion_paths=[])
+    mgr = FileCullingManager(trash_dir=trash_dir)
+
+    record = mgr.trash_candidate(candidate)
+    recorded_dst = dict(record.affected_paths)[cr3]
+    assert recorded_dst.name == "IMG_0001.2.CR3"
+
+    # Simulate external trash cleanup deleting the recorded trashed item before undo
+    recorded_dst.unlink()
+    record.trash_info_paths[cr3].unlink()
+
+    with pytest.raises(FileCullingError) as exc_info:
+        mgr.undo_culling(record, candidate)
+
+    assert "IMG_0001.CR3" in str(exc_info.value)
+    # Invariant: unrelated files/IMG_0001.CR3 must NEVER be restored to cr3!
+    assert not cr3.exists()
+    assert unrelated_in_trash.exists() and unrelated_in_trash.read_bytes() == b"unrelated-older-shoot-cr3"
+
+
+def test_card_mount_trash_undo_when_original_occupied_restores_with_suffix(
+    tmp_path: Path, monkeypatch
+):
+    """When original path on a mounted card is occupied before undo, card trash undo restores bundle with -2 suffix."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg_data"))
+    card_mount = tmp_path / "EOS_DIGITAL"
+    dcim_dir = card_mount / "DCIM" / "100EOS"
+    dcim_dir.mkdir(parents=True)
+
+    cr3 = dcim_dir / "IMG_0001.CR3"
+    jpg = dcim_dir / "IMG_0001.JPG"
+    cr3.write_bytes(b"trashed-card-cr3")
+    jpg.write_bytes(b"trashed-card-jpg")
+
+    candidate = CandidatePhoto(primary_path=cr3, companion_paths=[jpg])
+    mgr = _make_card_mount_manager(card_mount, tmp_path, uid=1000)
+
+    record = mgr.trash_candidate(candidate)
+
+    # Occupy the original primary path on the card before undo
+    cr3.write_bytes(b"new-card-shot-do-not-overwrite")
+
+    assert mgr.undo_culling(record, candidate) is True
+    assert cr3.read_bytes() == b"new-card-shot-do-not-overwrite"
+    assert (dcim_dir / "IMG_0001-2.CR3").read_bytes() == b"trashed-card-cr3"
+    assert (dcim_dir / "IMG_0001-2.JPG").read_bytes() == b"trashed-card-jpg"
+    assert candidate.primary_path == dcim_dir / "IMG_0001-2.CR3"
+    assert candidate.companion_paths == [dcim_dir / "IMG_0001-2.JPG"]
+
+
+def test_bundle_trash_failure_rolls_back_first_member_and_retains_partial_record_if_rollback_fails(
+    tmp_path: Path,
+):
+    """Half-failed bundle trash rolls back the first member; if rollback fails, retains partial_record for undo."""
+    from photo_selector_linux.viewmodels.culling_workspace import CullingWorkspaceViewModel
+
+    trash_dir = tmp_path / "Trash"
+    (trash_dir / "files").mkdir(parents=True)
+    (trash_dir / "info").mkdir(parents=True)
+
+    # Put an unrelated IMG_0001.CR3 in Trash so our trashed primary lands at IMG_0001.2.CR3
+    unrelated = trash_dir / "files" / "IMG_0001.CR3"
+    unrelated.write_bytes(b"unrelated-trash-payload")
+    (trash_dir / "info" / "IMG_0001.CR3.trashinfo").write_text(
+        "[Trash Info]\nPath=/elsewhere/IMG_0001.CR3\nDeletionDate=2026-01-01T00:00:00\n",
+        encoding="utf-8",
+    )
+
+    cr3 = tmp_path / "IMG_0001.CR3"
+    jpg = tmp_path / "IMG_0001.JPG"
+    cr3.write_bytes(b"precious-cr3")
+    jpg.write_bytes(b"precious-jpg")
+
+    candidate = CandidatePhoto(primary_path=cr3, companion_paths=[jpg])
+    mgr = FileCullingManager(trash_dir=trash_dir)
+
+    orig_trash_fn = mgr._trash_file_freedesktop
+    call_count = [0]
+
+    def fail_on_second_companion(src: Path, name=None):
+        call_count[0] += 1
+        if call_count[0] == 2:
+            raise PermissionError("Simulated companion trash failure")
+        return orig_trash_fn(src, name)
+
+    # Case A: Second member fails, rollback succeeds and restores IMG_0001.2.CR3 -> IMG_0001.CR3
+    with patch.object(mgr, "_trash_file_freedesktop", side_effect=fail_on_second_companion):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.trash_candidate(candidate)
+        assert exc_info.value.partial_record is None
+
+    assert cr3.exists() and cr3.read_bytes() == b"precious-cr3"
+    assert jpg.exists() and jpg.read_bytes() == b"precious-jpg"
+    assert unrelated.exists() and unrelated.read_bytes() == b"unrelated-trash-payload"
+    assert not (trash_dir / "files" / "IMG_0001.2.CR3").exists()
+
+    # Case B: Second member fails AND rollback of first member also fails -> error names IMG_0001.CR3
+    # and carries partial_record so CullingWorkspaceViewModel preserves it on undo_stack
+    call_count[0] = 0
+    vm = CullingWorkspaceViewModel(file_manager=mgr)
+    vm.candidates = [candidate]
+    vm.current_folder = tmp_path
+    notifications = []
+    vm.connect("notification", lambda _vm, msg: notifications.append(msg))
+
+    with patch.object(mgr, "_trash_file_freedesktop", side_effect=fail_on_second_companion), \
+         patch.object(mgr, "_restore_from_trash", side_effect=OSError("Simulated rollback I/O error")):
+        vm.cull_trash()
+
+    assert notifications and "IMG_0001.CR3" in notifications[-1]
+    assert len(vm.undo_stack) == 1
+    partial_rec, recorded_photo, _ = vm.undo_stack[0]
+    assert recorded_photo is candidate
+    assert partial_rec.affected_paths == [(cr3, (trash_dir / "files" / "IMG_0001.2.CR3").resolve())]
+
+    # Now that the transient I/O error has cleared, user can Undo to recover IMG_0001.CR3 from Trash!
+    assert vm.undo() is True
+    assert cr3.exists() and cr3.read_bytes() == b"precious-cr3"
+    assert jpg.exists() and jpg.read_bytes() == b"precious-jpg"
+    assert unrelated.exists() and unrelated.read_bytes() == b"unrelated-trash-payload"

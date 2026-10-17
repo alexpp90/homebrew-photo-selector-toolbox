@@ -17,7 +17,7 @@ import os
 import shutil
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote, unquote
 
 from photo_selector_linux.core.gvfs_names import (
@@ -220,7 +220,10 @@ def _move_no_overwrite(src: Path, dst: Path) -> None:
 
 class FileCullingError(Exception):
     """Base exception for culling file operation failures."""
-    pass
+
+    def __init__(self, message: str, partial_record: Optional[CullingRecord] = None):
+        super().__init__(message)
+        self.partial_record = partial_record
 
 
 class InsufficientDiskSpaceError(FileCullingError):
@@ -236,10 +239,48 @@ class FileCullingManager:
         default_selection_folder: str = "Selection",
         trash_dir: Optional[Path] = None,
         name_resolver: Optional[DisplayNameResolver] = None,
+        mount_root_for: Optional[Callable[[Path], Optional[Path]]] = None,
+        dev_of: Optional[Callable[[Path], int]] = None,
+        uid: Optional[int] = None,
     ):
         self.default_selection_folder = default_selection_folder
         self._trash_dir = trash_dir
         self.name_resolver: DisplayNameResolver = name_resolver or default_resolver()
+        self._mount_root_for_fn = mount_root_for
+        self._dev_of_fn = dev_of
+        self._uid = uid
+
+    def _get_uid(self) -> int:
+        if self._uid is not None:
+            return self._uid
+        return os.getuid() if hasattr(os, "getuid") else 1000
+
+    def _dev_of(self, path: Path) -> int:
+        if self._dev_of_fn is not None:
+            return self._dev_of_fn(path)
+        curr = path
+        while not curr.exists() and not curr.is_symlink() and curr.parent != curr:
+            curr = curr.parent
+        return curr.stat().st_dev
+
+    def _mount_root_for(self, path: Path) -> Optional[Path]:
+        if self._mount_root_for_fn is not None:
+            res = self._mount_root_for_fn(path)
+            return res.resolve() if res is not None else None
+        curr = path.resolve()
+        while not curr.exists() and curr.parent != curr:
+            curr = curr.parent
+        if curr.is_file() or curr.is_symlink():
+            curr = curr.parent
+        dev = self._dev_of(curr)
+        while curr.parent != curr:
+            try:
+                if self._dev_of(curr.parent) != dev:
+                    return curr
+            except OSError:
+                return curr
+            curr = curr.parent
+        return curr
 
     def _resolve_bundle_destinations(
         self,
@@ -258,13 +299,73 @@ class FileCullingManager:
             return Path(xdg_data) / "Trash"
         return Path.home() / ".local" / "share" / "Trash"
 
-    def _trash_file_freedesktop(self, src: Path, name: Optional[str] = None) -> Path:
+    def _select_trash_base_for(self, src: Path) -> Tuple[Path, Optional[Path]]:
+        """Return ``(trash_base, mount_root)`` for ``src``.
+
+        When ``src`` resides on a mounted volume (SD card, external drive) with a different
+        device ID from the user's home trash, uses the FreeDesktop top-directory trash on that
+        mount (``<mount>/.Trash-$UID`` or ``<mount>/.Trash/$UID``) with relative ``Path=`` entries.
+        """
+        home_trash = self._get_trash_dir()
+        if self._trash_dir is not None or is_gvfs_fuse_path(src):
+            return home_trash, None
+
+        try:
+            src_dev = self._dev_of(src)
+            home_dev = self._dev_of(home_trash)
+        except OSError:
+            return home_trash, None
+
+        if src_dev != home_dev:
+            mount_root = self._mount_root_for(src)
+            if mount_root is not None:
+                try:
+                    src.resolve().relative_to(mount_root)
+                except ValueError:
+                    pass
+                else:
+                    uid = self._get_uid()
+                    shared_uid_trash = mount_root / ".Trash" / str(uid)
+                    top_uid_trash = mount_root / f".Trash-{uid}"
+                    if shared_uid_trash.is_dir() or (
+                        (mount_root / ".Trash").is_dir() and not top_uid_trash.exists()
+                    ):
+                        return shared_uid_trash, mount_root
+                    return top_uid_trash, mount_root
+
+        return home_trash, None
+
+    def _candidate_trash_bases(self, original_src: Path) -> List[Tuple[Path, Optional[Path]]]:
+        """Return ordered ``(trash_base, mount_root)`` candidates to inspect for ``original_src``."""
+        candidates: List[Tuple[Path, Optional[Path]]] = []
+        seen: set[Path] = set()
+
+        def _add(base: Path, mroot: Optional[Path]) -> None:
+            try:
+                key = base.resolve()
+            except OSError:
+                key = base
+            if key not in seen:
+                seen.add(key)
+                candidates.append((base, mroot))
+
+        if not is_gvfs_fuse_path(original_src):
+            mount_root = self._mount_root_for(original_src)
+            if mount_root is not None:
+                uid = self._get_uid()
+                _add(mount_root / f".Trash-{uid}", mount_root)
+                _add(mount_root / ".Trash" / str(uid), mount_root)
+
+        _add(self._get_trash_dir(), None)
+        return candidates
+
+    def _trash_file_freedesktop(self, src: Path, name: Optional[str] = None) -> Tuple[Path, Path]:
         """Relocate a file into the FreeDesktop.org Trash specification layout (files/ + info/).
 
         ``name`` is the user-facing filename when it differs from the on-disk one (GVFS cloud
-        mounts); the trash entry and its recorded original path use it.
+        mounts); the trash entry and its recorded original path use it. Returns ``(files_path, info_path)``.
         """
-        trash_base = self._get_trash_dir()
+        trash_base, mount_root = self._select_trash_base_for(src)
         files_dir = trash_base / "files"
         info_dir = trash_base / "info"
         files_dir.mkdir(parents=True, exist_ok=True)
@@ -278,15 +379,20 @@ class FileCullingManager:
             counter += 1
             candidate_name = f"{Path(name).stem}.{counter}{Path(name).suffix}"
 
-        dst_file = files_dir / candidate_name
-        info_file = info_dir / f"{candidate_name}.trashinfo"
+        dst_file = (files_dir / candidate_name).resolve()
+        info_file = (info_dir / f"{candidate_name}.trashinfo").resolve()
         deletion_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-        encoded_path = quote(str(src_resolved.parent / name), safe="/")
+        logical_src = src_resolved.parent / name
+        if mount_root is not None:
+            rel_path = logical_src.relative_to(mount_root)
+            encoded_path = quote(rel_path.as_posix(), safe="/")
+        else:
+            encoded_path = quote(str(logical_src), safe="/")
         info_content = f"[Trash Info]\nPath={encoded_path}\nDeletionDate={deletion_date}\n"
         info_file.write_text(info_content, encoding="utf-8")
 
         try:
-            if src_resolved.parent.stat().st_dev == files_dir.stat().st_dev:
+            if self._dev_of(src_resolved.parent) == self._dev_of(files_dir):
                 _move_no_overwrite(src_resolved, dst_file)
             else:
                 _copy_file(src_resolved, dst_file, fsync=True)
@@ -299,72 +405,88 @@ class FileCullingManager:
                     pass
             raise
 
-        return dst_file
+        return dst_file, info_file
 
-    def _find_trashed_file(self, original_src: Path) -> Optional[Path]:
-        """Locate a trashed file in FreeDesktop.org Trash matching original_src."""
-        trash_base = self._get_trash_dir()
-        files_dir = trash_base / "files"
-        info_dir = trash_base / "info"
-        if not files_dir.is_dir():
-            return None
+    def _find_trashed_entry(self, original_src: Path) -> Optional[Tuple[Path, Path]]:
+        """Locate ``(files_path, info_path)`` in mount or home Trash matching ``original_src``.
 
-        target_resolved = str(original_src.resolve())
-        if info_dir.is_dir():
-            matches: List[Tuple[float, Path]] = []
+        Matches only via ``.trashinfo`` ``Path=`` metadata (resolving relative paths against the
+        mount root for top-directory trash); never falls back to a bare filename match.
+        """
+        target_resolved = original_src.resolve()
+        matches: List[Tuple[int, Path, Path]] = []
+
+        for trash_base, mount_root in self._candidate_trash_bases(original_src):
+            files_dir = trash_base / "files"
+            info_dir = trash_base / "info"
+            if not files_dir.is_dir() or not info_dir.is_dir():
+                continue
             for info_file in info_dir.glob("*.trashinfo"):
                 try:
                     raw = info_file.read_text(encoding="utf-8", errors="replace")
                     for line in raw.splitlines():
-                        if line.startswith("Path="):
-                            recorded_path = unquote(line.split("=", 1)[1].strip())
-                            if (
-                                recorded_path == target_resolved
-                                or Path(recorded_path).resolve() == Path(target_resolved)
-                            ):
-                                trashed_name = info_file.name[:-len(".trashinfo")]
-                                payload = files_dir / trashed_name
-                                if payload.exists():
-                                    matches.append((info_file.stat().st_mtime, payload))
+                        if not line.startswith("Path="):
+                            continue
+                        recorded_raw = unquote(line.split("=", 1)[1].strip())
+                        recorded_path = Path(recorded_raw)
+                        if recorded_path.is_absolute():
+                            recorded_resolved = recorded_path.resolve()
+                        elif mount_root is not None:
+                            recorded_resolved = (mount_root / recorded_path).resolve()
+                        else:
+                            recorded_resolved = (trash_base.parent / recorded_path).resolve()
+
+                        if recorded_resolved == target_resolved:
+                            trashed_name = info_file.name[:-len(".trashinfo")]
+                            payload = files_dir / trashed_name
+                            if payload.exists() or payload.is_symlink():
+                                matches.append(
+                                    (info_file.stat().st_mtime_ns, payload.resolve(), info_file.resolve())
+                                )
                 except Exception:
                     continue
-            if matches:
-                matches.sort(key=lambda item: item[0], reverse=True)
-                return matches[0][1]
 
-        direct = files_dir / original_src.name
-        if direct.exists():
-            return direct
+        if matches:
+            matches.sort(key=lambda item: item[0], reverse=True)
+            return matches[0][1], matches[0][2]
         return None
+
+    def _find_trashed_file(self, original_src: Path) -> Optional[Path]:
+        """Locate a trashed file path matching ``original_src`` via ``.trashinfo`` metadata."""
+        entry = self._find_trashed_entry(original_src)
+        return entry[0] if entry is not None else None
 
     def _restore_from_trash(
         self,
         src: Path,
-        dst: Path,
+        dst: Optional[Path],
         restore_target: Optional[Path] = None,
+        info_path: Optional[Path] = None,
     ) -> None:
-        """Restore a single file from FreeDesktop.org Trash back to ``restore_target`` (or ``src``)."""
-        trash_file: Optional[Path] = None
-        if not str(dst).startswith("trash://") and dst.exists():
-            trash_file = dst
-        else:
-            trash_file = self._find_trashed_file(src)
+        """Restore a single recorded file from FreeDesktop.org Trash back to ``restore_target`` (or ``src``).
+
+        Never searches or guesses by filename: if the recorded ``dst`` is missing, raises
+        ``FileCullingError`` naming ``src.name``.
+        """
+        if dst is None or str(dst).startswith("trash://") or (not dst.exists() and not dst.is_symlink()):
+            raise FileCullingError(f"Trashed file for {src.name} is no longer in Trash (expected {dst})")
 
         target = restore_target if restore_target is not None else src
-        if trash_file is not None and trash_file.exists():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if target.parent.stat().st_dev == trash_file.stat().st_dev:
-                _move_no_overwrite(trash_file, target)
-            else:
-                _copy_file(trash_file, target, fsync=True)
-                trash_file.unlink()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if self._dev_of(target.parent) == self._dev_of(dst):
+            _move_no_overwrite(dst, target)
+        else:
+            _copy_file(dst, target, fsync=True)
+            if target.stat().st_size != dst.stat().st_size:
+                raise IOError(f"Byte mismatch restoring {dst.name}")
+            dst.unlink()
 
-            info_file = trash_file.parent.parent / "info" / f"{trash_file.name}.trashinfo"
-            if info_file.exists():
-                try:
-                    info_file.unlink()
-                except Exception:
-                    pass
+        info_file = info_path or (dst.parent.parent / "info" / f"{dst.name}.trashinfo")
+        if info_file.exists():
+            try:
+                info_file.unlink()
+            except Exception:
+                pass
 
     def _relink_restored(self, candidate: CandidatePhoto) -> None:
         """Point the candidate at its restored files.
@@ -433,8 +555,8 @@ class FileCullingManager:
         self._verify_destination_capacity(sel_dir, targets)
 
         # Detect cross-filesystem boundaries
-        sel_dev = sel_dir.stat().st_dev
-        is_cross_mount = any(t.exists() and t.stat().st_dev != sel_dev for t in targets)
+        sel_dev = self._dev_of(sel_dir)
+        is_cross_mount = any(t.exists() and self._dev_of(t) != sel_dev for t in targets)
 
         affected: List[Tuple[Path, Path]] = []
 
@@ -599,31 +721,71 @@ class FileCullingManager:
         """Safely send candidate and companions to FreeDesktop Trash (R-LINUX-CULL-05)."""
         targets = candidate.all_paths
         trashed_paths: List[Tuple[Path, Path]] = []
+        trash_info_paths: Dict[Path, Path] = {}
 
         try:
             for src in targets:
-                if not src.exists():
+                if not src.exists() and not src.is_symlink():
                     continue
                 if is_gvfs_fuse_path(src):
                     # GIO cannot trash through the FUSE mount, and the cloud's own trash is out of
                     # undo's reach: keep the file in the local Trash under its real name instead.
                     name = candidate.name_of(src)
-                    dst_trash = self._trash_file_freedesktop(src, name)
-                    trashed_paths.append((src.resolve().parent / name, dst_trash))
-                elif _HAVE_GIO and self._trash_dir is None and "XDG_DATA_HOME" not in os.environ:
+                    dst_trash, info_trash = self._trash_file_freedesktop(src, name)
+                    orig_key = src.resolve().parent / name
+                    trashed_paths.append((orig_key, dst_trash))
+                    trash_info_paths[orig_key] = info_trash
+                elif (
+                    _HAVE_GIO
+                    and self._trash_dir is None
+                    and "XDG_DATA_HOME" not in os.environ
+                    and self._mount_root_for_fn is None
+                    and self._dev_of_fn is None
+                ):
                     gfile = Gio.File.new_for_path(str(src.resolve()))
                     gfile.trash(None)
-                    located = self._find_trashed_file(src)
-                    trashed_paths.append((src, located if located is not None else Path(f"trash://{src.name}")))
-                else:
-                    dst_trash = self._trash_file_freedesktop(src)
+                    located = self._find_trashed_entry(src)
+                    if located is None:
+                        raise FileCullingError(f"Could not locate trashed entry in Trash for {src.name}")
+                    dst_trash, info_trash = located
                     trashed_paths.append((src, dst_trash))
+                    trash_info_paths[src] = info_trash
+                else:
+                    dst_trash, info_trash = self._trash_file_freedesktop(src)
+                    trashed_paths.append((src, dst_trash))
+                    trash_info_paths[src] = info_trash
         except Exception as e:
+            failed_rollbacks: List[Tuple[Path, Path, Exception]] = []
             for orig_src, trash_dst in reversed(trashed_paths):
                 try:
-                    self._restore_from_trash(orig_src, trash_dst)
-                except Exception:
-                    pass
+                    self._restore_from_trash(
+                        orig_src,
+                        trash_dst,
+                        info_path=trash_info_paths.get(orig_src),
+                    )
+                except Exception as rollback_err:
+                    failed_rollbacks.append((orig_src, trash_dst, rollback_err))
+            if failed_rollbacks:
+                failed_rollbacks.reverse()
+                still_trashed = [(s, d) for s, d, _ in failed_rollbacks]
+                still_info = {
+                    s: trash_info_paths[s]
+                    for s, _, _ in failed_rollbacks
+                    if s in trash_info_paths
+                }
+                partial_rec = CullingRecord(
+                    photo_id=candidate.id,
+                    action_type=CullingActionType.TRASH,
+                    original_primary_path=candidate.primary_path,
+                    affected_paths=still_trashed,
+                    previous_status=PhotoStatus.CANDIDATE,
+                    trash_info_paths=still_info,
+                )
+                failed_names = ", ".join(f"{s.name} ({err})" for s, _, err in failed_rollbacks)
+                raise FileCullingError(
+                    f"FreeDesktop trash failed ({e}); rollback also failed for: {failed_names}",
+                    partial_record=partial_rec,
+                ) from e
             raise FileCullingError(f"FreeDesktop trash failed, rolled back: {e}") from e
 
         candidate.status = PhotoStatus.TRASHED
@@ -633,6 +795,7 @@ class FileCullingManager:
             original_primary_path=candidate.primary_path,
             affected_paths=trashed_paths,
             previous_status=PhotoStatus.CANDIDATE,
+            trash_info_paths=trash_info_paths,
         )
 
     def _resolve_undo_targets(
@@ -787,7 +950,7 @@ class FileCullingManager:
                     dst_res = dst.resolve()
                     if dst_res != target_res and dst.exists():
                         restore_target.parent.mkdir(parents=True, exist_ok=True)
-                        if restore_target.parent.stat().st_dev == dst.stat().st_dev:
+                        if self._dev_of(restore_target.parent) == self._dev_of(dst):
                             _move_no_overwrite(dst, restore_target)
                         else:
                             _copy_file(dst, restore_target, fsync=True)
@@ -800,7 +963,7 @@ class FileCullingManager:
                 for moved_target, orig_dst in reversed(completed_moves):
                     if moved_target.exists() and not orig_dst.exists():
                         try:
-                            if orig_dst.parent.stat().st_dev == moved_target.stat().st_dev:
+                            if self._dev_of(orig_dst.parent) == self._dev_of(moved_target):
                                 _move_no_overwrite(moved_target, orig_dst)
                             else:
                                 _copy_file(moved_target, orig_dst, fsync=True)
@@ -817,13 +980,27 @@ class FileCullingManager:
 
         elif record.action_type == CullingActionType.TRASH:
             # === Transactional Trash Undo (R-LINUX-CULL-07) ===
-            # Restore trashed primary image and all companions from FreeDesktop Trash
+            # Restore trashed primary image and all companions from their exact recorded Trash paths
             undo_targets = self._resolve_undo_targets(record, candidate)
+            for orig_src, _restore_target, dst in undo_targets:
+                if dst is None or str(dst).startswith("trash://") or (not dst.exists() and not dst.is_symlink()):
+                    raise FileCullingError(
+                        f"Failed to restore trashed file {orig_src.name} during undo: "
+                        f"recorded trash item {dst} is missing"
+                    )
             restored_pairs = []
             for orig_src, restore_target, dst in undo_targets:
                 try:
-                    self._restore_from_trash(orig_src, dst, restore_target=restore_target)
+                    info_path = record.trash_info_paths.get(orig_src)
+                    self._restore_from_trash(
+                        orig_src,
+                        dst,
+                        restore_target=restore_target,
+                        info_path=info_path,
+                    )
                     restored_pairs.append((orig_src, restore_target))
+                except FileCullingError:
+                    raise
                 except Exception as e:
                     raise FileCullingError(f"Failed to restore trashed file {orig_src.name} during undo: {e}") from e
             if candidate:
