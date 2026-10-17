@@ -72,6 +72,10 @@ class SafTransferTest {
             @Volatile
             var failDeletes: Boolean = false
 
+            /** Milliseconds each file creation takes, to widen race windows in concurrency tests. */
+            @Volatile
+            var createDelayMs: Long = 0L
+
             @Volatile
             var autoRenameOnCreate: ((String) -> String)? = null
 
@@ -85,6 +89,7 @@ class SafTransferTest {
                 rootDir = root
                 advertiseSupportsMove = false
                 failDeletes = false
+                createDelayMs = 0L
                 autoRenameOnCreate = null
                 reportedSizeOverride = null
                 moveDocumentCalls.set(0)
@@ -259,6 +264,7 @@ class SafTransferTest {
                 autoRenameOnCreate?.invoke(displayName) ?: displayName
             }
             val target = File(parent, actualName)
+            if (createDelayMs > 0L) Thread.sleep(createDelayMs)
             if (mimeType == Document.MIME_TYPE_DIR) {
                 if (!target.exists() && !target.mkdirs()) {
                     throw FileNotFoundException("Could not mkdir $target")
@@ -632,13 +638,22 @@ class SafTransferTest {
         }
         gatedSource.ioDispatcher = gatingDispatcher
 
+        // Transfers into the same destination are serialised per destination (D-5), so each file
+        // goes to its own destination folder: only the semaphore then bounds the parallelism.
         val files = (1..5).map { idx ->
             File(rootDir, "CONC_$idx.JPG").apply { writeText("photo-$idx") }
         }
+        val destinations = (1..5).map { idx ->
+            File(rootDir, "dest$idx").mkdirs()
+            DocumentsContract.buildTreeDocumentUri(
+                FakeSafDocumentsProvider.AUTHORITY,
+                "${FakeSafDocumentsProvider.ROOT_ID}/dest$idx",
+            )
+        }
 
-        val deferreds = files.map { f ->
+        val deferreds = files.mapIndexed { idx, f ->
             async(standardDispatcher) {
-                gatedSource.copyImage(documentUriFor(f.name), treeUri, sorting = true, subfolderName = PhotoFolders.SELECTION)
+                gatedSource.copyImage(documentUriFor(f.name), destinations[idx], sorting = true, subfolderName = PhotoFolders.SELECTION)
             }
         }
 
@@ -678,5 +693,35 @@ class SafTransferTest {
         } catch (expected: CancellationException) {
             assertEquals("Transfer cancelled by scope", expected.message)
         }
+    }
+
+    // ── B-5 / D-5: concurrent transfers into the same destination ────────
+
+    // REQ-TOK-ARCH.15
+    @Test
+    fun `two concurrent copies of same-named files into one Selection both succeed with a suffix and one Selection folder`() {
+        source.ioDispatcher = Dispatchers.IO
+        FakeSafDocumentsProvider.createDelayMs = 150L
+        val fileA = File(rootDir, "dayA/IMG_0100.JPG").apply { parentFile!!.mkdirs(); writeText("payload-A") }
+        val fileB = File(rootDir, "dayB/IMG_0100.JPG").apply { parentFile!!.mkdirs(); writeText("payload-B") }
+
+        val results = kotlinx.coroutines.runBlocking {
+            val a = async(Dispatchers.IO) {
+                source.copyImageWithResult(documentUriFor("dayA/${fileA.name}"), treeUri, true, PhotoFolders.SELECTION)
+            }
+            val b = async(Dispatchers.IO) {
+                source.copyImageWithResult(documentUriFor("dayB/${fileB.name}"), treeUri, true, PhotoFolders.SELECTION)
+            }
+            listOf(a.await(), b.await())
+        }
+
+        assertTrue(results.all { it.success })
+        val jpeg = File(rootDir, "Selection/JPEG").list()!!.sorted()
+        assertEquals(listOf("IMG_0100-2.JPG", "IMG_0100.JPG"), jpeg)
+        assertEquals(
+            setOf("payload-A", "payload-B"),
+            jpeg.map { File(rootDir, "Selection/JPEG/$it").readText() }.toSet(),
+        )
+        assertEquals(listOf("Selection"), rootDir.list()!!.filter { it.startsWith("Selection") }.sorted())
     }
 }
