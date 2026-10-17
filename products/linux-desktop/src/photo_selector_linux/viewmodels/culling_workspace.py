@@ -502,9 +502,9 @@ class CullingWorkspaceViewModel:
 
             if action.generation == self._folder_generation:
                 if action.kind == "move":
-                    self._notify(f"Moved {action.photo.filename} to {action.selection_folder}/")
+                    self._notify(self._transfer_message("Moved", action, result))
                 elif action.kind == "copy":
-                    self._notify(f"Copied {action.photo.filename} to {action.selection_folder}/")
+                    self._notify(self._transfer_message("Copied", action, result))
                 elif action.kind == "trash":
                     self._notify(f"Moved {action.photo.filename} to Trash")
 
@@ -541,7 +541,36 @@ class CullingWorkspaceViewModel:
                 elif rec.action_type == CullingActionType.COPY:
                     self.selected_count = max(0, self.selected_count - 1)
                     self.copied_count = max(0, self.copied_count - 1)
-                self._notify(f"Undid {rec.action_type.value} for {action.photo.filename}")
+                restored_as = self._restored_suffixed_name(action.photo, rec)
+                if restored_as is not None:
+                    self._notify(f"Restored as {restored_as} (original name was in use)")
+                else:
+                    self._notify(f"Undid {rec.action_type.value} for {action.photo.filename}")
+
+    @staticmethod
+    def _transfer_message(verb: str, action: "_QueuedAction", result: Any) -> str:
+        """Feedback for a finished Move/Copy (docs/shared/FILE_OPERATIONS.md, feedback templates).
+
+        A collision-suffixed bundle says which name it got ("Moved to Selection/ as a-2.jpg (+1
+        related)"); a plain transfer keeps the short "Moved a.jpg to Selection/".
+        """
+        photo = action.photo
+        pairs = list(getattr(result, "affected_paths", None) or [])
+        primary_dst = next((dst for src, dst in pairs if src == photo.primary_path), None)
+        if primary_dst is not None and primary_dst.name != photo.name_of(photo.primary_path):
+            related = len(pairs) - 1
+            suffix = f" (+{related} related)" if related > 0 else ""
+            return f"{verb} to {action.selection_folder}/ as {primary_dst.name}{suffix}"
+        return f"{verb} {photo.filename} to {action.selection_folder}/"
+
+    @staticmethod
+    def _restored_suffixed_name(photo: CandidatePhoto, record: CullingRecord) -> Optional[str]:
+        """The new name of the restored primary file when undo had to suffix it, else None."""
+        if record.action_type not in (CullingActionType.MOVE, CullingActionType.TRASH):
+            return None
+        original = record.original_primary_path.name
+        restored = photo.primary_path.name
+        return restored if restored != original else None
 
     def cull_move(self) -> bool:
         """Queue moving active candidate and companions to Selection/ with optimistic advance."""
