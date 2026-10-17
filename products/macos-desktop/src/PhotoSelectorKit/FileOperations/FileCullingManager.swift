@@ -19,6 +19,9 @@ public enum FileCullingError: Error, LocalizedError, Sendable {
     case copyFailed(source: URL, destination: URL, reason: String)
     case trashFailed(url: URL, reason: String)
     case partialTrashRollbackFailed(url: URL, reason: String, remainingTrashedPairs: [TrashedFilePair])
+    /// A move copied (and size-verified) a member to the destination but could not remove the original.
+    /// The destination copies are kept; `unremovedSources` still exist at their original paths.
+    case partialMove(destinations: [URL], unremovedSources: [URL], reason: String)
 
     public var errorDescription: String? {
         switch self {
@@ -34,6 +37,9 @@ public enum FileCullingError: Error, LocalizedError, Sendable {
             return "Failed to move file to trash \(url.lastPathComponent): \(reason)"
         case .partialTrashRollbackFailed(let url, let reason, let remaining):
             return "Failed to move file to trash \(url.lastPathComponent): \(reason) (\(remaining.count) companion file(s) remain in Trash)"
+        case .partialMove(_, let unremoved, let reason):
+            let names = unremoved.map(\.lastPathComponent).joined(separator: ", ")
+            return "Copied to the destination folder — original could not be removed: \(names) (\(reason))"
         }
     }
 }
@@ -285,6 +291,9 @@ public final class FileCullingManager: @unchecked Sendable {
 
         var movedURLs: [URL] = []
         var movedPairs: [(source: URL, destination: URL)] = []
+        // Members whose verified copy is at the destination while the original could not be removed.
+        var unremovedPairs: [(source: URL, destination: URL)] = []
+        var firstUnremovedReason: String?
 
         for item in resolvedPlan {
             // Guard against self-move: if target already resides at destination,
@@ -299,11 +308,27 @@ public final class FileCullingManager: @unchecked Sendable {
                 movedURLs.append(item.destination)
                 movedPairs.append((source: item.source, destination: item.destination))
             } catch {
+                // A cross-volume move that copied the file but could not remove the original
+                // leaves a verified copy. That copy is never deleted to force a rollback
+                // (docs/shared/FILE_OPERATIONS.md §4): keep it and report a partial result.
+                if hasVerifiedCopyWithSurvivingSource(source: item.source, destination: item.destination) {
+                    movedURLs.append(item.destination)
+                    unremovedPairs.append((source: item.source, destination: item.destination))
+                    firstUnremovedReason = firstUnremovedReason ?? error.localizedDescription
+                    continue
+                }
                 // Roll back all previously moved companion files in this transaction
                 for pair in movedPairs.reversed() {
                     if fileManager.fileExists(atPath: pair.destination.path) {
                         try? fileManager.moveItem(at: pair.destination, to: pair.source)
                     }
+                }
+                if !unremovedPairs.isEmpty {
+                    throw FileCullingError.partialMove(
+                        destinations: unremovedPairs.map(\.destination),
+                        unremovedSources: unremovedPairs.map(\.source),
+                        reason: error.localizedDescription
+                    )
                 }
                 throw FileCullingError.moveFailed(
                     source: item.source,
@@ -313,7 +338,25 @@ public final class FileCullingManager: @unchecked Sendable {
             }
         }
 
+        if !unremovedPairs.isEmpty {
+            throw FileCullingError.partialMove(
+                destinations: movedURLs,
+                unremovedSources: unremovedPairs.map(\.source),
+                reason: firstUnremovedReason ?? "the original could not be removed"
+            )
+        }
         return movedURLs
+    }
+
+    /// True when `destination` (a name that did not exist before this move) holds a complete copy of
+    /// `source` — same non-zero byte size — and `source` is still there.
+    private func hasVerifiedCopyWithSurvivingSource(source: URL, destination: URL) -> Bool {
+        guard fileManager.fileExists(atPath: source.path),
+              fileManager.fileExists(atPath: destination.path),
+              let sourceSize = (try? fileManager.attributesOfItem(atPath: source.path))?[.size] as? NSNumber,
+              let destinationSize = (try? fileManager.attributesOfItem(atPath: destination.path))?[.size] as? NSNumber
+        else { return false }
+        return sourceSize.intValue > 0 && sourceSize == destinationSize
     }
 
     // MARK: - Copy to Selection
