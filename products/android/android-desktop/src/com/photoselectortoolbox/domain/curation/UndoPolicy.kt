@@ -32,13 +32,16 @@ sealed interface UndoableOperation {
     ) : UndoableOperation
 
     /**
-     * A completed move. The file exists at [destinationUri] and can be moved
-     * back into the folder the photographer opened.
+     * A completed move. The file (and any companions) exist at
+     * [destinationUris] and can be moved back into the sub-folder
+     * ([parentDocumentId]) or root folder the photographer opened.
      */
     data class ReverseMove(
         override val slots: List<ImageSlot>,
         val sourceUri: String,
         val destinationUri: String,
+        val destinationUris: List<String> = listOf(destinationUri),
+        val parentDocumentId: String? = null,
     ) : UndoableOperation
 }
 
@@ -72,7 +75,10 @@ object UndoPolicy {
         canTrash: Boolean,
     ): UndoableOperation? {
         if (slots.isEmpty() || !canTrash) return null
-        return UndoableOperation.RestoreFromTrash(slots, slots.map { it.uri })
+        return UndoableOperation.RestoreFromTrash(
+            slots = slots,
+            uris = slots.flatMap { slot -> slot.image.allFiles.map { it.uri } },
+        )
     }
 
     /**
@@ -90,9 +96,22 @@ object UndoPolicy {
         slots: List<ImageSlot>,
         sourceUri: String,
         destinationUri: String?,
+        destinationUris: List<String> = listOfNotNull(destinationUri),
+        parentDocumentId: String? = null,
     ): UndoableOperation? {
         if (action != CurationAction.MOVE) return null
-        if (destinationUri == null) return null
-        return UndoableOperation.ReverseMove(slots, sourceUri, destinationUri)
+        val effectiveDestinations = if (destinationUris.isNotEmpty()) {
+            destinationUris
+        } else {
+            listOfNotNull(destinationUri)
+        }
+        val primaryDestination = destinationUri ?: effectiveDestinations.firstOrNull() ?: return null
+        return UndoableOperation.ReverseMove(
+            slots = slots,
+            sourceUri = sourceUri,
+            destinationUri = primaryDestination,
+            destinationUris = effectiveDestinations,
+            parentDocumentId = parentDocumentId,
+        )
     }
 }
