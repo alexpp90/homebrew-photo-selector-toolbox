@@ -88,6 +88,10 @@ class SafTransferTest {
             @Volatile
             var reportedSizeOverride: ((File) -> Long?)? = null
 
+            /** Milliseconds each file creation takes, to widen race windows in concurrency tests. */
+            @Volatile
+            var createDelayMs: Long = 0L
+
             /** When true, sub-folders get provider-opaque ids ("msf:N") instead of path-like ones. */
             @Volatile
             var opaqueFolderIds: Boolean = false
@@ -116,6 +120,7 @@ class SafTransferTest {
                 failDeletes = false
                 failDeletesMatching = null
                 opaqueFolderIds = false
+                createDelayMs = 0L
                 opaqueRegistry.clear()
                 autoRenameOnCreate = null
                 reportedSizeOverride = null
@@ -279,6 +284,7 @@ class SafTransferTest {
                 autoRenameOnCreate?.invoke(displayName) ?: displayName
             }
             val target = File(parent, actualName)
+            if (createDelayMs > 0L) Thread.sleep(createDelayMs)
             if (mimeType == Document.MIME_TYPE_DIR) {
                 if (!target.exists() && !target.mkdirs()) {
                     throw FileNotFoundException("Could not mkdir $target")
@@ -1155,5 +1161,50 @@ class SafTransferTest {
         assertNotNull(undo.notice)
         assertFalse(File(rootDir, "Download/gone").exists())
         assertFalse(rootDir.walkTopDown().any { it.name.contains("msf:") })
+    }
+
+    // ── B-5 / D-5: concurrent transfers into the same destination ────────
+
+    private fun namedItem(folder: String, stem: String, payload: String): ImageItem {
+        val dir = File(rootDir, folder).apply { mkdirs() }
+        val file = File(dir, "$stem.JPG").apply { writeText(payload) }
+        return ImageItem(
+            uri = documentUriFor("$folder/$stem.JPG").toString(),
+            fileName = file.name,
+            fileSize = file.length(),
+            lastModified = file.lastModified(),
+            mimeType = "image/jpeg",
+            parentDocumentId = "root/$folder",
+        )
+    }
+
+    // REQ-AND-PLATFORM.06
+    @Test
+    fun `two concurrent transfers of same-named files into one Selection both succeed with a suffix and one Selection folder`() {
+        repository.ioDispatcher = kotlinx.coroutines.Dispatchers.IO
+        FakeSafDocumentsProvider.createDelayMs = 150L
+        val itemA = namedItem("dayA", "IMG_0100", "payload-A")
+        val itemB = namedItem("dayB", "IMG_0100", "payload-B")
+
+        val results = kotlinx.coroutines.runBlocking {
+            val a = async(kotlinx.coroutines.Dispatchers.IO) {
+                repository.copyBundle(context, itemA, treeUri, sorting = true)
+            }
+            val b = async(kotlinx.coroutines.Dispatchers.IO) {
+                repository.copyBundle(context, itemB, treeUri, sorting = true)
+            }
+            listOf(a.await(), b.await())
+        }
+
+        assertTrue(results.all { it.success })
+        val jpeg = File(rootDir, "Selection/JPEG").list()!!.sorted()
+        assertEquals(listOf("IMG_0100-2.JPG", "IMG_0100.JPG"), jpeg)
+        val contents = jpeg.map { File(rootDir, "Selection/JPEG/$it").readText() }.toSet()
+        assertEquals(setOf("payload-A", "payload-B"), contents)
+        // Exactly one Selection folder: no "Selection (1)" created by a racing findFile/createDirectory.
+        assertEquals(
+            listOf("Selection"),
+            rootDir.list()!!.filter { it.startsWith("Selection") }.sorted(),
+        )
     }
 }
