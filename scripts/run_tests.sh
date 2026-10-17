@@ -393,6 +393,15 @@ if $run_android; then
                 "$ROOT_DIR/products/android/android-desktop/build/intermediates/merged_native_libs/debug" \
                 "$ROOT_DIR/products/android/phototok/build/intermediates/merged_native_libs/debug"
 
+        # android.yml:build packages the debug APKs and checks them too: ELF alignment plus the
+        # zip-entry alignment of the stored .so files (finding Q-6) — only an APK has the latter.
+        gate "gradlew assembleDebug" "android.yml:build" \
+            ./gradlew assembleDebug --stacktrace
+        gate "check_native_alignment.py (debug APKs: ELF + zip-entry alignment)" "android.yml:build" \
+            python3 "$ROOT_DIR/scripts/check_native_alignment.py" \
+                "$ROOT_DIR"/products/android/android-desktop/build/outputs/apk/debug/*.apk \
+                "$ROOT_DIR"/products/android/phototok/build/outputs/apk/debug/*.apk
+
         # ── Android lint (advisory) ───────────────────────────────
         # Deliberately non-blocking: the CI job is `continue-on-error: true`
         # and both modules set `abortOnError = false`. Mirrored as advisory so
