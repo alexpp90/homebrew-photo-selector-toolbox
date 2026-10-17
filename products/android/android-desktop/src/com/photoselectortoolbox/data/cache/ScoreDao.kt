@@ -62,4 +62,49 @@ interface ScoreDao {
 
     @Query("SELECT * FROM user_ratings WHERE rating = :rating")
     suspend fun getUserRatingsWithRating(rating: Int): List<UserRatingEntity>
+
+    // ── Technique Facts (U-22a) ───────────────────────────────────────────
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTechniqueFacts(facts: List<TechniqueFactEntity>)
+
+    @Query("SELECT * FROM technique_facts WHERE uri = :uri")
+    suspend fun getTechniqueFactsForUri(uri: String): List<TechniqueFactEntity>
+
+    @Query("SELECT * FROM technique_facts WHERE uri IN (:uris)")
+    suspend fun getTechniqueFactsForUris(uris: List<String>): List<TechniqueFactEntity>
+
+    @Query("SELECT * FROM technique_facts WHERE kind = :kind AND confidence >= :minConfidence")
+    suspend fun getTechniqueFactsByKind(kind: String, minConfidence: Double = 0.0): List<TechniqueFactEntity>
+
+    @Query("DELETE FROM technique_facts WHERE uri = :uri")
+    suspend fun deleteTechniqueFactsForUri(uri: String)
+
+    @Query("DELETE FROM technique_facts")
+    suspend fun deleteAllTechniqueFacts()
+
+    // ── Lesson Progress (U-26) ────────────────────────────────────────────
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertLessonProgress(progress: LessonProgressEntity)
+
+    @Query("SELECT * FROM lesson_progress WHERE lessonId = :lessonId LIMIT 1")
+    suspend fun getLessonProgress(lessonId: String): LessonProgressEntity?
+
+    @Query("SELECT * FROM lesson_progress")
+    suspend fun getAllLessonProgress(): List<LessonProgressEntity>
+
+    // ── Practice Goals (U-28) ─────────────────────────────────────────────
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPracticeGoal(goal: PracticeGoalEntity)
+
+    @Query("SELECT * FROM practice_goals WHERE lessonId = :lessonId LIMIT 1")
+    suspend fun getPracticeGoal(lessonId: String): PracticeGoalEntity?
+
+    @Query("SELECT * FROM practice_goals")
+    suspend fun getAllPracticeGoals(): List<PracticeGoalEntity>
+
+    @Query("DELETE FROM practice_goals WHERE lessonId = :lessonId")
+    suspend fun deletePracticeGoal(lessonId: String)
 }

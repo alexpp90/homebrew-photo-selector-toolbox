@@ -41,8 +41,8 @@ class InspectScreenTest {
     @Test
     fun `Screen Inspect is registered with expected route, icons, and labels`() {
         assertEquals("inspect", Screen.Inspect.route)
-        assertEquals("Inspect & Learn", Screen.Inspect.label)
-        assertEquals("Inspect", Screen.Inspect.shortLabel)
+        assertEquals("Learn", Screen.Inspect.label)
+        assertEquals("Learn", Screen.Inspect.shortLabel)
         assertEquals(Icons.Default.CenterFocusStrong, Screen.Inspect.icon)
         assertTrue(Screen.Inspect.meaning.contains("Inspect composition"))
     }
@@ -141,7 +141,7 @@ class InspectScreenTest {
     }
 
     @Test
-    fun `handleInspectKey maps number keys 0 to 5 to ratings`() {
+    fun `handleInspectKey maps number keys 0 to 5 and X to ratings`() {
         val ratings = mutableListOf<Int>()
         val onRate: (Int) -> Unit = { ratings.add(it) }
 
@@ -158,6 +158,7 @@ class InspectScreenTest {
             Key.NumPad3 to 3,
             Key.NumPad4 to 4,
             Key.NumPad5 to 5,
+            Key.X to -1,
         )
 
         for ((key, expectedRating) in keys) {
@@ -172,7 +173,7 @@ class InspectScreenTest {
         }
 
         assertEquals(
-            listOf(0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5),
+            listOf(0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, -1),
             ratings,
         )
     }
@@ -344,6 +345,7 @@ class InspectScreenTest {
         val exif = ExifData(
             shutterSpeed = 0.1,
             focalLength = 50.0,
+            focalLength35mm = 50.0,
             aperture = 2.8,
             iso = 400,
             lens = "50mm F1.8",
@@ -358,7 +360,7 @@ class InspectScreenTest {
 
         assertEquals(0.02, report.safeShutterSpeed!!, 1e-4)
         assertTrue(report.cameraShakeRisk >= 0.7f)
-        assertTrue(report.tips.any { it.category == "Camera Shake" && it.severity == TipSeverity.CRITICAL })
+        assertTrue(report.tips.any { it.category == "Shutter Speed" && it.severity == TipSeverity.CRITICAL })
     }
 
     @Test
@@ -542,7 +544,7 @@ class InspectScreenTest {
             Key.Six, Key.Seven, Key.Eight, Key.Nine,
             Key.NumPad6, Key.NumPad7, Key.NumPad8, Key.NumPad9,
             Key.A, Key.B, Key.C, Key.D, Key.E, Key.F, Key.G, Key.H, Key.J, Key.K, Key.M,
-            Key.N, Key.O, Key.P, Key.Q, Key.R, Key.S, Key.T, Key.U, Key.V, Key.W, Key.X, Key.Y, Key.Z,
+            Key.N, Key.O, Key.P, Key.Q, Key.R, Key.S, Key.T, Key.U, Key.V, Key.W, Key.Y, Key.Z,
             Key.Spacebar, Key.Tab, Key.Enter, Key.Backspace, Key.Delete,
             Key.DirectionUp, Key.DirectionDown,
         )

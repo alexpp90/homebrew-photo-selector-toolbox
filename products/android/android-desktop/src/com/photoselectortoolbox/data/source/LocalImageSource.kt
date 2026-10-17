@@ -54,7 +54,29 @@ class LocalImageSourceImpl @Inject constructor(
     companion object {
         private const val TAG = "LocalImageSource"
 
-        private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "phototok_selection", "phototok_leftswipe")
+        const val SELECTION_MARKER_FILE_NAME = ".photoselector-selection"
+        private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "final", "phototok_selection", "phototok_leftswipe")
+
+        /**
+         * Determine whether a directory should be skipped during recursive traversal (`U-32`).
+         *
+         * The root directory opened by the user ([isRootDirectory] = true) is never skipped
+         * so a user can open `Selection/` directly for a second-pass cull. Any nested child
+         * directory ([isRootDirectory] = false) is skipped when it contains
+         * [SELECTION_MARKER_FILE_NAME] or matches [EXCLUDED_FOLDER_NAMES] / [customExcludedNames].
+         */
+        internal fun shouldSkipDirectory(
+            dirName: String,
+            isRootDirectory: Boolean,
+            hasMarkerFile: Boolean,
+            customExcludedNames: Set<String> = emptySet(),
+        ): Boolean {
+            if (isRootDirectory) return false
+            if (hasMarkerFile) return true
+            val lower = dirName.lowercase()
+            if (lower in EXCLUDED_FOLDER_NAMES) return true
+            return customExcludedNames.any { it.equals(dirName, ignoreCase = true) }
+        }
 
         /**
          * How many images to gather before the very first emission.
@@ -250,8 +272,11 @@ class LocalImageSourceImpl @Inject constructor(
         while (queue.isNotEmpty()) {
             coroutineContext.ensureActive()
             val parentId = queue.removeFirst()
+            val isRootDir = parentId == startDocumentId
             val cursor = queryChildren(treeUri, parentId) ?: continue
             val directoryEntries = mutableListOf<RawDirectoryEntry>()
+            val childDirectories = mutableListOf<Pair<String, String>>()
+            var hasMarkerFile = false
 
             cursor.use { c ->
                 val idIndex = c.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
@@ -271,12 +296,13 @@ class LocalImageSourceImpl @Inject constructor(
                     val name = c.getStringOrNull(nameIndex) ?: continue
                     val mimeType = c.getStringOrNull(mimeIndex)
 
+                    if (name == SELECTION_MARKER_FILE_NAME) {
+                        hasMarkerFile = true
+                        continue
+                    }
+
                     if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        if (name.lowercase() in EXCLUDED_FOLDER_NAMES) {
-                            Log.d(TAG, "Skipping excluded folder: $name")
-                            continue
-                        }
-                        if (seenDirectories.add(documentId)) queue.addLast(documentId)
+                        childDirectories.add(documentId to name)
                         continue
                     }
 
@@ -299,6 +325,29 @@ class LocalImageSourceImpl @Inject constructor(
                         )
                     )
                 }
+            }
+
+            if (shouldSkipDirectory(
+                    dirName = parentId.substringAfterLast('/'),
+                    isRootDirectory = isRootDir,
+                    hasMarkerFile = hasMarkerFile,
+                )
+            ) {
+                Log.d(TAG, "Skipping selection directory with marker file: $parentId")
+                continue
+            }
+
+            for ((childDocId, childDirName) in childDirectories) {
+                if (shouldSkipDirectory(
+                        dirName = childDirName,
+                        isRootDirectory = false,
+                        hasMarkerFile = false,
+                    )
+                ) {
+                    Log.d(TAG, "Skipping excluded folder: $childDirName")
+                    continue
+                }
+                if (seenDirectories.add(childDocId)) queue.addLast(childDocId)
             }
 
             for (item in groupCompanionsInDirectory(directoryEntries, parentId)) {

@@ -41,6 +41,7 @@ class CacheRepositoryImpl @Inject constructor(
 
     override suspend fun clearAll() {
         scoreDao.deleteAll()
+        scoreDao.deleteAllTechniqueFacts()
     }
 
     override suspend fun pruneToLimit(limit: Int) {

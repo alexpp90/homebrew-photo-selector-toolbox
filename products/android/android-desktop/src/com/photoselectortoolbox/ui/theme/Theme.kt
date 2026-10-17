@@ -4,11 +4,15 @@ import android.app.Activity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Density
 import androidx.core.view.WindowCompat
+import com.photoselectortoolbox.data.repository.SettingsRepository
 
 private val DarkColorScheme = darkColorScheme(
     primary = FocusCyan,
@@ -46,8 +50,12 @@ private val DarkColorScheme = darkColorScheme(
     scrim = Color.Black,
 )
 
+fun computeEffectiveFontScale(baseFontScale: Float, tvDisplayScaleEnabled: Boolean): Float =
+    if (tvDisplayScaleEnabled) baseFontScale * SettingsRepository.TV_DISPLAY_SCALE_FACTOR else baseFontScale
+
 @Composable
 fun PhotoSelectorToolboxTheme(
+    tvDisplayScaleEnabled: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val view = LocalView.current
@@ -63,9 +71,17 @@ fun PhotoSelectorToolboxTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = DarkColorScheme,
-        typography = AppTypography,
-        content = content,
+    val currentDensity = LocalDensity.current
+    val effectiveDensity = Density(
+        density = currentDensity.density,
+        fontScale = computeEffectiveFontScale(currentDensity.fontScale, tvDisplayScaleEnabled),
     )
+
+    CompositionLocalProvider(LocalDensity provides effectiveDensity) {
+        MaterialTheme(
+            colorScheme = DarkColorScheme,
+            typography = AppTypography,
+            content = content,
+        )
+    }
 }

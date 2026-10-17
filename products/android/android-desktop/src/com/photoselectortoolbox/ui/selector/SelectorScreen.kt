@@ -73,6 +73,8 @@ import com.photoselectortoolbox.ui.theme.StudioCard
 import com.photoselectortoolbox.ui.navigation.Screen
 import com.photoselectortoolbox.viewmodel.SelectorFrame
 import com.photoselectortoolbox.viewmodel.SelectorViewModel
+import com.photoselectortoolbox.viewmodel.isCloudProvider
+import com.photoselectortoolbox.viewmodel.providerLabel
 
 /**
  * The culling workspace.
@@ -202,7 +204,13 @@ fun SelectorScreen(
             onDismissRequest = { viewModel.dismissDeleteConfirmation() },
             title = { Text("Delete Image") },
             text = {
-                Text(SelectorLabels.deleteConfirmationMessage(uiState.currentImage?.fileName ?: ""))
+                Text(
+                    SelectorLabels.deleteConfirmationMessage(
+                        fileName = uiState.currentImage?.fileName ?: "",
+                        isCloudProvider = uiState.sourceKind.isCloudProvider,
+                        providerLabel = uiState.sourceKind.providerLabel,
+                    )
+                )
             },
             confirmButton = {
                 TextButton(
@@ -214,6 +222,33 @@ fun SelectorScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissDeleteConfirmation() }) { Text("Cancel") }
+            },
+            containerColor = StudioCard,
+        )
+    }
+
+    if (uiState.showCloudScanConfirmation) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCloudScanConfirmation() },
+            title = { Text("Cloud Folder Scan") },
+            text = {
+                Text(
+                    SelectorLabels.cloudScanConfirmationMessage(
+                        providerLabel = uiState.sourceKind.providerLabel,
+                        imageCount = uiState.images.size,
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.confirmCloudScan() },
+                    modifier = Modifier.testTag("dialog_confirm_cloud_scan"),
+                ) {
+                    Text("Scan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissCloudScanConfirmation() }) { Text("Cancel") }
             },
             containerColor = StudioCard,
         )
@@ -381,6 +416,19 @@ fun SelectorScreen(
                             DropdownMenuItem(
                                 text = { Text("Open folder") },
                                 onClick = { showMenu = false; folderPickerLauncher.launch(null) },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        if (uiState.sortWorstFirst) {
+                                            "Sort by filename (exit worst-first)"
+                                        } else {
+                                            "Sort worst sharpness first"
+                                        }
+                                    )
+                                },
+                                onClick = { showMenu = false; viewModel.toggleSortWorstFirst() },
+                                enabled = uiState.hasAnyScores,
                             )
                             DropdownMenuItem(
                                 text = { Text("Clear scores") },
@@ -599,19 +647,6 @@ internal fun handleSelectorKey(
         return false
     }
 
-    // When a frame is maximised, keys 0–5 set the rating of that maximised frame (0 = unrate, 1..5 = stars)
-    if (maximised && onSetRating != null) {
-        when (key) {
-            Key.Zero, Key.NumPad0 -> { onSetRating(0); return true }
-            Key.One, Key.NumPad1 -> { onSetRating(1); return true }
-            Key.Two, Key.NumPad2 -> { onSetRating(2); return true }
-            Key.Three, Key.NumPad3 -> { onSetRating(3); return true }
-            Key.Four, Key.NumPad4 -> { onSetRating(4); return true }
-            Key.Five, Key.NumPad5 -> { onSetRating(5); return true }
-            else -> Unit
-        }
-    }
-
     return when (key) {
         Key.L, Key.I -> {
             onNavigate?.invoke(Screen.Inspect)
@@ -629,12 +664,6 @@ internal fun handleSelectorKey(
         Key.Two -> { onMaximise(SelectorFrame.CURRENT); true }
         Key.Three -> { onMaximise(SelectorFrame.NEXT); true }
         Key.Slash -> { onShowShortcuts(); true }
-        Key.Zero, Key.NumPad0 -> { onSetRating?.invoke(0); true }
-        Key.Four, Key.NumPad4 -> { onSetRating?.invoke(4); true }
-        Key.Five, Key.NumPad5 -> { onSetRating?.invoke(5); true }
-        Key.NumPad1 -> { onSetRating?.invoke(1); true }
-        Key.NumPad2 -> { onSetRating?.invoke(2); true }
-        Key.NumPad3 -> { onSetRating?.invoke(3); true }
         else -> false
     }
 }

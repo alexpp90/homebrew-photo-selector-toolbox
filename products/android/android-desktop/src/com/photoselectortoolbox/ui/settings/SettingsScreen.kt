@@ -82,6 +82,9 @@ fun SettingsScreen(
     var editingFolderName by remember(uiState.selectionFolderName) {
         mutableStateOf(uiState.selectionFolderName)
     }
+    var editingSecondaryFolderName by remember(uiState.secondarySelectionFolderName) {
+        mutableStateOf(uiState.secondarySelectionFolderName)
+    }
 
     // Folder picker for custom selection destination
     val selectionFolderPickerLauncher = rememberLauncherForActivityResult(
@@ -177,6 +180,49 @@ fun SettingsScreen(
                 ) {
                     TextButton(
                         onClick = { viewModel.updateSelectionFolder(editingFolderName) },
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Text("Save", color = Indigo500)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Second-Pass Selection Subfolder Name",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Used automatically when re-culling an existing Selection folder",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = editingSecondaryFolderName,
+                    onValueChange = { editingSecondaryFolderName = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Indigo500,
+                        unfocusedBorderColor = Zinc700,
+                        cursorColor = Indigo500,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    placeholder = {
+                        Text(
+                            text = "Final",
+                            color = Zinc400,
+                        )
+                    },
+                )
+                if (editingSecondaryFolderName != uiState.secondarySelectionFolderName &&
+                    editingSecondaryFolderName.isNotBlank()
+                ) {
+                    TextButton(
+                        onClick = { viewModel.updateSecondarySelectionFolder(editingSecondaryFolderName) },
                         modifier = Modifier.align(Alignment.End),
                     ) {
                         Text("Save", color = Indigo500)
@@ -405,6 +451,16 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            HorizontalDivider(color = Zinc700.copy(alpha = 0.5f))
+
+            SettingsToggleItem(
+                title = "TV / 10-Foot Display Scale (125%)",
+                description = "Scale font size by 125% for living-room TV / DeX display viewing",
+                checked = uiState.tvDisplayScaleEnabled,
+                onCheckedChange = { viewModel.updateTvDisplayScaleEnabled(it) },
+                icon = Icons.Default.Info,
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))

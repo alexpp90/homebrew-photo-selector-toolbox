@@ -304,9 +304,9 @@ class ScoresDatabaseMigrationTest {
         rawDb.execSQL("INSERT INTO scores_cache (filePath, fileSize, lastModified, aestheticScore, lastAccessTime) VALUES ('photo_r4', 100, 200, 9.1, 1003)")
         rawDb.close()
 
-        // 2. Open via Room with MIGRATION_2_3 and MIGRATION_3_4 — this validates the full Room v4 schema integrity!
+        // 2. Open via Room with MIGRATIONS — this validates the full Room schema integrity!
         val roomDb = Room.databaseBuilder(context, ScoresDatabase::class.java, dbName)
-            .addMigrations(ScoresDatabase.MIGRATION_2_3, ScoresDatabase.MIGRATION_3_4)
+            .addMigrations(*ScoresDatabase.MIGRATIONS)
             .allowMainThreadQueries()
             .build()
 
@@ -652,7 +652,7 @@ class ScoresDatabaseMigrationTest {
         rawDb.close()
 
         val roomDb = Room.databaseBuilder(context, ScoresDatabase::class.java, dbName)
-            .addMigrations(ScoresDatabase.MIGRATION_3_4)
+            .addMigrations(*ScoresDatabase.MIGRATIONS)
             .allowMainThreadQueries()
             .build()
 
@@ -680,6 +680,45 @@ class ScoresDatabaseMigrationTest {
         val survivingRatings = dao.getUserRatings(listOf("photo_a", "unscanned_photo")).associateBy { it.uri }
         assertEquals(4, survivingRatings["photo_a"]?.rating)
         assertEquals(5, survivingRatings["unscanned_photo"]?.rating)
+
+        // Verify v5 technique_facts, v6 lesson_progress, and v7 practice_goals tables & DAO operations
+        dao.upsertTechniqueFacts(
+            listOf(
+                TechniqueFactEntity(
+                    uri = "photo_a",
+                    kind = "light.hour",
+                    value = "golden_hour",
+                    confidence = 0.9,
+                    geometryJson = null,
+                    fileSize = 100L,
+                    lastModified = 200L,
+                    detectorVersion = 1,
+                )
+            )
+        )
+        val facts = dao.getTechniqueFactsForUri("photo_a")
+        assertEquals(1, facts.size)
+        assertEquals("golden_hour", facts[0].value)
+
+        dao.upsertLessonProgress(
+            LessonProgressEntity(
+                lessonId = "light.golden_hour",
+                completedAt = 5000L,
+                spotItCorrect = 2,
+                spotItTotal = 2,
+            )
+        )
+        assertEquals(2, dao.getLessonProgress("light.golden_hour")?.spotItCorrect)
+
+        dao.upsertPracticeGoal(
+            PracticeGoalEntity(
+                lessonId = "composition.level_horizon",
+                startedAtEpochMs = 6000L,
+                baselineRate = 0.25,
+                baselineSampleSize = 20,
+            )
+        )
+        assertEquals(0.25, dao.getPracticeGoal("composition.level_horizon")!!.baselineRate, 1e-6)
 
         roomDb.close()
     }

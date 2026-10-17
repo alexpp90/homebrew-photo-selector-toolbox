@@ -65,6 +65,8 @@ private fun DesktopModeApp(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val selectorViewModel: com.photoselectortoolbox.viewmodel.SelectorViewModel =
+        androidx.hilt.navigation.compose.hiltViewModel()
 
     val isExpanded = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
@@ -135,6 +137,7 @@ private fun DesktopModeApp(
                     windowSizeClass = windowSizeClass,
                     currentRoute = currentDestination?.route,
                     onNavigate = navigateToScreen,
+                    selectorViewModel = selectorViewModel,
                 )
             }
         }
@@ -145,6 +148,7 @@ private fun DesktopModeApp(
             windowSizeClass = windowSizeClass,
             currentRoute = currentDestination?.route,
             onNavigate = navigateToScreen,
+            selectorViewModel = selectorViewModel,
         )
     } else {
         Scaffold(
@@ -198,6 +202,7 @@ private fun DesktopModeApp(
                     windowSizeClass = windowSizeClass,
                     currentRoute = currentDestination?.route,
                     onNavigate = navigateToScreen,
+                    selectorViewModel = selectorViewModel,
                 )
             }
         }
@@ -210,6 +215,7 @@ private fun AppNavHost(
     windowSizeClass: WindowSizeClass,
     currentRoute: String?,
     onNavigate: (Screen) -> Unit,
+    selectorViewModel: com.photoselectortoolbox.viewmodel.SelectorViewModel,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -220,6 +226,7 @@ private fun AppNavHost(
         composable(Screen.PhotoSelector.route) {
             SelectorScreen(
                 windowSizeClass = windowSizeClass,
+                viewModel = selectorViewModel,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,
             )
@@ -227,6 +234,7 @@ private fun AppNavHost(
         composable(Screen.Inspect.route) {
             InspectScreen(
                 windowSizeClass = windowSizeClass,
+                viewModel = selectorViewModel,
                 currentRoute = currentRoute,
                 onNavigate = onNavigate,
             )

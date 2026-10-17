@@ -607,19 +607,6 @@ private fun MaximisedFrame(
                     onClick = onExit,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
                 )
-                if (image != null) {
-                    StarRatingBar(
-                        rating = image.rating,
-                        onRatingChanged = onSetRating,
-                        starSize = 28.dp,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 12.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xCC000000))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                }
             }
         }
     }

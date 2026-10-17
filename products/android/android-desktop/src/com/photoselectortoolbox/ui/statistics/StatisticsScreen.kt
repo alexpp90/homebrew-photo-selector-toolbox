@@ -221,6 +221,31 @@ private fun CompactStatisticsLayout(
                 data = uiState.lensDistribution,
             )
         }
+
+        if (uiState.shutterSpeedSharpness.isNotEmpty()) {
+            item {
+                SharpnessBreakdownCard(
+                    title = "Sharpness by Shutter Speed",
+                    stats = uiState.shutterSpeedSharpness,
+                )
+            }
+        }
+        if (uiState.apertureSharpness.isNotEmpty()) {
+            item {
+                SharpnessBreakdownCard(
+                    title = "Sharpness by Aperture",
+                    stats = uiState.apertureSharpness,
+                )
+            }
+        }
+        if (uiState.focalLengthSharpness.isNotEmpty()) {
+            item {
+                SharpnessBreakdownCard(
+                    title = "Sharpness by Focal Length",
+                    stats = uiState.focalLengthSharpness,
+                )
+            }
+        }
     }
 }
 
@@ -278,6 +303,77 @@ private fun ExpandedStatisticsLayout(
                 title = "Lens Usage",
                 data = uiState.lensDistribution,
             )
+        }
+
+        if (uiState.shutterSpeedSharpness.isNotEmpty()) {
+            item {
+                SharpnessBreakdownCard(
+                    title = "Sharpness by Shutter Speed",
+                    stats = uiState.shutterSpeedSharpness,
+                )
+            }
+        }
+        if (uiState.apertureSharpness.isNotEmpty()) {
+            item {
+                SharpnessBreakdownCard(
+                    title = "Sharpness by Aperture",
+                    stats = uiState.apertureSharpness,
+                )
+            }
+        }
+        if (uiState.focalLengthSharpness.isNotEmpty()) {
+            item(span = { GridItemSpan(2) }) {
+                SharpnessBreakdownCard(
+                    title = "Sharpness by Focal Length",
+                    stats = uiState.focalLengthSharpness,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SharpnessBreakdownCard(
+    title: String,
+    stats: Map<String, com.photoselectortoolbox.viewmodel.ExifSharpnessStats>,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Zinc800),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            stats.values.forEach { entry ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "${entry.bucketLabel} (${entry.sampleCount})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = String.format(
+                            java.util.Locale.US,
+                            "mean %.1f · median %.1f",
+                            entry.meanSharpness,
+                            entry.medianSharpness,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
         }
     }
 }
