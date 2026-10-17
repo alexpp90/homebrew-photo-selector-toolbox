@@ -74,6 +74,11 @@ jobs:
       - name: Build PhotoSelectorKit & PhotoSelectorApp (Release)
         run: swift build -c release
 
+      # The UI test hooks can trash files when launched with --ui-scenario: a release build
+      # must not contain them (they are compiled in only for debug and --test-hooks builds).
+      - name: Release binary carries no UI test hooks
+        run: scripts/check_no_test_hooks.sh .build/release/PhotoSelectorApp
+
       # Real-camera format corpus (docs/shared/SUPPORTED_FORMATS.md): fails the job if it
       # cannot be fetched, and makes the format tests mandatory instead of skippable.
       - name: Format conformance corpus
@@ -133,6 +138,7 @@ jobs:
           # promises Intel support. The asset keeps its historical name because the
           # alexpp90/homebrew-tap casks download it by that name.
           scripts/build_app.sh release --universal
+          scripts/check_no_test_hooks.sh .build/app/PhotoSelector.app
           cd .build/app
           zip -r -y ../../../../photo-selector-macos-apple-silicon.zip PhotoSelector.app
 
