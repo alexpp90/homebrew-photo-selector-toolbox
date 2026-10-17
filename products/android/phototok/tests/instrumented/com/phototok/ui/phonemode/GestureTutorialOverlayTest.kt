@@ -2,6 +2,7 @@ package com.phototok.ui.phonemode
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.SwipeAction
@@ -79,7 +81,9 @@ class GestureTutorialOverlayTest {
 
         listOf(
             "Tap the logo",
+            "Reload",
             "Help",
+            "Info",
             "Settings",
             "Sources",
             "Selection",
@@ -89,7 +93,48 @@ class GestureTutorialOverlayTest {
             "Single tap",
             "Double tap or pinch",
         ).forEach { label ->
-            composeTestRule.onNode(inGuide(label), useUnmergedTree = true).assertExists()
+            composeTestRule.onNode(inGuide(label), useUnmergedTree = true).assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun overlay_onCompact320x480Screen_displaysAllControlsAndSwipeCallouts() {
+        // Default CI AVDs created without a device profile use a 320x480dp HVGA screen.
+        // Every top/bottom coach mark and gesture stage callout must still be displayed.
+        composeTestRule.setContent {
+            Box(modifier = Modifier.size(width = 320.dp, height = 480.dp)) {
+                GestureTutorialOverlay(
+                    visible = true,
+                    onDismiss = {},
+                    collectionAction = CollectionAction.MOVE,
+                    collectionFolderName = "Keepers",
+                    leftSwipeAction = SwipeAction.COPY,
+                    leftSwipeFolderName = "Maybes",
+                )
+            }
+        }
+
+        awaitGuide()
+
+        listOf(
+            "Tap the logo",
+            "Reload",
+            "Help",
+            "Info",
+            "Settings",
+            "Sources",
+            "Selection",
+            "Revert",
+            "Next photo",
+            "Previous photo",
+            "Single tap",
+            "Double tap or pinch",
+            "MOVE",
+            "Move to Keepers",
+            "Copy to Maybes",
+            "GOT IT",
+        ).forEach { label ->
+            composeTestRule.onNode(inGuide(label), useUnmergedTree = true).assertIsDisplayed()
         }
     }
 

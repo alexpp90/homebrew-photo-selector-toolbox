@@ -311,17 +311,14 @@ class SettingsRepository @Inject constructor(
                 prefs.remove(legacyFolderPositionKey(evictedUri))
                 prefs.remove(folderScanMaxTimeKey(evictedUri))
                 prefs.remove(folderScanCountKey(evictedUri))
+                prefs.remove(folderScanLastUriKey(evictedUri))
+                prefs.remove(folderScanLastIndexKey(evictedUri))
             }
             prefs[KEY_RECENT_PATHS] = RecentPathCodec.encode(updated)
         }
     }
 
-    // ── Retired per-folder last position ─────────────────────────────────
-
-    // The feed is newest-first and always opens on the newest photo, so positions are no
-    // longer stored. Installs that predate this still hold these keys (indexes into the old
-    // oldest-first feed); they are removed when the folder leaves the recents list and by
-    // clearFolderPositions().
+    // ── Legacy per-folder last position keys (cleaned up on eviction/clear) ──
 
     /** Keyed by the full URI. */
     private fun folderPositionKey(folderUri: String) =
@@ -331,7 +328,7 @@ class SettingsRepository @Inject constructor(
     private fun legacyFolderPositionKey(folderUri: String) =
         intPreferencesKey("folder_pos_${folderUri.hashCode()}")
 
-    // ── Per-folder scan info ──────────────────────────────────────────────
+    // ── Per-folder scan info & resume position ────────────────────────────
 
     private fun folderScanMaxTimeKey(folderUri: String) =
         longPreferencesKey("folder_scan_time_v1_$folderUri")
@@ -339,10 +336,37 @@ class SettingsRepository @Inject constructor(
     private fun folderScanCountKey(folderUri: String) =
         intPreferencesKey("folder_scan_count_v1_$folderUri")
 
+    private fun folderScanLastUriKey(folderUri: String) =
+        stringPreferencesKey("folder_scan_last_uri_v1_$folderUri")
+
+    private fun folderScanLastIndexKey(folderUri: String) =
+        intPreferencesKey("folder_scan_last_idx_v1_$folderUri")
+
     suspend fun setFolderScanInfo(folderUri: String, info: FolderScanInfo) {
         context.dataStore.edit { prefs ->
             prefs[folderScanMaxTimeKey(folderUri)] = info.maxLastModified
             prefs[folderScanCountKey(folderUri)] = info.fileCount
+            if (info.lastViewedUri != null) {
+                prefs[folderScanLastUriKey(folderUri)] = info.lastViewedUri
+            }
+            if (info.lastViewedUri != null || info.lastViewedIndex > 0) {
+                prefs[folderScanLastIndexKey(folderUri)] = info.lastViewedIndex
+            }
+        }
+    }
+
+    suspend fun setFolderLastPosition(
+        folderUri: String,
+        lastViewedUri: String?,
+        lastViewedIndex: Int,
+    ) {
+        context.dataStore.edit { prefs ->
+            if (lastViewedUri != null) {
+                prefs[folderScanLastUriKey(folderUri)] = lastViewedUri
+            } else {
+                prefs.remove(folderScanLastUriKey(folderUri))
+            }
+            prefs[folderScanLastIndexKey(folderUri)] = lastViewedIndex
         }
     }
 
@@ -350,10 +374,17 @@ class SettingsRepository @Inject constructor(
         val prefs = context.dataStore.data.first()
         val maxTime = prefs[folderScanMaxTimeKey(folderUri)] ?: 0L
         val count = prefs[folderScanCountKey(folderUri)] ?: 0
-        return FolderScanInfo(maxLastModified = maxTime, fileCount = count)
+        val lastUri = prefs[folderScanLastUriKey(folderUri)]
+        val lastIdx = prefs[folderScanLastIndexKey(folderUri)] ?: 0
+        return FolderScanInfo(
+            maxLastModified = maxTime,
+            fileCount = count,
+            lastViewedUri = lastUri,
+            lastViewedIndex = lastIdx,
+        )
     }
 
-    /** Clear per-folder scan metadata and any retired last-position keys. */
+    /** Clear per-folder scan metadata, resume positions, and any retired last-position keys. */
     suspend fun clearFolderPositions() {
         context.dataStore.edit { prefs ->
             val keysToRemove = prefs.asMap().keys.filter {

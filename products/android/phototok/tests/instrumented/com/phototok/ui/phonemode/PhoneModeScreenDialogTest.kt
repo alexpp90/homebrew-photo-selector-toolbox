@@ -28,6 +28,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.phototok.domain.FirstRunHint
 import com.phototok.ui.components.ViewerBottomBar
 import com.phototok.viewmodel.FirstRunHintUi
+import com.phototok.viewmodel.ReloadPrompt
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -327,41 +328,52 @@ class PhoneModeScreenDialogTest {
     }
 
     @Test
-    fun reloadJumpDialog_displaysFoundCountAndTriggersCallbacks() {
-        var jumped = false
-        var stayed = false
+    fun folderResumeDialog_withNewPhotos_displaysFoundCountAndTriggersCallbacks() {
+        var startedWithNewest = false
+        var continuedWhereLeftOff = false
 
         composeTestRule.setContent {
-            AlertDialog(
-                onDismissRequest = { stayed = true },
-                title = { Text("New Photos Found") },
-                text = { Text("5 new photos were found while reviewing. Would you like to jump to the new photos or stay at your current photo?") },
-                confirmButton = {
-                    Button(
-                        onClick = { jumped = true },
-                        modifier = Modifier.testTag("reload_jump_confirm_button"),
-                    ) {
-                        Text("Jump to Latest")
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { stayed = true },
-                        modifier = Modifier.testTag("reload_jump_stay_button"),
-                    ) {
-                        Text("Stay at Current")
-                    }
-                },
-                modifier = Modifier.testTag("reload_jump_dialog"),
+            FolderResumeDialog(
+                prompt = ReloadPrompt(newCount = 5, firstNewIndex = 0, resumeIndex = 3, totalCount = 20),
+                onStartWithNewest = { startedWithNewest = true },
+                onContinueWhereLeftOff = { continuedWhereLeftOff = true },
             )
         }
 
         composeTestRule.onAllNodesWithTag("reload_jump_dialog").onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("New Photos Found").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "5 newer photos were added since you last left (at photo #4 of 20). Would you like to continue where you left off or start with the newest image?",
+        ).assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("reload_jump_confirm_button").onFirst().assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("reload_jump_stay_button").onFirst().assertIsDisplayed()
 
         composeTestRule.onAllNodesWithTag("reload_jump_confirm_button").onFirst().performClick()
-        assertTrue("Confirm button must trigger jump", jumped)
-        assertFalse("Stay button must not be triggered", stayed)
+        assertTrue("Start with Newest button must trigger callback", startedWithNewest)
+        assertFalse("Continue button must not be triggered", continuedWhereLeftOff)
+    }
+
+    @Test
+    fun folderResumeDialog_withNoNewPhotos_informsUserAndContinuesWhereLeftOff() {
+        var startedWithNewest = false
+        var continuedWhereLeftOff = false
+
+        composeTestRule.setContent {
+            FolderResumeDialog(
+                prompt = ReloadPrompt(newCount = 0, firstNewIndex = 0, resumeIndex = 7, totalCount = 15),
+                onStartWithNewest = { startedWithNewest = true },
+                onContinueWhereLeftOff = { continuedWhereLeftOff = true },
+            )
+        }
+
+        composeTestRule.onAllNodesWithTag("reload_jump_dialog").onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Resume Folder?").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "No newer photos were added since you last left (at photo #8 of 15). Would you like to continue where you left off or start with the newest image?",
+        ).assertIsDisplayed()
+
+        composeTestRule.onAllNodesWithTag("reload_jump_stay_button").onFirst().performClick()
+        assertTrue("Continue Where I Left Off button must trigger callback", continuedWhereLeftOff)
+        assertFalse("Start with Newest button must not be triggered", startedWithNewest)
     }
 }

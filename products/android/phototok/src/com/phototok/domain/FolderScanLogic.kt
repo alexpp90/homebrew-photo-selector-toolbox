@@ -3,13 +3,19 @@ package com.phototok.domain
 import com.phototok.data.model.ImageItem
 
 /**
- * Scan state metadata for a folder, tracking the maximum timestamp and file count
- * observed during the user's previous review session.
+ * Scan state and last-viewed position metadata for a folder, tracking the maximum
+ * timestamp, file count, and where the user left off during their previous review session.
  */
 data class FolderScanInfo(
     val maxLastModified: Long = 0L,
     val fileCount: Int = 0,
-)
+    val lastViewedUri: String? = null,
+    val lastViewedIndex: Int = 0,
+) {
+    /** True when this folder has been opened and scanned in a previous session. */
+    val hasPreviousSession: Boolean
+        get() = maxLastModified > 0L || fileCount > 0 || lastViewedUri != null || lastViewedIndex > 0
+}
 
 /**
  * Pure domain logic for detecting new unscanned photos and resolving target
@@ -18,9 +24,42 @@ data class FolderScanInfo(
 object FolderScanLogic {
 
     /**
-     * Where the viewer lands once enumeration is complete and the folder is NOT being
-     * reloaded inside an active session. The feed is newest-first, so new photos sit at
-     * the start of it. A previously saved position is deliberately not restored.
+     * Resolves the 0-based index where the user left off in [images], preferring an exact
+     * match on [lastViewedUri] (resilient to newly added photos shifting indices in a
+     * newest-first feed) and falling back to [lastViewedIndex] clamped to valid bounds.
+     */
+    fun resolveResumeIndex(
+        images: List<ImageItem>,
+        lastViewedUri: String?,
+        lastViewedIndex: Int = 0,
+    ): Int {
+        if (images.isEmpty()) return 0
+        if (lastViewedUri != null) {
+            val idx = images.indexOfFirst { it.uri == lastViewedUri }
+            if (idx >= 0) return idx
+        }
+        return lastViewedIndex.coerceIn(0, images.size - 1)
+    }
+
+    /**
+     * Returns all images in [images] that are newer than [previousMaxLastModified] or were
+     * not present in [urisBeforeReload] (when rescanning an active session).
+     */
+    fun findNewPhotos(
+        images: List<ImageItem>,
+        previousMaxLastModified: Long,
+        urisBeforeReload: Set<String> = emptySet(),
+    ): List<ImageItem> {
+        if (images.isEmpty()) return emptyList()
+        return images.filter {
+            (previousMaxLastModified > 0L && it.lastModified > previousMaxLastModified) ||
+                (urisBeforeReload.isNotEmpty() && it.uri !in urisBeforeReload)
+        }
+    }
+
+    /**
+     * Where the viewer lands once enumeration is complete and the folder is a fresh folder
+     * without a prior session prompt.
      *
      * - The user already swiped: stay on [preservedUri] (fallback [currentIndex]).
      * - Randomized feed: order carries no meaning; jump to the first new photo if any,
@@ -76,11 +115,22 @@ object FolderScanLogic {
     }
 
     /**
-     * Computes the updated scan metadata from the current list of images.
+     * Computes the updated scan metadata from the current list of images and active position.
      */
-    fun computeUpdatedScanInfo(images: List<ImageItem>): FolderScanInfo {
-        if (images.isEmpty()) return FolderScanInfo(0L, 0)
+    fun computeUpdatedScanInfo(
+        images: List<ImageItem>,
+        lastViewedUri: String? = null,
+        lastViewedIndex: Int = 0,
+    ): FolderScanInfo {
+        if (images.isEmpty()) return FolderScanInfo(0L, 0, null, 0)
         val maxTime = images.maxOfOrNull { it.lastModified } ?: 0L
-        return FolderScanInfo(maxLastModified = maxTime, fileCount = images.size)
+        val clampedIdx = lastViewedIndex.coerceIn(0, images.size - 1)
+        val resolvedUri = lastViewedUri ?: images.getOrNull(clampedIdx)?.uri
+        return FolderScanInfo(
+            maxLastModified = maxTime,
+            fileCount = images.size,
+            lastViewedUri = resolvedUri,
+            lastViewedIndex = clampedIdx,
+        )
     }
 }
