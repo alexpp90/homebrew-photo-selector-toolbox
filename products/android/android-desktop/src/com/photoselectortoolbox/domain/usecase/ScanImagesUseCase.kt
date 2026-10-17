@@ -84,9 +84,12 @@ class ScanImagesUseCase @Inject constructor(
         val threadCount = settingsRepository.analysisThreadCount.first()
         val semaphore = Semaphore(threadCount)
 
-        // Bulk load cache
+        // Bulk load cache in <= 900-variable chunks to respect SQLite bind limits
         val imageUris = images.map { it.uri }
-        val cachedScores = scoreDao.getScores(imageUris).associateBy { it.filePath }
+        val cachedScores = imageUris
+            .chunked(ScoreDao.SQLITE_MAX_BIND_PARAMS)
+            .flatMap { chunk -> scoreDao.getScores(chunk) }
+            .associateBy { it.filePath }
 
         // Find which images have valid cache hits and update their access times
         val currentTime = System.currentTimeMillis()
@@ -125,7 +128,7 @@ class ScanImagesUseCase @Inject constructor(
             launch(Dispatchers.IO) {
                 // SQLite has a limit of 999 variables per query (SQLITE_MAX_VARIABLE_NUMBER)
                 // Chunk the updates to avoid SQLiteException: too many SQL variables
-                urisToUpdate.chunked(900).forEach { chunk ->
+                urisToUpdate.chunked(ScoreDao.SQLITE_MAX_BIND_PARAMS).forEach { chunk ->
                     scoreDao.updateAccessTimes(chunk, currentTime)
                 }
             }

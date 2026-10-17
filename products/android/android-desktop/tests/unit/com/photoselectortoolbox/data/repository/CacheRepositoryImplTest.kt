@@ -153,4 +153,40 @@ class CacheRepositoryImplTest {
         assertEquals(list, result)
         coVerify { dao.getScoresWithRating(5) }
     }
+
+    // REQ-AND-CACHE.03, REQ-AND-CACHE.06
+    @Test
+    fun `getCachedScores updateAccessTimes and getRatings chunk 2500 URIs into 3 calls of at most 900`() = runTest {
+        val uris = (1..2500).map { "content://test/photo_$it.jpg" }
+        val scoreChunks = mutableListOf<List<String>>()
+        val accessChunks = mutableListOf<List<String>>()
+        val ratingChunks = mutableListOf<List<String>>()
+
+        coEvery { dao.getScores(any()) } answers {
+            val chunk = firstArg<List<String>>()
+            scoreChunks.add(chunk)
+            chunk.map { ScoreEntity(it, 100, 200, sharpnessScore = 50.0) }
+        }
+        coEvery { dao.updateAccessTimes(any(), any()) } answers {
+            accessChunks.add(firstArg())
+        }
+        coEvery { dao.getUserRatings(any()) } answers {
+            val chunk = firstArg<List<String>>()
+            ratingChunks.add(chunk)
+            chunk.map { UserRatingEntity(it, 4, 1000L) }
+        }
+
+        val scores = repo.getCachedScores(uris)
+        repo.updateAccessTimes(uris, 9999L)
+        val ratings = repo.getRatings(uris)
+
+        assertEquals(2500, scores.size)
+        assertEquals(2500, ratings.size)
+        assertEquals(listOf(900, 900, 700), scoreChunks.map { it.size })
+        assertEquals(listOf(900, 900, 700), accessChunks.map { it.size })
+        assertEquals(listOf(900, 900, 700), ratingChunks.map { it.size })
+        assertTrue(scoreChunks.all { it.size <= 900 })
+        assertTrue(accessChunks.all { it.size <= 900 })
+        assertTrue(ratingChunks.all { it.size <= 900 })
+    }
 }

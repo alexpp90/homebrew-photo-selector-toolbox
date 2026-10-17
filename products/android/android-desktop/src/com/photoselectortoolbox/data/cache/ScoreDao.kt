@@ -62,4 +62,48 @@ interface ScoreDao {
 
     @Query("SELECT * FROM user_ratings WHERE rating = :rating")
     suspend fun getUserRatingsWithRating(rating: Int): List<UserRatingEntity>
+
+    /**
+     * Chunked wrapper for [getScores] so no single SQLite `IN (:filePaths)`
+     * statement binds more than [chunkSize] variables (`SQLITE_MAX_VARIABLE_NUMBER = 999`
+     * on older Android builds).
+     */
+    suspend fun getScoresChunked(
+        filePaths: List<String>,
+        chunkSize: Int = SQLITE_MAX_BIND_PARAMS,
+    ): List<ScoreEntity> {
+        if (filePaths.isEmpty()) return emptyList()
+        return filePaths.chunked(chunkSize).flatMap { chunk -> getScores(chunk) }
+    }
+
+    /**
+     * Chunked wrapper for [updateAccessTimes] so no single `IN (:filePaths)`
+     * update binds more than [chunkSize] variables (`time` takes 1 variable).
+     */
+    suspend fun updateAccessTimesChunked(
+        filePaths: List<String>,
+        time: Long,
+        chunkSize: Int = SQLITE_MAX_BIND_PARAMS,
+    ) {
+        if (filePaths.isEmpty()) return
+        filePaths.chunked(chunkSize).forEach { chunk ->
+            updateAccessTimes(chunk, time)
+        }
+    }
+
+    /**
+     * Chunked wrapper for [getUserRatings] so no single `IN (:uris)` query
+     * binds more than [chunkSize] variables.
+     */
+    suspend fun getUserRatingsChunked(
+        uris: List<String>,
+        chunkSize: Int = SQLITE_MAX_BIND_PARAMS,
+    ): List<UserRatingEntity> {
+        if (uris.isEmpty()) return emptyList()
+        return uris.chunked(chunkSize).flatMap { chunk -> getUserRatings(chunk) }
+    }
+
+    companion object {
+        const val SQLITE_MAX_BIND_PARAMS = 900
+    }
 }
