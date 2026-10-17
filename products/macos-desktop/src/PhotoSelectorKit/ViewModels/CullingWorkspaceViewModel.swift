@@ -582,6 +582,7 @@ public final class CullingWorkspaceViewModel: ObservableObject {
                             actionType: record.actionType,
                             originalPrimaryURL: record.originalPrimaryURL,
                             affectedURLs: record.affectedURLs,
+                            trashedPairs: record.trashedPairs,
                             previousStatus: preservedPreviousStatus,
                             timestamp: record.timestamp
                         )
@@ -589,6 +590,26 @@ public final class CullingWorkspaceViewModel: ObservableObject {
                 }
             } catch is CancellationError {
                 // Cancelled before execution
+            } catch let error as FileCullingError {
+                await MainActor.run {
+                    if case .partialTrashRollbackFailed(_, _, let remainingPairs) = error, !remainingPairs.isEmpty {
+                        if let idx = self?.undoStack.firstIndex(where: { $0.jobID == job.id }) {
+                            let preservedPreviousStatus = self?.undoStack[idx].previousStatus ?? previousStatus
+                            self?.undoStack[idx] = CullingExecutionRecord(
+                                jobID: job.id,
+                                photoID: photo.id,
+                                actionType: action,
+                                originalPrimaryURL: photo.url,
+                                affectedURLs: remainingPairs.map(\.trashedURL),
+                                trashedPairs: remainingPairs,
+                                previousStatus: preservedPreviousStatus
+                            )
+                        }
+                    } else {
+                        self?.undoStack.removeAll(where: { $0.jobID == job.id })
+                    }
+                    self?.rollback(photoIndex: targetIndex, previousStatus: previousStatus, error: error)
+                }
             } catch {
                 await MainActor.run {
                     self?.undoStack.removeAll(where: { $0.jobID == job.id })
@@ -636,7 +657,11 @@ public final class CullingWorkspaceViewModel: ObservableObject {
             do {
                 _ = try await cullingActor.cancelOrUndo(jobID: record.jobID, fallbackRecord: record)
             } catch {
+                let remainingRecord = await cullingActor.completedRecord(for: record.jobID)
                 await MainActor.run {
+                    if let remainingRecord {
+                        self?.undoStack.append(remainingRecord)
+                    }
                     self?.showToast(
                         icon: "exclamationmark.triangle.fill",
                         title: "Undo Failed",

@@ -437,10 +437,13 @@ struct AsyncCullingActorTests {
         ]
 
         var trashedURLs: [URL] = []
+        var trashedPairs: [TrashedFilePair] = []
         for vector in testVectors {
+            let originalFile = root.appendingPathComponent(vector.originalName)
             let trashedFile = trashSimDir.appendingPathComponent(vector.trashedName)
             try vector.payload.data(using: .utf8)!.write(to: trashedFile)
             trashedURLs.append(trashedFile)
+            trashedPairs.append(TrashedFilePair(originalURL: originalFile, trashedURL: trashedFile))
         }
 
         let actor = AsyncCullingActor()
@@ -450,6 +453,7 @@ struct AsyncCullingActorTests {
             actionType: .trash,
             originalPrimaryURL: primaryURL,
             affectedURLs: trashedURLs,
+            trashedPairs: trashedPairs,
             previousStatus: .candidate
         )
 
@@ -599,6 +603,163 @@ struct AsyncCullingActorTests {
         #expect(try String(contentsOf: preExistingSelectionFile, encoding: .utf8) == "PRE_EXISTING_SELECTION_JPG")
         #expect(FileManager.default.fileExists(atPath: sourceFile.path), "Original source file must be untouched")
         #expect(try String(contentsOf: sourceFile, encoding: .utf8) == "NEW_SOURCE_JPG")
+    }
+
+    @Test("U-03: Undo after bundle trash where TrashService renames trashed files restores every file via recorded trashedPairs")
+    func testUndoAfterBundleTrashWithRenamedTrashedFilesRestoresViaRecordedPairs() async throws {
+        struct ArbitraryRenamingTrashService: TrashService {
+            let trashDirectory: URL
+            let renameMap: [String: String]
+
+            func trash(_ url: URL) throws -> URL {
+                let fm = FileManager.default
+                if !fm.fileExists(atPath: trashDirectory.path) {
+                    try fm.createDirectory(at: trashDirectory, withIntermediateDirectories: true)
+                }
+                let trashedName = renameMap[url.lastPathComponent] ?? "renamed_\(UUID().uuidString)_\(url.lastPathComponent)"
+                let dst = trashDirectory.appendingPathComponent(trashedName)
+                try fm.moveItem(at: url, to: dst)
+                return dst
+            }
+        }
+
+        let root = try createTempDir(prefix: "AsyncRecordedPairsUndoTest")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let trashDir = root.appendingPathComponent(".ArbitraryTrash", isDirectory: true)
+        let bundle: [(name: String, trashedName: String, content: String)] = [
+            ("DSC0001.ARW", "DSC0001 14-22-01-999.ARW", "RAW_CONTENT"),
+            ("DSC0001.JPG", "completely_arbitrary_name_99.JPG", "JPG_CONTENT"),
+            ("DSC0001.ARW.xmp", "DSC0001.ARW 2.xmp", "DOUBLE_XMP_CONTENT"),
+            ("DSC0001-Edit.tif", "DSC0001-Edit_custom_suffix.tif", "EDIT_TIF_CONTENT")
+        ]
+
+        var renameMap: [String: String] = [:]
+        for item in bundle {
+            try Data(item.content.utf8).write(to: root.appendingPathComponent(item.name))
+            renameMap[item.name] = item.trashedName
+        }
+
+        let primaryURL = root.appendingPathComponent("DSC0001.ARW")
+        let service = ArbitraryRenamingTrashService(trashDirectory: trashDir, renameMap: renameMap)
+        let actor = AsyncCullingActor(trashService: service)
+        let job = CullingJob(
+            photoID: UUID(),
+            actionType: .trash,
+            primaryURL: primaryURL,
+            rootURL: root
+        )
+
+        guard let record = try await actor.enqueue(job) else {
+            #expect(Bool(false), "Trash job failed to produce record")
+            return
+        }
+
+        #expect(record.trashedPairs.count == 4)
+        let restored = try await actor.undo(record: record)
+        #expect(restored.count == 4)
+
+        for item in bundle {
+            let fileURL = root.appendingPathComponent(item.name)
+            #expect(FileManager.default.fileExists(atPath: fileURL.path), "Expected \(item.name) restored to exact original URL")
+            #expect(try String(contentsOf: fileURL, encoding: .utf8) == item.content)
+        }
+    }
+
+    @Test("U-03: Half-failed bundle trash where rollback of first member also fails preserves undo record for remaining trashed member")
+    func testHalfFailedBundleTrashWhenRollbackAlsoFailsPreservesUndoRecord() async throws {
+        final class BlockRollbackFileManager: FileManager, @unchecked Sendable {
+            let trashDirPath: String
+            var moveFromTrashAttempts = 0
+
+            init(trashDirPath: String) {
+                self.trashDirPath = trashDirPath
+                super.init()
+            }
+
+            override func moveItem(at srcURL: URL, to dstURL: URL) throws {
+                if srcURL.path.hasPrefix(trashDirPath) {
+                    moveFromTrashAttempts += 1
+                    if moveFromTrashAttempts == 1 {
+                        throw NSError(
+                            domain: NSCocoaErrorDomain,
+                            code: NSFileWriteNoPermissionError,
+                            userInfo: [NSLocalizedDescriptionKey: "Simulated rollback failure from Trash"]
+                        )
+                    }
+                }
+                try super.moveItem(at: srcURL, to: dstURL)
+            }
+        }
+
+        struct FailSecondMemberTrashService: TrashService {
+            let trashDirectory: URL
+            let failOnFilename: String
+
+            func trash(_ url: URL) throws -> URL {
+                if url.lastPathComponent == failOnFilename {
+                    throw FileCullingError.trashFailed(url: url, reason: "Simulated failure on second companion")
+                }
+                let fm = FileManager.default
+                if !fm.fileExists(atPath: trashDirectory.path) {
+                    try fm.createDirectory(at: trashDirectory, withIntermediateDirectories: true)
+                }
+                let dst = trashDirectory.appendingPathComponent(url.lastPathComponent)
+                try fm.moveItem(at: url, to: dst)
+                return dst
+            }
+        }
+
+        let root = try createTempDir(prefix: "AsyncHalfFailedTrashUndoTest")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let trashDir = root.appendingPathComponent(".SimTrash", isDirectory: true)
+        let rawURL = root.appendingPathComponent("IMG_0050.CR3")
+        let jpgURL = root.appendingPathComponent("IMG_0050.JPG")
+        try Data("PRECIOUS_RAW".utf8).write(to: rawURL)
+        try Data("PRECIOUS_JPG".utf8).write(to: jpgURL)
+
+        let trashService = FailSecondMemberTrashService(trashDirectory: trashDir, failOnFilename: "IMG_0050.JPG")
+        let actor = AsyncCullingActor(
+            trashService: trashService,
+            fileManager: BlockRollbackFileManager(trashDirPath: trashDir.path)
+        )
+
+        let job = CullingJob(
+            photoID: UUID(),
+            actionType: .trash,
+            primaryURL: rawURL,
+            rootURL: root
+        )
+
+        var caughtPartialError = false
+        do {
+            _ = try await actor.enqueue(job)
+        } catch let FileCullingError.partialTrashRollbackFailed(_, _, remainingPairs) {
+            caughtPartialError = true
+            #expect(remainingPairs.count == 1)
+            #expect(remainingPairs.first?.originalURL == rawURL)
+        }
+        #expect(caughtPartialError, "Expected partialTrashRollbackFailed when both companion trash and first-member rollback fail")
+
+        // Actor must preserve the undo record for the remaining trashed member!
+        let hasRecord = await actor.hasCompletedRecord(for: job.id)
+        #expect(hasRecord, "Undo record must NOT be dropped while a member remains in the Trash")
+
+        // Subsequent undo attempt succeeds and restores the remaining trashed member
+        let emptyFallback = CullingExecutionRecord(
+            jobID: job.id,
+            photoID: job.photoID,
+            actionType: .trash,
+            originalPrimaryURL: rawURL,
+            affectedURLs: []
+        )
+        let restored = try await actor.cancelOrUndo(jobID: job.id, fallbackRecord: emptyFallback)
+        #expect(restored == [rawURL])
+        #expect(FileManager.default.fileExists(atPath: rawURL.path))
+        #expect(FileManager.default.fileExists(atPath: jpgURL.path))
+        #expect(try String(contentsOf: rawURL, encoding: .utf8) == "PRECIOUS_RAW")
+        #expect(try String(contentsOf: jpgURL, encoding: .utf8) == "PRECIOUS_JPG")
     }
 }
 

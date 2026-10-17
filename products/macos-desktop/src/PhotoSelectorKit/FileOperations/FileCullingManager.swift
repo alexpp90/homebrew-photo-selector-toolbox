@@ -1,5 +1,16 @@
 import Foundation
 
+/// Records the exact source URL and resulting Trash URL for a trashed file.
+public struct TrashedFilePair: Sendable, Equatable {
+    public let originalURL: URL
+    public let trashedURL: URL
+
+    public init(originalURL: URL, trashedURL: URL) {
+        self.originalURL = originalURL
+        self.trashedURL = trashedURL
+    }
+}
+
 /// Errors encountered during file culling operations.
 public enum FileCullingError: Error, LocalizedError, Sendable {
     case fileNotFound(URL)
@@ -7,6 +18,7 @@ public enum FileCullingError: Error, LocalizedError, Sendable {
     case moveFailed(source: URL, destination: URL, reason: String)
     case copyFailed(source: URL, destination: URL, reason: String)
     case trashFailed(url: URL, reason: String)
+    case partialTrashRollbackFailed(url: URL, reason: String, remainingTrashedPairs: [TrashedFilePair])
 
     public var errorDescription: String? {
         switch self {
@@ -20,6 +32,8 @@ public enum FileCullingError: Error, LocalizedError, Sendable {
             return "Failed to copy file from \(src.lastPathComponent) to \(dst.lastPathComponent): \(reason)"
         case .trashFailed(let url, let reason):
             return "Failed to move file to trash \(url.lastPathComponent): \(reason)"
+        case .partialTrashRollbackFailed(let url, let reason, let remaining):
+            return "Failed to move file to trash \(url.lastPathComponent): \(reason) (\(remaining.count) companion file(s) remain in Trash)"
         }
     }
 }
@@ -31,13 +45,17 @@ public protocol TrashService: Sendable {
 }
 
 /// Production trash implementation backed by `FileManager.default.trashItem`.
-public struct SystemTrashService: TrashService {
-    public init() {}
+public struct SystemTrashService: TrashService, @unchecked Sendable {
+    private let fileManager: FileManager
+
+    public init(fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+    }
 
     public func trash(_ url: URL) throws -> URL {
         var resultingURL: NSURL?
         do {
-            try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
+            try fileManager.trashItem(at: url, resultingItemURL: &resultingURL)
         } catch {
             throw FileCullingError.trashFailed(url: url, reason: error.localizedDescription)
         }
@@ -373,29 +391,40 @@ public final class FileCullingManager: @unchecked Sendable {
 
     // MARK: - Move to Trash
 
-    /// Sends the primary photo and all associated companion files to the macOS system trash.
-    /// - Parameter photoURL: The primary photo URL to trash.
-    /// - Returns: The list of resulting URLs in the trash.
-    public func moveToTrash(photoURL: URL) throws -> [URL] {
+    /// Sends the primary photo and all associated companion files to the macOS system trash,
+    /// returning the exact `(originalURL, trashedURL)` pairs for non-destructive undo.
+    /// If trashing a companion fails mid-bundle, previously trashed members are rolled back
+    /// using non-overwriting `moveItem` (with collision-free suffixing if the original path
+    /// became occupied). If any rollback itself fails, throws `.partialTrashRollbackFailed`
+    /// carrying the remaining trashed pairs so the caller preserves the undo entry.
+    public func moveToTrashWithPairs(photoURL: URL) throws -> [TrashedFilePair] {
         guard fileManager.fileExists(atPath: photoURL.path) else {
             throw FileCullingError.fileNotFound(photoURL)
         }
 
         let targets = findCompanionFiles(for: photoURL)
-        var trashedURLs: [URL] = []
-        var trashedPairs: [(source: URL, trashed: URL)] = []
+        let primaryStem = photoURL.deletingPathExtension().lastPathComponent
+        let originalDir = photoURL.deletingLastPathComponent()
+        var trashedPairs: [TrashedFilePair] = []
 
         for target in targets {
             guard fileManager.fileExists(atPath: target.path) else { continue }
             do {
                 let res = try trashService.trash(target)
-                trashedURLs.append(res)
-                trashedPairs.append((source: target, trashed: res))
+                trashedPairs.append(TrashedFilePair(originalURL: target, trashedURL: res))
             } catch {
-                for pair in trashedPairs.reversed() {
-                    if fileManager.fileExists(atPath: pair.trashed.path) {
-                        try? fileManager.moveItem(at: pair.trashed, to: pair.source)
-                    }
+                let remainingTrashed = rollbackTrashedPairs(
+                    trashedPairs,
+                    originalDir: originalDir,
+                    primaryStem: primaryStem
+                )
+                if !remainingTrashed.isEmpty {
+                    let reason = (error as? FileCullingError)?.errorDescription ?? error.localizedDescription
+                    throw FileCullingError.partialTrashRollbackFailed(
+                        url: target,
+                        reason: reason,
+                        remainingTrashedPairs: remainingTrashed
+                    )
                 }
                 if let cullingError = error as? FileCullingError {
                     throw cullingError
@@ -404,6 +433,66 @@ public final class FileCullingManager: @unchecked Sendable {
             }
         }
 
-        return trashedURLs
+        return trashedPairs
+    }
+
+    /// Sends the primary photo and all associated companion files to the macOS system trash.
+    /// - Parameter photoURL: The primary photo URL to trash.
+    /// - Returns: The list of resulting URLs in the trash.
+    public func moveToTrash(photoURL: URL) throws -> [URL] {
+        try moveToTrashWithPairs(photoURL: photoURL).map(\.trashedURL)
+    }
+
+    /// Rolls back already-trashed companion files to `originalDir` without overwriting any
+    /// newly created files at their original paths, and returns any `TrashedFilePair`s whose
+    /// rollback failed (meaning those files remain in the Trash and must stay undoable).
+    private func rollbackTrashedPairs(
+        _ pairs: [TrashedFilePair],
+        originalDir: URL,
+        primaryStem: String
+    ) -> [TrashedFilePair] {
+        guard !pairs.isEmpty else { return [] }
+
+        let anyOccupied = pairs.contains { fileManager.fileExists(atPath: $0.originalURL.path) }
+        let targetDestinations: [URL]
+        if !anyOccupied {
+            targetDestinations = pairs.map(\.originalURL)
+        } else {
+            var suffix = 2
+            while true {
+                let allFree = pairs.allSatisfy { pair in
+                    let suffixedName = Self.suffixedCompanionFilename(
+                        pair.originalURL.lastPathComponent,
+                        primaryStem: primaryStem,
+                        suffix: suffix
+                    )
+                    let candidateDest = originalDir.appendingPathComponent(suffixedName)
+                    return !fileManager.fileExists(atPath: candidateDest.path)
+                }
+                if allFree {
+                    break
+                }
+                suffix += 1
+            }
+            targetDestinations = pairs.map { pair in
+                let suffixedName = Self.suffixedCompanionFilename(
+                    pair.originalURL.lastPathComponent,
+                    primaryStem: primaryStem,
+                    suffix: suffix
+                )
+                return originalDir.appendingPathComponent(suffixedName)
+            }
+        }
+
+        var remainingInReverse: [TrashedFilePair] = []
+        for (pair, restoreDest) in zip(pairs, targetDestinations).reversed() {
+            guard fileManager.fileExists(atPath: pair.trashedURL.path) else { continue }
+            do {
+                try fileManager.moveItem(at: pair.trashedURL, to: restoreDest)
+            } catch {
+                remainingInReverse.append(pair)
+            }
+        }
+        return remainingInReverse.reversed()
     }
 }
