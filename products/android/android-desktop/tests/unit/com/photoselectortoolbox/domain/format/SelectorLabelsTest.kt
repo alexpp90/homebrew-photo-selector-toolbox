@@ -83,4 +83,25 @@ class SelectorLabelsTest {
             SelectorLabels.position(position = 127, total = 842, stillEnumerating = true),
         )
     }
+
+    @Test
+    fun `delete confirmation message states permanent commit and 20-step Ctrl+Z undo`() {
+        val msg = SelectorLabels.deleteConfirmationMessage("DSC001.JPG")
+        assertEquals(
+            "Delete \"DSC001.JPG\"? Deletions in this folder are permanent once committed. You can undo up to 20 actions with Ctrl+Z before leaving the folder.",
+            msg,
+        )
+    }
+
+    @Test
+    fun `uncompleted deletions recovery message is pluralised`() {
+        assertEquals(
+            "1 deletion was not completed — delete now / keep",
+            SelectorLabels.uncompletedDeletionsMessage(1),
+        )
+        assertEquals(
+            "3 deletions were not completed — delete now / keep",
+            SelectorLabels.uncompletedDeletionsMessage(3),
+        )
+    }
 }

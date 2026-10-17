@@ -22,6 +22,9 @@ public struct QualityScores: Sendable, Codable, Equatable, Hashable {
     /// Sharpness score in range 0.0 ... 100.0.
     public let sharpness: Double
 
+    /// Alias for sharpness score (0.0 ... 100.0) used in focus/sharpness sorting and statistics.
+    public var focusScore: Double { sharpness }
+
     /// Sensor noise metric in range 0.0 ... 100.0.
     public let noise: Double
 

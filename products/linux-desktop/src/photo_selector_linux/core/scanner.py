@@ -31,6 +31,7 @@ DEFAULT_EXCLUDED_FOLDERS: Set[str] = {
     "phototok_selection",
     "phototok_leftswipe",
 }
+SELECTION_MARKER_FILENAME: str = ".photoselector-selection"
 
 
 def _extension_of(name: str) -> str:
@@ -75,18 +76,32 @@ class DirectoryScanner:
                 self.excluded_names.add(sanitized)
 
     def is_path_excluded(self, dir_path: Path, root_path: Path) -> bool:
-        """Check if dir_path has any relative path component matching excluded names (R-LINUX-META-05).
+        """Check if dir_path has any relative path component matching excluded names or marker file (R-LINUX-META-05).
 
         If dir_path is identical to root_path, it is NEVER excluded (root scan exception).
         """
         try:
-            rel = dir_path.resolve().relative_to(root_path.resolve())
+            root_resolved = root_path.resolve()
+            rel = dir_path.resolve().relative_to(root_resolved)
         except ValueError:
             return False
 
-        # If dir_path is root, relative parts are empty -> not excluded
+        if not rel.parts:
+            return False
+
         parts = [p.lower() for p in rel.parts]
-        return any(p in self.excluded_names for p in parts)
+        if any(p in self.excluded_names for p in parts):
+            return True
+
+        curr = root_resolved
+        for part in rel.parts:
+            curr = curr / part
+            try:
+                if (curr / SELECTION_MARKER_FILENAME).exists():
+                    return True
+            except OSError:
+                pass
+        return False
 
     def find_companion_files(self, primary_path: Path) -> List[Path]:
         """Find all bound companion files (RAW, JPEG, XMP, -Edit) in the same directory (R-LINUX-META-04)."""
@@ -160,7 +175,7 @@ class DirectoryScanner:
         batch_size: int = 30,
         first_batch_size: Optional[int] = None,
     ) -> Generator[List[CandidatePhoto], None, None]:
-        """Progressively stream CandidatePhoto batches (R-LINUX-CULL-01).
+        """Progressively stream CandidatePhoto batches in depth-first per-folder natural order (R-LINUX-CULL-01/02).
 
         Each directory is listed once; companions are grouped from that listing in memory.
         """
@@ -192,12 +207,15 @@ class DirectoryScanner:
             # Real names for opaque on-disk names (Google Drive via GVFS); empty when local.
             display = self.name_resolver.names_in(curr_dir)
 
-            # Prune child directories that match exclusions before walking into them
-            dirnames[:] = [
-                d for d in dirnames
-                if display.get(d, d).strip().lower() not in self.excluded_names
-                and not self.is_path_excluded(curr_dir / d, root_path)
-            ]
+            # Prune child directories that match exclusions and sort remaining in natural order (UD-9)
+            dirnames[:] = sorted(
+                [
+                    d for d in dirnames
+                    if display.get(d, d).strip().lower() not in self.excluded_names
+                    and not self.is_path_excluded(curr_dir / d, root_path)
+                ],
+                key=lambda d: natural_sort_key(display.get(d, d)),
+            )
             entries: List[Tuple[Path, str]] = [
                 (curr_dir / fname, display.get(fname, fname)) for fname in filenames
             ]
@@ -264,7 +282,7 @@ class DirectoryScanner:
         first_batch_size: int = 1,
         batch_size: int = 30,
     ) -> Generator[List[CandidatePhoto], None, None]:
-        """Yield first candidate batch immediately (first_batch_size=1), then subsequent batches (REQ-LINUX-CULL.01)."""
+        """Yield first candidate batch immediately (first_batch_size=1), then subsequent batches (R-LINUX-CULL-01)."""
         yield from self.scan_stream(
             root_path,
             recursive=recursive,
@@ -273,7 +291,7 @@ class DirectoryScanner:
         )
 
     def scan_directory(self, root_path: Path, recursive: bool = True) -> List[CandidatePhoto]:
-        """Enumerate and return all candidates sorted naturally by primary filename (R-LINUX-CULL-02)."""
+        """Enumerate and return all candidates in depth-first per-folder natural order (R-LINUX-CULL-02)."""
         candidates: List[CandidatePhoto] = []
         for batch in self.scan_stream(root_path, recursive=recursive, batch_size=50):
             candidates.extend(batch)
@@ -285,7 +303,6 @@ class DirectoryScanner:
                 except OSError:
                     candidate._file_size = 0
 
-        candidates.sort(key=lambda c: natural_sort_key(c.filename))
         return candidates
 
 

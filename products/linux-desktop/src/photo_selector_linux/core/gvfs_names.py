@@ -115,6 +115,86 @@ def is_gvfs_fuse_path(path: Path, roots: Optional[Sequence[Path]] = None) -> boo
     return False
 
 
+REMOTE_FS_TYPES = {
+    "fuse",
+    "gvfsd-fuse",
+    "cifs",
+    "smb3",
+    "smbfs",
+    "nfs",
+    "nfs4",
+    "sshfs",
+    "rclone",
+    "webdav",
+}
+
+
+def is_remote_filesystem(
+    path: Path,
+    mountinfo_text: Optional[str] = None,
+    roots: Optional[Sequence[Path]] = None,
+) -> bool:
+    """True when ``path`` resides on a GVFS, FUSE, or network filesystem (U-31).
+
+    Checks GVFS FUSE roots first, then ``/proc/self/mountinfo`` (or ``mountinfo_text`` when
+    supplied by tests), and finally GIO's ``filesystem::remote`` attribute when available.
+    """
+    if is_gvfs_fuse_path(path, roots=roots):
+        return True
+
+    text = mountinfo_text
+    if text is None:
+        mountinfo_path = Path("/proc/self/mountinfo")
+        if mountinfo_path.is_file():
+            try:
+                text = mountinfo_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                text = None
+
+    if text:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            resolved = path
+        best_mount_len = -1
+        best_fstype = ""
+        for line in text.splitlines():
+            if " - " not in line:
+                continue
+            left, right = line.split(" - ", 1)
+            left_parts = left.split()
+            right_parts = right.split()
+            if len(left_parts) < 5 or not right_parts:
+                continue
+            mount_point = Path(left_parts[4].replace("\\040", " "))
+            fstype = right_parts[0].lower()
+            for candidate_path in (resolved, path):
+                try:
+                    candidate_path.relative_to(mount_point)
+                except ValueError:
+                    continue
+                mount_len = len(str(mount_point))
+                if mount_len >= best_mount_len:
+                    best_mount_len = mount_len
+                    best_fstype = fstype
+        if best_fstype:
+            if best_fstype.startswith("fuse.") or best_fstype in REMOTE_FS_TYPES:
+                return True
+
+    if HAS_GIO and Gio is not None:
+        try:
+            gfile = Gio.File.new_for_path(str(path))
+            info = gfile.query_filesystem_info("filesystem::remote", None)
+            if info is not None:
+                is_rem = info.get_attribute_boolean("filesystem::remote")
+                if isinstance(is_rem, bool) and is_rem:
+                    return True
+        except Exception:
+            pass
+
+    return False
+
+
 def default_resolver() -> DisplayNameResolver:
     """GIO-backed resolver when PyGObject is present, identity otherwise."""
     return GioDisplayNameResolver() if HAS_GIO else IdentityNameResolver()

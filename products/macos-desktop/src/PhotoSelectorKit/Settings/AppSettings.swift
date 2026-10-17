@@ -4,6 +4,7 @@ import Foundation
 public enum AppSettingsKeys {
     // MARK: - General
     public static let cullingDestinationFolderName = "cullingDestinationFolderName"
+    public static let externalCullingDestinationURL = "externalCullingDestinationURL"
     public static let autoAdvance = "autoAdvance"
 
     // MARK: - Scoring & Aesthetics
@@ -50,6 +51,26 @@ public extension UserDefaults {
         set {
             let sanitized = AppSettings.sanitizeDestinationFolderName(newValue)
             set(sanitized, forKey: AppSettingsKeys.cullingDestinationFolderName)
+        }
+    }
+
+    /// Optional external base directory for Move/Copy destination (e.g., an internal SSD folder
+    /// when culling directly off an SD card). When nil, Move/Copy targets `<rootDirectoryURL>/<cullingDestinationFolderName>`.
+    var externalCullingDestinationURL: URL? {
+        get {
+            guard let rawPath = string(forKey: AppSettingsKeys.externalCullingDestinationURL)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !rawPath.isEmpty else {
+                return nil
+            }
+            return URL(fileURLWithPath: rawPath, isDirectory: true)
+        }
+        set {
+            if let url = newValue {
+                set(url.standardizedFileURL.path, forKey: AppSettingsKeys.externalCullingDestinationURL)
+            } else {
+                removeObject(forKey: AppSettingsKeys.externalCullingDestinationURL)
+            }
         }
     }
 
@@ -134,6 +155,7 @@ public extension UserDefaults {
     /// Resets all application settings to their documented defaults.
     func resetAppSettingsToDefaults() {
         removeObject(forKey: AppSettingsKeys.cullingDestinationFolderName)
+        removeObject(forKey: AppSettingsKeys.externalCullingDestinationURL)
         removeObject(forKey: AppSettingsKeys.autoAdvance)
         removeObject(forKey: AppSettingsKeys.sharpnessBlurryThreshold)
         removeObject(forKey: AppSettingsKeys.sharpnessAcceptableThreshold)

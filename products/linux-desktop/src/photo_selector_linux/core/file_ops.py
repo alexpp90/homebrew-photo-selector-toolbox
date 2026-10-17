@@ -10,11 +10,13 @@ Adheres to:
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import datetime, timezone
 import errno
 import logging
 import os
 import shutil
+import stat
 import threading
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -35,6 +37,7 @@ from photo_selector_linux.core.models import (
 logger = logging.getLogger(__name__)
 
 _RENAME_LOCK = threading.Lock()
+SELECTION_MARKER_FILENAME: str = ".photoselector-selection"
 
 _HAVE_GIO = False
 try:
@@ -325,15 +328,24 @@ class FileCullingManager:
                     pass
                 else:
                     uid = self._get_uid()
-                    shared_uid_trash = mount_root / ".Trash" / str(uid)
-                    top_uid_trash = mount_root / f".Trash-{uid}"
-                    if shared_uid_trash.is_dir() or (
-                        (mount_root / ".Trash").is_dir() and not top_uid_trash.exists()
-                    ):
-                        return shared_uid_trash, mount_root
-                    return top_uid_trash, mount_root
+                    # FreeDesktop Trash spec 1.0 §Trash directories: $topdir/.Trash is used only
+                    # when it is a real directory (not a symlink) with the sticky bit; otherwise
+                    # fall back to the per-user $topdir/.Trash-$uid.
+                    shared_trash = mount_root / ".Trash"
+                    if self._is_usable_shared_trash(shared_trash):
+                        return shared_trash / str(uid), mount_root
+                    return mount_root / f".Trash-{uid}", mount_root
 
         return home_trash, None
+
+    @staticmethod
+    def _is_usable_shared_trash(path: Path) -> bool:
+        """True for a ``$topdir/.Trash`` that is a real directory with the sticky bit set."""
+        try:
+            mode = os.lstat(path).st_mode
+        except OSError:
+            return False
+        return stat.S_ISDIR(mode) and bool(mode & stat.S_ISVTX)
 
     def _candidate_trash_bases(self, original_src: Path) -> List[Tuple[Path, Optional[Path]]]:
         """Return ordered ``(trash_base, mount_root)`` candidates to inspect for ``original_src``."""
@@ -368,19 +380,14 @@ class FileCullingManager:
         trash_base, mount_root = self._select_trash_base_for(src)
         files_dir = trash_base / "files"
         info_dir = trash_base / "info"
-        files_dir.mkdir(parents=True, exist_ok=True)
-        info_dir.mkdir(parents=True, exist_ok=True)
+        # A top-directory trash holds other users' and programs' entries: owner-only (spec).
+        dir_mode = 0o700 if mount_root is not None else 0o777
+        trash_base.mkdir(mode=dir_mode, parents=True, exist_ok=True)
+        files_dir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
+        info_dir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
 
         src_resolved = src.resolve()
         name = name or src.name
-        candidate_name = name
-        counter = 1
-        while (files_dir / candidate_name).exists() or (info_dir / f"{candidate_name}.trashinfo").exists():
-            counter += 1
-            candidate_name = f"{Path(name).stem}.{counter}{Path(name).suffix}"
-
-        dst_file = (files_dir / candidate_name).resolve()
-        info_file = (info_dir / f"{candidate_name}.trashinfo").resolve()
         deletion_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         logical_src = src_resolved.parent / name
         if mount_root is not None:
@@ -389,7 +396,31 @@ class FileCullingManager:
         else:
             encoded_path = quote(str(logical_src), safe="/")
         info_content = f"[Trash Info]\nPath={encoded_path}\nDeletionDate={deletion_date}\n"
-        info_file.write_text(info_content, encoding="utf-8")
+
+        # The .trashinfo reserves the trash name: create it with O_EXCL (spec) so two processes
+        # trashing the same name never share an entry; on EEXIST try the next name.
+        candidate_name = name
+        counter = 1
+        while True:
+            if (files_dir / candidate_name).exists() or (info_dir / f"{candidate_name}.trashinfo").exists():
+                counter += 1
+                candidate_name = f"{Path(name).stem}.{counter}{Path(name).suffix}"
+                continue
+            try:
+                fd = os.open(
+                    info_dir / f"{candidate_name}.trashinfo",
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                )
+            except FileExistsError:
+                counter += 1
+                candidate_name = f"{Path(name).stem}.{counter}{Path(name).suffix}"
+                continue
+            break
+        dst_file = (files_dir / candidate_name).resolve()
+        info_file = (info_dir / f"{candidate_name}.trashinfo").resolve()
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(info_content)
 
         try:
             if self._dev_of(src_resolved.parent) == self._dev_of(files_dir):
@@ -512,6 +543,8 @@ class FileCullingManager:
             if new.name != name:
                 candidate.display_names[new] = name
 
+    SELECTION_MARKER_FILENAME: str = ".photoselector-selection"
+
     def _get_selection_dir(self, root_dir: Path, custom_folder: Optional[str] = None) -> Path:
         folder_name = custom_folder or self.default_selection_folder
         folder_name = str(folder_name).strip().rstrip("/\\").strip() or "Selection"
@@ -522,6 +555,12 @@ class FileCullingManager:
                 return (root_dir / on_disk).resolve()
         sel_dir = (root_dir / folder_name).resolve()
         sel_dir.mkdir(parents=True, exist_ok=True)
+        marker = sel_dir / self.SELECTION_MARKER_FILENAME
+        if not marker.exists():
+            try:
+                marker.write_bytes(b"")
+            except OSError:
+                pass
         return sel_dir
 
     def _verify_destination_capacity(self, sel_dir: Path, files: List[Path]) -> None:
@@ -545,18 +584,21 @@ class FileCullingManager:
         candidate: CandidatePhoto,
         root_dir: Path,
         selection_folder: Optional[str] = None,
+        selection_folder_name: Optional[str] = None,
     ) -> CullingRecord:
         """Atomically move candidate photo and all bound companions to Selection/ (R-LINUX-CULL-03)."""
-        sel_dir = self._get_selection_dir(root_dir, selection_folder)
+        sel_dir = self._get_selection_dir(root_dir, selection_folder_name or selection_folder)
         planned_moves = self._resolve_bundle_destinations(candidate, sel_dir)
         targets = [src for src, _ in planned_moves]
-
-        # Pre-flight capacity check
-        self._verify_destination_capacity(sel_dir, targets)
 
         # Detect cross-filesystem boundaries
         sel_dev = self._dev_of(sel_dir)
         is_cross_mount = any(t.exists() and self._dev_of(t) != sel_dev for t in targets)
+
+        # Pre-flight capacity check: only a cross-mount move copies bytes. A same-filesystem
+        # move is a rename and needs no free space, so a nearly full card must not refuse it.
+        if is_cross_mount:
+            self._verify_destination_capacity(sel_dir, targets)
 
         affected: List[Tuple[Path, Path]] = []
 
@@ -643,9 +685,21 @@ class FileCullingManager:
                     sel_dir,
                     failed_names,
                 )
+                # The verified copies are the user's data now: hand back a record (marked partial
+                # through `unremoved_sources`) so the caller can keep it for undo and report
+                # "Copied to «folder» — original could not be removed" (FILE_OPERATIONS.md §4).
+                partial_record = CullingRecord(
+                    photo_id=candidate.id,
+                    action_type=CullingActionType.MOVE,
+                    original_primary_path=candidate.primary_path,
+                    affected_paths=staged_dsts,
+                    previous_status=PhotoStatus.CANDIDATE,
+                    unremoved_sources=[s for s, _ in failed_unlinks],
+                )
                 raise FileCullingError(
-                    f"Cross-filesystem move commit partially succeeded: destination replicas preserved, "
-                    f"but source files could not be removed: {failed_names}"
+                    f"Copied to {sel_dir.name} — original could not be removed: {failed_names}; "
+                    f"destination replicas preserved",
+                    partial_record=partial_record,
                 )
 
             affected = staged_dsts
@@ -664,9 +718,10 @@ class FileCullingManager:
         candidate: CandidatePhoto,
         root_dir: Path,
         selection_folder: Optional[str] = None,
+        selection_folder_name: Optional[str] = None,
     ) -> CullingRecord:
         """Atomically copy candidate photo and all bound companions to Selection/ (R-LINUX-CULL-04)."""
-        sel_dir = self._get_selection_dir(root_dir, selection_folder)
+        sel_dir = self._get_selection_dir(root_dir, selection_folder_name or selection_folder)
         planned_copies = self._resolve_bundle_destinations(candidate, sel_dir)
         targets = [src for src, _ in planned_copies]
 
@@ -717,6 +772,73 @@ class FileCullingManager:
             previous_status=PhotoStatus.CANDIDATE,
         )
 
+    def _use_gio(self) -> bool:
+        """True when the real desktop Trash (GIO) is used rather than the injected/test layout."""
+        return (
+            _HAVE_GIO
+            and self._trash_dir is None
+            and "XDG_DATA_HOME" not in os.environ
+            and self._mount_root_for_fn is None
+            and self._dev_of_fn is None
+        )
+
+    def _gio_trash_names(self, src_resolved: Path) -> List[str]:
+        """Names in GIO's ``trash:///`` listing whose recorded original path is ``src_resolved``."""
+        root = Gio.File.new_for_uri("trash:///")
+        enumerator = root.enumerate_children(
+            "standard::name,trash::orig-path", Gio.FileQueryInfoFlags.NONE, None
+        )
+        names: List[str] = []
+        while True:
+            item = enumerator.next_file(None)
+            if item is None:
+                return names
+            orig = item.get_attribute_byte_string("trash::orig-path")
+            if orig and Path(os.fsdecode(orig)) == src_resolved:
+                names.append(item.get_name())
+
+    def _trash_via_gio(self, src: Path) -> Tuple[Path, Path]:
+        """Trash ``src`` through GIO and return ``(files_path, info_path)`` of its trash entry.
+
+        Once GIO has trashed the file it is in the Trash whether or not we can find the entry, so
+        a failed lookup must never leave it there unrecorded: look again through GIO's own trash
+        listing, and failing that put the file back before raising.
+        """
+        src_resolved = src.resolve()
+        Gio.File.new_for_path(str(src_resolved)).trash(None)
+        located = self._find_trashed_entry(src)
+        names: List[str] = []
+        if located is None:
+            try:
+                names = self._gio_trash_names(src_resolved)
+            except Exception:
+                names = []
+            for trashed_name in names:
+                for base, _ in self._candidate_trash_bases(src):
+                    payload = base / "files" / trashed_name
+                    info = base / "info" / f"{trashed_name}.trashinfo"
+                    if (payload.exists() or payload.is_symlink()) and info.exists():
+                        located = (payload.resolve(), info.resolve())
+                        break
+                if located is not None:
+                    break
+        if located is not None:
+            return located
+        for trashed_name in names:
+            try:
+                Gio.File.new_for_uri("trash:///").get_child(trashed_name).move(
+                    Gio.File.new_for_path(str(src_resolved)), Gio.FileCopyFlags.NONE, None, None, None
+                )
+            except Exception:
+                continue
+            raise FileCullingError(
+                f"Could not track {src.name} after moving it to the Trash; it was restored to its folder"
+            )
+        raise FileCullingError(
+            f"{src.name} was moved to the Trash but could not be tracked or put back; "
+            f"restore it from the file manager's Trash"
+        )
+
     def trash_candidate(self, candidate: CandidatePhoto) -> CullingRecord:
         """Safely send candidate and companions to FreeDesktop Trash (R-LINUX-CULL-05)."""
         targets = candidate.all_paths
@@ -735,19 +857,8 @@ class FileCullingManager:
                     orig_key = src.resolve().parent / name
                     trashed_paths.append((orig_key, dst_trash))
                     trash_info_paths[orig_key] = info_trash
-                elif (
-                    _HAVE_GIO
-                    and self._trash_dir is None
-                    and "XDG_DATA_HOME" not in os.environ
-                    and self._mount_root_for_fn is None
-                    and self._dev_of_fn is None
-                ):
-                    gfile = Gio.File.new_for_path(str(src.resolve()))
-                    gfile.trash(None)
-                    located = self._find_trashed_entry(src)
-                    if located is None:
-                        raise FileCullingError(f"Could not locate trashed entry in Trash for {src.name}")
-                    dst_trash, info_trash = located
+                elif self._use_gio():
+                    dst_trash, info_trash = self._trash_via_gio(src)
                     trashed_paths.append((src, dst_trash))
                     trash_info_paths[src] = info_trash
                 else:
@@ -920,6 +1031,13 @@ class FileCullingManager:
                 candidate.display_names.pop(orig_src, None)
                 candidate.display_names[restore_target] = restore_target.name
 
+    @staticmethod
+    def _safe_resolve(path: Path) -> Path:
+        try:
+            return path.resolve()
+        except OSError:
+            return path
+
     def undo_culling(self, record: CullingRecord, candidate: Optional[CandidatePhoto] = None) -> bool:
         """Atomically reverse culling operation with absolute source preservation (R-LINUX-CULL-06/07)."""
         if record.action_type == CullingActionType.COPY:
@@ -941,7 +1059,25 @@ class FileCullingManager:
         elif record.action_type == CullingActionType.MOVE:
             # === Transactional Move Undo (R-LINUX-CULL-07) ===
             # Restore files from Selection/ back to original source directory (with collision suffix if occupied)
-            undo_targets = self._resolve_undo_targets(record, candidate)
+            #
+            # A partial move (copy verified, original not removable) left some originals in
+            # place. Restoring their copies would put a "-2" duplicate next to the original
+            # (D-3), so those copies are deleted instead (docs/shared/FILE_OPERATIONS.md §3);
+            # a copy whose original has meanwhile disappeared is the only one left and is
+            # restored like any other member.
+            still_home: List[Tuple[Path, Path]] = []
+            to_restore: List[Tuple[Path, Path]] = list(record.affected_paths)
+            if record.unremoved_sources:
+                to_restore = []
+                unremoved = {self._safe_resolve(p) for p in record.unremoved_sources}
+                for pair in record.affected_paths:
+                    src_of_pair = pair[0]
+                    if self._safe_resolve(src_of_pair) in unremoved and src_of_pair.exists():
+                        still_home.append(pair)
+                    else:
+                        to_restore.append(pair)
+            restore_record = dataclasses.replace(record, affected_paths=to_restore)
+            undo_targets = self._resolve_undo_targets(restore_record, candidate)
             restored_pairs: List[Tuple[Path, Path]] = []
             completed_moves: List[Tuple[Path, Path]] = []
             try:
@@ -971,6 +1107,15 @@ class FileCullingManager:
                         except Exception:
                             pass
                 raise FileCullingError(f"Failed to restore moved file during undo: {e}") from e
+
+            for src, dst in still_home:
+                if dst.exists() and self._safe_resolve(dst) != self._safe_resolve(src):
+                    try:
+                        dst.unlink()
+                    except Exception as e:
+                        raise FileCullingError(
+                            f"Failed to delete the copy of {src.name} during undo: {e}"
+                        ) from e
 
             if candidate:
                 self._update_candidate_restored_paths(candidate, restored_pairs)

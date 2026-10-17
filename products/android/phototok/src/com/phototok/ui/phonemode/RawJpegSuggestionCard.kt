@@ -56,6 +56,7 @@ fun RawJpegSuggestionDialog(
     onEnableMoveRelatedFiles: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onShowOnePerShot: () -> Unit = {},
 ) {
     if (!visible) return
 
@@ -144,11 +145,39 @@ fun RawJpegSuggestionDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Option 0 (Recommended): Show 1 per shot
+                Surface(
+                    onClick = onShowOnePerShot,
+                    shape = RoundedCornerShape(12.dp),
+                    color = colors.primaryContainer.copy(alpha = 0.7f),
+                    border = BorderStroke(1.5.dp, colors.primary),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("one_per_shot_button"),
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "Show 1 per shot (Recommended)",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.onPrimaryContainer,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Shows the JPEG in the feed with a RAW+JPG badge and applies actions to both files.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onPrimaryContainer.copy(alpha = 0.9f),
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 // Option 1: Link actions across both
                 Surface(
                     onClick = onEnableMoveRelatedFiles,
                     shape = RoundedCornerShape(12.dp),
-                    color = colors.primaryContainer.copy(alpha = 0.5f),
+                    color = colors.primaryContainer.copy(alpha = 0.4f),
                     border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -262,6 +291,7 @@ fun RawJpegSuggestionCard(
     onEnableMoveRelatedFiles: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onShowOnePerShot: () -> Unit = {},
 ) = RawJpegSuggestionDialog(
     visible = visible,
     onFilterRaw = onFilterRaw,
@@ -269,4 +299,5 @@ fun RawJpegSuggestionCard(
     onEnableMoveRelatedFiles = onEnableMoveRelatedFiles,
     onDismiss = onDismiss,
     modifier = modifier,
+    onShowOnePerShot = onShowOnePerShot,
 )

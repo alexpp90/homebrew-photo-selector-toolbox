@@ -185,4 +185,43 @@ class RelatedFilesTest {
         val sameFolder = listOf(inDir("DSC_0001.ARW", "a"), inDir("DSC_0001.JPG", "a"))
         assertTrue(RelatedFiles.hasRawJpegPairs(sameFolder))
     }
+
+    @Test
+    fun `collapseOnePerShot prefers JPEG over RAW in same folder and keeps unpaired items`() {
+        val raw1 = img("DSC_0001.ARW")
+        val jpg1 = img("DSC_0001.JPG")
+        val raw2 = img("DSC_0002.ARW")
+        val jpg3 = img("DSC_0003.JPG")
+        val all = listOf(raw1, jpg1, raw2, jpg3)
+
+        val collapsed = RelatedFiles.collapseOnePerShot(all)
+
+        assertEquals(listOf("DSC_0001.JPG", "DSC_0002.ARW", "DSC_0003.JPG"), collapsed.map { it.fileName })
+    }
+
+    @Test
+    fun `hasRawCompanion returns true for JPEG with RAW sibling`() {
+        val raw = img("DSC_0001.ARW")
+        val jpg = img("DSC_0001.JPG")
+        val soloJpg = img("DSC_0002.JPG")
+        val all = listOf(raw, jpg, soloJpg)
+
+        assertTrue(RelatedFiles.hasRawCompanion(all, jpg))
+        org.junit.Assert.assertFalse(RelatedFiles.hasRawCompanion(all, raw))
+        org.junit.Assert.assertFalse(RelatedFiles.hasRawCompanion(all, soloJpg))
+    }
+
+    @Test
+    fun `preferredShareItem returns JPEG companion when sharing RAW`() {
+        val raw = img("DSC_0001.ARW")
+        val jpg = img("DSC_0001.JPG")
+        val soloRaw = img("DSC_0002.ARW")
+        val all = listOf(raw, jpg, soloRaw)
+
+        val preferred = RelatedFiles.preferredShareItem(all = all, target = raw)
+        assertEquals(jpg, preferred)
+
+        val preferredSolo = RelatedFiles.preferredShareItem(all = all, target = soloRaw)
+        assertEquals(soloRaw, preferredSolo)
+    }
 }

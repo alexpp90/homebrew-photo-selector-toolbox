@@ -68,9 +68,21 @@ class SettingsRepository @Inject constructor(
          */
         private val KEY_SEEN_HINTS = stringSetPreferencesKey("seen_first_run_hints")
 
+        /**
+         * Durable journal of deferred-delete URIs not yet committed to disk,
+         * so a killed process can offer recovery on next startup (PRP WP-11 / U-05).
+         */
+        private val KEY_PENDING_DELETE_JOURNAL = stringSetPreferencesKey("pending_delete_journal")
+        private val KEY_SECONDARY_SELECTION_FOLDER_NAME = stringPreferencesKey("secondary_selection_folder_name")
+        private val KEY_CUSTOM_SELECTION_DESTINATION_URI = stringPreferencesKey("custom_selection_destination_uri")
+        private val KEY_TV_DISPLAY_SCALE_ENABLED = booleanPreferencesKey("tv_display_scale_enabled")
+
         const val DEFAULT_SELECTION_FOLDER_NAME = "Selection"
+        const val DEFAULT_SECONDARY_SELECTION_FOLDER_NAME = "Final"
         const val DEFAULT_SORTING_ENABLED = true
         const val DEFAULT_GROUPING_ENABLED = false
+        const val DEFAULT_TV_DISPLAY_SCALE_ENABLED = false
+        const val TV_DISPLAY_SCALE_FACTOR = 1.25f
 
         /**
          * The filmstrip starts hidden.
@@ -469,5 +481,92 @@ class SettingsRepository @Inject constructor(
     suspend fun getFolderLastPosition(folderUri: String): Int {
         val key = intPreferencesKey("folder_pos_${folderUri.hashCode()}")
         return context.dataStore.data.map { prefs -> prefs[key] ?: 0 }.first()
+    }
+
+    // ── Durable pending-delete journal (PRP WP-11 / U-05) ────────────────
+
+    /**
+     * URIs of pending deletions not yet committed to disk.
+     *
+     * Recorded when a deletion is deferred into the undo history and removed
+     * when it is either reverted or committed, so a process killed mid-session
+     * can surface an honest recovery prompt on next launch instead of silently
+     * resurrecting or losing the pending operations.
+     */
+    val pendingDeleteJournal: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PENDING_DELETE_JOURNAL] ?: emptySet()
+    }
+
+    suspend fun setPendingDeleteJournal(uris: Set<String>) {
+        context.dataStore.edit { prefs ->
+            if (uris.isEmpty()) {
+                prefs.remove(KEY_PENDING_DELETE_JOURNAL)
+            } else {
+                prefs[KEY_PENDING_DELETE_JOURNAL] = uris
+            }
+        }
+    }
+
+    suspend fun addPendingDeletes(uris: Collection<String>) {
+        if (uris.isEmpty()) return
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_PENDING_DELETE_JOURNAL] ?: emptySet()
+            prefs[KEY_PENDING_DELETE_JOURNAL] = current + uris
+        }
+    }
+
+    suspend fun removePendingDeletes(uris: Collection<String>) {
+        if (uris.isEmpty()) return
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_PENDING_DELETE_JOURNAL] ?: emptySet()
+            val updated = current - uris.toSet()
+            if (updated.isEmpty()) {
+                prefs.remove(KEY_PENDING_DELETE_JOURNAL)
+            } else {
+                prefs[KEY_PENDING_DELETE_JOURNAL] = updated
+            }
+        }
+    }
+
+    suspend fun clearPendingDeleteJournal() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(KEY_PENDING_DELETE_JOURNAL)
+        }
+    }
+
+    // ── Multi-pass culling, portable culling station, and TV display scale (U-32, U-33, U-36) ──
+
+    val secondarySelectionFolderName: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SECONDARY_SELECTION_FOLDER_NAME] ?: DEFAULT_SECONDARY_SELECTION_FOLDER_NAME
+    }
+
+    suspend fun setSecondarySelectionFolderName(name: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SECONDARY_SELECTION_FOLDER_NAME] = name
+        }
+    }
+
+    val customSelectionDestinationUri: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CUSTOM_SELECTION_DESTINATION_URI]
+    }
+
+    suspend fun setCustomSelectionDestinationUri(uri: String?) {
+        context.dataStore.edit { prefs ->
+            if (uri != null) {
+                prefs[KEY_CUSTOM_SELECTION_DESTINATION_URI] = uri
+            } else {
+                prefs.remove(KEY_CUSTOM_SELECTION_DESTINATION_URI)
+            }
+        }
+    }
+
+    val tvDisplayScaleEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_TV_DISPLAY_SCALE_ENABLED] ?: DEFAULT_TV_DISPLAY_SCALE_ENABLED
+    }
+
+    suspend fun setTvDisplayScaleEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_TV_DISPLAY_SCALE_ENABLED] = enabled
+        }
     }
 }

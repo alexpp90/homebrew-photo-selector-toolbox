@@ -53,4 +53,8 @@ data class ImageItem(
                 mimeType = mimeType,
             )
         ) + companions
+
+    /** True when any companion file is a camera RAW container. */
+    val hasRawCompanion: Boolean
+        get() = companions.any { com.photoselectortoolbox.domain.format.ImageFormats.isRaw(it.fileName) }
 }

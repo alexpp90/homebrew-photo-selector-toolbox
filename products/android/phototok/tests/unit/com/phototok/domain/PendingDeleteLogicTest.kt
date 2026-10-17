@@ -211,4 +211,85 @@ class PendingDeleteLogicTest {
         assertEquals(feed, restored.allImages)
         assertEquals(2, restored.currentIndex)
     }
+
+    @Test
+    fun `pushRemove and popRestore maintain multi-step LIFO undo stack`() {
+        var images = listOf(a, b, c)
+        var allImages = listOf(a, b, c)
+        var stack = emptyList<PendingDeleteLogic.Pending>()
+
+        val push1 = PendingDeleteLogic.pushRemove(
+            images = images,
+            allImages = allImages,
+            currentIndex = 0,
+            related = emptyList(),
+            sortByOrientation = false,
+            currentStack = stack,
+        )!!
+        images = push1.state.images
+        allImages = push1.state.allImages
+        stack = push1.updatedStack
+        assertEquals(listOf(b, c), images)
+        assertEquals(1, stack.size)
+        assertNull(push1.evictedOldest)
+
+        val push2 = PendingDeleteLogic.pushRemove(
+            images = images,
+            allImages = allImages,
+            currentIndex = 0,
+            related = emptyList(),
+            sortByOrientation = false,
+            currentStack = stack,
+        )!!
+        images = push2.state.images
+        allImages = push2.state.allImages
+        stack = push2.updatedStack
+        assertEquals(listOf(c), images)
+        assertEquals(2, stack.size)
+
+        val pop2 = PendingDeleteLogic.popRestore(images, allImages, stack, false)!!
+        images = pop2.state.images
+        allImages = pop2.state.allImages
+        stack = pop2.remainingStack
+        assertEquals(listOf(b, c), images)
+        assertEquals(1, stack.size)
+
+        val pop1 = PendingDeleteLogic.popRestore(images, allImages, stack, false)!!
+        assertEquals(listOf(a, b, c), pop1.state.images)
+        assertEquals(0, pop1.remainingStack.size)
+    }
+
+    @Test
+    fun `pushRemove evicts oldest item when stack exceeds MAX_STACK_SIZE`() {
+        var images = (0..PendingDeleteLogic.MAX_STACK_SIZE).map { img("p$it.jpg") }
+        var allImages = images
+        var stack = emptyList<PendingDeleteLogic.Pending>()
+
+        repeat(PendingDeleteLogic.MAX_STACK_SIZE) {
+            val res = PendingDeleteLogic.pushRemove(
+                images = images,
+                allImages = allImages,
+                currentIndex = 0,
+                related = emptyList(),
+                sortByOrientation = false,
+                currentStack = stack,
+            )!!
+            images = res.state.images
+            allImages = res.state.allImages
+            stack = res.updatedStack
+            assertNull(res.evictedOldest)
+        }
+        assertEquals(PendingDeleteLogic.MAX_STACK_SIZE, stack.size)
+
+        val overflow = PendingDeleteLogic.pushRemove(
+            images = images,
+            allImages = allImages,
+            currentIndex = 0,
+            related = emptyList(),
+            sortByOrientation = false,
+            currentStack = stack,
+        )!!
+        assertEquals(PendingDeleteLogic.MAX_STACK_SIZE, overflow.updatedStack.size)
+        assertEquals("p0.jpg", overflow.evictedOldest?.image?.fileName)
+    }
 }

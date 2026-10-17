@@ -1,5 +1,6 @@
 package com.phototok.data.repository
 
+import com.photoselector.core.storage.SourceKind
 import com.phototok.data.model.RecentPath
 
 /**
@@ -15,13 +16,39 @@ object RecentPathCodec {
     private const val FIELD_SEP = "\u001F" // unit separator
 
     fun encode(paths: List<RecentPath>): String =
-        paths.joinToString(ENTRY_SEP) { "${it.uri}$FIELD_SEP${it.name}" }
+        paths.joinToString(ENTRY_SEP) { path ->
+            listOf(
+                path.uri,
+                path.name,
+                path.kind.name,
+                path.volumeUuid.orEmpty(),
+            ).joinToString(FIELD_SEP)
+        }
 
     fun decode(raw: String?): List<RecentPath> {
         if (raw.isNullOrEmpty()) return emptyList()
         return raw.split(ENTRY_SEP).mapNotNull { entry ->
             val parts = entry.split(FIELD_SEP)
-            if (parts.size == 2 && parts[0].isNotEmpty()) RecentPath(parts[0], parts[1]) else null
+            when {
+                parts.size < 2 || parts[0].isEmpty() -> null
+                parts.size == 2 -> RecentPath(
+                    uri = parts[0],
+                    name = parts[1],
+                    kind = SourceKind.PHONE_LIBRARY,
+                    volumeUuid = null,
+                )
+                else -> {
+                    val kind = SourceKind.entries.firstOrNull { it.name == parts[2] }
+                        ?: SourceKind.PHONE_LIBRARY
+                    val volumeUuid = parts.getOrNull(3)?.takeIf { it.isNotEmpty() }
+                    RecentPath(
+                        uri = parts[0],
+                        name = parts[1],
+                        kind = kind,
+                        volumeUuid = volumeUuid,
+                    )
+                }
+            }
         }
     }
 
@@ -31,8 +58,10 @@ object RecentPathCodec {
         uri: String,
         name: String,
         max: Int = MAX_STORED,
+        kind: SourceKind = SourceKind.PHONE_LIBRARY,
+        volumeUuid: String? = null,
     ): List<RecentPath> =
-        (listOf(RecentPath(uri, name)) + current.filter { it.uri != uri }).take(max)
+        (listOf(RecentPath(uri, name, kind, volumeUuid)) + current.filter { it.uri != uri }).take(max)
 
     /** URIs present in [before] but no longer in [after] (evicted by the cap). */
     fun evictedUris(before: List<RecentPath>, after: List<RecentPath>): List<String> {
@@ -40,3 +69,4 @@ object RecentPathCodec {
         return before.map { it.uri }.filter { it !in kept }
     }
 }
+

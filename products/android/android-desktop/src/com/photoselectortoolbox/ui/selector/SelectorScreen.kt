@@ -54,6 +54,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -72,6 +74,8 @@ import com.photoselectortoolbox.ui.theme.StudioCard
 import com.photoselectortoolbox.ui.navigation.Screen
 import com.photoselectortoolbox.viewmodel.SelectorFrame
 import com.photoselectortoolbox.viewmodel.SelectorViewModel
+import com.photoselectortoolbox.viewmodel.isCloudProvider
+import com.photoselectortoolbox.viewmodel.providerLabel
 
 /**
  * The culling workspace.
@@ -133,7 +137,7 @@ fun SelectorScreen(
     // scan cannot move the frame behind the sheet. Esc is the exception — it is
     // what closes the sheet.
     val sheetOpen = showScanConfig || guideOpen ||
-        uiState.showDeleteConfirmation
+        uiState.showDeleteConfirmation || uiState.uncompletedDeletionsPrompt != null
 
     val dismissGuide: () -> Unit = {
         showGuide = false
@@ -201,7 +205,13 @@ fun SelectorScreen(
             onDismissRequest = { viewModel.dismissDeleteConfirmation() },
             title = { Text("Delete Image") },
             text = {
-                Text("Delete \"${uiState.currentImage?.fileName ?: ""}\"? This cannot be undone.")
+                Text(
+                    SelectorLabels.deleteConfirmationMessage(
+                        fileName = uiState.currentImage?.fileName ?: "",
+                        isCloudProvider = uiState.sourceKind.isCloudProvider,
+                        providerLabel = uiState.sourceKind.providerLabel,
+                    )
+                )
             },
             confirmButton = {
                 TextButton(
@@ -218,7 +228,59 @@ fun SelectorScreen(
         )
     }
 
+    if (uiState.showCloudScanConfirmation) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCloudScanConfirmation() },
+            title = { Text("Cloud Folder Scan") },
+            text = {
+                Text(
+                    SelectorLabels.cloudScanConfirmationMessage(
+                        providerLabel = uiState.sourceKind.providerLabel,
+                        imageCount = uiState.images.size,
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.confirmCloudScan() },
+                    modifier = Modifier.testTag("dialog_confirm_cloud_scan"),
+                ) {
+                    Text("Scan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissCloudScanConfirmation() }) { Text("Cancel") }
+            },
+            containerColor = StudioCard,
+        )
+    }
 
+    uiState.uncompletedDeletionsPrompt?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = { viewModel.keepUncompletedDeletions() },
+            title = { Text("Uncompleted Deletions") },
+            text = {
+                Text(SelectorLabels.uncompletedDeletionsMessage(prompt.uris.size))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.confirmUncompletedDeletions() },
+                    modifier = Modifier.testTag("dialog_confirm_uncompleted_deletions"),
+                ) {
+                    Text("Delete now", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.keepUncompletedDeletions() },
+                    modifier = Modifier.testTag("dialog_keep_uncompleted_deletions"),
+                ) {
+                    Text("Keep")
+                }
+            },
+            containerColor = StudioCard,
+        )
+    }
 
     if (showScanConfig) {
         ScanConfigSheet(
@@ -238,7 +300,7 @@ fun SelectorScreen(
             onDismiss = { showFullscreen = false },
             onDelete = { index ->
                 viewModel.navigateToImage(index)
-                viewModel.showDeleteConfirmation()
+                viewModel.requestDelete()
             },
             onMoveToSelection = { index ->
                 viewModel.navigateToImage(index)
@@ -298,6 +360,8 @@ fun SelectorScreen(
                                         contextMenuAt != null -> contextMenuAt = null
                                         showScanConfig -> showScanConfig = false
                                         guideOpen -> dismissGuide()
+                                        uiState.showDeleteConfirmation -> viewModel.dismissDeleteConfirmation()
+                                        uiState.uncompletedDeletionsPrompt != null -> viewModel.keepUncompletedDeletions()
                                         uiState.maximisedFrame != null -> viewModel.clearMaximised()
                                     }
                                 },
@@ -309,6 +373,8 @@ fun SelectorScreen(
                                     }
                                 },
                                 onNavigate = onNavigate,
+                                ctrlOrMetaPressed = event.isCtrlPressed || event.isMetaPressed,
+                                onUndo = viewModel::undoLastOperation,
                             )
                         }
                 } else {
@@ -351,6 +417,19 @@ fun SelectorScreen(
                             DropdownMenuItem(
                                 text = { Text("Open folder") },
                                 onClick = { showMenu = false; folderPickerLauncher.launch(null) },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        if (uiState.sortWorstFirst) {
+                                            "Sort by filename (exit worst-first)"
+                                        } else {
+                                            "Sort worst sharpness first"
+                                        }
+                                    )
+                                },
+                                onClick = { showMenu = false; viewModel.toggleSortWorstFirst() },
+                                enabled = uiState.hasAnyScores,
                             )
                             DropdownMenuItem(
                                 text = { Text("Clear scores") },
@@ -561,6 +640,8 @@ internal fun handleSelectorKey(
     onCloseOverlays: () -> Unit,
     onSetRating: ((Int) -> Unit)? = null,
     onNavigate: ((Screen) -> Unit)? = null,
+    ctrlOrMetaPressed: Boolean = false,
+    onUndo: (() -> Unit)? = null,
 ): Boolean {
     if (key == Key.Escape) {
         if (sheetOpen || contextMenuOpen || fullscreenOpen || maximised) {
@@ -572,17 +653,12 @@ internal fun handleSelectorKey(
 
     if (sheetOpen) return false
 
-    // When a frame is maximised, keys 0–5 set the rating of that maximised frame (0 = unrate, 1..5 = stars)
-    if (maximised && onSetRating != null) {
-        when (key) {
-            Key.Zero, Key.NumPad0 -> { onSetRating(0); return true }
-            Key.One, Key.NumPad1 -> { onSetRating(1); return true }
-            Key.Two, Key.NumPad2 -> { onSetRating(2); return true }
-            Key.Three, Key.NumPad3 -> { onSetRating(3); return true }
-            Key.Four, Key.NumPad4 -> { onSetRating(4); return true }
-            Key.Five, Key.NumPad5 -> { onSetRating(5); return true }
-            else -> Unit
+    if (ctrlOrMetaPressed) {
+        if (key == Key.Z) {
+            onUndo?.invoke()
+            return true
         }
+        return false
     }
 
     return when (key) {
@@ -602,12 +678,6 @@ internal fun handleSelectorKey(
         Key.Two -> { onMaximise(SelectorFrame.CURRENT); true }
         Key.Three -> { onMaximise(SelectorFrame.NEXT); true }
         Key.Slash -> { onShowShortcuts(); true }
-        Key.Zero, Key.NumPad0 -> { onSetRating?.invoke(0); true }
-        Key.Four, Key.NumPad4 -> { onSetRating?.invoke(4); true }
-        Key.Five, Key.NumPad5 -> { onSetRating?.invoke(5); true }
-        Key.NumPad1 -> { onSetRating?.invoke(1); true }
-        Key.NumPad2 -> { onSetRating?.invoke(2); true }
-        Key.NumPad3 -> { onSetRating?.invoke(3); true }
         else -> false
     }
 }

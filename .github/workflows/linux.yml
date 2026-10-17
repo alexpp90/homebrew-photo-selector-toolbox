@@ -59,6 +59,9 @@ jobs:
   test:
     name: Headless Unit Tests (pytest)
     runs-on: ubuntu-latest
+    # The suite takes about a minute. A test that blocks on a real GTK main loop must fail the job in
+    # minutes (faulthandler below dumps every thread's stack), not sit "pending" for hours.
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -93,7 +96,7 @@ jobs:
       - name: Run pytest
         env:
           GDK_BACKEND: x11
-        run: xvfb-run -a poetry run pytest tests/unit -q --tb=short
+        run: xvfb-run -a poetry run pytest tests/unit -q --tb=short -o faulthandler_timeout=120 --cov=photo_selector_linux --cov-report=term-missing:skip-covered --cov-fail-under=70
 
   # ── Debian Packaging & APT Validation (Mirror: scripts/run_tests.sh `linux.yml:package`) ──
   package:

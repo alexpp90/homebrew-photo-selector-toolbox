@@ -32,13 +32,21 @@ sealed interface UndoableOperation {
     ) : UndoableOperation
 
     /**
-     * A completed move. The file exists at [destinationUri] and can be moved
-     * back into the folder the photographer opened.
+     * A completed move. The file (and any companions) exist at
+     * [destinationUris] and can be moved back into the sub-folder
+     * ([parentDocumentId]) or root folder the photographer opened.
      */
     data class ReverseMove(
         override val slots: List<ImageSlot>,
         val sourceUri: String,
         val destinationUri: String,
+        val destinationUris: List<String> = listOf(destinationUri),
+        val parentDocumentId: String? = null,
+        /**
+         * Set after a *partial* move: destination copy → original that could not be removed.
+         * Undo deletes those copies (while the original exists) instead of restoring them.
+         */
+        val copiesOfSurvivingOriginals: Map<String, String> = emptyMap(),
     ) : UndoableOperation
 }
 
@@ -50,6 +58,43 @@ sealed interface UndoableOperation {
  * either an operation to run or null.
  */
 object UndoPolicy {
+
+    /**
+     * Maximum number of reversible operations (deferred deletes + moves) held in
+     * the session undo stack before the oldest entry is evicted and committed.
+     */
+    const val MAX_UNDO_HISTORY = 20
+
+    /**
+     * Push [operation] onto the front of [history] (newest first), evicting any
+     * entries beyond [maxDepth].
+     */
+    fun push(
+        history: List<UndoableOperation>,
+        operation: UndoableOperation,
+        maxDepth: Int = MAX_UNDO_HISTORY,
+    ): UndoPushResult {
+        val combined = listOf(operation) + history
+        return if (combined.size <= maxDepth) {
+            UndoPushResult(history = combined)
+        } else {
+            UndoPushResult(
+                history = combined.take(maxDepth),
+                evicted = combined.drop(maxDepth),
+            )
+        }
+    }
+
+    /**
+     * Pop the newest operation from [history], returning the popped operation
+     * (or null when empty) and the remaining history.
+     */
+    fun pop(
+        history: List<UndoableOperation>,
+    ): Pair<UndoableOperation?, List<UndoableOperation>> {
+        val head = history.firstOrNull() ?: return null to emptyList()
+        return head to history.drop(1)
+    }
 
     /**
      * Undo for a deletion that is still deferred — nothing on disk has changed
@@ -72,7 +117,10 @@ object UndoPolicy {
         canTrash: Boolean,
     ): UndoableOperation? {
         if (slots.isEmpty() || !canTrash) return null
-        return UndoableOperation.RestoreFromTrash(slots, slots.map { it.uri })
+        return UndoableOperation.RestoreFromTrash(
+            slots = slots,
+            uris = slots.flatMap { slot -> slot.image.allFiles.map { it.uri } },
+        )
     }
 
     /**
@@ -90,9 +138,49 @@ object UndoPolicy {
         slots: List<ImageSlot>,
         sourceUri: String,
         destinationUri: String?,
+        destinationUris: List<String> = listOfNotNull(destinationUri),
+        parentDocumentId: String? = null,
+        copiesOfSurvivingOriginals: Map<String, String> = emptyMap(),
     ): UndoableOperation? {
         if (action != CurationAction.MOVE) return null
-        if (destinationUri == null) return null
-        return UndoableOperation.ReverseMove(slots, sourceUri, destinationUri)
+        val effectiveDestinations = if (destinationUris.isNotEmpty()) {
+            destinationUris
+        } else {
+            listOfNotNull(destinationUri)
+        }
+        val primaryDestination = destinationUri ?: effectiveDestinations.firstOrNull() ?: return null
+        return UndoableOperation.ReverseMove(
+            slots = slots,
+            sourceUri = sourceUri,
+            destinationUri = primaryDestination,
+            destinationUris = effectiveDestinations,
+            parentDocumentId = parentDocumentId,
+            copiesOfSurvivingOriginals = copiesOfSurvivingOriginals,
+        )
     }
+}
+
+/** Result of pushing a new operation onto the bounded undo history. */
+data class UndoPushResult(
+    val history: List<UndoableOperation>,
+    val evicted: List<UndoableOperation> = emptyList(),
+) {
+    /** Pending deletions evicted from the tail that must now be committed to disk. */
+    val evictedPendingDeletions: List<PendingDeletion>
+        get() = evicted.filterIsInstance<UndoableOperation.RevertPendingDelete>().map { it.pending }
+}
+
+/** Alias object for callers referencing [UndoHistory] directly. */
+object UndoHistory {
+    const val MAX_UNDO_HISTORY = UndoPolicy.MAX_UNDO_HISTORY
+
+    fun push(
+        history: List<UndoableOperation>,
+        operation: UndoableOperation,
+        maxDepth: Int = MAX_UNDO_HISTORY,
+    ): UndoPushResult = UndoPolicy.push(history, operation, maxDepth)
+
+    fun pop(
+        history: List<UndoableOperation>,
+    ): Pair<UndoableOperation?, List<UndoableOperation>> = UndoPolicy.pop(history)
 }

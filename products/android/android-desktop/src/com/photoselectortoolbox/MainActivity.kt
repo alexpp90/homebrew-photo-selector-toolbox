@@ -12,15 +12,22 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.photoselectortoolbox.data.repository.SettingsRepository
 import com.photoselectortoolbox.ui.navigation.PhotoSelectorApp
 import com.photoselectortoolbox.ui.theme.PhotoSelectorToolboxTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class, ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,7 +35,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         configureSystemBars()
         setContent {
-            PhotoSelectorToolboxTheme {
+            val tvDisplayScaleEnabled by settingsRepository.tvDisplayScaleEnabled.collectAsState(initial = false)
+            PhotoSelectorToolboxTheme(tvDisplayScaleEnabled = tvDisplayScaleEnabled) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

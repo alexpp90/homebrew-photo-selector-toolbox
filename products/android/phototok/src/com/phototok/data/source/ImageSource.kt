@@ -32,7 +32,11 @@ interface ImageSource {
     fun owns(uri: Uri): Boolean
 
     /** Discover all images under the given folder (recursively). */
-    fun discoverImages(folderUri: Uri): Flow<List<ImageItem>>
+    fun discoverImages(
+        folderUri: Uri,
+        excludedFolderNames: Set<String> = emptySet(),
+        shuffleFirstBatch: Boolean = false,
+    ): Flow<List<ImageItem>>
 
     /**
      * Prepare a folder for use as the swipe source: persist access permissions

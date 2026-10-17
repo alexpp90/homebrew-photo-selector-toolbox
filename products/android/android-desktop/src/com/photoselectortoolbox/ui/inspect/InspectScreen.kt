@@ -1,5 +1,6 @@
 package com.photoselectortoolbox.ui.inspect
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,18 +22,17 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.RotateRight
-import androidx.compose.material.icons.filled.Adjust
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material.icons.filled.Grid4x4
-import androidx.compose.material.icons.filled.LinearScale
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timeline
@@ -57,7 +57,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -68,30 +71,45 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.photoselectortoolbox.domain.format.ImageFormats
+import com.photoselectortoolbox.data.cache.LessonProgressEntity
+import com.photoselectortoolbox.data.cache.PracticeGoalEntity
+import com.photoselectortoolbox.data.cache.TechniqueFactEntity
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.domain.analysis.PhotoCoachEngine
 import com.photoselectortoolbox.domain.analysis.PhotoCoachEngineImpl
 import com.photoselectortoolbox.domain.format.ExifFormatter
+import com.photoselectortoolbox.domain.learn.CardGenerator
+import com.photoselectortoolbox.domain.learn.CropAspectRatio
+import com.photoselectortoolbox.domain.learn.CropSuggester
+import com.photoselectortoolbox.domain.learn.LearnCard
+import com.photoselectortoolbox.domain.learn.LessonCatalog
+import com.photoselectortoolbox.domain.learn.MicroLesson
+import com.photoselectortoolbox.domain.learn.PracticeAndInsightsEngine
+import com.photoselectortoolbox.domain.learn.SceneComparator
+import com.photoselectortoolbox.domain.learn.SubjectBoundingBox
+import com.photoselectortoolbox.domain.learn.SuggestedCrop
+import com.photoselectortoolbox.domain.learn.TechniqueFactDetector
 import com.photoselectortoolbox.domain.model.CoachingTip
 import com.photoselectortoolbox.domain.model.CompositionGuideType
 import com.photoselectortoolbox.domain.model.CompositionResult
 import com.photoselectortoolbox.domain.model.PhotoCoachReport
+import com.photoselectortoolbox.domain.model.RatingFilter
 import com.photoselectortoolbox.domain.model.SpiralOrientation
 import com.photoselectortoolbox.domain.model.TipSeverity
+import com.photoselectortoolbox.ui.components.CompositionGeometry
 import com.photoselectortoolbox.ui.components.CompositionOverlay
 import com.photoselectortoolbox.ui.components.EmptyStateCard
 import com.photoselectortoolbox.ui.components.StarRatingBar
 import com.photoselectortoolbox.ui.navigation.Screen
+import com.photoselectortoolbox.ui.selector.RatingFilterSelector
+import com.photoselectortoolbox.ui.theme.FocusCyan
 import com.photoselectortoolbox.ui.theme.Indigo500
 import com.photoselectortoolbox.ui.theme.Indigo600
 import com.photoselectortoolbox.ui.theme.PanelSurface
@@ -110,6 +128,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+enum class LearnTab(val label: String, val tag: String) {
+    EXPLORE("Explore", "learn_tab_explore"),
+    LESSONS("Lessons", "learn_tab_lessons"),
+    COMPARE("Compare", "learn_tab_compare"),
+    PRACTICE("Practice", "learn_tab_practice"),
+}
+
 /**
  * Cycles the 4-way focal eye orientation for the Fibonacci Golden Spiral in order:
  * TOP_LEFT -> TOP_RIGHT -> BOTTOM_RIGHT -> BOTTOM_LEFT -> TOP_LEFT.
@@ -122,13 +147,14 @@ fun cycleSpiralOrientation(current: SpiralOrientation): SpiralOrientation = when
 }
 
 /**
- * Pure hardware keyboard hotkey handler for the Inspect & Learn workstation.
+ * Pure hardware keyboard hotkey handler for the Learn workstation (`U-21`).
  *
  * Mappings:
  * - `L`, `I`, `Escape`: Return to Culling view (`onNavigateToSelector`).
  * - `Left Arrow`: Navigate to previous image.
  * - `Right Arrow`: Navigate to next image.
  * - `0`–`5` (and NumPad equivalents): Set rating (0 = clear/unrated, 1..5 = stars).
+ * - `X`: Set reject rating (-1).
  */
 internal fun handleInspectKey(
     key: Key,
@@ -174,26 +200,18 @@ internal fun handleInspectKey(
             onSetRating(5)
             true
         }
+        Key.X -> {
+            onSetRating(-1)
+            true
+        }
         else -> false
     }
 }
 
-/**
- * "Inspect & Learn" Workstation screen.
- *
- * Features:
- * 1. Single large photo preview overlaid with interactive vector composition guides (Rule of Thirds,
- *    Golden Ratio, Fibonacci Spiral with 4-way flip, Baroque/Sinister diagonals, Horizon crosshair).
- * 2. Photo Coach Card evaluating camera shake risk, reciprocal rule safe shutter comparison,
- *    sensor noise, dynamic range clipping, and EV compensation.
- * 3. EXIF technical readout and interactive 1–5 Star Rating Bar.
- * 4. Candidate thumbnail filmstrip with rating badges for fast navigation.
- * 5. Complete hardware keyboard shortcut support (`L`/`I`/`Escape`, `0`–`5`, `Left`/`Right`).
- */
 @Composable
 fun InspectScreen(
     windowSizeClass: WindowSizeClass,
-    currentRoute: String? = null,
+    @Suppress("UNUSED_PARAMETER") currentRoute: String? = null,
     onNavigate: (Screen) -> Unit = {},
     viewModel: SelectorViewModel = hiltViewModel(),
     photoCoachEngine: PhotoCoachEngine = remember { PhotoCoachEngineImpl() },
@@ -219,6 +237,8 @@ fun InspectScreen(
         onPrevious = { viewModel.navigatePrevious() },
         onNext = { viewModel.navigateNext() },
         onSetRating = { item, rating -> viewModel.setRating(item, rating) },
+        ratingFilter = uiState.ratingFilter,
+        onRatingFilterSelected = { filter -> viewModel.setRatingFilter(filter) },
         photoCoachEngine = photoCoachEngine,
     )
 }
@@ -235,8 +255,11 @@ internal fun InspectScreenContent(
     onNext: () -> Unit,
     onSetRating: (ImageItem, Int) -> Unit,
     modifier: Modifier = Modifier,
+    ratingFilter: RatingFilter = RatingFilter.All,
+    onRatingFilterSelected: (RatingFilter) -> Unit = {},
     photoCoachEngine: PhotoCoachEngine = remember { PhotoCoachEngineImpl() },
     compositionResult: CompositionResult? = null,
+    factsByUri: Map<String, List<TechniqueFactEntity>> = emptyMap(),
 ) {
     val focusRequester = remember { FocusRequester() }
 
@@ -244,13 +267,18 @@ internal fun InspectScreenContent(
         focusRequester.requestFocus()
     }
 
-    // Composition overlay toggle states
     var activeGuides by remember {
         mutableStateOf<Set<CompositionGuideType>>(setOf(CompositionGuideType.RuleOfThirds))
     }
     var spiralOrientation by remember { mutableStateOf(SpiralOrientation.TOP_LEFT) }
-    var showLeadingLines by remember { mutableStateOf(false) }
-    var showMassDistribution by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(LearnTab.EXPLORE) }
+    var selectedLessonId by remember { mutableStateOf<String?>(null) }
+    var guessFirstEnabled by remember { mutableStateOf(false) }
+    var guessRevealedForUri by remember { mutableStateOf<String?>(null) }
+    var whatIfCropActive by remember { mutableStateOf(false) }
+    var selectedCropAspect by remember { mutableStateOf<CropAspectRatio?>(null) }
+    var completedLessons by remember { mutableStateOf<Map<String, LessonProgressEntity>>(emptyMap()) }
+    var activePracticeGoal by remember { mutableStateOf<PracticeGoalEntity?>(null) }
 
     val isCompact = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Compact
 
@@ -286,68 +314,219 @@ internal fun InspectScreenContent(
             return@Box
         }
 
-        val coachReport = remember(currentImage) {
-            photoCoachEngine.evaluate(currentImage.exifData, currentImage.scanResult)
+        val isRaw = remember(currentImage) {
+            currentImage.hasRawCompanion || ImageFormats.isRaw(currentImage.fileName)
+        }
+
+        val coachReport = remember(currentImage, isRaw) {
+            photoCoachEngine.evaluate(
+                exif = currentImage.exifData,
+                scanResult = currentImage.scanResult,
+                isRawOrHasRawCompanion = isRaw,
+                imageWidth = currentImage.imageWidth,
+                imageHeight = currentImage.imageHeight,
+            )
+        }
+
+        val detector = remember { TechniqueFactDetector() }
+        val currentFacts = remember(currentImage, factsByUri) {
+            val cached = factsByUri[currentImage.uri]
+            if (!cached.isNullOrEmpty()) {
+                cached
+            } else {
+                detector.detectAll(
+                    uri = currentImage.uri,
+                    fileSize = currentImage.fileSize,
+                    lastModified = currentImage.lastModified,
+                    exif = currentImage.exifData,
+                    width = currentImage.imageWidth ?: 0,
+                    height = currentImage.imageHeight ?: 0,
+                    sharpnessScore = currentImage.scanResult?.sharpnessScore,
+                    noiseLevel = currentImage.scanResult?.noiseLevel,
+                    highlightClipping = currentImage.scanResult?.highlightClipping,
+                    shadowClipping = currentImage.scanResult?.shadowClipping,
+                    isRawOrHasRawCompanion = isRaw,
+                )
+            }
+        }
+
+        val cardResult = remember(currentImage, currentFacts, isRaw) {
+            CardGenerator.generateFromEntities(
+                entities = currentFacts,
+                exif = currentImage.exifData,
+                scanResult = currentImage.scanResult,
+                isRawOrHasRawCompanion = isRaw,
+            )
+        }
+
+        val defaultSubjectBox = remember(currentImage) {
+            SubjectBoundingBox(
+                xMin = 0.36,
+                yMin = 0.36,
+                xMax = 0.64,
+                yMax = 0.64,
+                centroidX = 0.48,
+                centroidY = 0.48,
+                confidence = 0.70,
+            )
+        }
+
+        val suggestedCrop = remember(currentImage, selectedCropAspect) {
+            CropSuggester.suggestCrop(
+                subjectBox = defaultSubjectBox,
+                imageWidth = currentImage.imageWidth?.takeIf { it > 0 } ?: 1500,
+                imageHeight = currentImage.imageHeight?.takeIf { it > 0 } ?: 1000,
+                requestedAspect = selectedCropAspect,
+            )
+        }
+
+        val onToggleGuideThirds = {
+            activeGuides = if (activeGuides.any { it is CompositionGuideType.RuleOfThirds }) {
+                activeGuides.filterNot { it is CompositionGuideType.RuleOfThirds }.toSet()
+            } else {
+                activeGuides + CompositionGuideType.RuleOfThirds
+            }
+        }
+        val onToggleGuideGolden = {
+            activeGuides = if (activeGuides.any { it is CompositionGuideType.GoldenRatio }) {
+                activeGuides.filterNot { it is CompositionGuideType.GoldenRatio }.toSet()
+            } else {
+                activeGuides + CompositionGuideType.GoldenRatio
+            }
+        }
+        val onToggleGuideSpiral = {
+            activeGuides = if (activeGuides.any { it is CompositionGuideType.FibonacciSpiral }) {
+                activeGuides.filterNot { it is CompositionGuideType.FibonacciSpiral }.toSet()
+            } else {
+                activeGuides + CompositionGuideType.FibonacciSpiral(spiralOrientation)
+            }
+        }
+        val onFlipGuideSpiral = {
+            val newOrientation = cycleSpiralOrientation(spiralOrientation)
+            spiralOrientation = newOrientation
+            if (activeGuides.any { it is CompositionGuideType.FibonacciSpiral }) {
+                activeGuides = activeGuides.filterNot { it is CompositionGuideType.FibonacciSpiral }.toSet() +
+                    CompositionGuideType.FibonacciSpiral(newOrientation)
+            }
+        }
+        val onToggleGuideDiagonals = {
+            activeGuides = if (activeGuides.any { it is CompositionGuideType.BaroqueSinister }) {
+                activeGuides.filterNot { it is CompositionGuideType.BaroqueSinister }.toSet()
+            } else {
+                activeGuides + CompositionGuideType.BaroqueSinister
+            }
+        }
+        val onToggleGuideHorizon = {
+            activeGuides = if (activeGuides.any { it is CompositionGuideType.CrosshairHorizon }) {
+                activeGuides.filterNot { it is CompositionGuideType.CrosshairHorizon }.toSet()
+            } else {
+                activeGuides + CompositionGuideType.CrosshairHorizon
+            }
+        }
+
+        val sidePanelContent: @Composable () -> Unit = {
+            LearnTabSelector(
+                selectedTab = selectedTab,
+                onSelectTab = { selectedTab = it },
+            )
+
+            when (selectedTab) {
+                LearnTab.EXPLORE -> {
+                    InspectRatingCard(
+                        rating = currentImage.rating,
+                        onRatingChanged = { rating -> onSetRating(currentImage, rating) },
+                        ratingFilter = ratingFilter,
+                        onRatingFilterSelected = onRatingFilterSelected,
+                    )
+
+                    ExploreCardsSection(
+                        currentImage = currentImage,
+                        cardResult = cardResult,
+                        guessFirstEnabled = guessFirstEnabled,
+                        isGuessRevealed = !guessFirstEnabled || guessRevealedForUri == currentImage.uri,
+                        onToggleGuessFirst = {
+                            guessFirstEnabled = !guessFirstEnabled
+                            if (!guessFirstEnabled) guessRevealedForUri = currentImage.uri
+                        },
+                        onRevealGuess = { guessRevealedForUri = currentImage.uri },
+                        onOpenLesson = { lessonId ->
+                            selectedLessonId = lessonId
+                            selectedTab = LearnTab.LESSONS
+                        },
+                        whatIfCropActive = whatIfCropActive,
+                        onToggleWhatIfCrop = { whatIfCropActive = !whatIfCropActive },
+                        selectedCropAspect = selectedCropAspect,
+                        onSelectCropAspect = { selectedCropAspect = it },
+                        suggestedCrop = suggestedCrop,
+                    )
+
+                    PhotoCoachCard(
+                        currentImage = currentImage,
+                        coachReport = coachReport,
+                    )
+
+                    ExifTechnicalReadoutCard(currentImage = currentImage)
+                }
+
+                LearnTab.LESSONS -> {
+                    LessonsTabContent(
+                        selectedLessonId = selectedLessonId,
+                        onSelectLesson = { selectedLessonId = it },
+                        factsByUri = factsByUri,
+                        completedLessons = completedLessons,
+                        onLessonCompleted = { progress ->
+                            completedLessons = completedLessons + (progress.lessonId to progress)
+                        },
+                        onSetPracticeGoal = { lessonId ->
+                            activePracticeGoal = PracticeAndInsightsEngine.createPracticeGoal(
+                                lessonId = lessonId,
+                                images = images,
+                                factsByUri = factsByUri,
+                            )
+                            selectedTab = LearnTab.PRACTICE
+                        },
+                    )
+                }
+
+                LearnTab.COMPARE -> {
+                    CompareTabContent(images = images)
+                }
+
+                LearnTab.PRACTICE -> {
+                    PracticeTabContent(
+                        images = images,
+                        factsByUri = factsByUri,
+                        activePracticeGoal = activePracticeGoal,
+                        onSelectLessonForGoal = { lessonId ->
+                            activePracticeGoal = PracticeAndInsightsEngine.createPracticeGoal(
+                                lessonId = lessonId,
+                                images = images,
+                                factsByUri = factsByUri,
+                            )
+                        },
+                        onOpenLesson = { lessonId ->
+                            selectedLessonId = lessonId
+                            selectedTab = LearnTab.LESSONS
+                        },
+                    )
+                }
+            }
         }
 
         if (isCompact) {
-            // Compact layout (<600dp): Vertical stacked layout
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top controls bar
                 InspectControlBar(
                     activeGuides = activeGuides,
                     spiralOrientation = spiralOrientation,
-                    showLeadingLines = showLeadingLines,
-                    showMassDistribution = showMassDistribution,
-                    onToggleThirds = {
-                        activeGuides = if (activeGuides.any { it is CompositionGuideType.RuleOfThirds }) {
-                            activeGuides.filterNot { it is CompositionGuideType.RuleOfThirds }.toSet()
-                        } else {
-                            activeGuides + CompositionGuideType.RuleOfThirds
-                        }
-                    },
-                    onToggleGoldenRatio = {
-                        activeGuides = if (activeGuides.any { it is CompositionGuideType.GoldenRatio }) {
-                            activeGuides.filterNot { it is CompositionGuideType.GoldenRatio }.toSet()
-                        } else {
-                            activeGuides + CompositionGuideType.GoldenRatio
-                        }
-                    },
-                    onToggleSpiral = {
-                        activeGuides = if (activeGuides.any { it is CompositionGuideType.FibonacciSpiral }) {
-                            activeGuides.filterNot { it is CompositionGuideType.FibonacciSpiral }.toSet()
-                        } else {
-                            activeGuides + CompositionGuideType.FibonacciSpiral(spiralOrientation)
-                        }
-                    },
-                    onFlipSpiral = {
-                        val newOrientation = cycleSpiralOrientation(spiralOrientation)
-                        spiralOrientation = newOrientation
-                        if (activeGuides.any { it is CompositionGuideType.FibonacciSpiral }) {
-                            activeGuides = activeGuides.filterNot { it is CompositionGuideType.FibonacciSpiral }.toSet() +
-                                CompositionGuideType.FibonacciSpiral(newOrientation)
-                        }
-                    },
-                    onToggleDiagonals = {
-                        activeGuides = if (activeGuides.any { it is CompositionGuideType.BaroqueSinister }) {
-                            activeGuides.filterNot { it is CompositionGuideType.BaroqueSinister }.toSet()
-                        } else {
-                            activeGuides + CompositionGuideType.BaroqueSinister
-                        }
-                    },
-                    onToggleHorizon = {
-                        activeGuides = if (activeGuides.any { it is CompositionGuideType.CrosshairHorizon }) {
-                            activeGuides.filterNot { it is CompositionGuideType.CrosshairHorizon }.toSet()
-                        } else {
-                            activeGuides + CompositionGuideType.CrosshairHorizon
-                        }
-                    },
-                    onToggleLeadingLines = { showLeadingLines = !showLeadingLines },
-                    onToggleMassDistribution = { showMassDistribution = !showMassDistribution },
+                    onToggleThirds = onToggleGuideThirds,
+                    onToggleGoldenRatio = onToggleGuideGolden,
+                    onToggleSpiral = onToggleGuideSpiral,
+                    onFlipSpiral = onFlipGuideSpiral,
+                    onToggleDiagonals = onToggleGuideDiagonals,
+                    onToggleHorizon = onToggleGuideHorizon,
                     onNavigateToSelector = onNavigateToSelector,
                 )
 
-                // Central Image View with Overlays
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -366,33 +545,30 @@ internal fun InspectScreenContent(
                         imageAspectRatio = currentImage.aspectRatio ?: (3f / 2f),
                         activeGuides = activeGuides,
                         compositionResult = compositionResult,
-                        showLeadingLines = showLeadingLines,
-                        showMassDistribution = showMassDistribution,
+                        showLeadingLines = false,
+                        showMassDistribution = false,
                     )
+                    if (whatIfCropActive && suggestedCrop != null) {
+                        WhatIfCropOverlay(
+                            modifier = Modifier.fillMaxSize(),
+                            imageAspectRatio = currentImage.aspectRatio ?: (3f / 2f),
+                            crop = suggestedCrop,
+                        )
+                    }
                 }
 
-                // Compact side panels in scrollable container
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
+                        .height(290.dp)
                         .background(PanelSurface)
                         .verticalScroll(rememberScrollState())
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    InspectRatingCard(
-                        rating = currentImage.rating,
-                        onRatingChanged = { rating -> onSetRating(currentImage, rating) },
-                    )
-                    PhotoCoachCard(
-                        currentImage = currentImage,
-                        coachReport = coachReport,
-                    )
-                    ExifTechnicalReadoutCard(currentImage = currentImage)
+                    sidePanelContent()
                 }
 
-                // Bottom Filmstrip
                 InspectFilmstrip(
                     images = images,
                     currentIndex = currentIndex,
@@ -400,9 +576,7 @@ internal fun InspectScreenContent(
                 )
             }
         } else {
-            // Expanded / Medium Layout (Tablet >=600dp & DeX): Row layout
             Row(modifier = Modifier.fillMaxSize()) {
-                // Main Workspace: Control bar, Large Image with Overlay, Bottom Filmstrip
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -411,57 +585,15 @@ internal fun InspectScreenContent(
                     InspectControlBar(
                         activeGuides = activeGuides,
                         spiralOrientation = spiralOrientation,
-                        showLeadingLines = showLeadingLines,
-                        showMassDistribution = showMassDistribution,
-                        onToggleThirds = {
-                            activeGuides = if (activeGuides.any { it is CompositionGuideType.RuleOfThirds }) {
-                                activeGuides.filterNot { it is CompositionGuideType.RuleOfThirds }.toSet()
-                            } else {
-                                activeGuides + CompositionGuideType.RuleOfThirds
-                            }
-                        },
-                        onToggleGoldenRatio = {
-                            activeGuides = if (activeGuides.any { it is CompositionGuideType.GoldenRatio }) {
-                                activeGuides.filterNot { it is CompositionGuideType.GoldenRatio }.toSet()
-                            } else {
-                                activeGuides + CompositionGuideType.GoldenRatio
-                            }
-                        },
-                        onToggleSpiral = {
-                            activeGuides = if (activeGuides.any { it is CompositionGuideType.FibonacciSpiral }) {
-                                activeGuides.filterNot { it is CompositionGuideType.FibonacciSpiral }.toSet()
-                            } else {
-                                activeGuides + CompositionGuideType.FibonacciSpiral(spiralOrientation)
-                            }
-                        },
-                        onFlipSpiral = {
-                            val newOrientation = cycleSpiralOrientation(spiralOrientation)
-                            spiralOrientation = newOrientation
-                            if (activeGuides.any { it is CompositionGuideType.FibonacciSpiral }) {
-                                activeGuides = activeGuides.filterNot { it is CompositionGuideType.FibonacciSpiral }.toSet() +
-                                    CompositionGuideType.FibonacciSpiral(newOrientation)
-                            }
-                        },
-                        onToggleDiagonals = {
-                            activeGuides = if (activeGuides.any { it is CompositionGuideType.BaroqueSinister }) {
-                                activeGuides.filterNot { it is CompositionGuideType.BaroqueSinister }.toSet()
-                            } else {
-                                activeGuides + CompositionGuideType.BaroqueSinister
-                            }
-                        },
-                        onToggleHorizon = {
-                            activeGuides = if (activeGuides.any { it is CompositionGuideType.CrosshairHorizon }) {
-                                activeGuides.filterNot { it is CompositionGuideType.CrosshairHorizon }.toSet()
-                            } else {
-                                activeGuides + CompositionGuideType.CrosshairHorizon
-                            }
-                        },
-                        onToggleLeadingLines = { showLeadingLines = !showLeadingLines },
-                        onToggleMassDistribution = { showMassDistribution = !showMassDistribution },
+                        onToggleThirds = onToggleGuideThirds,
+                        onToggleGoldenRatio = onToggleGuideGolden,
+                        onToggleSpiral = onToggleGuideSpiral,
+                        onFlipSpiral = onFlipGuideSpiral,
+                        onToggleDiagonals = onToggleGuideDiagonals,
+                        onToggleHorizon = onToggleGuideHorizon,
                         onNavigateToSelector = onNavigateToSelector,
                     )
 
-                    // Large central image workspace
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -480,12 +612,18 @@ internal fun InspectScreenContent(
                             imageAspectRatio = currentImage.aspectRatio ?: (3f / 2f),
                             activeGuides = activeGuides,
                             compositionResult = compositionResult,
-                            showLeadingLines = showLeadingLines,
-                            showMassDistribution = showMassDistribution,
+                            showLeadingLines = false,
+                            showMassDistribution = false,
                         )
+                        if (whatIfCropActive && suggestedCrop != null) {
+                            WhatIfCropOverlay(
+                                modifier = Modifier.fillMaxSize(),
+                                imageAspectRatio = currentImage.aspectRatio ?: (3f / 2f),
+                                crop = suggestedCrop,
+                            )
+                        }
                     }
 
-                    // Bottom Filmstrip
                     InspectFilmstrip(
                         images = images,
                         currentIndex = currentIndex,
@@ -493,50 +631,35 @@ internal fun InspectScreenContent(
                     )
                 }
 
-                // Right Flank Side Panel (Photo Coach, EXIF Readout, Rating)
                 Column(
                     modifier = Modifier
-                        .width(360.dp)
+                        .width(380.dp)
                         .fillMaxHeight()
                         .background(PanelSurface)
                         .border(1.dp, Zinc800, RoundedCornerShape(0.dp))
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    InspectRatingCard(
-                        rating = currentImage.rating,
-                        onRatingChanged = { rating -> onSetRating(currentImage, rating) },
-                    )
-
-                    PhotoCoachCard(
-                        currentImage = currentImage,
-                        coachReport = coachReport,
-                    )
-
-                    ExifTechnicalReadoutCard(currentImage = currentImage)
+                    sidePanelContent()
                 }
             }
         }
     }
 }
 
-// ── Control Bar ───────────────────────────────────────────────────────────────
+// ── Control Bar (U-20: dead Lines and Mass toggles removed) ───────────────────
 
 @Composable
 private fun InspectControlBar(
     activeGuides: Set<CompositionGuideType>,
     spiralOrientation: SpiralOrientation,
-    showLeadingLines: Boolean,
-    showMassDistribution: Boolean,
     onToggleThirds: () -> Unit,
     onToggleGoldenRatio: () -> Unit,
     onToggleSpiral: () -> Unit,
     onFlipSpiral: () -> Unit,
     onToggleDiagonals: () -> Unit,
     onToggleHorizon: () -> Unit,
-    onToggleLeadingLines: () -> Unit,
-    onToggleMassDistribution: () -> Unit,
     onNavigateToSelector: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -567,7 +690,6 @@ private fun InspectControlBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // Return to Culling button
             IconButton(
                 onClick = onNavigateToSelector,
                 modifier = Modifier
@@ -589,7 +711,6 @@ private fun InspectControlBar(
                 modifier = Modifier.padding(end = 2.dp),
             )
 
-            // Rule of Thirds
             GuideToggleButton(
                 label = "Thirds",
                 icon = Icons.Default.Grid3x3,
@@ -599,7 +720,6 @@ private fun InspectControlBar(
                 aliasTag = "nav_thirds",
             )
 
-            // Golden Ratio Phi Grid
             GuideToggleButton(
                 label = "Phi",
                 icon = Icons.Default.Grid4x4,
@@ -608,7 +728,6 @@ private fun InspectControlBar(
                 testTag = "toggle_golden_ratio",
             )
 
-            // Fibonacci Spiral
             GuideToggleButton(
                 label = "Spiral",
                 icon = Icons.AutoMirrored.Filled.RotateRight,
@@ -617,7 +736,6 @@ private fun InspectControlBar(
                 testTag = "toggle_spiral",
             )
 
-            // Spiral 4-way flip button
             Surface(
                 shape = RoundedCornerShape(6.dp),
                 color = if (isSpiralActive) Zinc800 else Zinc900,
@@ -637,7 +755,6 @@ private fun InspectControlBar(
                 )
             }
 
-            // Diagonals (Baroque / Sinister)
             GuideToggleButton(
                 label = "Diagonals",
                 icon = Icons.Default.Timeline,
@@ -646,7 +763,6 @@ private fun InspectControlBar(
                 testTag = "toggle_diagonals",
             )
 
-            // Crosshair & Horizon
             GuideToggleButton(
                 label = "Horizon",
                 icon = Icons.Default.Tune,
@@ -656,24 +772,6 @@ private fun InspectControlBar(
             )
 
             Spacer(modifier = Modifier.weight(1f))
-
-            // Leading Lines toggle
-            GuideToggleButton(
-                label = "Lines",
-                icon = Icons.Default.LinearScale,
-                active = showLeadingLines,
-                onClick = onToggleLeadingLines,
-                testTag = "toggle_leading_lines",
-            )
-
-            // Mass Centroid toggle
-            GuideToggleButton(
-                label = "Mass",
-                icon = Icons.Default.Adjust,
-                active = showMassDistribution,
-                onClick = onToggleMassDistribution,
-                testTag = "toggle_mass_centroid",
-            )
         }
     }
 }
@@ -720,7 +818,661 @@ private fun GuideToggleButton(
     }
 }
 
-// ── Photo Coach Card ──────────────────────────────────────────────────────────
+// ── Learn 4-Tab Bar (U-24 .. U-28) ────────────────────────────────────────────
+
+@Composable
+private fun LearnTabSelector(
+    selectedTab: LearnTab,
+    onSelectTab: (LearnTab) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("learn_tab_bar"),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        LearnTab.entries.forEach { tab ->
+            val active = tab == selectedTab
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (active) Indigo600 else Zinc900,
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (active) Indigo500 else Zinc800),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onSelectTab(tab) }
+                    .testTag(tab.tag)
+                    .pointerHoverIcon(PointerIcon.Hand),
+            ) {
+                Box(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = tab.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (active) Color.White else Zinc400,
+                        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Explore Section (U-24, U-25) ──────────────────────────────────────────────
+
+@Composable
+private fun ExploreCardsSection(
+    @Suppress("UNUSED_PARAMETER") currentImage: ImageItem,
+    cardResult: com.photoselectortoolbox.domain.learn.CardGenerationResult,
+    guessFirstEnabled: Boolean,
+    isGuessRevealed: Boolean,
+    onToggleGuessFirst: () -> Unit,
+    onRevealGuess: () -> Unit,
+    onOpenLesson: (String) -> Unit,
+    whatIfCropActive: Boolean,
+    onToggleWhatIfCrop: () -> Unit,
+    selectedCropAspect: CropAspectRatio?,
+    onSelectCropAspect: (CropAspectRatio?) -> Unit,
+    suggestedCrop: SuggestedCrop?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = if (guessFirstEnabled) Indigo600 else Zinc900,
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (guessFirstEnabled) Indigo500 else Zinc800),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onToggleGuessFirst)
+                    .testTag("guess_first_toggle"),
+            ) {
+                Text(
+                    text = if (guessFirstEnabled) "Guess first: ON" else "Guess first: OFF",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (guessFirstEnabled) Color.White else Zinc400,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                )
+            }
+
+            if (suggestedCrop != null) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (whatIfCropActive) Indigo600 else Zinc900,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (whatIfCropActive) Indigo500 else Zinc800),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(onClick = onToggleWhatIfCrop)
+                        .testTag("what_if_crop_toggle"),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Crop,
+                            contentDescription = null,
+                            tint = if (whatIfCropActive) Color.White else Zinc400,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            text = if (whatIfCropActive) "Hide 'What if?' Crop" else "What if? Crop",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (whatIfCropActive) Color.White else Zinc400,
+                        )
+                    }
+                }
+            }
+        }
+
+        if (whatIfCropActive && suggestedCrop != null) {
+            Card(
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Zinc900),
+                border = androidx.compose.foundation.BorderStroke(1.dp, FocusCyan.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth().testTag("what_if_crop_card"),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "Non-Destructive Crop Preview",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                    Text(
+                        text = suggestedCrop.rationale,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Zinc400,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        CropAspectRatio.entries.forEach { ratio ->
+                            val isChosen = (selectedCropAspect ?: suggestedCrop.aspectRatio) == ratio
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (isChosen) Indigo600 else Zinc950,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Zinc700),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { onSelectCropAspect(ratio) },
+                            ) {
+                                Text(
+                                    text = ratio.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isChosen) Color.White else Zinc400,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!isGuessRevealed) {
+            val challenge = cardResult.guessFirstChallenge
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Zinc900),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Indigo500),
+                modifier = Modifier.fillMaxWidth().testTag("guess_first_card"),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = challenge.prompt,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                    challenge.options.forEachIndexed { idx, option ->
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Zinc950,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Zinc800),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { onRevealGuess() }
+                                .testTag("guess_option_$idx"),
+                        ) {
+                            Text(
+                                text = option,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Zinc200,
+                                modifier = Modifier.padding(10.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            cardResult.didWellCards.forEach { card ->
+                LearnObservationCard(
+                    card = card,
+                    onOpenLesson = onOpenLesson,
+                    testTag = "did_well_card",
+                )
+            }
+            cardResult.tryNextCard?.let { card ->
+                LearnObservationCard(
+                    card = card,
+                    onOpenLesson = onOpenLesson,
+                    testTag = "try_next_card",
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LearnObservationCard(
+    card: LearnCard,
+    onOpenLesson: (String) -> Unit,
+    testTag: String,
+) {
+    val isPositive = card.kind == com.photoselectortoolbox.domain.learn.CardKind.DID_WELL
+    val accent = if (isPositive) ScoreGood else ScoreWarn
+    val badgeText = if (isPositive) "What you did well" else "What to try next"
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Zinc900),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth().testTag(testTag),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = badgeText.uppercase(Locale.US),
+                style = MaterialTheme.typography.labelSmall,
+                color = accent,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = card.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+            Text(
+                text = card.whatHappened,
+                style = MaterialTheme.typography.bodySmall,
+                color = Zinc200,
+            )
+            Text(
+                text = card.whyItMatters,
+                style = MaterialTheme.typography.bodySmall,
+                color = Zinc400,
+            )
+            Text(
+                text = "Next time: ${card.tryNextTime}",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+            )
+            card.lessonId?.let { lessonId ->
+                Text(
+                    text = "Why? → Open Lesson",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = FocusCyan,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clickable { onOpenLesson(lessonId) }
+                        .padding(top = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WhatIfCropOverlay(
+    modifier: Modifier,
+    imageAspectRatio: Float,
+    crop: SuggestedCrop,
+) {
+    Canvas(modifier = modifier.testTag("what_if_crop_overlay")) {
+        val bounds = CompositionGeometry.calculateDisplayedBounds(
+            containerWidth = size.width,
+            containerHeight = size.height,
+            aspectRatio = imageAspectRatio,
+        )
+        val cropLeft = bounds.left + (crop.xMin.toFloat() * bounds.width)
+        val cropTop = bounds.top + (crop.yMin.toFloat() * bounds.height)
+        val cropWidth = (crop.xMax - crop.xMin).toFloat() * bounds.width
+        val cropHeight = (crop.yMax - crop.yMin).toFloat() * bounds.height
+
+        drawRect(
+            color = FocusCyan,
+            topLeft = Offset(cropLeft, cropTop),
+            size = Size(cropWidth, cropHeight),
+            style = Stroke(width = 2.5.dp.toPx()),
+        )
+    }
+}
+
+// ── Lessons Tab (U-26) ────────────────────────────────────────────────────────
+
+@Composable
+private fun LessonsTabContent(
+    selectedLessonId: String?,
+    onSelectLesson: (String?) -> Unit,
+    factsByUri: Map<String, List<TechniqueFactEntity>>,
+    completedLessons: Map<String, LessonProgressEntity>,
+    onLessonCompleted: (LessonProgressEntity) -> Unit,
+    onSetPracticeGoal: (String) -> Unit,
+) {
+    val activeLesson: MicroLesson? = selectedLessonId?.let { LessonCatalog.getById(it) }
+    if (activeLesson != null) {
+        val questions = remember(activeLesson, factsByUri) {
+            LessonCatalog.buildSpotItQuiz(activeLesson, factsByUri)
+        }
+        var answers by remember(activeLesson.id) { mutableStateOf<Map<Int, Int>>(emptyMap()) }
+
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Zinc900),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Zinc800),
+            modifier = Modifier.fillMaxWidth().testTag("lesson_detail_card"),
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = "← All Lessons (${activeLesson.track.title})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = FocusCyan,
+                    modifier = Modifier.clickable { onSelectLesson(null) },
+                )
+                Text(
+                    text = activeLesson.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+                Text(
+                    text = activeLesson.conceptSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Zinc200,
+                )
+                Text(
+                    text = "Spot It Quiz (2 Questions)",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Indigo500,
+                )
+                questions.forEachIndexed { qIdx, q ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "${qIdx + 1}. ${q.prompt}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
+                        q.options.forEachIndexed { optIdx, optText ->
+                            val chosen = answers[qIdx] == optIdx
+                            val isCorrect = optIdx == q.correctIndex
+                            val borderCol = when {
+                                !chosen -> Zinc800
+                                isCorrect -> ScoreGood
+                                else -> ScoreBad
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Zinc950,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, borderCol),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        val updated = answers + (qIdx to optIdx)
+                                        answers = updated
+                                        if (updated.size == questions.size) {
+                                            val correctCount = questions.indices.count { i ->
+                                                updated[i] == questions[i].correctIndex
+                                            }
+                                            onLessonCompleted(
+                                                LessonProgressEntity(
+                                                    lessonId = activeLesson.id,
+                                                    completedAt = System.currentTimeMillis(),
+                                                    spotItCorrect = correctCount,
+                                                    spotItTotal = questions.size,
+                                                )
+                                            )
+                                        }
+                                    },
+                            ) {
+                                Text(
+                                    text = optText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Zinc200,
+                                    modifier = Modifier.padding(8.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Indigo600,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onSetPracticeGoal(activeLesson.id) }
+                        .testTag("set_practice_goal_button"),
+                ) {
+                    Text(
+                        text = "Practice this next shoot",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
+            }
+        }
+        return
+    }
+
+    LessonCatalog.lessonsByTrack().forEach { (track, lessons) ->
+        Text(
+            text = track.title,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = Zinc400,
+        )
+        lessons.forEach { lesson ->
+            val done = completedLessons.containsKey(lesson.id)
+            Card(
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Zinc900),
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (done) ScoreGood.copy(alpha = 0.5f) else Zinc800),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelectLesson(lesson.id) }
+                    .testTag("lesson_item_${lesson.id}"),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = lesson.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = lesson.tryThisPrompt,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Zinc400,
+                            maxLines = 2,
+                        )
+                    }
+                    if (done) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Completed",
+                            tint = ScoreGood,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Compare Tab (U-27) ────────────────────────────────────────────────────────
+
+@Composable
+private fun CompareTabContent(images: List<ImageItem>) {
+    val scenes = remember(images) { SceneComparator.findComparableScenes(images) }
+    if (scenes.isEmpty()) {
+        Text(
+            text = "Load at least 2 photos in a shoot folder to compare burst/scene pairs.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Zinc400,
+        )
+        return
+    }
+
+    scenes.forEach { scene ->
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Zinc900),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Zinc800),
+            modifier = Modifier.fillMaxWidth().testTag("scene_compare_card"),
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = scene.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+                Text(
+                    text = "Why one worked better:",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = FocusCyan,
+                )
+                scene.differenceBullets.forEach { bullet ->
+                    Text(
+                        text = "• $bullet",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Zinc200,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Practice & Insights Tab (U-28) ────────────────────────────────────────────
+
+@Composable
+private fun PracticeTabContent(
+    images: List<ImageItem>,
+    factsByUri: Map<String, List<TechniqueFactEntity>>,
+    activePracticeGoal: PracticeGoalEntity?,
+    onSelectLessonForGoal: (String) -> Unit,
+    onOpenLesson: (String) -> Unit,
+) {
+    val goalStatus = remember(activePracticeGoal, images, factsByUri) {
+        activePracticeGoal?.let { PracticeAndInsightsEngine.evaluateGoalProgress(it, images, factsByUri) }
+    }
+    val insights = remember(images, factsByUri) {
+        PracticeAndInsightsEngine.computeInsights(images, factsByUri)
+    }
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Zinc900),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Indigo500.copy(alpha = 0.6f)),
+        modifier = Modifier.fillMaxWidth().testTag("practice_goal_card"),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Active Practice Goal",
+                style = MaterialTheme.typography.labelSmall,
+                color = Indigo500,
+                fontWeight = FontWeight.Bold,
+            )
+            if (goalStatus != null) {
+                Text(
+                    text = goalStatus.lessonTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+                Text(
+                    text = goalStatus.tryThisPrompt,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Zinc200,
+                )
+                Text(
+                    text = goalStatus.summaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ScoreGood,
+                )
+            } else {
+                Text(
+                    text = "Choose one technique to focus on during your next shoot:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Zinc400,
+                )
+                LessonCatalog.ALL_LESSONS.take(3).forEach { lesson ->
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Zinc950,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Zinc800),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onSelectLessonForGoal(lesson.id) },
+                    ) {
+                        Text(
+                            text = "Set Goal: ${lesson.title}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = FocusCyan,
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    Text(
+        text = "Personal Pattern Insights",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = Zinc400,
+    )
+
+    if (insights.isEmpty()) {
+        Text(
+            text = "Scan at least ${PracticeAndInsightsEngine.MIN_SAMPLE_SIZE} photos in a shoot folder to unlock statistically grounded personal pattern insights.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Zinc500,
+        )
+    } else {
+        insights.forEach { insight ->
+            Card(
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Zinc900),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Zinc800),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenLesson(insight.recommendedLessonId) }
+                    .testTag("pattern_insight_card"),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = insight.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                    Text(
+                        text = insight.observation,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Zinc200,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Photo Coach Card (U-20: Hand-Holding Guideline wording, no 'shake') ───────
 
 @Composable
 private fun PhotoCoachCard(
@@ -742,7 +1494,6 @@ private fun PhotoCoachCard(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -762,13 +1513,12 @@ private fun PhotoCoachCard(
                 )
             }
 
-            // Camera Shake Risk Meter
             val risk = coachReport.cameraShakeRisk
             val riskPct = (risk * 100).toInt()
             val (riskLabel, riskColor) = when {
-                risk >= 0.7f -> "Critical Blur Risk ($riskPct%)" to ScoreBad
-                risk >= 0.3f -> "Moderate Shake Risk ($riskPct%)" to ScoreWarn
-                else -> "Low Shake Risk ($riskPct%)" to ScoreGood
+                risk >= 0.7f -> "High Blur Risk ($riskPct%)" to ScoreBad
+                risk >= 0.3f -> "Moderate Blur Risk ($riskPct%)" to ScoreWarn
+                else -> "Low Blur Risk ($riskPct%)" to ScoreGood
             }
 
             Row(
@@ -780,7 +1530,7 @@ private fun PhotoCoachCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "Camera Shake Risk:",
+                    text = "Hand-Holding Guideline:",
                     style = MaterialTheme.typography.bodySmall,
                     color = Zinc400,
                 )
@@ -799,7 +1549,6 @@ private fun PhotoCoachCard(
                 }
             }
 
-            // Safe Shutter Speed Comparison
             val safeSpeed = coachReport.safeShutterSpeed
             val actualSpeed = currentImage.exifData?.shutterSpeed
             val safeSpeedFormatted = safeSpeed?.let { ExifFormatter.shutterSpeed(it) } ?: "—"
@@ -813,7 +1562,7 @@ private fun PhotoCoachCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "Reciprocal Safe Shutter (1/f):",
+                    text = "1/f_eff Guideline:",
                     style = MaterialTheme.typography.bodySmall,
                     color = Zinc400,
                 )
@@ -825,7 +1574,6 @@ private fun PhotoCoachCard(
                 )
             }
 
-            // Recommended EV Compensation
             coachReport.recommendedEvCompensation?.let { ev ->
                 val evFormatted = if (ev > 0.0) "+$ev" else "$ev"
                 Row(
@@ -856,7 +1604,6 @@ private fun PhotoCoachCard(
                 }
             }
 
-            // Coaching Tips
             Text(
                 text = "Technique Guidance:",
                 style = MaterialTheme.typography.labelMedium,
@@ -1040,12 +1787,14 @@ private fun ReadoutRow(label: String, value: String) {
     }
 }
 
-// ── Rating Card ───────────────────────────────────────────────────────────────
+// ── Rating Card (U-21: owns StarRatingBar + RatingFilterSelector) ─────────────
 
 @Composable
 private fun InspectRatingCard(
     rating: Int,
     onRatingChanged: (Int) -> Unit,
+    ratingFilter: RatingFilter = RatingFilter.All,
+    onRatingFilterSelected: (RatingFilter) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -1074,7 +1823,7 @@ private fun InspectRatingCard(
                     color = Color.White,
                 )
                 Text(
-                    text = "Hotkeys 0–5",
+                    text = "Hotkeys 0–5, X",
                     style = MaterialTheme.typography.labelSmall,
                     color = Zinc500,
                 )
@@ -1087,6 +1836,12 @@ private fun InspectRatingCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
+            )
+
+            RatingFilterSelector(
+                currentFilter = ratingFilter,
+                onFilterSelected = onRatingFilterSelected,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }
@@ -1150,7 +1905,6 @@ private fun InspectFilmstrip(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                    // Rating badge at bottom
                     if (item.rating != 0) {
                         Surface(
                             shape = RoundedCornerShape(topEnd = 4.dp),

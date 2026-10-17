@@ -15,8 +15,12 @@ data class PendingDeletion(
     /** When the deletion was applied, in `System.currentTimeMillis()` terms. */
     val requestedAtMillis: Long,
 ) {
-    /** The URIs that must actually be deleted when this is committed. */
-    val uris: List<String> get() = slots.map { it.uri }
+    /**
+     * The URIs that must actually be deleted when this is committed: every
+     * removed frame's primary URI plus all of its companion URIs.
+     */
+    val uris: List<String>
+        get() = slots.flatMap { slot -> slot.image.allFiles.map { it.uri } }
 
     /** How much of the undo window is left at [nowMillis]; never negative. */
     fun remainingMillis(nowMillis: Long): Long =

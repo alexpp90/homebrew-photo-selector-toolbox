@@ -61,12 +61,12 @@
     <li>
       <strong>Photos, EXIF Metadata &amp; On-Device Analysis (Local Only):</strong>
       You select folders explicitly using the Android System Storage Access Framework (SAF) folder picker (<code>ACTION_OPEN_DOCUMENT_TREE</code>).
-      All sharpness, noise, exposure, composition (OpenCV), and duplicate analyses run strictly locally on your device.
+      All sharpness, noise, exposure, subject, composition, and technique (OpenCV), and duplicate analyses run strictly locally on your device.
       No images, thumbnails, file paths, GPS coordinates, or EXIF tags are ever transmitted over a network.
     </li>
     <li>
       <strong>Local Score Cache &amp; Preferences (Room &amp; DataStore):</strong>
-      Calculated image quality scores and star ratings are cached locally in an internal SQLite (Room) database so folders re-open quickly, and user preferences are stored in Android Jetpack DataStore.
+      Calculated image quality scores, detected technique facts, and star ratings are cached locally in an internal SQLite (Room) database so folders re-open quickly, and user preferences are stored in Android Jetpack DataStore.
       You can clear the local score cache at any time in <strong>Settings &rarr; Cache Management &rarr; Clear Cache</strong>.
       Cloud auto-backup of the local score database and SAF folder grants is disabled so local file URIs and metadata are never uploaded to cloud backup services.
     </li>
@@ -111,11 +111,11 @@
     <li>
       <strong>Fotos, EXIF-Metadaten &amp; Bildanalyse (ausschließlich lokal):</strong>
       Der Zugriff auf Fotoordner erfolgt ausschließlich über die vom Nutzer explizit im Android Storage Access Framework (SAF, <code>ACTION_OPEN_DOCUMENT_TREE</code>) ausgewählten Verzeichnisse.
-      Sämtliche Berechnungen (Schärfe, Bildrauschen, Belichtung, Bildkomposition mittels OpenCV sowie Duplikaterkennung) finden vollständig lokal auf Ihrem Gerät statt.
+      Sämtliche Berechnungen (Schärfe, Bildrauschen, Belichtung, Motiv-, Technik- und Bildkompositionsanalyse mittels OpenCV sowie Duplikaterkennung) finden vollständig lokal auf Ihrem Gerät statt.
     </li>
     <li>
       <strong>Lokaler Bewertungs-Cache &amp; Einstellungen (Room &amp; DataStore):</strong>
-      Berechnete Qualitätswerte und Sternebewertungen werden lokal in einer internen SQLite-Datenbank (Room) zwischengespeichert; Einstellungen liegen lokal im Jetpack DataStore. Sie können den Cache jederzeit in den App-Einstellungen (<strong>Settings &rarr; Clear Cache</strong>) löschen. Ein Cloud-Auto-Backup dieser Datenbanken ist deaktiviert.
+      Berechnete Qualitätswerte, erkannte Aufnahmetechnik-Merkmale und Sternebewertungen werden lokal in einer internen SQLite-Datenbank (Room) zwischengespeichert; Einstellungen liegen lokal im Jetpack DataStore. Sie können den Analyse-Cache jederzeit in den App-Einstellungen (<strong>Settings &rarr; Clear Cache</strong>) löschen. Ein Cloud-Auto-Backup dieser Datenbanken ist deaktiviert.
     </li>
   </ul>
 

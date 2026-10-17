@@ -139,10 +139,16 @@ class QualityScores:
     shadow_clipping: float
     raw_variance: Optional[float] = None
     category_override: Optional[SharpnessCategory] = field(default=None, repr=False, compare=False)
+    blurry_threshold: float = field(default=35.0, repr=False, compare=False)
+    sharp_threshold: float = field(default=70.0, repr=False, compare=False)
     focus_category: SharpnessCategory = field(init=False)
 
     def __post_init__(self):
-        cat = self.category_override or SharpnessCategory.from_score(self.sharpness)
+        cat = self.category_override or SharpnessCategory.from_score(
+            self.sharpness,
+            blurry_threshold=self.blurry_threshold,
+            sharp_threshold=self.sharp_threshold,
+        )
         object.__setattr__(self, "focus_category", cat)
 
     @property
@@ -244,5 +250,8 @@ class CullingRecord:
     affected_paths: List[Tuple[Path, Path]]  # [(original_source, target_destination), ...]
     previous_status: PhotoStatus = PhotoStatus.CANDIDATE
     trash_info_paths: Dict[Path, Path] = field(default_factory=dict)  # {trashed_files_path: trashinfo_path}
+    # Sources of a MOVE whose verified copy exists in `affected_paths` but which could not be
+    # removed (read-only card). Empty for a complete operation; non-empty marks it partial.
+    unremoved_sources: List[Path] = field(default_factory=list)
     timestamp: float = field(default_factory=time.time)
     id: str = field(default_factory=lambda: str(uuid.uuid4()))

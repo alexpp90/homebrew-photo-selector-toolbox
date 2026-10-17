@@ -103,11 +103,14 @@ def test_intra_filesystem_move_rollback_on_failure(tmp_path: Path):
 
 
 def test_cross_filesystem_preflight_space_check(tmp_path: Path):
-    """Verify pre-flight capacity check raises InsufficientDiskSpaceError before disk mutation (R-LINUX-CULL-03)."""
+    """Verify pre-flight capacity check raises InsufficientDiskSpaceError before disk mutation (R-LINUX-CULL-03).
+
+    Only a cross-mount move copies bytes, so the destination is made to look like another device.
+    """
     raw = tmp_path / "DSC_004.ARW"
     raw.write_bytes(b"x" * 1024)
     candidate = CandidatePhoto(primary_path=raw, companion_paths=[])
-    mgr = FileCullingManager()
+    mgr = FileCullingManager(dev_of=lambda p: 2 if "Selection" in str(p) else 1)
 
     mock_stat = MagicMock()
     mock_stat.f_bavail = 1
@@ -937,3 +940,351 @@ def test_bundle_trash_failure_rolls_back_first_member_and_retains_partial_record
     assert cr3.exists() and cr3.read_bytes() == b"precious-cr3"
     assert jpg.exists() and jpg.read_bytes() == b"precious-jpg"
     assert unrelated.exists() and unrelated.read_bytes() == b"unrelated-trash-payload"
+
+
+# ── B-1: partial cross-mount move (D-1) and capacity pre-flight (D-7) ───────────
+
+
+class _NoNames:
+    def names_in(self, directory):
+        return {}
+
+
+def test_cross_mount_move_with_unremovable_source_returns_partial_record(tmp_path: Path):
+    """D-1: the verified copy stays in Selection/, the source stays on the card, and the failure
+    carries a record (marked partial) so the caller can offer undo instead of retrying into IMG-2."""
+    card = tmp_path / "card"
+    card.mkdir()
+    (card / "IMG_1.JPG").write_bytes(b"x" * 100)
+    mgr = FileCullingManager(
+        name_resolver=_NoNames(),
+        trash_dir=tmp_path / "Trash",
+        dev_of=lambda p: 2 if "Selection" in str(p) else 1,
+        mount_root_for=lambda p: None,
+    )
+    real_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self.parent == card:
+            raise PermissionError("read-only card")
+        return real_unlink(self, *args, **kwargs)
+
+    candidate = CandidatePhoto(primary_path=card / "IMG_1.JPG")
+    with patch.object(Path, "unlink", failing_unlink):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.move_candidate(candidate, card)
+
+    record = exc_info.value.partial_record
+    assert record is not None
+    assert record.action_type == CullingActionType.MOVE
+    assert [dst.name for _, dst in record.affected_paths] == ["IMG_1.JPG"]
+    assert record.unremoved_sources == [card / "IMG_1.JPG"]
+    assert "original could not be removed" in str(exc_info.value)
+    assert (card / "Selection" / "IMG_1.JPG").read_bytes() == b"x" * 100
+    assert (card / "IMG_1.JPG").exists()
+
+
+def test_same_filesystem_move_skips_the_capacity_preflight(tmp_path: Path):
+    """D-7: a rename needs no free space, so a full disk must not refuse it."""
+    (tmp_path / "IMG_2.JPG").write_bytes(b"y" * 1000)
+    mgr = FileCullingManager(name_resolver=_NoNames(), trash_dir=tmp_path / "Trash")
+
+    class FullDisk:
+        f_bavail = 0
+        f_frsize = 4096
+
+    with patch("os.statvfs", lambda p: FullDisk()):
+        record = mgr.move_candidate(CandidatePhoto(primary_path=tmp_path / "IMG_2.JPG"), tmp_path)
+
+    assert (tmp_path / "Selection" / "IMG_2.JPG").exists()
+    assert not (tmp_path / "IMG_2.JPG").exists()
+    assert record.unremoved_sources == []
+
+
+# ── B-2: FreeDesktop trash details (D-2, D-11) ─────────────────────────────────
+
+
+def _card_manager(tmp_path: Path):
+    card = tmp_path / "card"
+    card.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    return card, _make_card_mount_manager(card, home)
+
+
+def _trash_one(mgr: FileCullingManager, card: Path):
+    photo = card / "IMG_9.JPG"
+    photo.write_bytes(b"photo")
+    record = mgr.trash_candidate(CandidatePhoto(primary_path=photo))
+    return record.affected_paths[0][1]
+
+
+def test_top_dir_trash_uses_shared_dot_trash_only_when_sticky_and_not_a_symlink(tmp_path: Path):
+    """D-11: $topdir/.Trash/$uid is allowed only if .Trash is a real directory with the sticky bit."""
+    card, mgr = _card_manager(tmp_path)
+    shared = card / ".Trash"
+    shared.mkdir()
+    os.chmod(shared, 0o1777)
+
+    trashed = _trash_one(mgr, card)
+
+    assert trashed.parent.parent == (card / ".Trash" / "1000").resolve()
+
+
+def test_top_dir_trash_falls_back_to_per_user_dir_when_dot_trash_lacks_sticky_bit(tmp_path: Path):
+    card, mgr = _card_manager(tmp_path)
+    shared = card / ".Trash"
+    shared.mkdir()
+    os.chmod(shared, 0o777)
+
+    trashed = _trash_one(mgr, card)
+
+    assert trashed.parent.parent == (card / ".Trash-1000").resolve()
+
+
+def test_top_dir_trash_ignores_a_dot_trash_symlink(tmp_path: Path):
+    card, mgr = _card_manager(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    os.chmod(elsewhere, 0o1777)
+    (card / ".Trash").symlink_to(elsewhere)
+
+    trashed = _trash_one(mgr, card)
+
+    assert trashed.parent.parent == (card / ".Trash-1000").resolve()
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_trashinfo_is_created_exclusively_and_the_next_name_is_used_on_a_race(tmp_path: Path):
+    """D-11: the .trashinfo reserves its name with O_EXCL; losing the race picks the next name."""
+    import errno
+
+    trash = tmp_path / "Trash"
+    mgr = FileCullingManager(trash_dir=trash)
+    photo = tmp_path / "IMG_5.JPG"
+    photo.write_bytes(b"data")
+
+    real_open = os.open
+    raced = []
+
+    def racing_open(path, flags, *args, **kwargs):
+        if str(path).endswith("IMG_5.JPG.trashinfo") and not raced:
+            raced.append(path)
+            Path(path).write_text("[Trash Info]\nPath=/someone/else\n")  # the other process won
+            raise FileExistsError(errno.EEXIST, "File exists", str(path))
+        return real_open(path, flags, *args, **kwargs)
+
+    with patch("os.open", racing_open):
+        files_path, info_path = mgr._trash_file_freedesktop(photo)
+
+    assert raced, "the exclusive create was never attempted"
+    assert files_path.name == "IMG_5.2.JPG"
+    assert info_path.name == "IMG_5.2.JPG.trashinfo"
+    # The other process's entry is untouched.
+    assert "someone/else" in (trash / "info" / "IMG_5.JPG.trashinfo").read_text()
+
+
+class _FakeGioFile:
+    def __init__(self, on_trash=None, children=None, move_ok=True, path=None):
+        self.on_trash = on_trash
+        self.children = children or []
+        self.move_ok = move_ok
+        self.path = path
+        self.moved_to = None
+
+    def trash(self, cancellable):
+        if self.on_trash:
+            self.on_trash()
+
+    def enumerate_children(self, attributes, flags, cancellable):
+        return self
+
+    def next_file(self, cancellable):
+        return self.children.pop(0) if self.children else None
+
+    def get_child(self, name):
+        return _FakeGioFile(path=name)
+
+    def move(self, target, flags, *args):
+        if not self.move_ok:
+            raise OSError("cannot restore")
+        self.moved_to = target
+
+
+class _FakeGioItem:
+    def __init__(self, name, orig_path):
+        self.name = name
+        self.orig_path = orig_path
+
+    def get_name(self):
+        return self.name
+
+    def get_attribute_byte_string(self, attr):
+        return self.orig_path
+
+
+def _fake_gio(trashed_file, trash_root):
+    class FakeGio:
+        class FileCopyFlags:
+            NONE = 0
+
+        class FileQueryInfoFlags:
+            NONE = 0
+
+        class File:
+            @staticmethod
+            def new_for_path(path):
+                return trashed_file
+
+            @staticmethod
+            def new_for_uri(uri):
+                return trash_root
+
+    return FakeGio
+
+
+def test_gio_trash_whose_entry_cannot_be_matched_is_located_through_the_trash_listing(tmp_path: Path):
+    """D-2: GIO trashed the file but the .trashinfo Path= does not match; the pair must still be
+    recorded (found through GIO's own trash:/// listing) instead of raising with no record."""
+    from photo_selector_linux.core import file_ops
+
+    trash = tmp_path / "Trash"
+    (trash / "files").mkdir(parents=True)
+    (trash / "info").mkdir(parents=True)
+    photo = tmp_path / "IMG_7.JPG"
+    photo.write_bytes(b"data")
+
+    def gio_moves_file():
+        (trash / "files" / "IMG_7.JPG").write_bytes(b"data")
+        (trash / "info" / "IMG_7.JPG.trashinfo").write_text("[Trash Info]\nPath=/odd/encoding\n")
+        photo.unlink()
+
+    trashed = _FakeGioFile(on_trash=gio_moves_file)
+    root = _FakeGioFile(children=[_FakeGioItem("IMG_7.JPG", str(photo))])
+    mgr = FileCullingManager(trash_dir=trash)
+
+    with patch.object(FileCullingManager, "_use_gio", return_value=True), \
+         patch.object(file_ops, "Gio", _fake_gio(trashed, root), create=True):
+        record = mgr.trash_candidate(CandidatePhoto(primary_path=photo))
+
+    assert record.affected_paths == [(photo, (trash / "files" / "IMG_7.JPG").resolve())]
+    assert record.trash_info_paths[photo] == (trash / "info" / "IMG_7.JPG.trashinfo").resolve()
+
+
+def test_gio_trash_that_cannot_be_located_at_all_is_restored_before_raising(tmp_path: Path):
+    from photo_selector_linux.core import file_ops
+
+    trash = tmp_path / "Trash"
+    photo = tmp_path / "IMG_8.JPG"
+    photo.write_bytes(b"data")
+
+    def gio_moves_file():
+        photo.unlink()
+
+    trashed = _FakeGioFile(on_trash=gio_moves_file)
+    restored_item = _FakeGioFile()
+    root = _FakeGioFile(children=[_FakeGioItem("IMG_8.JPG", str(photo))])
+    root.get_child = lambda name: restored_item  # type: ignore[method-assign]
+    mgr = FileCullingManager(trash_dir=trash)
+
+    with patch.object(FileCullingManager, "_use_gio", return_value=True), \
+         patch.object(file_ops, "Gio", _fake_gio(trashed, root), create=True):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.trash_candidate(CandidatePhoto(primary_path=photo))
+
+    assert restored_item.moved_to is not None, "the file was left in the Trash"
+    assert "restored" in str(exc_info.value).lower()
+
+
+def test_gio_trash_that_cannot_be_located_or_restored_tells_the_user_where_the_file_is(tmp_path: Path):
+    from photo_selector_linux.core import file_ops
+
+    trash = tmp_path / "Trash"
+    photo = tmp_path / "IMG_10.JPG"
+    photo.write_bytes(b"data")
+    trashed = _FakeGioFile(on_trash=photo.unlink)
+    root = _FakeGioFile(children=[])
+    mgr = FileCullingManager(trash_dir=trash)
+
+    with patch.object(FileCullingManager, "_use_gio", return_value=True), \
+         patch.object(file_ops, "Gio", _fake_gio(trashed, root), create=True):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.trash_candidate(CandidatePhoto(primary_path=photo))
+
+    assert "IMG_10.JPG" in str(exc_info.value)
+    assert "Trash" in str(exc_info.value)
+# ── B-3: undo of a partial move (D-3) ───────────────────────────────────────────
+
+
+def _selection_files(card: Path):
+    """Files in Selection/ (the folder's hidden hand-over marker is not a photo)."""
+    return [p for p in (card / "Selection").iterdir() if not p.name.startswith(".photoselector")]
+
+
+def _partial_move(tmp_path: Path, names, undeletable):
+    """Cross-mount move of ``names`` from a fake card where the sources in ``undeletable`` stay."""
+    card = tmp_path / "card"
+    card.mkdir()
+    for n in names:
+        (card / n).write_bytes(n.encode() * 20)
+    mgr = FileCullingManager(
+        name_resolver=_NoNames(),
+        trash_dir=tmp_path / "Trash",
+        dev_of=lambda p: 2 if "Selection" in str(p) else 1,
+        mount_root_for=lambda p: None,
+    )
+    real_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self.parent == card and self.name in undeletable:
+            raise PermissionError("read-only card")
+        return real_unlink(self, *args, **kwargs)
+
+    candidate = CandidatePhoto(
+        primary_path=card / names[0], companion_paths=[card / n for n in names[1:]]
+    )
+    with patch.object(Path, "unlink", failing_unlink):
+        with pytest.raises(FileCullingError) as exc_info:
+            mgr.move_candidate(candidate, card)
+    return mgr, card, candidate, exc_info.value.partial_record
+
+
+def test_undo_of_a_fully_unremoved_partial_move_deletes_the_copy_and_creates_no_duplicate(tmp_path: Path):
+    """D-3: the originals never left, so undo must delete the copies it created instead of
+    restoring them next to the originals as IMG_1-2.JPG."""
+    mgr, card, candidate, record = _partial_move(tmp_path, ["IMG_1.JPG"], {"IMG_1.JPG"})
+
+    assert mgr.undo_culling(record, candidate) is True
+
+    assert sorted(p.name for p in card.iterdir() if p.is_file()) == ["IMG_1.JPG"]
+    assert (card / "IMG_1.JPG").read_bytes() == b"IMG_1.JPG" * 20
+    assert _selection_files(card) == []
+
+
+def test_undo_of_a_mixed_partial_move_restores_removed_members_and_deletes_only_surviving_copies(tmp_path: Path):
+    mgr, card, candidate, record = _partial_move(
+        tmp_path, ["IMG_2.CR3", "IMG_2.JPG"], {"IMG_2.JPG"}
+    )
+    assert not (card / "IMG_2.CR3").exists()      # moved
+    assert (card / "IMG_2.JPG").exists()          # stayed behind
+
+    assert mgr.undo_culling(record, candidate) is True
+
+    # The member that was really moved is back under its own name; the one that never left
+    # keeps its original and loses only the copy this operation made.
+    assert (card / "IMG_2.CR3").read_bytes() == b"IMG_2.CR3" * 20
+    assert (card / "IMG_2.JPG").read_bytes() == b"IMG_2.JPG" * 20
+    assert sorted(p.name for p in card.iterdir() if p.is_file()) == ["IMG_2.CR3", "IMG_2.JPG"]
+    assert _selection_files(card) == []
+
+
+def test_undo_of_a_partial_move_never_deletes_a_copy_whose_original_is_gone(tmp_path: Path):
+    """Only copies whose original still exists are deleted; if the original has meanwhile been
+    removed by the user, the copy is the only one left and is restored, not deleted."""
+    mgr, card, candidate, record = _partial_move(tmp_path, ["IMG_3.JPG"], {"IMG_3.JPG"})
+    (card / "IMG_3.JPG").unlink()   # the user deleted the stuck original later
+
+    assert mgr.undo_culling(record, candidate) is True
+
+    assert (card / "IMG_3.JPG").read_bytes() == b"IMG_3.JPG" * 20
+    assert _selection_files(card) == []

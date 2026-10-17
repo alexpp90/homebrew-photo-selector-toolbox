@@ -85,4 +85,32 @@ class UndoPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `push and pop maintain LIFO order up to 20 entries and report evicted pending deletions`() {
+        var history = emptyList<UndoableOperation>()
+        for (i in 1..20) {
+            val item = image.copy(uri = "content://tree/$i.jpg", fileName = "$i.jpg")
+            val op = UndoableOperation.RevertPendingDelete(PendingDeletion(listOf(ImageSlot(item, i - 1)), 0L))
+            val result = UndoPolicy.push(history, op)
+            assertTrue(result.evictedPendingDeletions.isEmpty())
+            history = result.history
+        }
+        assertEquals(20, history.size)
+
+        // Pushing a 21st entry evicts the oldest (1.jpg) and reports it as an evicted pending deletion.
+        val item21 = image.copy(uri = "content://tree/21.jpg", fileName = "21.jpg")
+        val push21 = UndoPolicy.push(
+            history,
+            UndoableOperation.RevertPendingDelete(PendingDeletion(listOf(ImageSlot(item21, 20)), 0L)),
+        )
+        assertEquals(20, push21.history.size)
+        assertEquals(1, push21.evictedPendingDeletions.size)
+        assertEquals("content://tree/1.jpg", push21.evictedPendingDeletions.first().slots.first().image.uri)
+
+        // Popping returns the most recent (21.jpg) first.
+        val (popped, remaining) = UndoPolicy.pop(push21.history)
+        assertEquals("content://tree/21.jpg", (popped as UndoableOperation.RevertPendingDelete).slots.first().image.uri)
+        assertEquals(19, remaining.size)
+    }
 }

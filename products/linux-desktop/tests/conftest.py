@@ -106,6 +106,9 @@ if "gi" not in sys.modules and not _real_gtk_usable():
         def set_css_classes(self, classes, *args, **kwargs):
             self._css_classes = list(classes)
 
+        def has_css_class(self, cls_name: str, *args, **kwargs) -> bool:
+            return cls_name in getattr(self, "_css_classes", [])
+
         def get_css_classes(self):
             return list(getattr(self, "_css_classes", []))
 
@@ -185,6 +188,51 @@ if "gi" not in sys.modules and not _real_gtk_usable():
         def add_controller(self, *args, **kwargs):
             pass
 
+        def set_transient_for(self, *args, **kwargs):
+            pass
+
+        def present(self, *args, **kwargs):
+            pass
+
+        def add(self, child, *args, **kwargs):
+            self.append(child)
+
+        def set_child(self, child, *args, **kwargs):
+            self._children = [child]
+
+        def set_subtitle(self, subtitle: str = "", *args, **kwargs):
+            self._subtitle = str(subtitle)
+
+        def get_subtitle(self):
+            return getattr(self, "_subtitle", "")
+
+        def set_text(self, text: str = "", *args, **kwargs):
+            self._text = str(text)
+
+        def get_text(self):
+            return getattr(self, "_text", "")
+
+        def set_active(self, active: bool = False, *args, **kwargs):
+            self._active = bool(active)
+
+        def get_active(self):
+            return getattr(self, "_active", False)
+
+        def set_value(self, value: float = 0.0, *args, **kwargs):
+            self._value = float(value)
+
+        def get_value(self):
+            return getattr(self, "_value", 0.0)
+
+        def set_digits(self, *args, **kwargs):
+            pass
+
+        def set_draw_value(self, *args, **kwargs):
+            pass
+
+        def add_suffix(self, child, *args, **kwargs):
+            self.append(child)
+
     # Mock Gtk
     mock_gtk = MagicMock()
     mock_gtk.Box = MockGtkWidget
@@ -193,6 +241,8 @@ if "gi" not in sys.modules and not _real_gtk_usable():
     mock_gtk.Button = MockGtkWidget
     mock_gtk.Label = MockGtkWidget
     mock_gtk.ProgressBar = MockGtkWidget
+    mock_gtk.ScrolledWindow = MockGtkWidget
+    mock_gtk.Scale.new_with_range = lambda *args, **kwargs: MockGtkWidget()
     mock_gtk.Orientation.HORIZONTAL = 0
     mock_gtk.Orientation.VERTICAL = 1
     mock_gtk.Align.START = 1
@@ -218,6 +268,11 @@ if "gi" not in sys.modules and not _real_gtk_usable():
     mock_adw.Application = MockGtkWidget
     mock_adw.ApplicationWindow = MockGtkWidget
     mock_adw.PreferencesWindow = MockGtkWidget
+    mock_adw.PreferencesPage = MockGtkWidget
+    mock_adw.PreferencesGroup = MockGtkWidget
+    mock_adw.EntryRow = MockGtkWidget
+    mock_adw.SwitchRow = MockGtkWidget
+    mock_adw.ActionRow = MockGtkWidget
     mock_adw.Window = MockGtkWidget
     mock_adw.ColorScheme.FORCE_DARK = 2
 
