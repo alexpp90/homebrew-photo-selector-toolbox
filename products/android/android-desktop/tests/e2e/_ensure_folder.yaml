@@ -1,0 +1,35 @@
+# Lab: run by scripts/lab before every journey that does not start from a fresh install.
+# If the app has no usable folder (fresh .lab install, or an earlier fresh_install journey
+# cleared the grant), grant /sdcard/PSTLab/work; then wait until a photo is on screen.
+# The first workspace visit after an install shows the screen guide over everything (sidebar
+# included), so it is dismissed before and after the folder check.
+appId: com.photoselectortoolbox.lab
+---
+- extendedWaitUntil:
+    visible:
+      id: "image_region"
+    timeout: 6000
+    optional: true
+- tapOn:
+    id: "coach_overlay_dismiss"
+    optional: true
+- runFlow:
+    when:
+      notVisible:
+        id: "image_region"
+    commands:
+      - tapOn:
+          id: "sidebar_open_folder"
+      - runFlow: _pick_work_folder.yaml
+- extendedWaitUntil:
+    visible:
+      id: "coach_overlay_dismiss"
+    timeout: 4000
+    optional: true
+- tapOn:
+    id: "coach_overlay_dismiss"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "image_region"
+    timeout: 20000

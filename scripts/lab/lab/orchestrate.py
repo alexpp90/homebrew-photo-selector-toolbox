@@ -12,7 +12,18 @@ from typing import Any, Callable
 import yaml
 
 from .android.adb import AdbClient
+from .android.build import build_lab_apks, install_lab_apk
+from .android.configs import record_device_state, reset_config
 from .android.runner import run_android_journey
+from .inventory import (
+    ANDROID_PRODUCTS,
+    AndroidDevice,
+    Inventory,
+    load_inventory,
+    parse_inventory,
+    resolve_android_device,
+    select_android_devices,
+)
 from .linux.runner import preflight_linux, run_linux_journey
 from .macos.remote import preflight_remote_mac, trigger_remote_mac_run
 from .macos.runner import default_app_binary, run_macos_journey
@@ -73,13 +84,17 @@ def _record_not_run(
     journeys: list[dict[str, Any]],
     config_filter: str | None,
     reason: str,
+    device: AndroidDevice | None = None,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for j in journeys:
         jid = str(j["id"])
-        for cfg in j.get("configs", []):
-            if config_filter and cfg != config_filter:
+        for base_cfg in j.get("configs", []):
+            if config_filter and base_cfg != config_filter:
                 continue
+            if device is not None and not device.allows_config(base_cfg):
+                continue
+            cfg = device.label(base_cfg) if device is not None else base_cfg
             j_dir = run_dir / product / cfg / jid
             ensure_under(j_dir, run_dir)
             j_dir.mkdir(parents=True, exist_ok=True)
@@ -114,6 +129,144 @@ def _load_devices_inventory(devices_yaml: Path | None = None) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _run_android_product(
+    product: str,
+    journeys: list[dict[str, Any]],
+    config_filter: str | None,
+    run_dir: Path,
+    inventory: Inventory,
+    *,
+    with_personal: bool,
+    only_devices: list[str] | None,
+    build: bool,
+    build_state: dict[str, tuple[bool, str | None]],
+    resolve_fn: Callable[[AndroidDevice], tuple[bool, str | None]] = resolve_android_device,
+    journey_fn: Callable[..., tuple[str, list[Finding]]] = run_android_journey,
+) -> tuple[list[dict[str, Any]], list[Finding], dict[str, Any]]:
+    """Run every journey of one Android product on each selected, reachable device."""
+    records: list[dict[str, Any]] = []
+    findings: list[Finding] = []
+    devices = select_android_devices(inventory, product, with_personal=with_personal, only=only_devices)
+    if not devices:
+        reason = "no lab device for this product in devices.yaml"
+        skipped_personal = [d.name for d in inventory.android if d.runs(product) and d.personal]
+        if skipped_personal and not only_devices:
+            reason += f" (personal devices skipped: {', '.join(skipped_personal)}; add --with-personal)"
+        records.extend(_record_not_run(run_dir, product, journeys, config_filter, reason))
+        return records, findings, {"status": "not-run", "reason": reason, "devices": {}}
+
+    dev_meta: dict[str, Any] = {}
+    for dev in devices:
+        ok, reason = resolve_fn(dev)
+        adb = AdbClient(serial=dev.adb_serial or dev.serial)
+        saved = None
+        if ok and dev.personal:
+            try:
+                busy = adb.in_use_by()
+            except Exception:  # noqa: BLE001 - an unreadable state is not proof of use
+                busy = None
+            if busy:
+                ok, reason = False, (
+                    f"{dev.name} is in use ({busy} on screen); go to the home screen or lock it, then re-run"
+                )
+        if ok:
+            try:
+                saved = record_device_state(adb)
+                adb.ensure_ready()
+            except Exception as exc:  # noqa: BLE001 - any adb failure means "not run" for this device
+                ok, reason = False, f"{dev.name}: {exc}"
+        if ok and build:
+            if "apks" not in build_state:
+                build_state["apks"] = build_lab_apks(list(ANDROID_PRODUCTS), run_dir / "gradle-assembleLab.log")
+            ok, reason = build_state["apks"]
+        if ok and build:
+            try:
+                install_lab_apk(adb, product, user=dev.lab_user_id)
+            except Exception as exc:  # noqa: BLE001
+                ok, reason = False, f"{dev.name}: install failed: {exc}"
+        if not ok:
+            if saved is not None:
+                _safe_reset(adb, saved)
+            dev_meta[dev.name] = {"status": "not-run", "reason": reason, "model": dev.model}
+            records.extend(_record_not_run(run_dir, product, journeys, config_filter, reason or "unreachable", dev))
+            continue
+
+        dev_meta[dev.name] = {"status": "ran", "model": dev.model, "adb": dev.adb_serial}
+        try:
+            for j in journeys:
+                jid = str(j["id"])
+                for cfg_name in j.get("configs", []):
+                    if config_filter and cfg_name != config_filter:
+                        continue
+                    if not dev.allows_config(cfg_name):
+                        continue
+                    label = dev.label(cfg_name)
+                    try:
+                        status, f_list = journey_fn(
+                            manifest=j,
+                            config_name=cfg_name,
+                            run_dir=run_dir,
+                            adb=adb,
+                            user_id=dev.lab_user_id,
+                            label=label,
+                        )
+                        err = _result_reason(run_dir / product / label / jid)
+                    except Exception as exc:  # noqa: BLE001 - one broken journey must not end the run
+                        status, f_list, err = "error", [], f"{type(exc).__name__}: {exc}"
+                        _write_error_result(run_dir / product / label / jid, err)
+                    findings.extend(f_list)
+                    rec = {
+                        "product": product,
+                        "config": label,
+                        "device": dev.name,
+                        "journey": jid,
+                        "result": status,
+                        "dir": f"{product}/{label}/{jid}",
+                    }
+                    if err:
+                        rec["reason"] = err
+                    records.append(rec)
+        finally:
+            if saved is not None:
+                _safe_reset(adb, saved)
+
+    ran = [n for n, m in dev_meta.items() if m["status"] == "ran"]
+    meta: dict[str, Any] = {"status": "ran" if ran else "not-run", "devices": dev_meta}
+    if not ran:
+        meta["reason"] = "; ".join(str(m.get("reason")) for m in dev_meta.values())
+    return records, findings, meta
+
+
+def _load_findings(path: Path) -> list[Finding]:
+    """Findings another host wrote (the Mac's `findings.det.json`), or none."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [Finding.from_dict(d) for d in data if isinstance(d, dict)]
+
+
+def _result_reason(j_dir: Path) -> str | None:
+    try:
+        return json.loads((j_dir / "result.json").read_text(encoding="utf-8")).get("reason")
+    except (OSError, ValueError):
+        return None
+
+
+def _safe_reset(adb: AdbClient, saved: Any) -> None:
+    try:
+        reset_config(adb, saved)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[lab] warning: could not restore settings on {adb.serial}: {exc}", file=sys.stderr)
+
+
+def _write_error_result(j_dir: Path, err: str) -> None:
+    j_dir.mkdir(parents=True, exist_ok=True)
+    (j_dir / "result.json").write_text(
+        json.dumps({"status": "error", "reason": err, "findings": 0}, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def run_lab(
     products: list[str],
     journey_filter: str | None = None,
@@ -123,8 +276,16 @@ def run_lab(
     devices_inventory: dict[str, Any] | None = None,
     preflight_overrides: dict[str, tuple[bool, str | None]] | None = None,
     runner_overrides: dict[str, Callable[..., tuple[str, list[Finding]]]] | None = None,
+    with_personal: bool = False,
+    only_devices: list[str] | None = None,
+    build: bool = True,
 ) -> Path:
-    """Orchestrate a lab run across the requested products and generate report.html."""
+    """Orchestrate a lab run across the requested products and generate report.html.
+
+    Android products fan out over every selected, reachable inventory device; their results
+    live under `<product>/<config>@<device>/<journey>/`. Personal devices join only with
+    `with_personal=True` or when named in `only_devices`.
+    """
     now = dt.datetime.now(dt.timezone.utc)
     commit = get_git_commit()
 
@@ -134,7 +295,11 @@ def run_lab(
         run_dir = out_dir.resolve()
         run_dir.mkdir(parents=True, exist_ok=True)
 
-    inventory = devices_inventory if devices_inventory is not None else _load_devices_inventory()
+    raw_inventory = devices_inventory if devices_inventory is not None else _load_devices_inventory()
+    inventory = parse_inventory(raw_inventory)
+    build_state: dict[str, tuple[bool, str | None]] = {}
+    remote_mac: tuple[bool, str | None] | None = None
+    mac_opted_in = with_personal or bool(only_devices and "mac" in only_devices)
     all_findings: list[Finding] = []
     products_meta: dict[str, Any] = {}
     journey_records: list[dict[str, Any]] = []
@@ -147,19 +312,22 @@ def run_lab(
 
         if preflight_overrides and product in preflight_overrides:
             ok, reason = preflight_overrides[product]
-        elif product in ("android-desktop", "phototok"):
-            dev_key = "tablet" if product == "android-desktop" else "phone"
-            dev_cfg = inventory.get(dev_key, {})
-            serial = str(dev_cfg.get("serial", ""))
-            if not serial or serial.startswith(("R52X", "RF8X")):
-                ok, reason = False, f"{dev_key} device not attached or serial not configured in devices.yaml"
-            else:
-                adb = AdbClient(serial=serial)
-                try:
-                    adb.ensure_ready()
-                    ok, reason = True, None
-                except Exception as exc:
-                    ok, reason = False, str(exc)
+        elif product in ANDROID_PRODUCTS:
+            records, a_findings, meta = _run_android_product(
+                product,
+                journeys,
+                config_filter,
+                run_dir,
+                inventory,
+                with_personal=with_personal,
+                only_devices=only_devices,
+                build=build,
+                build_state=build_state,
+            )
+            journey_records.extend(records)
+            all_findings.extend(a_findings)
+            products_meta[product] = meta
+            continue
         elif product == "macos":
             if sys.platform == "darwin":
                 bin_path = default_app_binary()
@@ -168,11 +336,17 @@ def run_lab(
                 else:
                     ok, reason = False, f"macOS app binary not built at {bin_path}"
             else:
-                mac_cfg = inventory.get("mac", {})
+                mac_cfg = raw_inventory.get("mac", {})
                 host = str(mac_cfg.get("host", ""))
+                if inventory.mac and inventory.mac.personal and not mac_opted_in:
+                    host = ""
                 user = str(mac_cfg.get("user", "pst-lab"))
                 if not host:
-                    ok, reason = False, "Mac host not configured in devices.yaml"
+                    ok, reason = False, (
+                        "Mac is a personal device; add --with-personal"
+                        if inventory.mac and inventory.mac.personal and not mac_opted_in
+                        else "Mac host not configured in devices.yaml"
+                    )
                 else:
                     ok, reason = preflight_remote_mac(host, user=user)
         elif product == "linux":
@@ -198,34 +372,32 @@ def run_lab(
                 if runner_overrides and product in runner_overrides:
                     status, f_list = runner_overrides[product](j, cfg_name, cfg_spec, run_dir)
                     all_findings.extend(f_list)
-                elif product in ("android-desktop", "phototok"):
-                    dev_key = "tablet" if product == "android-desktop" else "phone"
-                    dev_cfg = inventory.get(dev_key, {})
-                    adb = AdbClient(serial=str(dev_cfg.get("serial", "")))
-                    status, f_list = run_android_journey(
-                        manifest=j,
-                        config_name=cfg_name,
-                        run_dir=run_dir,
-                        adb=adb,
-                        user_id=int(dev_cfg.get("lab_user_id", 10)),
-                    )
-                    all_findings.extend(f_list)
                 elif product == "macos":
                     if sys.platform == "darwin":
                         status, f_list = run_macos_journey(j, cfg_name, cfg_spec, run_dir)
                         all_findings.extend(f_list)
                     else:
-                        mac_cfg = inventory.get("mac", {})
-                        ok_rem, _ = trigger_remote_mac_run(
-                            host=str(mac_cfg.get("host", "")),
-                            run_id=run_dir.name,
-                            commit=commit,
-                            journeys=[jid],
-                            configs=[cfg_name],
-                            local_run_dir=run_dir,
-                            user=str(mac_cfg.get("user", "pst-lab")),
-                        )
-                        status = "pass" if ok_rem else "not-run"
+                        # The Mac runs every macOS journey in one go; trigger it once, then
+                        # read each journey's own result from the synced directory.
+                        if remote_mac is None:
+                            mac_cfg = raw_inventory.get("mac", {})
+                            remote_mac = trigger_remote_mac_run(
+                                host=str(mac_cfg.get("host", "")),
+                                run_id=run_dir.name,
+                                commit=commit,
+                                journeys=[str(x["id"]) for x in journeys],
+                                configs=sorted({c for x in journeys for c in x.get("configs", [])}),
+                                local_run_dir=run_dir,
+                                user=str(mac_cfg.get("user", "pst-lab")),
+                            )
+                            if remote_mac[0]:
+                                all_findings.extend(_load_findings(run_dir / "macos" / "findings.det.json"))
+                        ok_rem, rem_reason = remote_mac
+                        res_path = run_dir / "macos" / cfg_name / jid / "result.json"
+                        if ok_rem and res_path.is_file():
+                            status = str(json.loads(res_path.read_text(encoding="utf-8")).get("status", "error"))
+                        else:
+                            status = "not-run"
                 elif product == "linux":
                     status, f_list = run_linux_journey(
                         j,

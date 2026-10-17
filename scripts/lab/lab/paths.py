@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -44,6 +45,25 @@ def ensure_android_lab_path(remote_path: str) -> str:
     if ".." in parts:
         raise ValueError(f"refusing to touch path with parent traversal {remote_path!r} outside lab root")
     return cleaned
+
+
+def lab_tmp_root() -> Path:
+    """Scratch root for generated fixtures and private sessions: `/tmp/pstlab` by default.
+
+    `/tmp` is shared between macOS accounts, so when `/tmp/pstlab` belongs to another user (an
+    earlier run in the maintainer's own account) the lab account uses `/tmp/pstlab-<uid>`.
+    `PST_LAB_TMP` overrides both; it must still start with `/tmp/pstlab` for the session guards.
+    """
+    explicit = os.environ.get("PST_LAB_TMP")
+    if explicit:
+        return Path(explicit)
+    default = Path("/tmp/pstlab")
+    try:
+        if not default.exists() or default.stat().st_uid == os.getuid():
+            return default
+    except OSError:
+        pass
+    return Path(f"/tmp/pstlab-{os.getuid()}")
 
 
 def runs_dir(root: Path | None = None) -> Path:

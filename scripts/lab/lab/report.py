@@ -155,7 +155,8 @@ def generate_report(run_dir: Path | str) -> tuple[Path, Path]:
     )
 
     journeys = run_meta.get("journeys", [])
-    broken_flows = [j for j in journeys if j.get("result") == "flow-broken"]
+    # A journey that raised (adb dropped, app crashed the runner) is as broken as a failed flow.
+    broken_flows = [j for j in journeys if j.get("result") in ("flow-broken", "error")]
 
     new_minors_polish = [
         f
@@ -197,6 +198,14 @@ def generate_report(run_dir: Path | str) -> tuple[Path, Path]:
         f"{p} ({info.get('status', 'unknown')})" for p, info in sorted(products_meta.items())
     )
     md_lines.append(f"- **Products:** {prod_summary or 'none'}")
+    device_summary = ", ".join(
+        f"{name} ({d.get('status', 'unknown')})"
+        for info in products_meta.values()
+        if isinstance(info, dict)
+        for name, d in sorted((info.get("devices") or {}).items())
+    )
+    if device_summary:
+        md_lines.append(f"- **Devices:** {device_summary}")
     md_lines.append("")
 
     html_parts.append(f"<h1>Lab Run Report — <code>{html.escape(commit)}</code></h1>")
@@ -207,6 +216,8 @@ def generate_report(run_dir: Path | str) -> tuple[Path, Path]:
         f"<strong>Duration:</strong> {html.escape(duration_str)}</p>"
     )
     html_parts.append(f"<p><strong>Products:</strong> {html.escape(prod_summary or 'none')}</p>")
+    if device_summary:
+        html_parts.append(f"<p><strong>Devices:</strong> {html.escape(device_summary)}</p>")
     html_parts.append("</div>")
 
     def render_finding_section(title: str, items: list[Finding]) -> None:
@@ -269,6 +280,8 @@ def generate_report(run_dir: Path | str) -> tuple[Path, Path]:
         html_parts.append("<ul>")
         for bf in broken_flows:
             line = f"{bf.get('product')}/{bf.get('config')}/{bf.get('journey')} ({bf.get('dir', '')})"
+            if bf.get("reason"):
+                line += f" — {bf['reason']}"
             md_lines.append(f"- `{line}`")
             html_parts.append(f"<li><code>{html.escape(line)}</code></li>")
         html_parts.append("</ul>")

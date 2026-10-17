@@ -2,7 +2,7 @@ id: J-AD-01
 product: android-desktop
 title: Open folder and verify three-frame workspace layout
 fixture: burst-raw-jpeg
-configs: [tab-landscape]
+configs: [tab-landscape, tab-native-landscape, dex-on-device, chromebook-window, chromebook-large, chromebook-medium, chromebook-small]
 fresh_install: false
 steps:
   - {maestro: products/android/android-desktop/tests/e2e/J-AD-01/01_open_picker.yaml}

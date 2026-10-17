@@ -2,9 +2,24 @@ phone-portrait:      {rotation: portrait}
 phone-landscape:     {rotation: landscape}
 phone-large-text:    {rotation: portrait, font_scale: 1.3, density_factor: 1.15}
 phone-dark:          {rotation: portrait, night: true}
+# Native geometry of whichever tablet runs it (Pixel Tablet: 1280x800 dp). The tab-* configs
+# below force the reference geometry (Galaxy Tab S11 Ultra, 1480x924 dp) on any tablet.
+tab-native-landscape: {rotation: landscape}
+tab-native-portrait:  {rotation: portrait}
 tab-landscape:       {size: 2960x1848, density: 320, rotation: landscape}
 tab-portrait:        {size: 2960x1848, density: 320, rotation: portrait}
 tab-landscape-kbd:   {size: 2960x1848, density: 320, rotation: landscape, keyboard: true}
 tab-large-text:      {size: 2960x1848, density: 320, rotation: landscape, font_scale: 1.3}
 dex-1280x800:        {size: 2560x1600, density: 320, rotation: landscape}
 dex-960x600:         {size: 1920x1200, density: 320, rotation: landscape}
+# Real Samsung DeX on the tablet's own screen (devices with `supports: [dex]` only). The
+# dex-WxH configs above only emulate DeX window geometry with `wm size` and run with DeX off.
+dex-on-device:       {dex: true}
+# ChromeOS ARC (devices with `supports: [arc]`): the app's own ChromeOS window; ChromeOS owns
+# size, density and rotation.
+chromebook-window:   {native_display: true}
+# Freeform window sizes (dp) applied right after launch with `am task resize`, so the layout is
+# checked at the sizes people actually drag a ChromeOS window to, not only the launch size.
+chromebook-large:    {native_display: true, window: max}
+chromebook-medium:   {native_display: true, window: 1100x760}
+chromebook-small:    {native_display: true, window: 720x560}

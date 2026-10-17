@@ -52,12 +52,19 @@ export GDK_SCALE="${SCALE}"
 export XDG_DATA_HOME="${LAB_DIR}/xdg-data"
 export XDG_CONFIG_HOME="${LAB_DIR}/xdg-config"
 export PST_LAB=1
+# Xvfb has no GPU: GTK's default Vulkan/GL renderer paints black there; cairo is software and
+# deterministic. No portals: in a private bus the desktop portal blocks ~25 s on a missing
+# secrets service before the window shows, and the lab never uses portal dialogs.
+export GSK_RENDERER="${GSK_RENDERER:-cairo}"
+export GDK_DEBUG="${GDK_DEBUG:+$GDK_DEBUG,}no-portals"
+export GTK_USE_PORTAL=0
 export PST_LAB_ARTIFACTS="${ARTIFACTS_DIR}"
 
 if [[ "$USE_INSTALLED" -eq 1 ]]; then
   APP_CMD=(photo-selector-linux "$FIXTURE_DIR")
 else
-  APP_CMD=(python3 -m photo_selector_linux "$FIXTURE_DIR")
+  # PST_LAB_PYTHON: an interpreter with the distribution's PyGObject (the lab runner sets it).
+  APP_CMD=("${PST_LAB_PYTHON:-python3}" -m photo_selector_linux "$FIXTURE_DIR")
 fi
 
 dbus-run-session -- bash -c '
@@ -69,13 +76,14 @@ dbus-run-session -- bash -c '
   APP_PID=$!
   trap "kill \$APP_PID >/dev/null 2>&1 || true" EXIT
 
-  for _ in $(seq 1 50); do
-    if xdotool search --name "Photo Selector" >/dev/null 2>&1; then
-      xdotool search --name "Photo Selector" windowactivate --sync >/dev/null 2>&1 || true
+  for _ in $(seq 1 300); do
+    if xdotool search --onlyvisible --name "Photo Selector" >/dev/null 2>&1; then
+      xdotool search --onlyvisible --name "Photo Selector" windowactivate --sync >/dev/null 2>&1 || true
       break
     fi
     sleep 0.1
   done
+  sleep 1
 
   if [[ -n "'"${SCRIPT_FILE}"'" && -f "'"${SCRIPT_FILE}"'" ]]; then
     while IFS= read -r line || [[ -n "$line" ]]; do

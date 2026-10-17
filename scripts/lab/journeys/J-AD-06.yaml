@@ -1,0 +1,38 @@
+id: J-AD-06
+product: android-desktop
+title: Resize the freeform window across breakpoints mid-session (ChromeOS, DeX)
+fixture: smoke
+configs: [chromebook-window, dex-on-device]
+fresh_install: false
+steps:
+  - {resize: max}
+  - {checkpoint: large}
+  - {resize: 1100x760}
+  - {checkpoint: medium}
+  - {resize: 840x600}
+  - {checkpoint: compact}
+  - {resize: 600x480}
+  - {checkpoint: narrow}
+  - {keys: [DPAD_RIGHT]}
+  - {checkpoint: narrow-next}
+  - {resize: max}
+  - {checkpoint: restored}
+fs_expect:
+  restored:
+    unchanged: true
+layout_expect:
+  large:
+    required: [image_region, selector_sidebar]
+  medium:
+    required: [image_region]
+  compact:
+    required: [image_region]
+  narrow:
+    required: [image_region]
+  narrow-next:
+    required: [image_region]
+  restored:
+    required: [image_region, selector_sidebar]
+timing_expect:
+  restored:
+    trend: true

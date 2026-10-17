@@ -8,6 +8,7 @@
     <array>
         <string>/usr/bin/caffeinate</string>
         <string>-i</string>
+        <string>/bin/bash</string>
         <string>/Users/pst-lab/pst/photo-selector/scripts/lab/macos/agent_run.sh</string>
     </array>
     <key>WatchPaths</key>

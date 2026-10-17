@@ -85,6 +85,33 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--config", default=None, help="Filter by config name")
     p_run.add_argument("--out", default=None, help="Explicit output run directory")
     p_run.add_argument("--installed", action="store_true", help="Use installed package binary (C-50)")
+    p_run.add_argument(
+        "--with-personal",
+        action="store_true",
+        help="Also use devices marked personal in devices.yaml (your phone, tablet, Mac)",
+    )
+    p_run.add_argument(
+        "--device",
+        action="append",
+        default=None,
+        help="Run Android products only on this inventory device (name or serial; repeatable; "
+        "naming a personal device opts it in; 'mac' opts the Mac in)",
+    )
+    p_run.add_argument("--no-build", action="store_true", help="Skip assembleLab + install (reuse installed .lab APKs)")
+
+    # devices
+    p_dev = sub.add_parser("devices", help="Show the device inventory and which devices are reachable now")
+    p_dev.add_argument("--with-personal", action="store_true", help="Also probe personal devices")
+
+    # pair
+    p_pair = sub.add_parser("pair", help="Pair this host with a device showing a wireless-debugging pairing code")
+    p_pair.add_argument("code", help="6-digit code from Wireless debugging -> Pair device with pairing code")
+    p_pair.add_argument("--address", default=None, help="ip:port shown under the code (if mDNS does not find it)")
+    p_pair.add_argument("--device", default=None, help="Inventory name, when several devices show a pairing dialog")
+
+    # install-timer
+    p_tim = sub.add_parser("install-timer", help="Install the weekly systemd user timer for this checkout")
+    p_tim.add_argument("--dry-run", action="store_true", help="Print the unit files instead of installing")
 
     return parser
 
@@ -100,14 +127,65 @@ def main(argv: list[str] | None = None) -> int:
     if args.subcommand == "preflight":
         import shutil
 
+        from .android.runner import maestro_binary
+
+        maestro = maestro_binary()
         tools = {
             "python": sys.version.split()[0],
+            "pyyaml": "real" if not getattr(yaml, "__lab_fallback__", False) else "fallback (apt install python3-yaml)",
             "adb": shutil.which("adb") or "missing",
-            "maestro": shutil.which("maestro") or "missing",
+            "maestro": maestro if Path(maestro).is_file() else "missing",
+            "xdotool": shutil.which("xdotool") or "missing (apt install xdotool)",
+            "Xvfb": shutil.which("Xvfb") or "missing (apt install xvfb)",
             "swift": shutil.which("swift") or "missing",
         }
         print(json.dumps(tools, indent=2))
         return 0
+
+    if args.subcommand == "devices":
+        from .inventory import load_inventory, resolve_android_device
+
+        inv = load_inventory()
+        if not inv.android and not inv.mac:
+            print("No inventory at private/lab/devices.yaml", file=sys.stderr)
+            return 2
+        for dev in inv.android:
+            tag = "personal" if dev.personal else "dedicated"
+            if dev.personal and not args.with_personal:
+                print(f"  -  {dev.name:<16} {dev.model:<24} {tag:<9} {','.join(dev.products):<26} (not probed)")
+                continue
+            ok, reason = resolve_android_device(dev)
+            mark = "ok" if ok else "--"
+            where = dev.adb_serial if ok else reason
+            print(f"  {mark} {dev.name:<16} {dev.model:<24} {tag:<9} {','.join(dev.products):<26} {where}")
+        if inv.mac:
+            from .macos.remote import preflight_remote_mac
+
+            if inv.mac.personal and not args.with_personal:
+                print(f"  -  {'mac':<16} {inv.mac.host:<24} personal  macos                      (not probed)")
+            else:
+                ok, reason = preflight_remote_mac(inv.mac.host, user=inv.mac.user)
+                print(f"  {'ok' if ok else '--'} {'mac':<16} {inv.mac.host:<24} {'personal':<9} {'macos':<26} {reason or ''}")
+        return 0
+
+    if args.subcommand == "pair":
+        from .inventory import load_inventory, pair_advertised_device
+
+        serial = None
+        if args.device:
+            dev = load_inventory().find(args.device)
+            if dev is None:
+                print(f"unknown device {args.device!r} in devices.yaml", file=sys.stderr)
+                return 2
+            serial = dev.serial
+        ok, msg = pair_advertised_device(args.code, address=args.address, serial=serial)
+        print(msg)
+        return 0 if ok else 1
+
+    if args.subcommand == "install-timer":
+        from .timer import install_timer
+
+        return install_timer(dry_run=bool(args.dry_run))
 
     if args.subcommand == "fixtures":
         from .fixtures import CorpusMissingError, generate_fixtures, load_spec
@@ -237,6 +315,9 @@ def main(argv: list[str] | None = None) -> int:
             config_filter=args.config,
             out_dir=Path(args.out) if args.out else None,
             installed=bool(args.installed),
+            with_personal=bool(args.with_personal),
+            only_devices=args.device,
+            build=not bool(args.no_build),
         )
         return 0
 

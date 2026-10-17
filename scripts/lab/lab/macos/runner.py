@@ -15,7 +15,7 @@ from ..fs_oracle import evaluate_fs_oracle, snapshot_directory
 from ..layout_lint import lint, load_rules
 from ..logscan import scan_macos_crash_reports
 from ..model import Finding, Tree
-from ..paths import ensure_under, repo_root
+from ..paths import ensure_under, lab_tmp_root, repo_root
 
 
 def default_app_binary(root: Path | None = None) -> Path:
@@ -52,7 +52,7 @@ def run_macos_journey(
     ensure_under(j_dir, run_dir)
     j_dir.mkdir(parents=True, exist_ok=True)
 
-    fbase = (fixture_base_dir or Path("/tmp/pstlab")).resolve()
+    fbase = (fixture_base_dir or lab_tmp_root()).resolve()
     fbase.mkdir(parents=True, exist_ok=True)
     work_fixture = fbase / f"work_{jid}_{config_name}" / fset
     ensure_under(work_fixture, fbase)

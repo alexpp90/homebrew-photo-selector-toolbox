@@ -2,7 +2,7 @@ id: J-AD-03
 product: android-desktop
 title: Quality score scan and burst grouping toggle
 fixture: burst-jpeg
-configs: [tab-landscape]
+configs: [tab-landscape, tab-native-landscape, dex-on-device, chromebook-window]
 fresh_install: false
 steps:
   - {maestro: products/android/android-desktop/tests/e2e/J-AD-03/01_scan.yaml}

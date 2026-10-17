@@ -1,8 +1,8 @@
 appId: com.phototok.lab
 ---
+# The controls guide covers the feed (and hides viewer.photo) until it is dismissed;
+# 03_dismiss_coach asserts the photo underneath.
 - extendedWaitUntil:
     visible:
-      id: "viewer.photo"
-    timeout: 10000
-- assertVisible:
-    id: "controls_guide"
+      id: "controls_guide"
+    timeout: 15000

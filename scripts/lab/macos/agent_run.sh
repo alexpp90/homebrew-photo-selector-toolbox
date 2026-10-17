@@ -26,6 +26,11 @@ mkdir -p "$HOME/Applications"
 rm -rf "$HOME/Applications/PhotoSelector.app"
 cp -R products/macos-desktop/.build/app/PhotoSelector.app "$HOME/Applications/PhotoSelector.app"
 
-python3 scripts/lab/lab.py fixtures --out "$HOME/PSTLab"
+# Each journey generates its own small fixture set under the lab's scratch root (/tmp/pstlab,
+# or /tmp/pstlab-<uid> when another account owns that); no full fixture pass (the large set
+# alone is several hundred MB on a laptop disk).
 python3 scripts/lab/lab.py run --product macos --out "$OUT_DIR"
+for d in /tmp/pstlab "/tmp/pstlab-$(id -u)"; do
+  if [[ -O "$d" ]]; then rm -rf "$d"; fi
+done
 touch "$OUT_DIR/done"

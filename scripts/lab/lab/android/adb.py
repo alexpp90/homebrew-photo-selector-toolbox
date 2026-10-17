@@ -64,6 +64,56 @@ class AdbClient:
         if "mDreamingLockscreen=true" in win_dump:
             raise RuntimeError(f"Device {self.serial} is still locked (mDreamingLockscreen=true)")
 
+    def in_use_by(self) -> str | None:
+        """The app a person is using right now, or None when the device is idle.
+
+        Idle means: screen off or dozing, lock screen showing, or the top activity is the home
+        screen or a lab app. Personal devices are checked before a run takes them over.
+        """
+        power = self.run("shell", "dumpsys", "power")
+        if "mWakefulness=Awake" not in power:
+            return None
+        window = self.run("shell", "dumpsys", "window")
+        if "isKeyguardShowing=true" in window or "mDreamingLockscreen=true" in window:
+            return None
+        acts = self.run("shell", "dumpsys", "activity", "activities")
+        m = re.search(r"topResumedActivity=\S+\s+\S+\s+([\w.]+)/", acts) or re.search(
+            r"mResumedActivity: \S+\s+\S+\s+([\w.]+)/", acts
+        )
+        if not m:
+            return None
+        top = m.group(1)
+        home = self.run(
+            "shell", "cmd", "package", "resolve-activity", "--brief",
+            "-a", "android.intent.action.MAIN", "-c", "android.intent.category.HOME",
+        )
+        home_pkgs = {ln.split("/")[0].strip() for ln in home.splitlines() if "/" in ln}
+        if top in home_pkgs or top.endswith(".lab") or "launcher" in top:
+            return None
+        return top
+
+    def app_task(self, app_id: str) -> tuple[int, str, tuple[int, int, int, int] | None, tuple[int, int] | None]:
+        """`(task id, windowing mode, bounds px, max size px)` of the app's top task.
+
+        Bounds exist only for freeform windows (Samsung DeX, ChromeOS ARC); the max size is the
+        area a window may cover (`mMaxBounds`).
+        """
+        out = self.run("shell", "dumpsys", "activity", "activities")
+        head = re.search(r"Task\{\w+ #(\d+) [^}]*A=\d+:" + re.escape(app_id) + r"[^}]*mode=(\w+)", out)
+        if not head:
+            raise RuntimeError(f"{app_id} has no task on {self.serial} (not running?)")
+        rest = out[head.end():]
+        nxt = re.search(r"\n\s*\* Task\{", rest)
+        block = rest[: nxt.start()] if nxt else rest
+        b = re.search(r"mBounds=Rect\((-?\d+), (-?\d+) - (-?\d+), (-?\d+)\)", block)
+        mx = re.search(r"mMaxBounds=Rect\(0, 0 - (\d+), (\d+)\)", block)
+        bounds = tuple(int(x) for x in b.groups()) if b else None
+        max_px = (int(mx.group(1)), int(mx.group(2))) if mx else None
+        return int(head.group(1)), head.group(2), bounds, max_px  # type: ignore[return-value]
+
+    def resize_task(self, task_id: int, left: int, top: int, right: int, bottom: int) -> str:
+        return self.run("shell", "am", "task", "resize", str(task_id), str(left), str(top), str(right), str(bottom))
+
     def current_user(self) -> int:
         out = self.run("shell", "am", "get-current-user").strip()
         return int(out.splitlines()[-1].strip())
@@ -83,16 +133,22 @@ class AdbClient:
     def clear(self, app_id: str, user: int = 0) -> str:
         return self.run("shell", "pm", "clear", "--user", str(user), app_id)
 
+    def force_stop(self, app_id: str) -> str:
+        return self.run("shell", "am", "force-stop", app_id)
+
     def start(self, app_id: str) -> str:
-        return self.run(
-            "shell",
-            "monkey",
-            "-p",
-            app_id,
-            "-c",
-            "android.intent.category.LAUNCHER",
-            "1",
+        """Launch the app's launcher activity with `am start`.
+
+        Not `monkey`: on ChromeOS ARC it aborts ("SYS_KEYS has no physical keys").
+        """
+        out = self.run(
+            "shell", "cmd", "package", "resolve-activity", "--brief",
+            "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", app_id,
         )
+        component = next((ln.strip() for ln in reversed(out.splitlines()) if "/" in ln), "")
+        if not component:
+            raise RuntimeError(f"{app_id} has no launcher activity on {self.serial} (not installed?)")
+        return self.run("shell", "am", "start", "-W", "-n", component, timeout=60)
 
     def home(self) -> str:
         return self.run("shell", "input", "keyevent", "KEYCODE_HOME")
@@ -173,11 +229,24 @@ class AdbClient:
         return self.density()
 
     def window_dp(self) -> tuple[int, int]:
+        """Current display size in dp, as rotated.
+
+        Read from the display (`cur=WxH` at the `base=… <dpi>dpi` density), not from the first
+        `w…dp h…dp` configuration in `dumpsys window`: that one belongs to the top app and keeps
+        its old orientation while the display rotates (seen on the Pixel Tablet).
+        """
+        out = self.run("shell", "dumpsys", "window", "displays")
+        # "init=1600x2560 320dpi [base=2960x1848 320dpi] cur=2960x1848"; base only with overrides.
+        m = re.search(r"init=\d+x\d+\s+(\d+)dpi(?:.*?base=\d+x\d+\s+(\d+)dpi)?.*?cur=(\d+)x(\d+)", out)
+        if m:
+            dpi = int(m.group(2) or m.group(1))
+            w_px, h_px = int(m.group(3)), int(m.group(4))
+            return round(w_px * 160 / dpi), round(h_px * 160 / dpi)
         out = self.run("shell", "dumpsys", "window")
         m = re.search(r"sw\d+dp\s+w(\d+)dp\s+h(\d+)dp", out)
         if m:
             return int(m.group(1)), int(m.group(2))
-        raise RuntimeError("Could not parse w<W>dp h<H>dp from dumpsys window")
+        raise RuntimeError("Could not parse the display size from dumpsys window")
 
     def key(self, code: str) -> str:
         norm = code if code.startswith("KEYCODE_") else f"KEYCODE_{code}"

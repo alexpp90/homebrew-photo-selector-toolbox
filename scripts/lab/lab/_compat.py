@@ -559,6 +559,7 @@ def install_fallbacks_if_needed() -> None:
         yaml_mod = types.ModuleType("yaml")
         yaml_mod.safe_load = _yaml_safe_load  # type: ignore[attr-defined]
         yaml_mod.safe_dump = _yaml_safe_dump  # type: ignore[attr-defined]
+        yaml_mod.__lab_fallback__ = True  # type: ignore[attr-defined]
         sys.modules["yaml"] = yaml_mod
 
     if "PIL" not in sys.modules and importlib.util.find_spec("PIL") is None:

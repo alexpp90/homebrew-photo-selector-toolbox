@@ -1,0 +1,29 @@
+# Lab: pick /sdcard/PSTLab/work in the system folder picker (DocumentsUI). The lab runner
+# pushes every journey's fixture into that one folder, so one persisted grant serves them all.
+# Locale-independent: folder names are ours, "Use this folder" and the "Allow" dialog are both
+# android:id/button1 (the lab devices run German as well as English).
+appId: com.phototok.lab
+---
+- waitForAnimationToEnd
+# Re-opened pickers start inside the last folder; the first breadcrumb is the storage root.
+- tapOn:
+    id: "com.google.android.documentsui:id/breadcrumb_text"
+    index: 0
+    optional: true
+- scrollUntilVisible:
+    element:
+      text: "PSTLab"
+    timeout: 10000
+- tapOn:
+    text: "PSTLab"
+- scrollUntilVisible:
+    element:
+      text: "work"
+    timeout: 10000
+- tapOn:
+    text: "work"
+- tapOn:
+    id: "android:id/button1"
+- tapOn:
+    id: "android:id/button1"
+    optional: true

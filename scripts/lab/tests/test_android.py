@@ -11,9 +11,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import lab.android.configs as android_configs  # noqa: E402
 from lab.android.adb import AdbClient  # noqa: E402
 from lab.android.configs import ConfigNotRunError, apply_config, record_device_state, reset_config  # noqa: E402
-from lab.android.runner import run_android_journey  # noqa: E402
+from lab.android.runner import is_infra_failure, run_android_journey  # noqa: E402
 from lab.android.tree_android import parse_uiautomator_xml  # noqa: E402
 from lab.schema import validate  # noqa: E402
 from PIL import Image  # noqa: E402
@@ -46,12 +47,35 @@ class FakeAdbExec:
             buf = io.BytesIO()
             Image.new("RGB", (100, 60), (20, 40, 60)).save(buf, format="PNG")
             return subprocess.CompletedProcess(cmd, 0, stdout=buf.getvalue(), stderr=b"")
+        if "dumpsys activity activities" in joined:
+            task = "  * Task{abc #12 type=standard A=10074:com.photoselectortoolbox.lab U=0 visible=true mode=fullscreen sz=1}\n"
+            return subprocess.CompletedProcess(cmd, 0, stdout=task.encode(), stderr=b"")
+        if "resolve-activity" in joined:
+            pkg = cmd[-1]
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"priority=0\n{pkg}/.MainActivity\n".encode(), stderr=b"")
         if "find . -type f" in joined:
             return subprocess.CompletedProcess(cmd, 0, stdout=b"1024 ./DSC_0001.JPG\n", stderr=b"")
         return subprocess.CompletedProcess(cmd, 0, stdout=b"0\n", stderr=b"")
 
 
 class TestAndroidLayer(unittest.TestCase):
+    def test_infra_failures_are_told_apart_from_broken_flows(self) -> None:
+        self.assertTrue(is_infra_failure("maestro.android.DeviceServerDiedException: Device server died"))
+        self.assertTrue(is_infra_failure("Device 192.168.0.117:46567 was requested, but it is not connected."))
+        self.assertFalse(is_infra_failure("[Failed] 02_open_info (20s) (Element not found: Id matching regex: x)"))
+
+    def test_freeform_window_offset_is_removed(self) -> None:
+        xml = (
+            '<hierarchy><node bounds="[584,240][2376,1584]" resource-id="" class="android.widget.FrameLayout">'
+            '<node bounds="[2200,300][2376,400]" resource-id="btn" class="android.widget.Button" clickable="true" text="x"/>'
+            "</node></hierarchy>"
+        )
+        tree = parse_uiautomator_xml(xml, density_dpi=280)
+        self.assertEqual((tree.window["w"], tree.window["h"]), (1024.0, 768.0))
+        btn = {n.id: n for n in tree.nodes}["btn"]
+        self.assertAlmostEqual(btn.bounds[0], (2200 - 584) / 1.75, places=1)  # inside the window
+        self.assertAlmostEqual(btn.bounds[1], (300 - 240) / 1.75, places=1)
+
     def test_parse_uiautomator_xml_converts_px_to_dp(self) -> None:
         tree = parse_uiautomator_xml(DATA_DIR / "android_dump.xml", density_dpi=320)
         self.assertEqual(validate(tree.to_dict(), "tree"), [])
@@ -62,6 +86,9 @@ class TestAndroidLayer(unittest.TestCase):
         self.assertEqual(by_id["sidebar_open_folder"].role, "button")
 
     def test_adb_guards_paths_and_verifies_rotation(self) -> None:
+        # The fake applies rotations instantly; don't wait out the real-device settle polls.
+        self.addCleanup(setattr, android_configs, "ROTATION_POLL_S", android_configs.ROTATION_POLL_S)
+        android_configs.ROTATION_POLL_S = 0.0
         recorder = FakeAdbExec(landscape_on_rot=0)
         adb = AdbClient(serial="TEST1234", exec_fn=recorder)
 
@@ -110,6 +137,10 @@ class TestAndroidLayer(unittest.TestCase):
             self.assertIn(status, ("pass", "fail"))
             png_file = run_dir / "android-desktop" / "tab-landscape" / "SMOKE-android-desktop" / "01_launched.png"
             self.assertTrue(png_file.is_file())
+            # Launch via the resolved launcher activity, never `monkey` (aborts on ChromeOS ARC).
+            launches = [c for c in recorder.commands if "am" in c and "start" in c]
+            self.assertTrue(any("com.photoselectortoolbox.lab/.MainActivity" in c for c in launches))
+            self.assertFalse(any("monkey" in c for c in recorder.commands))
         finally:
             if run_dir.exists():
                 shutil.rmtree(run_dir)

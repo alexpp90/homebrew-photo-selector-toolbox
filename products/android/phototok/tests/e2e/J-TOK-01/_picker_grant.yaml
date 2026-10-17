@@ -2,15 +2,4 @@ appId: com.phototok.lab
 ---
 - tapOn:
     id: "landing_custom_folder_card"
-- tapOn:
-    text: "PSTLab"
-    optional: true
-- tapOn:
-    text: "smoke"
-    optional: true
-- tapOn:
-    text: "Use this folder"
-    optional: true
-- tapOn:
-    text: "Allow"
-    optional: true
+- runFlow: ../_pick_work_folder.yaml

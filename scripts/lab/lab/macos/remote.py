@@ -81,6 +81,15 @@ def trigger_remote_mac_run(
             rres = runner(rsync_cmd)
             if rres.returncode != 0:
                 return False, f"rsync from {host} failed: {rres.stderr}"
+            # The Mac's deterministic findings, merged into the hub's findings by the orchestrator.
+            runner(
+                [
+                    "rsync",
+                    "-a",
+                    f"{user}@{host}:~/pst/out/{run_id}/findings.det.json",
+                    str(local_run_dir / "macos" / "findings.det.json"),
+                ]
+            )
             return True, None
         time.sleep(poll_interval_s)
 
