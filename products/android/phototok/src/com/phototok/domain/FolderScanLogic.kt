@@ -19,15 +19,16 @@ object FolderScanLogic {
 
     /**
      * Where the viewer lands once enumeration is complete and the folder is NOT being
-     * reloaded inside an active session. The feed is newest-first, so new photos sit at
-     * the start of it. A previously saved position is deliberately not restored.
+     * reloaded inside an active session:
      *
      * - The user already swiped: stay on [preservedUri] (fallback [currentIndex]).
-     * - Randomized feed: order carries no meaning; jump to the first new photo if any,
-     *   else stay on [preservedUri].
-     * - Otherwise: any photo newer than [previousMaxLastModified] puts the user at the
-     *   first new one (index 0 unless orientation grouping interposes); otherwise
-     *   the viewer starts at 0 (the newest).
+     * - Randomized (`SHUFFLE`) feed (`U-16`): never jump to [findFirstNewImageIndex] —
+     *   always stay on [preservedUri] (or `0` on fresh open) so completion does not teleport
+     *   the user.
+     * - `SHOOTING` feed (`U-12`): land on the first unseen photo (via [seenUris] from `SeenStore`),
+     *   or `0` if none recorded / all seen.
+     * - Otherwise (`NEWEST_FIRST` / `ORIENTATION_THEN_NEWEST`): any photo newer than
+     *   [previousMaxLastModified] puts the user at the first new one; otherwise `0`.
      */
     fun resolveLandingIndex(
         images: List<ImageItem>,
@@ -36,13 +37,24 @@ object FolderScanLogic {
         randomized: Boolean,
         preservedUri: String?,
         currentIndex: Int,
+        mode: FeedOrderMode = if (randomized) FeedOrderMode.SHUFFLE else FeedOrderMode.NEWEST_FIRST,
+        seenUris: Set<String> = emptySet(),
     ): Int {
         if (images.isEmpty()) return 0
         val preserved = preservedUri?.let { u -> images.indexOfFirst { it.uri == u } }?.takeIf { it >= 0 }
             ?: currentIndex.coerceIn(0, images.size - 1)
         if (userHasNavigated) return preserved
+        if (randomized || mode == FeedOrderMode.SHUFFLE) {
+            return preserved
+        }
+        if (mode == FeedOrderMode.SHOOTING) {
+            if (seenUris.isNotEmpty()) {
+                val firstUnseen = images.indexOfFirst { it.uri !in seenUris }
+                if (firstUnseen >= 0) return firstUnseen
+            }
+            return 0
+        }
         val firstNew = findFirstNewImageIndex(images, previousMaxLastModified)
-        if (randomized) return if (firstNew >= 0) firstNew else preserved
         if (firstNew >= 0) return firstNew
         return 0
     }
@@ -84,3 +96,4 @@ object FolderScanLogic {
         return FolderScanInfo(maxLastModified = maxTime, fileCount = images.size)
     }
 }
+

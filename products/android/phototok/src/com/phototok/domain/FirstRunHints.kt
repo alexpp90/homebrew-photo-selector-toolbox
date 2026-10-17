@@ -56,8 +56,12 @@ object FirstRunHintText {
     private const val DEFAULT_COLLECTION = "your collection folder"
     private const val DEFAULT_LEFT_SWIPE = "your chosen folder"
 
-    fun title(hint: FirstRunHint): String = when (hint) {
-        FirstRunHint.SWIPE_RIGHT -> "Added to collection"
+    fun title(
+        hint: FirstRunHint,
+        swipeRightVerb: SwipeRightVerb = SwipeRightVerb.DEFAULT,
+    ): String = when (hint) {
+        FirstRunHint.SWIPE_RIGHT ->
+            if (swipeRightVerb == SwipeRightVerb.FAVOURITE) "Marked as favourite" else "Added to collection"
         FirstRunHint.SWIPE_LEFT_FOLDER -> "Sent to folder"
         FirstRunHint.SWIPE_LEFT_DELETE -> "Moved to trash"
         FirstRunHint.SWIPE_VERTICAL -> "Browsing photos"
@@ -75,11 +79,16 @@ object FirstRunHintText {
         collectionFolderName: String = "",
         leftSwipeFolderName: String = "",
         fileTypeFilter: FileTypeFilter = FileTypeFilter.DEFAULT,
+        swipeRightVerb: SwipeRightVerb = collectionAction.toSwipeRightVerb(),
     ): String = when (hint) {
         FirstRunHint.SWIPE_RIGHT -> {
-            val verb = if (collectionAction == CollectionAction.COPY) "copied" else "moved"
-            val where = collectionFolderName.ifBlank { DEFAULT_COLLECTION }
-            "You $verb this photo to $where. Every swipe right does the same. $SETTINGS_SUFFIX"
+            if (swipeRightVerb == SwipeRightVerb.FAVOURITE) {
+                "You favourited this photo. Every swipe right does the same. $SETTINGS_SUFFIX"
+            } else {
+                val verb = if (swipeRightVerb == SwipeRightVerb.COPY) "copied" else "moved"
+                val where = collectionFolderName.ifBlank { DEFAULT_COLLECTION }
+                "You $verb this photo to $where. Every swipe right does the same. $SETTINGS_SUFFIX"
+            }
         }
 
         FirstRunHint.SWIPE_LEFT_FOLDER -> {
@@ -112,8 +121,10 @@ object FirstRunHintText {
                 "Showing RAW photos only. Most photos in this folder are JPEG and are hidden. You can switch to All or change this in Settings."
             FileTypeFilter.JPG ->
                 "Showing JPEG photos only. Most photos in this folder are RAW and are hidden. You can switch to All or change this in Settings."
-            FileTypeFilter.ALL ->
+            FileTypeFilter.ALL,
+            FileTypeFilter.ONE_PER_SHOT ->
                 "A file filter is active and hiding photos in this folder. You can change this in Settings."
         }
     }
 }
+

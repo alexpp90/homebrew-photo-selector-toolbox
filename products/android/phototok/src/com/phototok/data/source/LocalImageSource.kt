@@ -12,6 +12,8 @@ import com.photoselector.core.model.ExifData
 import com.photoselector.core.preview.EmbeddedPreviewExtractor
 import com.photoselector.core.reader.AndroidExifReader
 import com.photoselector.core.reader.MediaStoreReader
+import com.photoselector.core.storage.SourceKind
+import com.photoselector.core.storage.SourceKindClassifier
 import com.phototok.data.model.ImageItem
 import com.phototok.domain.PhotoExtensions
 import com.phototok.domain.TransferResult
@@ -48,10 +50,17 @@ class LocalImageSourceImpl @Inject constructor(
         private const val JPEG_SUBFOLDER = "JPEG"
         private const val EDIT_SUFFIX = "-Edit"
         private const val EDIT_UNDERSCORE_SUFFIX = "_Edit"
+        const val SELECTION_MARKER_FILE = ".photoselector-selection"
 
         internal const val MAX_CONCURRENT_TRANSFERS = 2
 
-        private val EXCLUDED_FOLDER_NAMES = setOf("selection", "selected", "phototok_selection", "phototok_leftswipe")
+        internal val EXCLUDED_FOLDER_NAMES = setOf(
+            "selection",
+            "selected",
+            "phototok_selection",
+            "phototok_leftswipe",
+            ".photoselector-trash",
+        )
 
         /**
          * How many images to gather before the very first emission. Small on
@@ -222,7 +231,11 @@ class LocalImageSourceImpl @Inject constructor(
      * Consumers must treat the emissions as append-only (see
      * `PhoneFeedOrdering.appendBatch`) so already-visible photos do not move.
      */
-    override fun discoverImages(folderUri: Uri): Flow<List<ImageItem>> = flow {
+    override fun discoverImages(
+        folderUri: Uri,
+        excludedFolderNames: Set<String>,
+        shuffleFirstBatch: Boolean,
+    ): Flow<List<ImageItem>> = flow {
         val rootDocumentId = treeDocumentIdOf(folderUri)
         if (rootDocumentId == null) {
             Log.w(TAG, "Invalid folder URI: $folderUri")
@@ -231,9 +244,24 @@ class LocalImageSourceImpl @Inject constructor(
         }
 
         val images = mutableListOf<ImageItem>()
-        var nextEmitAt = FIRST_BATCH_SIZE
+        var nextEmitAt = if (shuffleFirstBatch) Int.MAX_VALUE else FIRST_BATCH_SIZE
 
-        walkImages(folderUri, rootDocumentId) { image ->
+        walkImages(
+            treeUri = folderUri,
+            startDocumentId = rootDocumentId,
+            extraExcludedFolderNames = excludedFolderNames,
+            skipSelectionMarkerDirs = true,
+            onFirstDirectoryComplete = if (shuffleFirstBatch) {
+                {
+                    if (images.isNotEmpty()) {
+                        emit(images.toList())
+                    }
+                    nextEmitAt = images.size + BATCH_SIZE
+                }
+            } else {
+                null
+            },
+        ) { image ->
             images.add(image)
             if (images.size >= nextEmitAt) {
                 emit(images.toList())
@@ -451,16 +479,38 @@ class LocalImageSourceImpl @Inject constructor(
     private suspend fun walkImages(
         treeUri: Uri,
         startDocumentId: String,
+        extraExcludedFolderNames: Set<String> = emptySet(),
+        skipSelectionMarkerDirs: Boolean = true,
+        onFirstDirectoryComplete: (suspend () -> Unit)? = null,
         onImage: suspend (ImageItem) -> Unit,
     ) {
+        val excludedLower = if (extraExcludedFolderNames.isEmpty()) {
+            EXCLUDED_FOLDER_NAMES
+        } else {
+            EXCLUDED_FOLDER_NAMES + extraExcludedFolderNames.mapNotNull {
+                it.trim().lowercase().takeIf { s -> s.isNotEmpty() }
+            }
+        }
         val queue = ArrayDeque<String>()
         val seenDirectories = mutableSetOf(startDocumentId)
         queue.addLast(startDocumentId)
+        var firstDirectoryDone = false
 
         while (queue.isNotEmpty()) {
             coroutineContext.ensureActive()
             val parentId = queue.removeFirst()
-            val cursor = queryChildren(treeUri, parentId) ?: continue
+            val cursor = queryChildren(treeUri, parentId)
+            if (cursor == null) {
+                if (!firstDirectoryDone) {
+                    firstDirectoryDone = true
+                    onFirstDirectoryComplete?.invoke()
+                }
+                continue
+            }
+
+            val dirsInParent = mutableListOf<String>()
+            val imagesInParent = mutableListOf<ImageItem>()
+            var hasSelectionMarker = false
 
             cursor.use { c ->
                 val idIndex = c.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
@@ -479,12 +529,17 @@ class LocalImageSourceImpl @Inject constructor(
                     val name = c.getStringOrNull(nameIndex) ?: continue
                     val mimeType = c.getStringOrNull(mimeIndex)
 
+                    if (name.equals(SELECTION_MARKER_FILE, ignoreCase = true)) {
+                        hasSelectionMarker = true
+                        continue
+                    }
+
                     if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        if (name.lowercase() in EXCLUDED_FOLDER_NAMES) {
+                        if (name.lowercase() in excludedLower) {
                             Log.d(TAG, "Skipping excluded folder: $name")
                             continue
                         }
-                        if (seenDirectories.add(documentId)) queue.addLast(documentId)
+                        dirsInParent.add(documentId)
                         continue
                     }
 
@@ -495,7 +550,7 @@ class LocalImageSourceImpl @Inject constructor(
                         .buildDocumentUriUsingTree(treeUri, parentId)
                         .toString()
 
-                    onImage(
+                    imagesInParent.add(
                         ImageItem(
                             uri = DocumentsContract
                                 .buildDocumentUriUsingTree(treeUri, documentId)
@@ -510,6 +565,24 @@ class LocalImageSourceImpl @Inject constructor(
                         )
                     )
                 }
+            }
+
+            if (skipSelectionMarkerDirs && hasSelectionMarker && parentId != startDocumentId) {
+                Log.d(TAG, "Skipping directory containing $SELECTION_MARKER_FILE: $parentId")
+                continue
+            }
+
+            for (dirId in dirsInParent) {
+                if (seenDirectories.add(dirId)) {
+                    queue.addLast(dirId)
+                }
+            }
+            for (img in imagesInParent) {
+                onImage(img)
+            }
+            if (!firstDirectoryDone) {
+                firstDirectoryDone = true
+                onFirstDirectoryComplete?.invoke()
             }
         }
     }
@@ -552,20 +625,44 @@ class LocalImageSourceImpl @Inject constructor(
             }
         }
 
-    private fun resolveTargetFolder(
+    internal fun resolveTargetFolder(
         fileName: String,
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
     ): DocumentFile? {
         val destFolder = documentFileFromTreeUri(destFolderUri) ?: return null
+        val selectionDir = if (
+            subfolderName.isBlank() ||
+            destFolder.name.equals(subfolderName, ignoreCase = true)
+        ) {
+            destFolder
+        } else {
+            val found = destFolder.findFile(subfolderName)
+            val created = if (found == null) destFolder.createDirectory(subfolderName) else null
+            val candidate = found ?: created ?: return null
+            val hasRealSubfolder = !candidate.name.isNullOrBlank() || !candidate.uri.scheme.isNullOrBlank()
+            if (hasRealSubfolder || sorting) {
+                candidate
+            } else {
+                destFolder
+            }
+        }
+        ensureSelectionMarker(selectionDir)
         return if (sorting) {
-            val selectionDir = destFolder.findFile(subfolderName)
-                ?: destFolder.createDirectory(subfolderName)
-                ?: return null
             determineTargetFolder(fileName, selectionDir)
         } else {
-            destFolder
+            selectionDir
+        }
+    }
+
+    internal fun ensureSelectionMarker(selectionDir: DocumentFile) {
+        try {
+            if (selectionDir.findFile(SELECTION_MARKER_FILE) == null) {
+                selectionDir.createFile("application/octet-stream", SELECTION_MARKER_FILE)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Could not create $SELECTION_MARKER_FILE in ${selectionDir.uri}: ${e.message}")
         }
     }
 
@@ -799,6 +896,15 @@ class LocalImageSourceImpl @Inject constructor(
                 context.contentResolver.openOutputStream(destFile.uri)?.use { output ->
                     bytesCopied = input.copyTo(output)
                     output.flush()
+                }
+            }
+            if (bytesCopied >= 0L && SourceKindClassifier.classify(destFile.uri) == SourceKind.REMOVABLE) {
+                try {
+                    context.contentResolver.openFileDescriptor(destFile.uri, "rw")?.use { pfd ->
+                        pfd.fileDescriptor.sync()
+                    }
+                } catch (_: Exception) {
+                    // Best-effort fsync when destination provider supports file descriptor sync.
                 }
             }
         } catch (e: Exception) {

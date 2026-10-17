@@ -5,23 +5,11 @@ import com.phototok.data.model.ImageItem
 /**
  * Pure ordering logic for the phone-mode feed, extracted from the ViewModel so it can
  * be unit-tested without Android dependencies.
- *
- * Rules:
- *  - Randomize wins over everything (uses the injected [shuffler] for determinism in tests).
- *  - Base order is by last-modified date, **newest first** (index 0 is the newest photo;
- *    swiping to the next photo shows the next-older one). Ties break by lower-cased file
- *    name, then URI, so the order is deterministic.
- *  - When sortByOrientation is on: landscape group first, then portrait, each group newest first.
- *
- * Large folders are discovered progressively, so the feed is built up from
- * several batches instead of one complete list. [newItems] and [appendBatch]
- * exist for that case: they add newly discovered photos to the *end* of the
- * feed, never reordering what is already published, so a photo the user has
- * already swiped past can never jump back in front of them mid-session.
- * The one exception is [appendBatch]'s `reorder` flag, used only while the user has not
- * yet touched the feed: there the newest-so-far photo must be at index 0.
  */
 object PhoneFeedOrdering {
+
+    /** Number of look-ahead cards after [currentIndex] kept frozen during progressive shuffle. */
+    const val PREFETCH_WINDOW = 2
 
     data class Result(
         val images: List<ImageItem>,
@@ -29,53 +17,143 @@ object PhoneFeedOrdering {
         val portraitSectionStart: Int,
     )
 
+    /**
+     * Natural filename comparison (`IMG_2.JPG < IMG_10.JPG`), case-insensitive with
+     * exact-case tie-breaker.
+     */
+    fun compareNatural(a: String, b: String): Int {
+        var ia = 0
+        var ib = 0
+        val na = a.length
+        val nb = b.length
+
+        while (ia < na && ib < nb) {
+            val ca = a[ia]
+            val cb = b[ib]
+            if (ca.isDigit() && cb.isDigit()) {
+                var za = ia
+                while (za < na && a[za] == '0') za++
+                var zb = ib
+                while (zb < nb && b[zb] == '0') zb++
+
+                var ea = za
+                while (ea < na && a[ea].isDigit()) ea++
+                var eb = zb
+                while (eb < nb && b[eb].isDigit()) eb++
+
+                val lenA = ea - za
+                val lenB = eb - zb
+                if (lenA != lenB) return lenA.compareTo(lenB)
+
+                for (k in 0 until lenA) {
+                    val da = a[za + k]
+                    val db = b[zb + k]
+                    if (da != db) return da.compareTo(db)
+                }
+
+                val rawLenA = ea - ia
+                val rawLenB = eb - ib
+                if (rawLenA != rawLenB) return rawLenA.compareTo(rawLenB)
+
+                ia = ea
+                ib = eb
+            } else {
+                val lca = ca.lowercaseChar()
+                val lcb = cb.lowercaseChar()
+                if (lca != lcb) return lca.compareTo(lcb)
+                ia++
+                ib++
+            }
+        }
+        if (ia != na || ib != nb) return (na - ia).compareTo(nb - ib)
+        return a.compareTo(b)
+    }
+
     fun order(
         images: List<ImageItem>,
         randomize: Boolean,
         sortByOrientation: Boolean,
         shuffler: (List<ImageItem>) -> List<ImageItem> = { it.shuffled() },
-    ): Result {
-        if (randomize) {
-            return Result(shuffler(images), -1)
-        }
+    ): Result = order(
+        images = images,
+        mode = FeedOrderMode.fromLegacy(randomize = randomize, sortByOrientation = sortByOrientation),
+        seenUris = emptySet(),
+        shuffler = shuffler,
+    )
 
-        val byDate = images.sortedWith(
+    fun order(
+        images: List<ImageItem>,
+        mode: FeedOrderMode,
+        seenUris: Set<String> = emptySet(),
+        shuffler: (List<ImageItem>) -> List<ImageItem> = { it.shuffled() },
+    ): Result {
+        return when (mode) {
+            FeedOrderMode.SHUFFLE -> {
+                val shuffled = shuffleUnseenFirst(images, seenUris, shuffler)
+                Result(shuffled, -1)
+            }
+            FeedOrderMode.SHOOTING -> {
+                val byShooting = images.sortedWith { a, b ->
+                    val cmpTime = a.lastModified.compareTo(b.lastModified)
+                    if (cmpTime != 0) cmpTime
+                    else {
+                        val cmpName = compareNatural(a.fileName, b.fileName)
+                        if (cmpName != 0) cmpName else a.uri.compareTo(b.uri)
+                    }
+                }
+                Result(partitionUnseenFirst(byShooting, seenUris), -1)
+            }
+            FeedOrderMode.NEWEST_FIRST -> {
+                val byDate = sortNewestFirst(images)
+                Result(partitionUnseenFirst(byDate, seenUris), -1)
+            }
+            FeedOrderMode.ORIENTATION_THEN_NEWEST -> {
+                val byDate = partitionUnseenFirst(sortNewestFirst(images), seenUris)
+                val landscape = byDate.filter { it.isLandscape }
+                val portrait = byDate.filter { !it.isLandscape }
+                val result = landscape + portrait
+                val split = if (portrait.isEmpty()) -1 else landscape.size
+                Result(result, split)
+            }
+        }
+    }
+
+    private fun partitionUnseenFirst(
+        ordered: List<ImageItem>,
+        seenUris: Set<String>,
+    ): List<ImageItem> {
+        if (seenUris.isEmpty()) return ordered
+        val (unseen, seen) = ordered.partition { it.uri !in seenUris }
+        return unseen + seen
+    }
+
+    private fun sortNewestFirst(images: List<ImageItem>): List<ImageItem> =
+        images.sortedWith(
             compareByDescending<ImageItem> { it.lastModified }
                 .thenBy { it.fileName.lowercase() }
                 .thenBy { it.uri }
         )
-        if (!sortByOrientation) {
-            return Result(byDate, -1)
-        }
 
-        val landscape = byDate.filter { it.isLandscape }
-        val portrait = byDate.filter { !it.isLandscape }
-        val result = landscape + portrait
-        val split = if (portrait.isEmpty()) -1 else landscape.size
-        return Result(result, split)
+    private fun shuffleUnseenFirst(
+        images: List<ImageItem>,
+        seenUris: Set<String>,
+        shuffler: (List<ImageItem>) -> List<ImageItem>,
+    ): List<ImageItem> {
+        if (seenUris.isEmpty()) return shuffler(images)
+        val (unseen, seen) = images.partition { it.uri !in seenUris }
+        val shuffledUnseen = if (unseen.isEmpty()) emptyList() else shuffler(unseen)
+        val shuffledSeen = if (seen.isEmpty()) emptyList() else shuffler(seen)
+        return shuffledUnseen + shuffledSeen
     }
 
     /**
      * The subset of [incoming] that is not yet known, identified by URI.
-     *
-     * Progressive discovery re-emits a cumulative list on every batch, and the
-     * user may have removed items (move / delete) from the feed in between, so
-     * "not currently in the feed" is *not* the same as "new". Callers therefore
-     * pass the set of URIs ever published for this folder.
      */
     fun newItems(incoming: List<ImageItem>, knownUris: Set<String>): List<ImageItem> =
         if (knownUris.isEmpty()) incoming else incoming.filter { it.uri !in knownUris }
 
     /**
      * Append or merge a freshly discovered batch to an already published feed.
-     *
-     * When [randomize] is true, [fresh] is shuffled and appended after [current].
-     * When [randomize] is false, [fresh] is ordered and appended (existing items never move),
-     * unless [reorder] is true: then the whole feed is re-ordered newest first, which the
-     * caller may only request while the user has not navigated yet (nothing to jump under
-     * their thumb) so that index 0 is always the newest photo known so far.
-     *
-     * When [current] is empty this is exactly [order].
      */
     fun appendBatch(
         current: List<ImageItem>,
@@ -84,17 +162,51 @@ object PhoneFeedOrdering {
         sortByOrientation: Boolean,
         shuffler: (List<ImageItem>) -> List<ImageItem> = { it.shuffled() },
         reorder: Boolean = false,
+        currentIndex: Int = 0,
+        seenUris: Set<String> = emptySet(),
+    ): Result = appendBatch(
+        current = current,
+        fresh = fresh,
+        mode = FeedOrderMode.fromLegacy(randomize = randomize, sortByOrientation = sortByOrientation),
+        shuffler = shuffler,
+        reorder = reorder,
+        currentIndex = currentIndex,
+        seenUris = seenUris,
+    )
+
+    fun appendBatch(
+        current: List<ImageItem>,
+        fresh: List<ImageItem>,
+        mode: FeedOrderMode,
+        shuffler: (List<ImageItem>) -> List<ImageItem> = { it.shuffled() },
+        reorder: Boolean = false,
+        currentIndex: Int = 0,
+        seenUris: Set<String> = emptySet(),
     ): Result {
-        if (reorder && !randomize && fresh.isNotEmpty()) {
-            return order(current + fresh, randomize = false, sortByOrientation = sortByOrientation)
+        val sortByOrientation = mode.isSortByOrientation
+        if (reorder && !mode.isRandomized && fresh.isNotEmpty()) {
+            return order(current + fresh, mode = mode, seenUris = seenUris, shuffler = shuffler)
         }
         if (fresh.isEmpty()) {
             return Result(current, portraitSplit(current, sortByOrientation))
         }
         if (current.isEmpty()) {
-            return order(fresh, randomize, sortByOrientation, shuffler)
+            return order(fresh, mode = mode, seenUris = seenUris, shuffler = shuffler)
         }
-        val ordered = order(fresh, randomize, sortByOrientation = false, shuffler = shuffler).images
+        if (mode == FeedOrderMode.SHUFFLE) {
+            val safeIndex = currentIndex.coerceAtLeast(0)
+            val frozenCount = (safeIndex + PREFETCH_WINDOW + 1).coerceAtMost(current.size)
+            val frozenPrefix = current.subList(0, frozenCount)
+            val tailPool = current.subList(frozenCount, current.size) + fresh
+            val reshuffledTail = shuffleUnseenFirst(tailPool, seenUris, shuffler)
+            return Result(frozenPrefix + reshuffledTail, -1)
+        }
+        val ordered = order(
+            fresh,
+            mode = if (mode == FeedOrderMode.SHOOTING) FeedOrderMode.SHOOTING else FeedOrderMode.NEWEST_FIRST,
+            seenUris = seenUris,
+            shuffler = shuffler,
+        ).images
         val merged = current + ordered
         return Result(merged, portraitSplit(merged, sortByOrientation))
     }
@@ -116,5 +228,7 @@ object PhoneFeedOrdering {
             FileTypeFilter.ALL -> images
             FileTypeFilter.RAW -> images.filter { PhotoExtensions.isRaw(it.fileName) }
             FileTypeFilter.JPG -> images.filter { PhotoExtensions.isJpeg(it.fileName) }
+            FileTypeFilter.ONE_PER_SHOT -> RelatedFiles.collapseOnePerShot(images)
         }
 }
+

@@ -17,12 +17,19 @@ object SwipeLabels {
     internal const val DEFAULT_COLLECTION = "your collection"
     internal const val DEFAULT_LEFT_SWIPE = "your chosen folder"
 
-    // ── Swipe right (collection action) ──────────────────────────────────
+    // ── Swipe right (collection / favourite action) ──────────────────────
 
     /** Short, all-caps indicator label for a swipe right. */
     fun rightLabel(action: CollectionAction): String = when (action) {
         CollectionAction.COPY -> "COPY"
         CollectionAction.MOVE -> "MOVE"
+    }
+
+    /** Short indicator label for a [SwipeRightVerb] (`U-17`). */
+    fun rightLabel(verb: SwipeRightVerb): String = when (verb) {
+        SwipeRightVerb.COPY -> "COPY"
+        SwipeRightVerb.MOVE -> "MOVE"
+        SwipeRightVerb.FAVOURITE -> "★"
     }
 
     /** Sentence-case verb for a swipe right, e.g. for coach-mark captions. */
@@ -31,9 +38,24 @@ object SwipeLabels {
         CollectionAction.MOVE -> "Move"
     }
 
+    /** Sentence-case verb for a [SwipeRightVerb]. */
+    fun rightVerb(verb: SwipeRightVerb): String = when (verb) {
+        SwipeRightVerb.COPY -> "Copy"
+        SwipeRightVerb.MOVE -> "Move"
+        SwipeRightVerb.FAVOURITE -> "Favourite"
+    }
+
     /** Accessibility / caption text naming the swipe-right target. */
     fun rightDescription(action: CollectionAction, folderName: String): String =
         "${rightVerb(action)} to ${folderName.ifBlank { DEFAULT_COLLECTION }}"
+
+    /** Accessibility / caption text naming the [SwipeRightVerb] effect. */
+    fun rightDescription(verb: SwipeRightVerb, folderName: String): String = when (verb) {
+        SwipeRightVerb.FAVOURITE -> "Favourite photo"
+        SwipeRightVerb.COPY,
+        SwipeRightVerb.MOVE -> "${rightVerb(verb)} to ${folderName.ifBlank { DEFAULT_COLLECTION }}"
+    }
+
 
     // ── Swipe left (configured left-swipe action) ────────────────────────
 

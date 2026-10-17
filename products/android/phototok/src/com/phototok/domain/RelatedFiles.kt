@@ -26,6 +26,50 @@ object RelatedFiles {
     }
 
     /**
+     * Collapse `RAW + JPEG` pairs into a single feed entry per shot `(parentUri, stem)`:
+     * - When both a processed image (JPEG / HEIC / non-RAW) and a RAW exist for the same shot,
+     *   show the processed image for instant decode.
+     * - When only a RAW or only a processed file exists, show it as-is.
+     */
+    fun collapseOnePerShot(images: List<ImageItem>): List<ImageItem> {
+        if (images.isEmpty()) return emptyList()
+        val byShot = LinkedHashMap<Pair<String?, String>, MutableList<ImageItem>>()
+        for (image in images) {
+            byShot.getOrPut(shotKey(image)) { mutableListOf() }.add(image)
+        }
+        return byShot.values.map { group ->
+            if (group.size == 1) {
+                group[0]
+            } else {
+                group.firstOrNull { PhotoExtensions.isJpeg(it.fileName) }
+                    ?: group.firstOrNull { !PhotoExtensions.isRaw(it.fileName) }
+                    ?: group[0]
+            }
+        }
+    }
+
+    /**
+     * True when [target] is a processed image that has at least one RAW sibling in [all]
+     * (used to render the subtle `"RAW+JPG"` indicator pill when `ONE_PER_SHOT` is active).
+     */
+    fun hasRawCompanion(all: List<ImageItem>, target: ImageItem): Boolean {
+        if (PhotoExtensions.isRaw(target.fileName)) return false
+        return siblings(all, target).any { PhotoExtensions.isRaw(it.fileName) }
+    }
+
+    /**
+     * For sharing (`U-13`): if [target] is part of a RAW+JPEG pair, return the processed
+     * companion (JPEG/HEIC); if [target] is already processed or a lone RAW, return [target].
+     */
+    fun preferredShareItem(all: List<ImageItem>, target: ImageItem): ImageItem {
+        if (!PhotoExtensions.isRaw(target.fileName)) return target
+        val sibs = siblings(all, target)
+        return sibs.firstOrNull { PhotoExtensions.isJpeg(it.fileName) }
+            ?: sibs.firstOrNull { !PhotoExtensions.isRaw(it.fileName) }
+            ?: target
+    }
+
+    /**
      * Checks if [images] contains both RAW and JPEG formats of the same photo
      * (matching stem in the same parent folder, with at least one RAW and at least one
      * JPEG extension). Camera names such as DSC_0001 repeat across folders, so a RAW in
@@ -48,11 +92,11 @@ object RelatedFiles {
      * when filtered to RAW only or JPEG only).
      */
     fun hasFilterMismatch(images: List<ImageItem>, filter: FileTypeFilter): Boolean {
-        if (filter == FileTypeFilter.ALL || images.isEmpty()) return false
+        if (filter == FileTypeFilter.ALL || filter == FileTypeFilter.ONE_PER_SHOT || images.isEmpty()) return false
         val byStem = images.groupBy { shotKey(it) }
         val matchingCount = byStem.values.count { group ->
             when (filter) {
-                FileTypeFilter.ALL -> true
+                FileTypeFilter.ALL, FileTypeFilter.ONE_PER_SHOT -> true
                 FileTypeFilter.RAW -> group.any { PhotoExtensions.isRaw(it.fileName) }
                 FileTypeFilter.JPG -> group.any { PhotoExtensions.isJpeg(it.fileName) }
             }
@@ -68,3 +112,4 @@ object RelatedFiles {
     private fun stemOf(fileName: String): String =
         fileName.substringBeforeLast('.').lowercase()
 }
+

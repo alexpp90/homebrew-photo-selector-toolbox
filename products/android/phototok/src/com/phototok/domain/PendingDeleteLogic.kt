@@ -127,4 +127,88 @@ object PendingDeleteLogic {
             portraitSectionStart = PhoneFeedOrdering.portraitSplit(updatedImages, sortByOrientation),
         )
     }
+
+    /** Maximum number of pending deletions held in the session undo stack (`U-18`). */
+    const val MAX_STACK_SIZE = 50
+
+    /** Result of pushing a new deletion onto the bounded LIFO undo stack. */
+    data class StackPushResult(
+        val state: ListsState,
+        val pushed: Pending,
+        val updatedStack: List<Pending>,
+        /** Non-null when the stack overflowed [MAX_STACK_SIZE] and the oldest item must be committed. */
+        val evictedOldest: Pending?,
+    )
+
+    /** Result of popping and restoring the most recent deletion from the LIFO undo stack. */
+    data class StackPopResult(
+        val state: ListsState,
+        val restored: Pending,
+        val remainingStack: List<Pending>,
+    )
+
+    /**
+     * Remove the image at [currentIndex] and push it onto [currentStack] (LIFO: newest last).
+     * If [currentStack] is already at [maxStackSize], the oldest entry (`first()`) is evicted
+     * and returned as [StackPushResult.evictedOldest] so the caller can commit it immediately.
+     */
+    fun pushRemove(
+        images: List<ImageItem>,
+        allImages: List<ImageItem>,
+        currentIndex: Int,
+        related: List<ImageItem>,
+        sortByOrientation: Boolean,
+        currentStack: List<Pending>,
+        maxStackSize: Int = MAX_STACK_SIZE,
+    ): StackPushResult? {
+        val (state, pending) = remove(
+            images = images,
+            allImages = allImages,
+            currentIndex = currentIndex,
+            related = related,
+            sortByOrientation = sortByOrientation,
+        ) ?: return null
+
+        val cap = maxStackSize.coerceAtLeast(1)
+        val evicted = if (currentStack.size >= cap) currentStack.first() else null
+        val kept = if (currentStack.size >= cap) currentStack.drop(1) else currentStack
+        val updatedStack = kept + pending
+        return StackPushResult(
+            state = state,
+            pushed = pending,
+            updatedStack = updatedStack,
+            evictedOldest = evicted,
+        )
+    }
+
+    /**
+     * Pop the most recently deleted item (`last()`) from [currentStack] and restore it into
+     * [images] and [allImages]. Returns null when [currentStack] is empty.
+     */
+    fun popRestore(
+        images: List<ImageItem>,
+        allImages: List<ImageItem>,
+        currentStack: List<Pending>,
+        sortByOrientation: Boolean,
+    ): StackPopResult? {
+        val latest = currentStack.lastOrNull() ?: return null
+        val state = restore(
+            images = images,
+            allImages = allImages,
+            pending = latest,
+            sortByOrientation = sortByOrientation,
+        )
+        return StackPopResult(
+            state = state,
+            restored = latest,
+            remainingStack = currentStack.dropLast(1),
+        )
+    }
+
+    /** All primary + sibling URIs in [stack] in FIFO order, deduplicated. */
+    fun allTargetUris(stack: List<Pending>): List<String> =
+        stack.flatMap { pending ->
+            listOf(pending.image.uri) + pending.related.map { it.uri }
+        }.distinct()
 }
+

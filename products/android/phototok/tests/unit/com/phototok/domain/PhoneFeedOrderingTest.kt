@@ -259,4 +259,73 @@ class PhoneFeedOrderingTest {
         assertEquals(3, result.images.size)
         assertEquals(2, result.portraitSectionStart)
     }
+
+    @Test
+    fun `SHOOTING order sorts ascending by date with natural filename tie-break`() {
+        val input = listOf(
+            img("DSC_10.JPG", date = 100),
+            img("DSC_2.JPG", date = 100),
+            img("DSC_1.JPG", date = 50),
+        )
+
+        val result = PhoneFeedOrdering.order(
+            images = input,
+            mode = FeedOrderMode.SHOOTING,
+        )
+
+        assertEquals(
+            listOf("DSC_1.JPG", "DSC_2.JPG", "DSC_10.JPG"),
+            result.images.map { it.fileName },
+        )
+    }
+
+    @Test
+    fun `order partitions unseen photos before seen photos`() {
+        val a = img("a.jpg", date = 300)
+        val b = img("b.jpg", date = 200)
+        val c = img("c.jpg", date = 100)
+
+        val result = PhoneFeedOrdering.order(
+            images = listOf(a, b, c),
+            mode = FeedOrderMode.NEWEST_FIRST,
+            seenUris = setOf(a.uri),
+        )
+
+        assertEquals(listOf("b.jpg", "c.jpg", "a.jpg"), result.images.map { it.fileName })
+    }
+
+    @Test
+    fun `appendBatch in SHUFFLE mode freezes prefix up to currentIndex plus prefetch window`() {
+        val current = (0..4).map { img("c$it.jpg", date = it.toLong()) }
+        val fresh = listOf(img("f1.jpg", date = 10), img("f2.jpg", date = 11))
+
+        val result = PhoneFeedOrdering.appendBatch(
+            current = current,
+            fresh = fresh,
+            mode = FeedOrderMode.SHUFFLE,
+            shuffler = { it.reversed() },
+            currentIndex = 1,
+        )
+
+        // Indices 0..3 (currentIndex=1 + PREFETCH_WINDOW=2) must remain untouched
+        assertEquals(
+            listOf("c0.jpg", "c1.jpg", "c2.jpg", "c3.jpg"),
+            result.images.take(4).map { it.fileName },
+        )
+        assertEquals(7, result.images.size)
+    }
+
+    @Test
+    fun `filterByType ONE_PER_SHOT collapses paired RAW and JPEG to JPEG`() {
+        val jpg = img("IMG_001.JPG", date = 100)
+        val raw = img("IMG_001.CR3", date = 100).copy(mimeType = "image/x-canon-cr3")
+        val soloRaw = img("IMG_002.ARW", date = 200).copy(mimeType = "image/x-sony-arw")
+
+        val filtered = PhoneFeedOrdering.filterByType(
+            images = listOf(raw, jpg, soloRaw),
+            filter = FileTypeFilter.ONE_PER_SHOT,
+        )
+
+        assertEquals(listOf("IMG_001.JPG", "IMG_002.ARW"), filtered.map { it.fileName })
+    }
 }

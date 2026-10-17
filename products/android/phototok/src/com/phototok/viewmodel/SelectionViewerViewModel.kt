@@ -1,11 +1,14 @@
 package com.phototok.viewmodel
 
+import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.phototok.data.model.ImageItem
+import com.phototok.data.repository.FavouritesRepository
 import com.phototok.data.repository.ImageRepository
 import com.phototok.data.source.SelectionListing
+import com.phototok.domain.ShareIntentBuilder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,24 +17,35 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class SelectionViewerTab {
+    FAVOURITES,
+    SELECTION,
+}
+
 data class SelectionViewerUiState(
     /** Whether the read-only selection viewer is currently shown. */
     val isOpen: Boolean = false,
+    val activeTab: SelectionViewerTab = SelectionViewerTab.SELECTION,
     val images: List<ImageItem> = emptyList(),
+    val selectionImages: List<ImageItem> = emptyList(),
+    val favouriteImages: List<ImageItem> = emptyList(),
     val folderName: String = "",
     val currentIndex: Int = 0,
     val feedback: ActionFeedback? = null,
 )
 
 /**
- * Read-only viewer for the PhotoTok_Selection folder (view + back only).
- * Extracted from PhoneModeViewModel so the feed ViewModel stays focused on
- * the swipe feed; all folder traversal happens in the data layer.
+ * Read-only viewer for the Selection folder and in-place Favourites (`U-13`, `U-17`).
  */
 @HiltViewModel
 class SelectionViewerViewModel @Inject constructor(
     private val imageRepository: ImageRepository,
+    private val favouritesRepository: FavouritesRepository,
 ) : ViewModel() {
+
+    constructor(
+        imageRepository: ImageRepository,
+    ) : this(imageRepository, FavouritesRepository())
 
     private val _uiState = MutableStateFlow(SelectionViewerUiState())
     val uiState: StateFlow<SelectionViewerUiState> = _uiState.asStateFlow()
@@ -49,11 +63,21 @@ class SelectionViewerViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isOpen = true, currentIndex = 0) }
+            _uiState.update {
+                it.copy(
+                    isOpen = true,
+                    activeTab = SelectionViewerTab.SELECTION,
+                    currentIndex = 0,
+                )
+            }
             try {
                 when (val listing = imageRepository.listSelectionImages(Uri.parse(targetFolderUri))) {
                     is SelectionListing.Available -> _uiState.update {
-                        it.copy(images = listing.images, folderName = listing.folderName)
+                        it.copy(
+                            images = listing.images,
+                            selectionImages = listing.images,
+                            folderName = listing.folderName,
+                        )
                     }
                     SelectionListing.NotSupported -> _uiState.update {
                         it.copy(
@@ -80,6 +104,149 @@ class SelectionViewerViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Open the viewer with both in-place [sourceImages] filtered by [favouritedUris] and
+     * the Selection subfolder inside [targetFolderUri] (`U-17`).
+     */
+    fun openWithFavourites(
+        targetFolderUri: String?,
+        sourceImages: List<ImageItem>,
+        favouritedUris: Set<String> = favouritesRepository.favouritedUris.value,
+        preferredTab: SelectionViewerTab = SelectionViewerTab.FAVOURITES,
+    ) {
+        val favImages = sourceImages.filter { it.uri in favouritedUris }
+        if (targetFolderUri == null && favImages.isEmpty()) {
+            _uiState.update {
+                it.copy(feedback = ActionFeedback("No favourites or selection folder yet", isError = false))
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            var selImages: List<ImageItem> = emptyList()
+            var selFolderName = "Selection"
+            if (targetFolderUri != null) {
+                try {
+                    when (val listing = imageRepository.listSelectionImages(Uri.parse(targetFolderUri))) {
+                        is SelectionListing.Available -> {
+                            selImages = listing.images
+                            selFolderName = listing.folderName
+                        }
+                        else -> Unit
+                    }
+                } catch (_: Exception) {
+                }
+            }
+
+            if (favImages.isEmpty() && selImages.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isOpen = false,
+                        feedback = ActionFeedback("No favourites or selection photos yet", isError = false),
+                    )
+                }
+                return@launch
+            }
+
+            val initialTab = when {
+                preferredTab == SelectionViewerTab.FAVOURITES && favImages.isNotEmpty() ->
+                    SelectionViewerTab.FAVOURITES
+                selImages.isNotEmpty() ->
+                    SelectionViewerTab.SELECTION
+                else ->
+                    SelectionViewerTab.FAVOURITES
+            }
+            val activeList = if (initialTab == SelectionViewerTab.FAVOURITES) favImages else selImages
+
+            _uiState.update {
+                it.copy(
+                    isOpen = true,
+                    activeTab = initialTab,
+                    images = activeList,
+                    selectionImages = selImages,
+                    favouriteImages = favImages,
+                    folderName = if (initialTab == SelectionViewerTab.FAVOURITES) "Favourites" else selFolderName,
+                    currentIndex = 0,
+                )
+            }
+        }
+    }
+
+    fun selectTab(tab: SelectionViewerTab) {
+        _uiState.update { state ->
+            val list = if (tab == SelectionViewerTab.FAVOURITES) {
+                state.favouriteImages
+            } else {
+                state.selectionImages
+            }
+            state.copy(
+                activeTab = tab,
+                images = list,
+                folderName = if (tab == SelectionViewerTab.FAVOURITES) "Favourites" else state.folderName.ifEmpty { "Selection" },
+                currentIndex = 0,
+            )
+        }
+    }
+
+    /**
+     * Copy all favourited photos to a user-chosen destination folder (`U-17`).
+     */
+    fun copyFavouritesToFolder(destFolderUri: Uri, subfolderName: String = "Favourites") {
+        val favs = _uiState.value.favouriteImages.ifEmpty { _uiState.value.images }
+        if (favs.isEmpty()) return
+        viewModelScope.launch {
+            var copied = 0
+            for (img in favs) {
+                val ok = try {
+                    imageRepository.copyImage(
+                        sourceUri = Uri.parse(img.uri),
+                        destFolderUri = destFolderUri,
+                        sorting = false,
+                        subfolderName = subfolderName,
+                    )
+                } catch (_: Exception) {
+                    false
+                }
+                if (ok) copied++
+            }
+            val msg = if (copied == favs.size) {
+                "Copied $copied favourite(s) to $subfolderName"
+            } else {
+                "Copied $copied of ${favs.size} favourite(s)"
+            }
+            _uiState.update {
+                it.copy(feedback = ActionFeedback(msg, isError = copied < favs.size))
+            }
+        }
+    }
+
+    /**
+     * Build a batch `ACTION_SEND_MULTIPLE` chooser for the currently active tab's photos (`U-13`).
+     */
+    fun buildBatchShareIntent(allSourceImages: List<ImageItem> = emptyList()): Intent? {
+        val items = _uiState.value.images
+        if (items.isEmpty()) return null
+        val pool = if (allSourceImages.isNotEmpty()) allSourceImages else items
+        val resolution = ShareIntentBuilder.resolveShareBatch(
+            items = items,
+            allImages = pool,
+            moveRelatedFiles = true,
+            fileTypeFilter = com.phototok.domain.FileTypeFilter.ONE_PER_SHOT,
+        )
+        if (resolution.truncatedCount > 0) {
+            val totalRequested = resolution.targets.size + resolution.truncatedCount
+            _uiState.update {
+                it.copy(
+                    feedback = ActionFeedback(
+                        "Sharing first ${ShareIntentBuilder.MAX_SHARE_ITEMS} of $totalRequested photos",
+                        isError = false,
+                    )
+                )
+            }
+        }
+        return ShareIntentBuilder.buildBatchShareChooser(resolution.targets)
     }
 
     fun close() {

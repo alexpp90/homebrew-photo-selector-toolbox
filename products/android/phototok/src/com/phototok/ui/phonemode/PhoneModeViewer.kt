@@ -47,15 +47,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lens
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -81,9 +89,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,21 +104,24 @@ import com.photoselector.core.model.ExifData
 import com.phototok.data.model.ImageItem
 import com.phototok.domain.CollectionAction
 import com.phototok.domain.FirstRunHint
+import com.phototok.domain.SeenStore
 import com.phototok.domain.SwipeAction
 import com.phototok.domain.SwipeLabels
+import com.phototok.domain.SwipeRightVerb
 import com.phototok.ui.theme.SuccessGreen
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** How many images ahead/behind to warm into Coil's caches for snappy paging. */
 private const val PREFETCH_RADIUS = 3
+private const val CLOUD_PREFETCH_RADIUS = 1
 
-/** Glyph for the configured swipe-right (collection) action. */
-private fun collectionIcon(action: CollectionAction): ImageVector = when (action) {
-    CollectionAction.COPY -> Icons.Default.ContentCopy
-    CollectionAction.MOVE -> Icons.AutoMirrored.Filled.DriveFileMove
+/** Glyph for the configured swipe-right verb. */
+private fun swipeRightIcon(verb: SwipeRightVerb): ImageVector = when (verb) {
+    SwipeRightVerb.COPY -> Icons.Default.ContentCopy
+    SwipeRightVerb.MOVE -> Icons.AutoMirrored.Filled.DriveFileMove
+    SwipeRightVerb.FAVOURITE -> Icons.Default.Star
 }
 
 /** Glyph for the configured swipe-left action. */
@@ -122,9 +135,10 @@ private fun leftSwipeIcon(action: SwipeAction): ImageVector = when (action) {
  * Full-screen TikTok-style vertical-pager image viewer.
  *
  * - Swipe up/down → navigate images
- * - Swipe right → add to collection (green check flash)
+ * - Swipe right → add to collection or toggle favourite (green check / star flash)
  * - Swipe left → delete (card rotates, pulsing trash indicator)
  * - Single tap → toggle HUD overlay
+ * - Long press → Share / Open in another app / Show file details
  * - Gradient vignettes for readability
  *
  * When [readOnly] is true (selection-folder preview) the horizontal add/delete
@@ -141,12 +155,19 @@ fun PhoneModeViewer(
     leftSwipeAction: SwipeAction = SwipeAction.DELETE,
     leftSwipeFolderName: String = "",
     collectionAction: CollectionAction = CollectionAction.DEFAULT,
+    swipeRightVerb: SwipeRightVerb = SwipeRightVerb.fromCollectionAction(collectionAction),
     collectionFolderName: String = "",
     showExifOverlay: Boolean = true,
     showPageCounter: Boolean = true,
     /** True while the folder is still being enumerated (page count still grows). */
     isDiscovering: Boolean = false,
     readOnly: Boolean = false,
+    isCloudSource: Boolean = false,
+    rawCompanionUris: Set<String> = emptySet(),
+    favouriteUris: Set<String> = emptySet(),
+    onCardDwelled: (ImageItem) -> Unit = {},
+    onShareCurrentPhoto: () -> Unit = {},
+    onOpenWithCurrentPhoto: () -> Unit = {},
     onFirstRunHint: (FirstRunHint) -> Unit = {},
 ) {
     if (images.isEmpty()) return
@@ -157,12 +178,15 @@ fun PhoneModeViewer(
     )
 
     var isZoomed by remember { mutableStateOf(false) }
+    var showLongPressMenu by remember { mutableStateOf(false) }
+    var showFileDetailsDialog by remember { mutableStateOf(false) }
 
     // ── Prefetch upcoming/previous images into Coil caches ───────────────
     val context = LocalContext.current
-    LaunchedEffect(pagerState.currentPage, images) {
+    val prefetchRadius = if (isCloudSource) CLOUD_PREFETCH_RADIUS else PREFETCH_RADIUS
+    LaunchedEffect(pagerState.currentPage, images, prefetchRadius) {
         val center = pagerState.currentPage
-        for (offset in 1..PREFETCH_RADIUS) {
+        for (offset in 1..prefetchRadius) {
             listOf(center + offset, center - offset)
                 .filter { it in images.indices }
                 .forEach { idx ->
@@ -178,6 +202,21 @@ fun PhoneModeViewer(
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collect { page ->
             onNavigate(page)
+        }
+    }
+
+    // U-15: 500ms dwell timer on settledPage marks photo as seen
+    val currentOnCardDwelled by rememberUpdatedState(onCardDwelled)
+    LaunchedEffect(pagerState.settledPage, images, readOnly) {
+        if (!readOnly) {
+            val page = pagerState.settledPage
+            val item = images.getOrNull(page)
+            if (item != null) {
+                delay(SeenStore.SEEN_DWELL_MS)
+                if (pagerState.settledPage == page) {
+                    currentOnCardDwelled(item)
+                }
+            }
         }
     }
 
@@ -235,21 +274,39 @@ fun PhoneModeViewer(
     )
 
     val colors = MaterialTheme.colorScheme
+    val currentImage = images.getOrNull(pagerState.currentPage)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .semantics {
+                customActions = listOf(
+                    CustomAccessibilityAction("Share photo") {
+                        onShareCurrentPhoto()
+                        true
+                    },
+                    CustomAccessibilityAction("Open in another app") {
+                        onOpenWithCurrentPhoto()
+                        true
+                    },
+                    CustomAccessibilityAction("Show file details") {
+                        showFileDetailsDialog = true
+                        true
+                    },
+                )
+            },
     ) {
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             userScrollEnabled = !isZoomed,
             key = { images[it].uri },
-            beyondViewportPageCount = 2,
+            beyondViewportPageCount = if (isCloudSource) 1 else 2,
         ) { page ->
+            val pageItem = images[page]
             ImagePage(
-                image = images[page],
+                image = pageItem,
                 pageIndex = page,
                 totalCount = images.size,
                 isOrientationDivider = portraitSectionStart in 1 until images.size && page == portraitSectionStart,
@@ -259,10 +316,15 @@ fun PhoneModeViewer(
                 hudAlpha = hudAlpha,
                 readOnly = readOnly,
                 showFloatingPeeks = showFloatingPeeks,
+                hasRawCompanion = pageItem.uri in rawCompanionUris,
+                isFavourite = pageItem.uri in favouriteUris,
                 onFirstRunHint = onFirstRunHint,
                 onSingleTap = {
                     hudVisible = !hudVisible
                     if (!readOnly) onFirstRunHint(FirstRunHint.TAP_HUD)
+                },
+                onLongPress = {
+                    showLongPressMenu = true
                 },
                 onSwipeLeftDelete = {
                     onRequestDelete()
@@ -276,7 +338,7 @@ fun PhoneModeViewer(
                 },
                 leftSwipeAction = leftSwipeAction,
                 leftSwipeFolderName = leftSwipeFolderName,
-                collectionAction = collectionAction,
+                swipeRightVerb = swipeRightVerb,
                 collectionFolderName = collectionFolderName,
                 isActive = page == pagerState.currentPage,
                 onZoomChanged = { zoomed ->
@@ -287,7 +349,62 @@ fun PhoneModeViewer(
             )
         }
 
-        // ── Collection flash (centered copy/move glyph with glow) ────
+        // ── Long-press action menu (U-13) ────────────────────────────
+        Box(modifier = Modifier.align(Alignment.Center)) {
+            DropdownMenu(
+                expanded = showLongPressMenu,
+                onDismissRequest = { showLongPressMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Share photo") },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                    onClick = {
+                        showLongPressMenu = false
+                        onShareCurrentPhoto()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Open in another app") },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null) },
+                    onClick = {
+                        showLongPressMenu = false
+                        onOpenWithCurrentPhoto()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Show file details") },
+                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                    onClick = {
+                        showLongPressMenu = false
+                        showFileDetailsDialog = true
+                    },
+                )
+            }
+        }
+
+        if (showFileDetailsDialog && currentImage != null) {
+            AlertDialog(
+                onDismissRequest = { showFileDetailsDialog = false },
+                title = { Text(currentImage.fileName) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Resolution: ${currentImage.imageWidth} × ${currentImage.imageHeight}")
+                        Text("Size: ${currentImage.fileSize / 1024} KB")
+                        Text("MIME: ${currentImage.mimeType}")
+                        if (currentImage.uri in rawCompanionUris) {
+                            Text("RAW + JPEG pair")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showFileDetailsDialog = false }) {
+                        Text("Close")
+                    }
+                },
+            )
+        }
+
+        // ── Collection / Favourite flash (centered glyph with glow) ────
         AnimatedVisibility(
             visible = showCollectionFlash,
             modifier = Modifier.align(Alignment.Center),
@@ -295,7 +412,6 @@ fun PhoneModeViewer(
             exit = scaleOut(tween(300)) + fadeOut(tween(300)),
         ) {
             Box(contentAlignment = Alignment.Center) {
-                // Glow ring
                 Box(
                     modifier = Modifier
                         .size(120.dp)
@@ -303,11 +419,10 @@ fun PhoneModeViewer(
                         .background(SuccessGreen.copy(alpha = 0.15f))
                         .border(1.dp, SuccessGreen.copy(alpha = 0.3f), CircleShape),
                 )
-                // Icon — the configured action, not a generic tick.
                 Icon(
-                    imageVector = collectionIcon(collectionAction),
+                    imageVector = swipeRightIcon(swipeRightVerb),
                     contentDescription = SwipeLabels.rightDescription(
-                        collectionAction,
+                        swipeRightVerb,
                         collectionFolderName,
                     ),
                     tint = SuccessGreen.copy(alpha = 0.9f),
@@ -327,7 +442,6 @@ fun PhoneModeViewer(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 val primaryColor = MaterialTheme.colorScheme.primary
-                // Glow ring
                 Box(
                     modifier = Modifier
                         .size(120.dp)
@@ -335,7 +449,6 @@ fun PhoneModeViewer(
                         .background(primaryColor.copy(alpha = 0.15f))
                         .border(1.dp, primaryColor.copy(alpha = 0.3f), CircleShape),
                 )
-                // Icon
                 Icon(
                     imageVector = leftSwipeIcon(leftSwipeAction),
                     contentDescription = SwipeLabels.leftDescription(
@@ -354,7 +467,7 @@ fun PhoneModeViewer(
 
 /**
  * A single page in the vertical pager.
- * Handles horizontal-drag gestures: swipe-left = delete, swipe-right = add to collection.
+ * Handles horizontal-drag gestures: swipe-left = delete, swipe-right = add to collection / favourite.
  */
 @Composable
 private fun ImagePage(
@@ -368,13 +481,16 @@ private fun ImagePage(
     hudAlpha: Float,
     readOnly: Boolean,
     showFloatingPeeks: Boolean,
+    hasRawCompanion: Boolean,
+    isFavourite: Boolean,
     leftSwipeAction: SwipeAction,
     leftSwipeFolderName: String,
-    collectionAction: CollectionAction,
+    swipeRightVerb: SwipeRightVerb,
     collectionFolderName: String,
     isActive: Boolean,
     onZoomChanged: (Boolean) -> Unit,
     onSingleTap: () -> Unit,
+    onLongPress: () -> Unit,
     onSwipeLeftDelete: () -> Unit,
     onSwipeRightCollect: () -> Unit,
     onFirstRunHint: (FirstRunHint) -> Unit = {},
@@ -430,6 +546,7 @@ private fun ImagePage(
     }
 
     val currentOnSingleTap by rememberUpdatedState(onSingleTap)
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
     val currentOnFirstRunHint by rememberUpdatedState(onFirstRunHint)
 
     val colors = MaterialTheme.colorScheme
@@ -442,6 +559,7 @@ private fun ImagePage(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { currentOnSingleTap() },
+                    onLongPress = { currentOnLongPress() },
                     onDoubleTap = { centroid ->
                         val width = size.width
                         val height = size.height
@@ -467,7 +585,7 @@ private fun ImagePage(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    val firstDown = awaitFirstDown(requireUnconsumed = false)
+                    awaitFirstDown(requireUnconsumed = false)
                     val width = size.width
                     val height = size.height
 
@@ -515,7 +633,6 @@ private fun ImagePage(
                             }
                         } while (event.changes.any { it.pressed })
 
-                        // Gestures released - check if we need to animate reset/coerce
                         if (scale < 1.05f) {
                             coroutineScope.launch { animateReset() }
                         } else if (scale > 4f) {
@@ -622,10 +739,7 @@ private fun ImagePage(
                 ),
         )
 
-        // ── Collection indicator (right-swipe) ───────────────────────
-        // Labelled with the configured action (COPY / MOVE): the photo is filed
-        // away, not merely "kept", and saying "KEEP" while a file is moved out
-        // of the source folder is a lie the user only discovers afterwards.
+        // ── Collection / Favourite indicator (right-swipe) ───────────
         if (!readOnly && isSwipingRight) {
             Column(
                 modifier = Modifier
@@ -653,9 +767,9 @@ private fun ImagePage(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            imageVector = collectionIcon(collectionAction),
+                            imageVector = swipeRightIcon(swipeRightVerb),
                             contentDescription = SwipeLabels.rightDescription(
-                                collectionAction,
+                                swipeRightVerb,
                                 collectionFolderName,
                             ),
                             tint = Color.White,
@@ -665,7 +779,7 @@ private fun ImagePage(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = SwipeLabels.rightLabel(collectionAction),
+                    text = SwipeLabels.rightLabel(swipeRightVerb),
                     style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 3.sp),
                     color = SuccessGreen,
                 )
@@ -700,14 +814,12 @@ private fun ImagePage(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    // Outer glow
                     Box(
                         modifier = Modifier
                             .size((96 * pulseScale).dp)
                             .clip(CircleShape)
                             .background(containerColor.copy(alpha = 0.3f)),
                     )
-                    // Inner circle
                     Box(
                         modifier = Modifier
                             .size((64 + 16 * swipeProgress).dp)
@@ -742,7 +854,6 @@ private fun ImagePage(
         // ── Navigation peeks (subtle idle hints on left/right edges with direction arrows) ──
         if (!readOnly && showFloatingPeeks && !isZoomed && !isSwipingLeft && !isSwipingRight && hudAlpha > 0.5f) {
             val peekTransition = rememberInfiniteTransition(label = "peeks")
-            // Right-side (trash) offset: slides from 12dp (mostly hidden) to -4dp (showing more)
             val trashPeekOffset by peekTransition.animateFloat(
                 initialValue = 12f,
                 targetValue = -4f,
@@ -752,7 +863,6 @@ private fun ImagePage(
                 ),
                 label = "trash-peek-offset",
             )
-            // Left-side (keep) offset: slides from -12dp (mostly hidden) to 4dp (showing more)
             val keepPeekOffset by peekTransition.animateFloat(
                 initialValue = -12f,
                 targetValue = 4f,
@@ -763,7 +873,6 @@ private fun ImagePage(
                 label = "keep-peek-offset",
             )
 
-            // Left peek: the collection action (copy/move icon + arrow pointing right)
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -780,9 +889,9 @@ private fun ImagePage(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = collectionIcon(collectionAction),
+                        imageVector = swipeRightIcon(swipeRightVerb),
                         contentDescription = "Swipe right to " +
-                            SwipeLabels.rightDescription(collectionAction, collectionFolderName)
+                            SwipeLabels.rightDescription(swipeRightVerb, collectionFolderName)
                                 .lowercase(),
                         tint = SuccessGreen,
                         modifier = Modifier.size(20.dp),
@@ -796,7 +905,6 @@ private fun ImagePage(
                 )
             }
 
-            // Right peek: Left Swipe Action (delete/copy/move icon + arrow pointing left)
             val isDelete = SwipeLabels.leftIsDestructive(leftSwipeAction)
             val icon = leftSwipeIcon(leftSwipeAction)
             val color = if (isDelete) colors.error else colors.primary
@@ -869,6 +977,48 @@ private fun ImagePage(
             }
         }
 
+        // ── Persistent Favourite badge + RAW+JPG badge (top-start below app bar) ──
+        if ((isFavourite || hasRawCompanion) && hudAlpha > 0f) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, top = 56.dp)
+                    .graphicsLayer { alpha = hudAlpha },
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (isFavourite) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = colors.primaryContainer.copy(alpha = 0.85f),
+                    ) {
+                        Text(
+                            text = "★ Favourite",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.onPrimaryContainer,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+                if (hasRawCompanion) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = colors.secondaryContainer.copy(alpha = 0.85f),
+                    ) {
+                        Text(
+                            text = "RAW+JPG",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.onSecondaryContainer,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
+
         // ── EXIF overlay (glassmorphic card, bottom-start) ───────────
         if (showExifOverlay && hudAlpha > 0f) {
             image.exifData?.let { exif ->
@@ -878,7 +1028,7 @@ private fun ImagePage(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .navigationBarsPadding()
-                        .padding(start = 16.dp, bottom = 100.dp) // above nav bar
+                        .padding(start = 16.dp, bottom = 100.dp)
                         .graphicsLayer { alpha = hudAlpha },
                 )
             }
@@ -900,8 +1050,6 @@ private fun ImagePage(
                 ),
             ) {
                 Text(
-                    // "12 / 240+" while the folder is still being enumerated, so a
-                    // growing total reads as "still finding photos" and not as a bug.
                     text = "${pageIndex + 1} / $totalCount" + if (isDiscovering) "+" else "",
                     style = MaterialTheme.typography.labelMedium,
                     color = colors.primary,
@@ -947,7 +1095,6 @@ private fun ExifOverlay(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            // Filename
             Text(
                 text = fileName.uppercase(),
                 style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 1.sp),
@@ -956,7 +1103,6 @@ private fun ExifOverlay(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            // Camera EXIF
             if (items.isNotEmpty()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -978,7 +1124,6 @@ private fun ExifOverlay(
                 }
             }
 
-            // Lens
             if (exif.lens != "Unknown") {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

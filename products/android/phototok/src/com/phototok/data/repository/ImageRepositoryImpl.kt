@@ -26,8 +26,16 @@ class ImageRepositoryImpl @Inject constructor(
         private const val TAG = "ImageRepositoryImpl"
     }
 
-    override fun discoverImages(folderUri: Uri): Flow<List<ImageItem>> =
-        resolver.sourceFor(folderUri).discoverImages(folderUri)
+    override fun discoverImages(
+        folderUri: Uri,
+        excludedFolderNames: Set<String>,
+        shuffleFirstBatch: Boolean,
+    ): Flow<List<ImageItem>> =
+        resolver.sourceFor(folderUri).discoverImages(
+            folderUri = folderUri,
+            excludedFolderNames = excludedFolderNames,
+            shuffleFirstBatch = shuffleFirstBatch,
+        )
 
     override suspend fun prepareSourceFolder(folderUri: Uri): String? =
         resolver.sourceFor(folderUri).prepareSourceFolder(folderUri)

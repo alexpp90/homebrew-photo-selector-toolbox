@@ -115,9 +115,29 @@ class FolderScanLogicTest {
     }
 
     @Test
-    fun `randomized feed keeps the current photo unless new photos exist`() {
+    fun `randomized feed keeps the current photo even when new photos exist`() {
         assertEquals(2, landing(randomized = true, uri = "content://media/b.jpg"))
-        assertEquals(0, landing(randomized = true, prevMax = 350L, uri = "content://media/b.jpg"))
+        assertEquals(2, landing(randomized = true, prevMax = 350L, uri = "content://media/b.jpg"))
+    }
+
+    @Test
+    fun `shooting feed lands on first unseen photo`() {
+        val shootingFeed = listOf(
+            sampleImage("a.jpg", 100L),
+            sampleImage("b.jpg", 200L),
+            sampleImage("c.jpg", 300L),
+        )
+        val idx = FolderScanLogic.resolveLandingIndex(
+            images = shootingFeed,
+            previousMaxLastModified = 100L,
+            userHasNavigated = false,
+            randomized = false,
+            preservedUri = null,
+            currentIndex = 0,
+            mode = FeedOrderMode.SHOOTING,
+            seenUris = setOf("content://media/a.jpg", "content://media/b.jpg"),
+        )
+        assertEquals(2, idx)
     }
 
     @Test
