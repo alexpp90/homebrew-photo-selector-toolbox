@@ -86,19 +86,35 @@ DEX_POLLS = 20
 DEX_POLL_S = 1.0
 
 
-def _maestro_dex_tile(serial: str | None) -> int:
-    """Tap the DeX tile in Quick Settings with Maestro (`scripts/lab/flows/samsung_dex_tile.yaml`)."""
-    import tempfile
+def _tap_dex_tile(adb: AdbClient) -> int:
+    """Open Quick Settings, find the tile whose label is exactly "DeX" and tap its centre.
 
-    from .runner import default_maestro_runner
-
-    flow = Path(__file__).resolve().parent.parent.parent / "flows" / "samsung_dex_tile.yaml"
-    with tempfile.TemporaryDirectory(prefix="pstlab-dex-") as tmp:
-        return default_maestro_runner(serial, flow, Path(tmp) / "dex.xml")
+    Samsung exposes no shell command for DeX, ignores `cmd statusbar click-tile` for it, and
+    Maestro hangs on its system UI; a plain uiautomator dump plus `input tap` works. The dump
+    is retried until the panel has finished expanding (an early tap lands on the animation).
+    Returns 0 when the tile was tapped.
+    """
+    adb.run("shell", "cmd", "statusbar", "expand-settings")
+    for _ in range(5):
+        if DEX_POLL_S > 0:
+            time.sleep(DEX_POLL_S)
+        adb.run("shell", "uiautomator", "dump", "/sdcard/pst_qs.xml", timeout=30)
+        xml = adb.run("shell", "cat", "/sdcard/pst_qs.xml")
+        for node in re.findall(r"<node [^>]*>", xml):
+            label = re.search(r'content-desc="([^"]*)"', node)
+            text = re.search(r' text="([^"]*)"', node)
+            names = {(label.group(1) if label else "").strip(), (text.group(1) if text else "").strip()}
+            b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
+            if "DeX" in names and b and 'clickable="true"' in node:
+                x0, y0, x1, y1 = (int(v) for v in b.groups())
+                adb.run("shell", "input", "tap", str((x0 + x1) // 2), str((y0 + y1) // 2))
+                return 0
+    adb.run("shell", "cmd", "statusbar", "collapse")
+    return 1
 
 
 # Fallback used by `set_dex` when `click-tile` does not switch DeX; tests replace it.
-DEX_TILE_TAPPER: Callable[[str | None], int] | None = _maestro_dex_tile
+DEX_TILE_TAPPER: Callable[[AdbClient], int] | None = _tap_dex_tile
 
 
 def dex_active(adb: AdbClient) -> bool:
@@ -113,7 +129,7 @@ def dex_active(adb: AdbClient) -> bool:
     return bool(m and m.group(1) == "freeform")
 
 
-def set_dex(adb: AdbClient, on: bool, tile_tapper: Callable[[str | None], int] | None = None) -> None:
+def set_dex(adb: AdbClient, on: bool, tile_tapper: Callable[[AdbClient], int] | None = None) -> None:
     """Switch DeX on or off through its Quick Settings tile and verify the windowing mode.
 
     Raises `ConfigNotRunError` when the switch does not take effect (tile missing, device
@@ -140,7 +156,7 @@ def set_dex(adb: AdbClient, on: bool, tile_tapper: Callable[[str | None], int] |
         return
     # One UI ignores click-tile for the DeX tile; tap it in Quick Settings instead.
     tapper = tile_tapper or DEX_TILE_TAPPER
-    if tapper is not None and tapper(adb.serial) == 0 and wait_for(on):
+    if tapper is not None and tapper(adb) == 0 and wait_for(on):
         return
     state = "on" if on else "off"
     raise ConfigNotRunError(

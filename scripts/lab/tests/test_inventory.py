@@ -280,7 +280,7 @@ class DexTests(unittest.TestCase):
     def test_quick_settings_tap_is_the_fallback_when_click_tile_is_ignored(self) -> None:
         adb = _DexAdb(stuck=True)  # click-tile does nothing, like One UI 8
 
-        def tap(serial):  # type: ignore[no-untyped-def]
+        def tap(_adb):  # type: ignore[no-untyped-def]
             adb.dex = True
             return 0
 
