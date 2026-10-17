@@ -365,7 +365,10 @@ def test_deb_depends_and_recommends_come_from_debian_control(tmp_path):
     bin_stanza = src.strip().split("\n\n")[-1]
     for key in ("Depends", "Recommends"):
         block = re.search(rf"^{key}:\n((?: .*\n?)+)", bin_stanza, re.M).group(1)
-        expected = [d.strip() for d in block.replace("\n", " ").split(",") if d.strip() and not d.strip().startswith("${")]
+        expected = [
+            d.strip() for d in block.replace("\n", " ").split(",")
+            if d.strip() and not d.strip().startswith("${")
+        ]
         assert field(built, key).split(", ") == expected
     assert "python3 (>= 3.12)" in field(built, "Depends")
 
@@ -376,7 +379,7 @@ def test_desktop_mimetype_covers_every_supported_format():
 
     assert set(formats.MIME_TYPE_BY_EXTENSION) == set(formats.SUPPORTED_EXTENSIONS)
     desktop = (get_product_root() / "data" / "org.photoselector.Linux.desktop").read_text()
-    line = next(l for l in desktop.splitlines() if l.startswith("MimeType="))
+    line = next(row for row in desktop.splitlines() if row.startswith("MimeType="))
     assert set(filter(None, line.split("=", 1)[1].split(";"))) == set(formats.MIME_TYPES)
 
 
@@ -427,8 +430,10 @@ def test_appstream_validates():
     assert res.returncode == 0, res.stdout + res.stderr
 
 
-@pytest.mark.skipif(not __import__("shutil").which("desktop-file-validate"), reason="desktop-file-validate not installed")
+@pytest.mark.skipif(
+    not __import__("shutil").which("desktop-file-validate"), reason="desktop-file-validate not installed"
+)
 def test_desktop_file_validates():
-    res = subprocess.run(["desktop-file-validate", str(get_product_root() / "data" / "org.photoselector.Linux.desktop")],
-                         capture_output=True, text=True)
+    desktop = get_product_root() / "data" / "org.photoselector.Linux.desktop"
+    res = subprocess.run(["desktop-file-validate", str(desktop)], capture_output=True, text=True)
     assert res.returncode == 0, res.stdout + res.stderr
