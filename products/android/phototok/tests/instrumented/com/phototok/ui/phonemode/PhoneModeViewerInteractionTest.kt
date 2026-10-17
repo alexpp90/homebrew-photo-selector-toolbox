@@ -12,15 +12,22 @@ import com.phototok.domain.SwipeAction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 
 @RunWith(AndroidJUnit4::class)
 class PhoneModeViewerInteractionTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Before
+    fun enableAccessibilityChecks() {
+        composeTestRule.enableAccessibilityChecks()
+    }
 
     private fun testImage(name: String) = ImageItem(
         uri = "content://media/external/images/media/$name",

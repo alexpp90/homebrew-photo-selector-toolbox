@@ -1,0 +1,10 @@
+appId: com.photoselectortoolbox.lab
+---
+- extendedWaitUntil:
+    visible:
+      id: "position_counter"
+    timeout: 10000
+- assertVisible:
+    id: "image_region"
+- assertVisible:
+    id: "selector_sidebar"

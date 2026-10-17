@@ -1,0 +1,19 @@
+id: J-TOK-05
+product: phototok
+title: Swipe right on burst folder with RAW and JPEG files
+fixture: burst-raw-jpeg
+configs: [phone-portrait]
+fresh_install: false
+steps:
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-05/01_keep_frame3.yaml}
+  - {wait_ms: 1500}
+  - {checkpoint: kept-pair}
+fs_expect:
+  kept-pair:
+    present: ["*Selection*DSC_0003.JPG"]
+layout_expect:
+  kept-pair:
+    required: [viewer.photo]
+timing_expect:
+  kept-pair:
+    trend: true

@@ -7,6 +7,7 @@ Adheres to:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 try:
@@ -31,6 +32,7 @@ class PhotoSelectorApplication(Adw.Application if HAS_GI else object):
             )
         self.app_id = application_id
         self.window = None
+        self._lab_recorder = None
 
     def do_startup(self) -> None:
         if not HAS_GI:
@@ -88,6 +90,18 @@ class PhotoSelectorApplication(Adw.Application if HAS_GI else object):
             action.connect("activate", callback)
             self.add_action(action)
             self.set_accels_for_action(f"app.{name}", accels)
+
+        if os.environ.get("PST_LAB") == "1":
+            from photo_selector_linux.ui.lab_hooks import LabCheckpointRecorder
+            self._lab_recorder = LabCheckpointRecorder()
+            lab_action = Gio.SimpleAction.new("lab-checkpoint", GLib.VariantType.new("s"))
+            lab_action.connect("activate", self._on_action_lab_checkpoint)
+            self.add_action(lab_action)
+
+    def _on_action_lab_checkpoint(self, action, param) -> None:
+        if self._lab_recorder is not None:
+            name = param.get_string() if param is not None else "checkpoint"
+            self._lab_recorder.record_checkpoint(self.window, name)
 
     def _on_action_open_folder(self, action, param) -> None:
         if self.window:

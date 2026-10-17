@@ -1,0 +1,8 @@
+appId: com.photoselectortoolbox.lab
+---
+- tapOn:
+    id: "scan_button"
+- extendedWaitUntil:
+    visible:
+      id: "score_legend_button"
+    timeout: 15000

@@ -1,0 +1,6 @@
+appId: com.phototok.lab
+---
+- tapOn:
+    id: "info_exif_button"
+- assertVisible:
+    id: "viewer.info"

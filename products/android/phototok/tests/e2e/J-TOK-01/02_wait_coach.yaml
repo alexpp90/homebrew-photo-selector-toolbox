@@ -1,0 +1,8 @@
+appId: com.phototok.lab
+---
+- extendedWaitUntil:
+    visible:
+      id: "viewer.photo"
+    timeout: 10000
+- assertVisible:
+    id: "controls_guide"

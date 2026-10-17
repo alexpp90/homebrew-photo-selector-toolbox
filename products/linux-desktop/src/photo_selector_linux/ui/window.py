@@ -73,7 +73,10 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
     def _build_header_bar(self) -> None:
         # Open Folder button
         self.btn_open = Gtk.Button.new_from_icon_name("folder-open-symbolic")
+        self.btn_open.set_name("btn_open")
         self.btn_open.set_tooltip_text("Open Folder (Ctrl+O)")
+        if hasattr(Gtk, "AccessibleProperty") and hasattr(self.btn_open, "update_property"):
+            self.btn_open.update_property([Gtk.AccessibleProperty.LABEL], ["Open folder"])
         self.btn_open.set_action_name("app.open_folder")
         self.header_bar.pack_start(self.btn_open)
 
@@ -90,8 +93,11 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
         mode_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         mode_box.add_css_class("linked")
         self.btn_mode_1 = Gtk.Button(label="1-Up (1)")
+        self.btn_mode_1.set_name("btn_mode_1")
         self.btn_mode_2 = Gtk.Button(label="2-Up (2)")
+        self.btn_mode_2.set_name("btn_mode_2")
         self.btn_mode_3 = Gtk.Button(label="Focus 3-Up (3)")
+        self.btn_mode_3.set_name("btn_mode_3")
 
         self.btn_mode_1.connect("clicked", lambda b: self.viewmodel.set_comparison_mode(1))
         self.btn_mode_2.connect("clicked", lambda b: self.viewmodel.set_comparison_mode(2))

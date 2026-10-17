@@ -136,8 +136,33 @@ class FolderScanLogicTest {
             sampleImage("b.jpg", 500L),
             sampleImage("c.jpg", 300L),
         )
-        val info = FolderScanLogic.computeUpdatedScanInfo(list)
+        val info = FolderScanLogic.computeUpdatedScanInfo(list, lastViewedUri = "content://media/c.jpg", lastViewedIndex = 2)
         assertEquals(500L, info.maxLastModified)
         assertEquals(3, info.fileCount)
+        assertEquals("content://media/c.jpg", info.lastViewedUri)
+        assertEquals(2, info.lastViewedIndex)
+    }
+
+    @Test
+    fun `resolveResumeIndex prefers matching URI and falls back to clamped index`() {
+        // Exact URI match even when new photos shifted its index
+        assertEquals(2, FolderScanLogic.resolveResumeIndex(feed, "content://media/b.jpg", lastViewedIndex = 0))
+        // Fallback to clamped index when URI was removed
+        assertEquals(1, FolderScanLogic.resolveResumeIndex(feed, "content://media/deleted.jpg", lastViewedIndex = 1))
+        assertEquals(3, FolderScanLogic.resolveResumeIndex(feed, null, lastViewedIndex = 99))
+        assertEquals(0, FolderScanLogic.resolveResumeIndex(emptyList(), "content://media/b.jpg", lastViewedIndex = 2))
+    }
+
+    @Test
+    fun `findNewPhotos identifies photos newer than previousMaxLastModified or absent from urisBeforeReload`() {
+        val byTimestamp = FolderScanLogic.findNewPhotos(feed, previousMaxLastModified = 250L)
+        assertEquals(listOf("d.jpg", "c.jpg"), byTimestamp.map { it.fileName })
+
+        val byUriSet = FolderScanLogic.findNewPhotos(
+            images = feed,
+            previousMaxLastModified = 400L,
+            urisBeforeReload = setOf("content://media/c.jpg", "content://media/b.jpg", "content://media/a.jpg"),
+        )
+        assertEquals(listOf("d.jpg"), byUriSet.map { it.fileName })
     }
 }

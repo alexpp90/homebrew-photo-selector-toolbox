@@ -1,0 +1,17 @@
+id: J-MAC-02
+product: macos
+title: Space 1:1 zoom, synchronized pan lock, and toolbar interaction while zoomed
+fixture: burst-jpeg
+configs: [w1440]
+fresh_install: false
+steps:
+  - scenario: products/macos-desktop/tests/e2e/J-MAC-02.scenario.json
+  - checkpoint: zoomed-1to1
+  - checkpoint: pan-locked
+  - checkpoint: toolbar-while-zoomed
+fs_expect:
+  zoomed-1to1:
+    unchanged: true
+layout_expect:
+  zoomed-1to1:
+    required: [single_image_viewport]

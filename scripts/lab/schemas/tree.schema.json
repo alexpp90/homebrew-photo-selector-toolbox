@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Normalised UI Tree",
+  "type": "object",
+  "required": ["platform", "window", "nodes"],
+  "properties": {
+    "platform": {
+      "type": "string",
+      "enum": ["android", "macos", "linux"]
+    },
+    "window": {
+      "type": "object",
+      "required": ["w", "h", "unit", "scale"],
+      "properties": {
+        "w": {"type": "number"},
+        "h": {"type": "number"},
+        "unit": {"type": "string", "enum": ["dp", "pt", "px"]},
+        "scale": {"type": "number"}
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "parent",
+          "role",
+          "name",
+          "bounds",
+          "interactive",
+          "visible",
+          "overlay",
+          "text",
+          "clipped"
+        ],
+        "properties": {
+          "id": {"type": "string"},
+          "parent": {"type": ["string", "null"]},
+          "role": {
+            "type": "string",
+            "enum": ["button", "image", "text", "container", "input", "menu", "dialog", "other"]
+          },
+          "name": {"type": "string"},
+          "bounds": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "interactive": {"type": "boolean"},
+          "visible": {"type": "boolean"},
+          "overlay": {"type": "boolean"},
+          "text": {"type": "string"},
+          "clipped": {"type": ["boolean", "null"]}
+        }
+      }
+    }
+  }
+}

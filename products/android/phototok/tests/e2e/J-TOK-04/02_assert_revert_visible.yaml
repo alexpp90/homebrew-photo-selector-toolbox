@@ -1,0 +1,4 @@
+appId: com.phototok.lab
+---
+- assertVisible:
+    id: "viewer_revert_button"

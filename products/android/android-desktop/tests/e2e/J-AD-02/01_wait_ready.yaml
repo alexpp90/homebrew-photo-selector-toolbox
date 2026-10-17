@@ -1,0 +1,6 @@
+appId: com.photoselectortoolbox.lab
+---
+- assertVisible:
+    id: "image_region"
+- assertVisible:
+    id: "position_counter"

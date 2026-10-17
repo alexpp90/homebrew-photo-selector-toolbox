@@ -34,14 +34,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Icon
@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,9 +80,10 @@ private val BOTTOM_BAR_HEIGHT = 12.dp
 
 /**
  * Space the up/down swipe callouts take above and below the photo frame
- * (36dp circle + label, twice, plus the 4dp gaps).
+ * (44dp circle + label, twice, plus the 6dp gaps).
  */
-private val VERTICAL_CALLOUTS_HEIGHT = 80.dp
+private val VERTICAL_CALLOUTS_HEIGHT = 140.dp
+private val COMPACT_VERTICAL_CALLOUTS_HEIGHT = 108.dp
 
 /**
  * Coach-mark overlay explaining every Photo-Tok control **in place**.
@@ -122,7 +124,7 @@ fun GestureTutorialOverlay(
         val isLandscape = configuration.orientation ==
             android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 // A scrim rather than an opaque sheet: the controls being explained
@@ -134,25 +136,31 @@ fun GestureTutorialOverlay(
                 ) { /* absorb taps */ }
                 .testTag("controls_guide"),
         ) {
+            val compact = isLandscape || maxHeight < 600.dp || maxWidth < 360.dp
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = if (compact) 12.dp else 16.dp),
             ) {
                 // The real top app bar keeps drawing above this scrim; leave its
                 // height clear so the callouts sit *under* the icons they label
                 // instead of on top of them.
-                Spacer(modifier = Modifier.height(TOP_BAR_HEIGHT))
+                Spacer(modifier = Modifier.height(if (compact) 6.dp else TOP_BAR_HEIGHT))
 
-                TopBarCoachMarks()
+                TopBarCoachMarks(compact = compact)
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(if (compact) 2.dp else 4.dp))
 
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = if (compact) {
+                        MaterialTheme.typography.titleMedium
+                    } else {
+                        MaterialTheme.typography.headlineSmall
+                    },
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                 )
@@ -160,6 +168,8 @@ fun GestureTutorialOverlay(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant,
+                    maxLines = if (compact) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
 
                 // ── Gesture stage: the three swipes over the photo area ───
@@ -174,16 +184,17 @@ fun GestureTutorialOverlay(
                         collectionAction = collectionAction,
                         leftSwipeFolderName = leftSwipeFolderName,
                         collectionFolderName = collectionFolderName,
-                        compact = isLandscape,
+                        compact = compact,
                     )
                 }
 
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(36.dp)
+                        .height(if (compact) 32.dp else 36.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { onDismiss() },
+                        .clickable { onDismiss() }
+                        .testTag("gesture_tutorial_got_it"),
                     shape = RoundedCornerShape(12.dp),
                     color = colors.primaryContainer,
                 ) {
@@ -199,12 +210,12 @@ fun GestureTutorialOverlay(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(if (compact) 2.dp else 4.dp))
 
                 // ── Bottom-bar coach marks, above the real bottom bar ────
-                BottomBarCoachMarks()
+                BottomBarCoachMarks(compact = compact)
 
-                Spacer(modifier = Modifier.height(BOTTOM_BAR_HEIGHT))
+                Spacer(modifier = Modifier.height(if (compact) 6.dp else BOTTOM_BAR_HEIGHT))
             }
         }
     }
@@ -213,14 +224,14 @@ fun GestureTutorialOverlay(
 // ── Coach marks anchored to the real chrome ──────────────────────────────
 
 /**
- * Labels for the top app bar: the logo on the left, help and settings on the
- * right — in the same order and alignment as [PhoneModeScreen] renders them.
+ * Labels for the top app bar: the logo on the left, reload, help, info and settings
+ * on the right — in the same order and alignment as [PhoneModeScreen] renders them.
  */
 @Composable
-private fun TopBarCoachMarks() {
+private fun TopBarCoachMarks(compact: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.Top,
     ) {
         CoachMark(
@@ -228,33 +239,50 @@ private fun TopBarCoachMarks() {
             label = "Tap the logo",
             description = "Show or hide the camera info on each photo",
             pointsUp = true,
-            modifier = Modifier.width(150.dp),
+            compact = compact,
+            modifier = Modifier.weight(1.35f),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CoachMark(
-                icon = null,
-                label = "Help",
-                description = "This guide",
-                pointsUp = true,
-                modifier = Modifier.width(70.dp),
-            )
-            CoachMark(
-                icon = null,
-                label = "Settings",
-                description = "Swipe actions, sorting, filters",
-                pointsUp = true,
-                modifier = Modifier.width(96.dp),
-            )
-        }
+        CoachMark(
+            icon = null,
+            label = "Reload",
+            description = "Rescan folder",
+            pointsUp = true,
+            compact = compact,
+            modifier = Modifier.weight(0.9f),
+        )
+        CoachMark(
+            icon = null,
+            label = "Help",
+            description = "This guide",
+            pointsUp = true,
+            compact = compact,
+            modifier = Modifier.weight(0.8f),
+        )
+        CoachMark(
+            icon = null,
+            label = "Info",
+            description = "EXIF overlay",
+            pointsUp = true,
+            compact = compact,
+            modifier = Modifier.weight(0.8f),
+        )
+        CoachMark(
+            icon = null,
+            label = "Settings",
+            description = "Actions & filters",
+            pointsUp = true,
+            compact = compact,
+            modifier = Modifier.weight(1.05f),
+        )
     }
 }
 
 /** Labels for the three bottom-bar buttons, in their real order. */
 @Composable
-private fun BottomBarCoachMarks() {
+private fun BottomBarCoachMarks(compact: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceAround,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
         CoachMark(
@@ -262,21 +290,24 @@ private fun BottomBarCoachMarks() {
             label = "Sources",
             description = "Pick another folder",
             pointsUp = false,
-            modifier = Modifier.width(96.dp),
+            compact = compact,
+            modifier = Modifier.weight(1f),
         )
         CoachMark(
-            icon = Icons.Default.Star,
+            icon = Icons.Default.CollectionsBookmark,
             label = "Selection",
             description = "Everything you filed away",
             pointsUp = false,
-            modifier = Modifier.width(104.dp),
+            compact = compact,
+            modifier = Modifier.weight(1.1f),
         )
         CoachMark(
-            icon = Icons.AutoMirrored.Filled.Undo,
+            icon = Icons.Default.RestoreFromTrash,
             label = "Revert",
-            description = "Undo the last delete",
+            description = "Restore last deleted photo",
             pointsUp = false,
-            modifier = Modifier.width(96.dp),
+            compact = compact,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -291,6 +322,7 @@ private fun CoachMark(
     label: String,
     description: String,
     pointsUp: Boolean,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -299,18 +331,18 @@ private fun CoachMark(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (pointsUp) Connector(colors.primary)
+        if (pointsUp) Connector(colors.primary, compact = compact)
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = colors.primary,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(if (compact) 12.dp else 14.dp),
                 )
             }
             Text(
@@ -318,6 +350,8 @@ private fun CoachMark(
                 style = MaterialTheme.typography.labelMedium,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Text(
@@ -325,20 +359,22 @@ private fun CoachMark(
             style = MaterialTheme.typography.labelSmall,
             color = colors.onSurfaceVariant,
             textAlign = TextAlign.Center,
+            maxLines = if (compact) 1 else 2,
+            overflow = TextOverflow.Ellipsis,
         )
 
-        if (!pointsUp) Connector(colors.primary)
+        if (!pointsUp) Connector(colors.primary, compact = compact)
     }
 }
 
 /** The short vertical leader line that ties a callout to its control. */
 @Composable
-private fun Connector(color: Color) {
+private fun Connector(color: Color, compact: Boolean = false) {
     Box(
         modifier = Modifier
-            .padding(vertical = 3.dp)
+            .padding(vertical = if (compact) 2.dp else 3.dp)
             .width(1.dp)
-            .height(12.dp)
+            .height(if (compact) 8.dp else 12.dp)
             .background(color.copy(alpha = 0.5f)),
     )
 }
@@ -365,11 +401,13 @@ private fun GestureStage(
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         // Derived from what is left after the up/down callouts rather than as a
         // fraction of the height: a fraction overflows on short screens, where the
-        // two callouts (~68dp each) are a large share of the available space.
-        val frameHeight = (maxHeight - VERTICAL_CALLOUTS_HEIGHT).coerceIn(
+        // two callouts are a large share of the available space.
+        val calloutsHeight = if (compact) COMPACT_VERTICAL_CALLOUTS_HEIGHT else VERTICAL_CALLOUTS_HEIGHT
+        val frameHeight = (maxHeight - calloutsHeight).coerceIn(
             minimumValue = 24.dp,
             maximumValue = if (compact) 132.dp else 260.dp,
         )
+        val sideCalloutWidth = if (compact || maxWidth < 340.dp) 76.dp else 92.dp
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -383,13 +421,14 @@ private fun GestureStage(
                 tint = colors.secondary,
                 axis = DriftAxis.UP,
                 delayMs = 0,
+                compact = compact,
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(if (compact) 4.dp else 6.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 // ── Left ──────────────────────────────────────────────
@@ -401,7 +440,8 @@ private fun GestureStage(
                     tint = leftTint,
                     axis = DriftAxis.LEFT,
                     delayMs = 600,
-                    modifier = Modifier.width(92.dp),
+                    compact = compact,
+                    modifier = Modifier.width(sideCalloutWidth),
                 )
 
                 // ── The photo the gestures act on ─────────────────────
@@ -420,17 +460,19 @@ private fun GestureStage(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 14.dp),
                     ) {
                         TapHint(
                             icon = Icons.Default.TouchApp,
                             label = "Single tap",
                             description = "Hide the overlays",
+                            compact = compact,
                         )
                         TapHint(
                             icon = Icons.Default.ZoomIn,
                             label = "Double tap or pinch",
                             description = "Zoom in, drag to pan",
+                            compact = compact,
                         )
                     }
                 }
@@ -447,11 +489,12 @@ private fun GestureStage(
                     tint = colors.primary,
                     axis = DriftAxis.RIGHT,
                     delayMs = 300,
-                    modifier = Modifier.width(92.dp),
+                    compact = compact,
+                    modifier = Modifier.width(sideCalloutWidth),
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(if (compact) 4.dp else 6.dp))
 
             // ── Down ──────────────────────────────────────────────────
             SwipeCallout(
@@ -460,6 +503,7 @@ private fun GestureStage(
                 tint = colors.secondary,
                 axis = DriftAxis.DOWN,
                 delayMs = 900,
+                compact = compact,
             )
         }
     }
@@ -467,26 +511,35 @@ private fun GestureStage(
 
 /** A tap gesture explained inside the photo frame. */
 @Composable
-private fun TapHint(icon: ImageVector, label: String, description: String) {
+private fun TapHint(
+    icon: ImageVector,
+    label: String,
+    description: String,
+    compact: Boolean = false,
+) {
     val colors = MaterialTheme.colorScheme
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = colors.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(if (compact) 16.dp else 22.dp),
         )
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = Color.White,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = description,
             style = MaterialTheme.typography.labelSmall,
             color = colors.onSurfaceVariant,
             textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -504,6 +557,7 @@ private fun SwipeCallout(
     delayMs: Int,
     actionIcon: ImageVector? = null,
     description: String? = null,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -514,7 +568,7 @@ private fun SwipeCallout(
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(if (compact) 32.dp else 44.dp)
                 .clip(CircleShape)
                 .background(tint.copy(alpha = 0.12f))
                 .border(1.dp, tint.copy(alpha = 0.25f), CircleShape),
@@ -539,6 +593,8 @@ private fun SwipeCallout(
                 style = MaterialTheme.typography.labelMedium,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         if (description != null) {
@@ -547,6 +603,8 @@ private fun SwipeCallout(
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

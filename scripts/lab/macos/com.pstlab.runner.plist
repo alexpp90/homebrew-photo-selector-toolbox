@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pstlab.runner</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-i</string>
+        <string>/Users/pst-lab/pst/photo-selector/scripts/lab/macos/agent_run.sh</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+        <string>/Users/pst-lab/pst/trigger/run.json</string>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/pst-lab/pst/out/agent.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/pst-lab/pst/out/agent.stderr.log</string>
+</dict>
+</plist>

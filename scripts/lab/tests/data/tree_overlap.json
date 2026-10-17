@@ -1,0 +1,42 @@
+{
+  "platform": "android",
+  "window": {"w": 1480, "h": 844, "unit": "dp", "scale": 2.0},
+  "nodes": [
+    {
+      "id": "image_region",
+      "parent": null,
+      "role": "container",
+      "name": "",
+      "bounds": [212, 0, 1056, 844],
+      "interactive": false,
+      "visible": true,
+      "overlay": false,
+      "text": "",
+      "clipped": null
+    },
+    {
+      "id": "reject_button",
+      "parent": null,
+      "role": "button",
+      "name": "Delete",
+      "bounds": [1300, 700, 64, 56],
+      "interactive": true,
+      "visible": true,
+      "overlay": false,
+      "text": "Delete",
+      "clipped": false
+    },
+    {
+      "id": "rail_next",
+      "parent": null,
+      "role": "button",
+      "name": "Next",
+      "bounds": [1320, 710, 64, 56],
+      "interactive": true,
+      "visible": true,
+      "overlay": false,
+      "text": "Next",
+      "clipped": false
+    }
+  ]
+}

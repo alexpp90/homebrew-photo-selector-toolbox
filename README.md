@@ -79,9 +79,10 @@ A lightweight, touch-optimized portrait client designed for lightning-fast, sing
 * **TikTok-Style Vertical Feed:** Browse local collections seamlessly via Jetpack Compose native `VerticalPager` with background prefetching and progressive SAF loading (sub-second time-to-first-swipe).
 * **Tactile Culling Swipes:**
   * **Swipe-Right to File:** Instantly copy or move photos to your designated `Selection/` folder with an animated green confirmation glow.
-  * **Swipe-Left to Discard or Route:** Configurable action (Trash/Delete, Copy, or Move to secondary folder) with progressive card tilt ($2^\circ$) and non-blocking revert across scrolls.
+  * **Swipe-Left to Discard or Route:** Configurable action (Trash/Delete, Copy, or Move to secondary folder) with progressive card tilt ($2^\circ$) and non-blocking **Revert** (`RestoreFromTrash`) across scrolls.
+* **Session Resume & Newest Prompt:** Reopening a folder or reloading (`Sync`) reports whether newer photos were added since you last left and lets you choose between continuing where you left off or starting with the newest photo.
 * **Fluid Zoom & Pan:** Pinch-to-zoom (up to $6\times$) and double-tap to 2.5x zoom with single-finger panning; gestures automatically disable paging conflicts while zoomed.
-* **One-Tap Glassmorphic HUD:** Single tap toggles the translucent camera metadata panel (shutter, aperture, ISO, focal length, lens) and navigation controls for unobstructed viewing.
+* **One-Tap Glassmorphic HUD:** Single tap toggles the translucent camera metadata panel (shutter, aperture, ISO, focal length, lens) and micro-labelled navigation controls for unobstructed viewing.
 * **In-Place Guidance & Pairing:** Interactive coach-mark overlay anchored directly to UI controls, automatic RAW+JPEG companion pairing, and orientation-aware feed ordering.
 
 ---

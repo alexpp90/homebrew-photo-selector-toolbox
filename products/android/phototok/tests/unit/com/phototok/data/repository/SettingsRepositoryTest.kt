@@ -201,26 +201,43 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `folder scan info stores and retrieves by URI`() = runTest {
+    fun `folder scan info and last position store and retrieve by URI`() = runTest {
         val uri = "content://com.android.externalstorage.documents/tree/SD%3ADCIM"
         assertEquals(FolderScanInfo(0L, 0), repository.getFolderScanInfo(uri))
 
-        repository.setFolderScanInfo(uri, FolderScanInfo(maxLastModified = 1700000000L, fileCount = 42))
+        repository.setFolderScanInfo(
+            uri,
+            FolderScanInfo(
+                maxLastModified = 1700000000L,
+                fileCount = 42,
+                lastViewedUri = "$uri/document/photo1.jpg",
+                lastViewedIndex = 3,
+            ),
+        )
         val retrieved = repository.getFolderScanInfo(uri)
         assertEquals(1700000000L, retrieved.maxLastModified)
         assertEquals(42, retrieved.fileCount)
+        assertEquals("$uri/document/photo1.jpg", retrieved.lastViewedUri)
+        assertEquals(3, retrieved.lastViewedIndex)
+
+        repository.setFolderLastPosition(uri, "$uri/document/photo7.jpg", 7)
+        val afterMove = repository.getFolderScanInfo(uri)
+        assertEquals(1700000000L, afterMove.maxLastModified)
+        assertEquals(42, afterMove.fileCount)
+        assertEquals("$uri/document/photo7.jpg", afterMove.lastViewedUri)
+        assertEquals(7, afterMove.lastViewedIndex)
     }
 
     @Test
-    fun `clearFolderPositions deletes scan info alongside positions`() = runTest {
+    fun `clearFolderPositions deletes scan info and last positions alongside legacy positions`() = runTest {
         val uri = "content://com.android.externalstorage.documents/tree/SD%3ADCIM"
         writeRetiredPosition(uri, 5)
-        repository.setFolderScanInfo(uri, FolderScanInfo(12345L, 10))
+        repository.setFolderScanInfo(uri, FolderScanInfo(12345L, 10, "$uri/document/photo2.jpg", 2))
 
         repository.clearFolderPositions()
 
         assertFalse(hasRetiredPosition(uri))
-        assertEquals(FolderScanInfo(0L, 0), repository.getFolderScanInfo(uri))
+        assertEquals(FolderScanInfo(0L, 0, null, 0), repository.getFolderScanInfo(uri))
     }
 
     @Test
