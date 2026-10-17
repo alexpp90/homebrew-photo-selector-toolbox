@@ -30,6 +30,36 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Inside a Flatpak sandbox (the VS Code Flatpak, and so Claude Code and the integrated
+# terminal it hosts) /usr is the Freedesktop runtime, not the workstation: no GTK 4 /
+# Adwaita / GExiv2 typelibs, no tkinter, no xvfb-run, no dpkg-deb, and the Poetry venv —
+# built on the host's /usr/bin/python3 with system site-packages — does not resolve. Every
+# Python and Linux gate would then skip or fail for reasons that say nothing about the
+# code. Re-run on the host instead. A non-interactive host shell never reads ~/.bashrc,
+# so the JDK and SDK locations are carried across; only paths under $HOME, which the
+# sandbox shares with the host, mean the same thing on both sides.
+# A sandbox without host access (flatpak-builder, a CI Flatpak test run) stays where it is.
+# PST_NO_HOST_REEXEC=1 keeps the run inside the sandbox.
+if [ -f /.flatpak-info ] && [ -z "${PST_NO_HOST_REEXEC:-}" ] && command -v flatpak-spawn &>/dev/null \
+    && flatpak-spawn --host true &>/dev/null; then
+    host_env=(--env=PST_NO_HOST_REEXEC=1)
+    java_home="${JAVA_HOME:-}"
+    if [ -z "$java_home" ] && command -v java &>/dev/null; then
+        java_home="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+    fi
+    for var in java_home ANDROID_HOME ANDROID_SDK_ROOT; do
+        value="${!var:-}"
+        case "$value" in
+            "$HOME"/*) host_env+=("--env=${var^^}=$value") ;;
+        esac
+    done
+    echo -e "${DIM:-}Flatpak sandbox detected — running the gates on the host (PST_NO_HOST_REEXEC=1 to opt out)${NC:-}"
+    # shellcheck disable=SC2016  # expanded by the host shell, not here
+    exec flatpak-spawn --host --directory="$PWD" "${host_env[@]}" \
+        bash -lc '[ -n "${JAVA_HOME:-}" ] && export PATH="$JAVA_HOME/bin:$PATH"; exec bash "$@"' \
+        run_tests.sh "$SCRIPT_DIR/run_tests.sh" "$@"
+fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
