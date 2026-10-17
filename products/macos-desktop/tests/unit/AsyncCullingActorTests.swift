@@ -75,7 +75,7 @@ struct AsyncCullingActorTests {
         let photoURL = root.appendingPathComponent("TEST_003.JPG")
         try "JPEG".data(using: .utf8)!.write(to: photoURL)
 
-        let actor = AsyncCullingActor()
+        let actor = AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
         let job = CullingJob(
             photoID: UUID(),
             actionType: .trash,
@@ -293,7 +293,7 @@ struct AsyncCullingActorTests {
         #expect(try String(contentsOf: rawURL, encoding: .utf8) == rawPayload)
         #expect(try String(contentsOf: xmpURL, encoding: .utf8) == xmpMetadata)
 
-        let actor = AsyncCullingActor()
+        let actor = AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
         let job = CullingJob(
             photoID: UUID(),
             actionType: .trash,
@@ -368,7 +368,7 @@ struct AsyncCullingActorTests {
         }
 
         let primaryURL = urls["DSC0001.ARW"]!
-        let actor = AsyncCullingActor()
+        let actor = AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
         let job = CullingJob(
             photoID: UUID(),
             actionType: .trash,

@@ -24,13 +24,45 @@ public enum FileCullingError: Error, LocalizedError, Sendable {
     }
 }
 
+/// Abstraction for moving a file to the trash, enabling deterministic test injection without
+/// environment-variable branches in production code.
+public protocol TrashService: Sendable {
+    func trash(_ url: URL) throws -> URL
+}
+
+/// Production trash implementation backed by `FileManager.default.trashItem`.
+public struct SystemTrashService: TrashService {
+    public init() {}
+
+    public func trash(_ url: URL) throws -> URL {
+        var resultingURL: NSURL?
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
+        } catch {
+            throw FileCullingError.trashFailed(url: url, reason: error.localizedDescription)
+        }
+        guard let trashedURL = resultingURL as URL? else {
+            throw FileCullingError.trashFailed(
+                url: url,
+                reason: "System trash did not return a resulting item URL."
+            )
+        }
+        return trashedURL
+    }
+}
+
 /// Manages culling file actions (Selection folder move/copy, system trash) and companion file discovery.
 public final class FileCullingManager: @unchecked Sendable {
 
     private let fileManager: FileManager
+    public let trashService: any TrashService
 
-    public init(fileManager: FileManager = .default) {
+    public init(
+        fileManager: FileManager = .default,
+        trashService: any TrashService = SystemTrashService()
+    ) {
         self.fileManager = fileManager
+        self.trashService = trashService
     }
 
     // MARK: - Companion File Discovery
@@ -295,39 +327,23 @@ public final class FileCullingManager: @unchecked Sendable {
 
         let targets = findCompanionFiles(for: photoURL)
         var trashedURLs: [URL] = []
-
-        // In headless CI environments (e.g. GitHub Actions), FileManager.trashItem blocks indefinitely
-        // waiting for an interactive desktop user session / Finder. Fall back to moving to a dedicated
-        // simulated trash directory so file operations and undo remain fully testable without hanging.
-        let isCI = ProcessInfo.processInfo.environment["CI"] != nil
-        if isCI {
-            let simulatedTrash = fileManager.temporaryDirectory.appendingPathComponent(".SimulatedTrash", isDirectory: true)
-            let batchDir = simulatedTrash.appendingPathComponent(UUID().uuidString, isDirectory: true)
-            try? fileManager.createDirectory(at: batchDir, withIntermediateDirectories: true)
-            for target in targets {
-                guard fileManager.fileExists(atPath: target.path) else { continue }
-                let destination = batchDir.appendingPathComponent(target.lastPathComponent)
-                do {
-                    try fileManager.moveItem(at: target, to: destination)
-                    trashedURLs.append(destination)
-                } catch {
-                    throw FileCullingError.trashFailed(url: target, reason: error.localizedDescription)
-                }
-            }
-            return trashedURLs
-        }
+        var trashedPairs: [(source: URL, trashed: URL)] = []
 
         for target in targets {
             guard fileManager.fileExists(atPath: target.path) else { continue }
-            var resultingURL: NSURL?
             do {
-                try fileManager.trashItem(at: target, resultingItemURL: &resultingURL)
-                if let res = resultingURL as URL? {
-                    trashedURLs.append(res)
-                } else {
-                    trashedURLs.append(target)
-                }
+                let res = try trashService.trash(target)
+                trashedURLs.append(res)
+                trashedPairs.append((source: target, trashed: res))
             } catch {
+                for pair in trashedPairs.reversed() {
+                    if fileManager.fileExists(atPath: pair.trashed.path) {
+                        try? fileManager.moveItem(at: pair.trashed, to: pair.source)
+                    }
+                }
+                if let cullingError = error as? FileCullingError {
+                    throw cullingError
+                }
                 throw FileCullingError.trashFailed(url: target, reason: error.localizedDescription)
             }
         }

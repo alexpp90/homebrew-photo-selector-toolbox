@@ -183,7 +183,7 @@ struct E2EIntegrationTests {
         let fileB = try harness.createFile(at: "COPY_ME.JPG", data: Data("B".utf8))
         let fileC = try harness.createFile(at: "TRASH_ME.JPG", data: Data("C".utf8))
 
-        let manager = FileCullingManager()
+        let manager = FileCullingManager(trashService: DirectoryTrashService(rootDirectory: harness.rootURL))
 
         // Move to Selection
         let moved = try manager.moveToSelection(photoURL: fileA, rootURL: harness.rootURL)

@@ -233,7 +233,7 @@ struct FileCullingAndDuplicateAdversarialTests {
         try "trash_arw".data(using: .utf8)!.write(to: primaryURL)
         try "trash_xmp".data(using: .utf8)!.write(to: companionURL)
 
-        let manager = FileCullingManager()
+        let manager = FileCullingManager(trashService: DirectoryTrashService(rootDirectory: tempDir))
         let trashed = try manager.moveToTrash(photoURL: primaryURL)
 
         #expect(trashed.count == 2)

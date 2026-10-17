@@ -77,11 +77,23 @@ public actor AsyncCullingActor {
     private var executedJobIDs: Set<UUID> = []
     private var completedRecords: [UUID: CullingExecutionRecord] = [:]
 
+    public nonisolated var trashService: any TrashService {
+        cullingManager.trashService
+    }
+
     public init(
         cullingManager: FileCullingManager = FileCullingManager(),
         fileManager: FileManager = .default
     ) {
         self.cullingManager = cullingManager
+        self.fileManager = fileManager
+    }
+
+    public init(
+        trashService: any TrashService,
+        fileManager: FileManager = .default
+    ) {
+        self.cullingManager = FileCullingManager(fileManager: fileManager, trashService: trashService)
         self.fileManager = fileManager
     }
 
