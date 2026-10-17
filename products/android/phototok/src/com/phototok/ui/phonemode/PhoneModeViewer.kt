@@ -81,6 +81,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -245,7 +246,7 @@ fun PhoneModeViewer(
             state = pagerState,
             modifier = Modifier
                 .fillMaxSize()
-                .androidx.compose.ui.platform.testTag("viewer.photo"),
+                .testTag("viewer.photo"),
             userScrollEnabled = !isZoomed,
             key = { images[it].uri },
             beyondViewportPageCount = 2,
@@ -937,7 +938,7 @@ private fun ExifOverlay(
     val colors = MaterialTheme.colorScheme
 
     Surface(
-        modifier = modifier.androidx.compose.ui.platform.testTag("viewer.info"),
+        modifier = modifier.testTag("viewer.info"),
         shape = RoundedCornerShape(12.dp),
         color = colors.surfaceContainerLowest.copy(alpha = 0.5f),
         border = androidx.compose.foundation.BorderStroke(
