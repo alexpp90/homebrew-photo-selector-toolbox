@@ -214,11 +214,6 @@ dependencies {
     // OpenCV
     implementation(libs.opencv.android)
 
-    // TensorFlow Lite — on-device NIMA aesthetic scoring.
-    // The .tflite model is loaded from assets at runtime; if absent the
-    // AestheticAnalyzer degrades gracefully (no aesthetic score shown).
-    implementation(libs.tensorflow.lite)
-
     // Testing — JVM unit tests
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

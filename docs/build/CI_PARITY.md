@@ -35,6 +35,7 @@ The rule that prevents it:
 | Visual regression | `desktop.yml:visual` | ⚠️ Linux + Xvfb; baselines are runner-rendered | See [Visual regression](#visual-regression-linux-only). |
 | `testDebugUnitTest` | `android.yml:unit-tests` | ✅ needs JDK 17 + Android SDK | |
 | `assembleDebugAndroidTest` | `android.yml:unit-tests` | ✅ needs JDK 17 + Android SDK | Compiles `tests/instrumented/`. Nothing else does. |
+| `check_native_alignment.py` | `android.yml:unit-tests`, `android.yml:build` | ✅ needs JDK 17 + Android SDK (unit tests run everywhere via `scripts/tests`) | Inspects every `lib/{arm64-v8a,x86_64}/*.so` in `merged_native_libs/debug` and built APK/AAB archives and fails if any ELF `PT_LOAD` segment has `p_align < 16384` (Google Play 16 KB page-size mandate). |
 | `lintDebug` | `android.yml:lint` | ✅ advisory | Non-blocking in both places, on purpose. |
 | `connectedDebugAndroidTest` | `android.yml:instrumented-tests` | ❌ **needs emulator/device** | See [Instrumented tests](#instrumented-tests-genuinely-need-a-device). |
 | `swift test (macos-desktop)` | `macos.yml:swift-test` | ⚠️ Darwin only | Native Swift 6 suite covering PhotoSelectorKit & App (release SLA benchmark included). Runs on `macos-latest` in CI. |

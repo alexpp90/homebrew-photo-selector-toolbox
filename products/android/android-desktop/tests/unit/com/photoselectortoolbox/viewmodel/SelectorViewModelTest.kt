@@ -470,7 +470,7 @@ class SelectorViewModelTest {
         val exif = ExifData(iso = 800, aperture = 4.0)
         coEvery { imageRepository.getExifData(any(), any()) } returns exif
         val progress = MutableSharedFlow<ScanProgress>(replay = 1)
-        every { scanImagesUseCase(any(), any()) } returns progress
+        every { scanImagesUseCase(any()) } returns progress
 
         val viewModel = loadFolder(image("a"))
         assertEquals(exif, viewModel.uiState.value.currentImage?.exifData)

@@ -104,6 +104,12 @@ jobs:
         working-directory: products/android
         run: ./gradlew :android-desktop:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
 
+      - name: Verify 16 KB ELF page alignment (merged native libs)
+        run: |
+          python3 scripts/check_native_alignment.py \
+            products/android/android-desktop/build/intermediates/merged_native_libs/debug \
+            products/android/phototok/build/intermediates/merged_native_libs/debug
+
       - name: Upload unit test report
         if: always()
         uses: actions/upload-artifact@v7
@@ -259,6 +265,12 @@ jobs:
         working-directory: products/android
         run: ./gradlew assembleDebug
 
+      - name: Verify 16 KB ELF page alignment (debug APK)
+        run: |
+          python3 scripts/check_native_alignment.py \
+            products/android/android-desktop/build/outputs/apk/debug/*.apk \
+            products/android/phototok/build/outputs/apk/debug/*.apk
+
       # Each app has its own upload keystore (full isolation). Decode both.
       - name: Decode Keystores
         if: github.event_name == 'push'
@@ -342,6 +354,15 @@ jobs:
           fi
           if compgen -G "products/android/phototok/build/outputs/bundle/release/*.aab" > /dev/null; then
             cp products/android/phototok/build/outputs/bundle/release/*.aab products/android/release-assets/phototok-android-release.aab
+          fi
+
+      - name: Verify 16 KB ELF page alignment (release APK & AAB)
+        if: github.event_name == 'push'
+        run: |
+          shopt -s nullglob
+          ARCHIVES=(products/android/release-assets/*.apk products/android/release-assets/*.aab)
+          if [ "${#ARCHIVES[@]}" -gt 0 ]; then
+            python3 scripts/check_native_alignment.py "${ARCHIVES[@]}"
           fi
 
       # `if-no-files-found` defaults to `warn`, which turns a broken build into

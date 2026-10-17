@@ -6,7 +6,6 @@ import com.photoselectortoolbox.data.cache.ScoreEntity
 import com.photoselectortoolbox.data.model.ImageItem
 import com.photoselectortoolbox.data.repository.SettingsRepository
 import com.photoselectortoolbox.data.source.PhotoBitmapDecoder
-import com.photoselectortoolbox.domain.analysis.AestheticAnalyzer
 import com.photoselectortoolbox.domain.analysis.ClippingAnalyzer
 import com.photoselectortoolbox.domain.analysis.NoiseAnalyzer
 import com.photoselectortoolbox.domain.analysis.SharpnessAnalyzer
@@ -25,16 +24,14 @@ class ScanImagesUseCaseBench {
         val sharpnessAnalyzer = mockk<SharpnessAnalyzer>()
         val noiseAnalyzer = mockk<NoiseAnalyzer>()
         val clippingAnalyzer = mockk<ClippingAnalyzer>()
-        val aestheticAnalyzer = mockk<AestheticAnalyzer>()
         val scoreDao = mockk<ScoreDao>()
         val settingsRepository = mockk<SettingsRepository>()
         val context = mockk<Context>()
 
         every { settingsRepository.analysisThreadCount } returns flowOf(4)
-        every { aestheticAnalyzer.isAvailable() } returns true
 
         val useCase = ScanImagesUseCase(
-            sharpnessAnalyzer, noiseAnalyzer, clippingAnalyzer, aestheticAnalyzer,
+            sharpnessAnalyzer, noiseAnalyzer, clippingAnalyzer,
             scoreDao, settingsRepository, PhotoBitmapDecoder(context)
         )
 
@@ -78,7 +75,7 @@ class ScanImagesUseCaseBench {
         }
 
         val time = measureTimeMillis {
-            useCase(images, aestheticEnabled = true).toList()
+            useCase(images).toList()
         }
         println("Benchmark time for $imageCount cached images: $time ms")
     }

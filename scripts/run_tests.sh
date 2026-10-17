@@ -356,6 +356,12 @@ if $run_android; then
         gate "gradlew assembleDebugAndroidTest (:android-desktop, :phototok)" "android.yml:unit-tests" \
             ./gradlew :android-desktop:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
 
+        section "Android 16 KB ELF page alignment"
+        gate "check_native_alignment.py (merged_native_libs)" "android.yml:unit-tests" \
+            python3 "$ROOT_DIR/scripts/check_native_alignment.py" \
+                "$ROOT_DIR/products/android/android-desktop/build/intermediates/merged_native_libs/debug" \
+                "$ROOT_DIR/products/android/phototok/build/intermediates/merged_native_libs/debug"
+
         # ── Android lint (advisory) ───────────────────────────────
         # Deliberately non-blocking: the CI job is `continue-on-error: true`
         # and both modules set `abortOnError = false`. Mirrored as advisory so

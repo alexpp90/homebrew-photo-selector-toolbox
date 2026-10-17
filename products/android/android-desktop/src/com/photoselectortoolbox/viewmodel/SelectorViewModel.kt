@@ -301,7 +301,6 @@ class SelectorViewModel @Inject constructor(
     private val prefetchRequests = mutableMapOf<String, Disposable>()
 
     private var workQueue = WorkQueueState()
-    private var pendingScanAesthetic = false
     private var pendingGroupingLevel: GroupingLevel = GroupingLevel.TIME_FILENAME
 
     private val imageGrouper = ImageGrouper(context)
@@ -433,7 +432,6 @@ class SelectorViewModel @Inject constructor(
         cancelAllPrefetch()
         loadedExifCache.clear()
         workQueue = SelectorWorkQueue.reset()
-        pendingScanAesthetic = false
         _ratingFilter.value = RatingFilter.All
         _uiState.update {
             it.copy(
@@ -711,9 +709,8 @@ class SelectorViewModel @Inject constructor(
 
     // ── Scanning, grouping, and the queue between them ───────────────────
 
-    fun startScan(aestheticEnabled: Boolean = false) {
+    fun startScan() {
         if (_uiState.value.images.isEmpty()) return
-        pendingScanAesthetic = aestheticEnabled
         applyWorkDecision(SelectorWorkQueue.request(workQueue, SelectorWork.SCAN))
     }
 
@@ -727,7 +724,7 @@ class SelectorViewModel @Inject constructor(
         publishWorkState()
         when (val decision = outcome.second) {
             is WorkDecision.Start -> when (decision.work) {
-                SelectorWork.SCAN -> runScan(pendingScanAesthetic)
+                SelectorWork.SCAN -> runScan()
                 SelectorWork.GROUPING -> runGrouping(pendingGroupingLevel)
             }
             is WorkDecision.Queue, WorkDecision.Idle -> Unit
@@ -754,7 +751,7 @@ class SelectorViewModel @Inject constructor(
         applyWorkDecision(SelectorWorkQueue.finish(workQueue, work))
     }
 
-    private fun runScan(aestheticEnabled: Boolean) {
+    private fun runScan() {
         val images = _uiState.value.images
         if (images.isEmpty()) {
             finishWork(SelectorWork.SCAN)
@@ -773,7 +770,7 @@ class SelectorViewModel @Inject constructor(
 
             var analysed = 0
             try {
-                scanImagesUseCase(images, aestheticEnabled).collect { progress ->
+                scanImagesUseCase(images).collect { progress ->
                     val fraction = if (progress.total > 0) {
                         progress.processed.toFloat() / progress.total.toFloat()
                     } else {
