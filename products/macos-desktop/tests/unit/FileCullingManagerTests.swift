@@ -1,6 +1,56 @@
 import Testing
 import Foundation
+import Darwin
 @testable import PhotoSelectorKit
+
+/// Test-only `TrashService` that moves trashed files into a temporary `.SimulatedTrash` directory
+/// inside the test's directory, handling filename collisions safely without invoking Finder or
+/// relying on environment variables in production code.
+struct DirectoryTrashService: TrashService {
+    let trashDirectory: URL
+    private let lock = NSLock()
+
+    init(rootDirectory: URL) {
+        self.trashDirectory = rootDirectory.appendingPathComponent(".SimulatedTrash", isDirectory: true)
+    }
+
+    init(trashDirectory: URL) {
+        self.trashDirectory = trashDirectory
+    }
+
+    func trash(_ url: URL) throws -> URL {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: trashDirectory.path) {
+            do {
+                try fm.createDirectory(at: trashDirectory, withIntermediateDirectories: true)
+            } catch {
+                throw FileCullingError.directoryCreationFailed(trashDirectory, error.localizedDescription)
+            }
+        }
+
+        let filename = url.lastPathComponent
+        let stem = (filename as NSString).deletingPathExtension
+        let ext = (filename as NSString).pathExtension
+
+        var destination = trashDirectory.appendingPathComponent(filename)
+        var counter = 2
+        while fm.fileExists(atPath: destination.path) {
+            let disambiguated = ext.isEmpty ? "\(stem) \(counter)" : "\(stem) \(counter).\(ext)"
+            destination = trashDirectory.appendingPathComponent(disambiguated)
+            counter += 1
+        }
+
+        do {
+            try fm.moveItem(at: url, to: destination)
+            return destination
+        } catch {
+            throw FileCullingError.trashFailed(url: url, reason: error.localizedDescription)
+        }
+    }
+}
 
 @Suite("FileCullingManager Unit Tests")
 struct FileCullingManagerTests {
@@ -126,12 +176,84 @@ struct FileCullingManagerTests {
         try dummy.write(to: primaryURL)
         try dummy.write(to: companionURL)
 
-        let manager = FileCullingManager()
+        let manager = FileCullingManager(trashService: DirectoryTrashService(rootDirectory: tempDir))
         let trashed = try manager.moveToTrash(photoURL: primaryURL)
 
         #expect(trashed.count == 2)
         #expect(!FileManager.default.fileExists(atPath: primaryURL.path))
         #expect(!FileManager.default.fileExists(atPath: companionURL.path))
+    }
+
+    @Test("FileCullingManager and AsyncCullingActor default to SystemTrashService even when CI=true is set in environment")
+    func testDefaultTrashServiceIgnoresCIEnvironmentVariable() throws {
+        let previousCI = getenv("CI").map { String(cString: $0) }
+        setenv("CI", "true", 1)
+        defer {
+            if let previousCI {
+                setenv("CI", previousCI, 1)
+            } else {
+                unsetenv("CI")
+            }
+        }
+
+        let defaultManager = FileCullingManager()
+        #expect(defaultManager.trashService is SystemTrashService)
+
+        let defaultActor = AsyncCullingActor()
+        #expect(defaultActor.trashService is SystemTrashService)
+
+        // Prove that with CI=true set, FileCullingManager delegates solely to its injected TrashService
+        // and never writes into $TMPDIR/.SimulatedTrash on its own.
+        struct SpyTrashService: TrashService {
+            let destinationDir: URL
+            func trash(_ url: URL) throws -> URL {
+                let dst = destinationDir.appendingPathComponent(url.lastPathComponent)
+                try FileManager.default.moveItem(at: url, to: dst)
+                return dst
+            }
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("CITrashCheck_\(UUID().uuidString)")
+        let spyTrashDir = tempDir.appendingPathComponent("CustomSpyTrash", isDirectory: true)
+        try FileManager.default.createDirectory(at: spyTrashDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let photoURL = tempDir.appendingPathComponent("IMG_CI_CHECK.JPG")
+        try Data("ci-test".utf8).write(to: photoURL)
+
+        let spyManager = FileCullingManager(trashService: SpyTrashService(destinationDir: spyTrashDir))
+        let trashed = try spyManager.moveToTrash(photoURL: photoURL)
+
+        #expect(trashed == [spyTrashDir.appendingPathComponent("IMG_CI_CHECK.JPG")])
+        #expect(!trashed.first!.path.contains(".SimulatedTrash"))
+        #expect(FileManager.default.fileExists(atPath: spyTrashDir.appendingPathComponent("IMG_CI_CHECK.JPG").path))
+    }
+
+    @Test("DirectoryTrashService disambiguates colliding filenames safely")
+    func testDirectoryTrashServiceCollisionHandling() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("TrashCollision_\(UUID().uuidString)")
+        let subA = tempDir.appendingPathComponent("A", isDirectory: true)
+        let subB = tempDir.appendingPathComponent("B", isDirectory: true)
+        try FileManager.default.createDirectory(at: subA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: subB, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileA = subA.appendingPathComponent("DUP.ARW")
+        let fileB = subB.appendingPathComponent("DUP.ARW")
+        try Data("FIRST".utf8).write(to: fileA)
+        try Data("SECOND".utf8).write(to: fileB)
+
+        let trashService = DirectoryTrashService(rootDirectory: tempDir)
+        let manager = FileCullingManager(trashService: trashService)
+
+        let trashedA = try manager.moveToTrash(photoURL: fileA)
+        let trashedB = try manager.moveToTrash(photoURL: fileB)
+
+        #expect(trashedA.count == 1)
+        #expect(trashedB.count == 1)
+        #expect(trashedA[0] != trashedB[0])
+        #expect(try Data(contentsOf: trashedA[0]) == Data("FIRST".utf8))
+        #expect(try Data(contentsOf: trashedB[0]) == Data("SECOND".utf8))
     }
 
     // MARK: - Data Safety & Re-cull Regressions

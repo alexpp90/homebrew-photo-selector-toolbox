@@ -18,7 +18,9 @@ struct FocusViewAndCullingAffordanceTests {
             return PhotoItem(url: url)
         }
 
-        let viewModel = CullingWorkspaceViewModel()
+        let viewModel = CullingWorkspaceViewModel(
+            cullingActor: AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: tempDir))
+        )
         viewModel.setPhotos(photos, rootURL: tempDir)
 
         #expect(viewModel.selectedCount == 0)

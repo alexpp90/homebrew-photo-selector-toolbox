@@ -136,6 +136,7 @@ struct DuplicateFinderViewModelTests {
         var trashedCallbackURLs: [URL] = []
         let viewModel = DuplicateFinderViewModel(
             targetDirectoryURL: tempDir,
+            cullingManager: FileCullingManager(trashService: DirectoryTrashService(rootDirectory: tempDir)),
             onPhotoTrashed: { url in
                 trashedCallbackURLs.append(url)
             }
@@ -174,7 +175,10 @@ struct DuplicateFinderViewModelTests {
 
         let group = DuplicateGroupModel(hash: "batch_hash", fileSize: 256, formattedFileSize: "256 B", entries: [entryKept, entry1, entry2])
 
-        let viewModel = DuplicateFinderViewModel(targetDirectoryURL: tempDir)
+        let viewModel = DuplicateFinderViewModel(
+            targetDirectoryURL: tempDir,
+            cullingManager: FileCullingManager(trashService: DirectoryTrashService(rootDirectory: tempDir))
+        )
         viewModel.setDuplicateGroupsForTesting([group])
 
         #expect(viewModel.markedForTrashCount == 2)

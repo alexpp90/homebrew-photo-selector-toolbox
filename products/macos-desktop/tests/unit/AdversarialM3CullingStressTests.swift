@@ -37,7 +37,9 @@ struct AdversarialM3CullingStressTests {
             photoItems.append(PhotoItem(id: UUID(), url: url, status: .candidate))
         }
 
-        let vm = CullingWorkspaceViewModel()
+        let vm = CullingWorkspaceViewModel(
+            cullingActor: AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
+        )
         vm.setPhotos(photoItems, rootURL: root)
         vm.autoAdvance = true
 
@@ -317,7 +319,9 @@ struct AdversarialM3CullingStressTests {
         let originalURL = try createTestPhoto(in: root, filename: "PHOTO_TRASH.JPG", content: payload)
         let items = [PhotoItem(id: UUID(), url: originalURL, status: .candidate)]
 
-        let vm = CullingWorkspaceViewModel()
+        let vm = CullingWorkspaceViewModel(
+            cullingActor: AsyncCullingActor(trashService: DirectoryTrashService(rootDirectory: root))
+        )
         vm.setPhotos(items, rootURL: root)
         vm.autoAdvance = false
 
