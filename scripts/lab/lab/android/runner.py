@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from ..fixtures import generate_fixtures
 from ..fs_oracle import evaluate_fs_oracle
@@ -30,7 +30,8 @@ from .configs import (
 from .tree_android import parse_uiautomator_xml
 
 
-MaestroFn = Callable[[str | None, Path, Path], int]
+# Optional[], not `str | None`: aliases are evaluated at runtime and the Mac runs Python 3.9.
+MaestroFn = Callable[[Optional[str], Path, Path], int]
 
 
 MAESTRO_TIMEOUT_S = 300
