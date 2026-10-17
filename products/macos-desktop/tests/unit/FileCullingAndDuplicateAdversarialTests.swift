@@ -135,7 +135,7 @@ struct FileCullingAndDuplicateAdversarialTests {
         #expect(!FileManager.default.fileExists(atPath: xmpURL.path))
     }
 
-    @Test("Moving to Selection when destination filename collision occurs cleanly overwrites without error")
+    @Test("Moving to Selection when destination filename collision occurs uses collision-free -2 suffix and preserves pre-existing file")
     func testMoveToSelectionDestinationCollision() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("CollisionTest_\(UUID().uuidString)")
@@ -152,6 +152,7 @@ struct FileCullingAndDuplicateAdversarialTests {
         let newContent = "NEW_SOURCE_CONTENT"
 
         let destFile = selectionDir.appendingPathComponent("COLLIDE_01.ARW")
+        let suffixedDestFile = selectionDir.appendingPathComponent("COLLIDE_01-2.ARW")
         try oldContent.data(using: .utf8)!.write(to: destFile)
         try newContent.data(using: .utf8)!.write(to: primaryURL)
 
@@ -159,13 +160,16 @@ struct FileCullingAndDuplicateAdversarialTests {
         let moved = try manager.moveToSelection(photoURL: primaryURL, rootURL: tempDir)
 
         #expect(moved.count == 1)
-        #expect(moved.first?.path == destFile.path)
+        #expect(moved.first?.path == suffixedDestFile.path)
         #expect(FileManager.default.fileExists(atPath: destFile.path))
+        #expect(FileManager.default.fileExists(atPath: suffixedDestFile.path))
         #expect(!FileManager.default.fileExists(atPath: primaryURL.path))
 
-        // Check content was updated to new content
-        let readContent = String(data: try Data(contentsOf: destFile), encoding: .utf8)
-        #expect(readContent == newContent)
+        // Verify pre-existing file in Selection/ is untouched and new file has new content
+        let existingContent = String(data: try Data(contentsOf: destFile), encoding: .utf8)
+        #expect(existingContent == oldContent)
+        let movedContent = String(data: try Data(contentsOf: suffixedDestFile), encoding: .utf8)
+        #expect(movedContent == newContent)
     }
 
     @Test("Adversarial behavior when photo is already inside Selection/ folder")
@@ -193,7 +197,7 @@ struct FileCullingAndDuplicateAdversarialTests {
         #expect(stillExists, "CRITICAL: Photo was permanently deleted when moveToSelection was called on file already in Selection folder!")
     }
 
-    @Test("Copying to Selection when destination collision occurs cleanly overwrites destination")
+    @Test("Copying to Selection when destination collision occurs uses collision-free -2 suffix and preserves pre-existing destination")
     func testCopyToSelectionDestinationCollision() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("CopyCollisionTest_\(UUID().uuidString)")
@@ -207,6 +211,7 @@ struct FileCullingAndDuplicateAdversarialTests {
 
         let primaryURL = tempDir.appendingPathComponent("COPY_01.JPG")
         let destFile = selectionDir.appendingPathComponent("COPY_01.JPG")
+        let suffixedDestFile = selectionDir.appendingPathComponent("COPY_01-2.JPG")
         try "old".data(using: .utf8)!.write(to: destFile)
         try "new".data(using: .utf8)!.write(to: primaryURL)
 
@@ -214,8 +219,9 @@ struct FileCullingAndDuplicateAdversarialTests {
         let copied = try manager.copyToSelection(photoURL: primaryURL, rootURL: tempDir)
 
         #expect(copied.count == 1)
-        let readContent = String(data: try Data(contentsOf: destFile), encoding: .utf8)
-        #expect(readContent == "new")
+        #expect(copied.first?.path == suffixedDestFile.path)
+        #expect(String(data: try Data(contentsOf: destFile), encoding: .utf8) == "old")
+        #expect(String(data: try Data(contentsOf: suffixedDestFile), encoding: .utf8) == "new")
         #expect(FileManager.default.fileExists(atPath: primaryURL.path)) // Original preserved
     }
 

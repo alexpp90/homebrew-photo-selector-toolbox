@@ -413,11 +413,83 @@ struct FileCullingManagerTests {
             try manager.copyToSelection(photoURL: rawURL, rootURL: tempDir)
         }
 
-        // Source files remain intact, and pre-existing Selection file is restored from backup
+        // Source files remain intact, pre-existing Selection file was never modified, and partial -2 copy is cleaned up
         #expect(FileManager.default.fileExists(atPath: rawURL.path))
         #expect(FileManager.default.fileExists(atPath: jpgURL.path))
         #expect(FileManager.default.fileExists(atPath: preExistingRaw.path))
         #expect(try Data(contentsOf: preExistingRaw) == oldContent)
+        #expect(!FileManager.default.fileExists(atPath: selectionDir.appendingPathComponent("ROLLBACK_02-2.CR3").path))
+    }
+
+    @Test("REQ-MAC-CULL.03, REQ-MAC-CULL.05: Two different bundles named IMG_0001.CR3 + .JPG + .CR3.xmp + -Edit.tif moved in sequence preserve both bundles with intact pairing")
+    func testSequentialBundlesWithSameNameGetSharedSuffixAndPreserveOriginal() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SequentialBundleCollision_\(UUID().uuidString)")
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let bodyADir = tempDir.appendingPathComponent("BodyA", isDirectory: true)
+        let bodyBDir = tempDir.appendingPathComponent("BodyB", isDirectory: true)
+        try FileManager.default.createDirectory(at: bodyADir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: bodyBDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let bundleA: [(String, String)] = [
+            ("IMG_0001.CR3", "BODY_A_RAW"),
+            ("IMG_0001.JPG", "BODY_A_JPG"),
+            ("IMG_0001.CR3.xmp", "BODY_A_DOUBLE_XMP"),
+            ("IMG_0001-Edit.tif", "BODY_A_EDIT_TIF")
+        ]
+        let bundleB: [(String, String)] = [
+            ("IMG_0001.CR3", "BODY_B_RAW"),
+            ("IMG_0001.JPG", "BODY_B_JPG"),
+            ("IMG_0001.CR3.xmp", "BODY_B_DOUBLE_XMP"),
+            ("IMG_0001-Edit.tif", "BODY_B_EDIT_TIF")
+        ]
+
+        for (name, content) in bundleA {
+            try Data(content.utf8).write(to: bodyADir.appendingPathComponent(name))
+        }
+        for (name, content) in bundleB {
+            try Data(content.utf8).write(to: bodyBDir.appendingPathComponent(name))
+        }
+
+        let manager = FileCullingManager()
+        let movedA = try manager.moveToSelection(
+            photoURL: bodyADir.appendingPathComponent("IMG_0001.CR3"),
+            rootURL: tempDir
+        )
+        let movedB = try manager.moveToSelection(
+            photoURL: bodyBDir.appendingPathComponent("IMG_0001.CR3"),
+            rootURL: tempDir
+        )
+
+        #expect(movedA.count == 4)
+        #expect(movedB.count == 4)
+
+        let selectionDir = tempDir.appendingPathComponent("Selection", isDirectory: true)
+        let expectedBundleB: [(String, String)] = [
+            ("IMG_0001-2.CR3", "BODY_B_RAW"),
+            ("IMG_0001-2.JPG", "BODY_B_JPG"),
+            ("IMG_0001-2.CR3.xmp", "BODY_B_DOUBLE_XMP"),
+            ("IMG_0001-2-Edit.tif", "BODY_B_EDIT_TIF")
+        ]
+
+        for (name, expectedContent) in bundleA {
+            let url = selectionDir.appendingPathComponent(name)
+            #expect(FileManager.default.fileExists(atPath: url.path), "First bundle file \(name) must remain in Selection/")
+            #expect(try String(contentsOf: url, encoding: .utf8) == expectedContent)
+        }
+        for (name, expectedContent) in expectedBundleB {
+            let url = selectionDir.appendingPathComponent(name)
+            #expect(FileManager.default.fileExists(atPath: url.path), "Second bundle file \(name) must be suffixed in Selection/")
+            #expect(try String(contentsOf: url, encoding: .utf8) == expectedContent)
+        }
+
+        // Verify companion discovery in Selection/ still groups each bundle cleanly without cross-talk
+        let discoveredA = manager.findCompanionFiles(for: selectionDir.appendingPathComponent("IMG_0001.CR3"))
+        let discoveredB = manager.findCompanionFiles(for: selectionDir.appendingPathComponent("IMG_0001-2.CR3"))
+        #expect(Set(discoveredA.map(\.lastPathComponent)) == Set(bundleA.map(\.0)))
+        #expect(Set(discoveredB.map(\.lastPathComponent)) == Set(expectedBundleB.map(\.0)))
     }
 }
 

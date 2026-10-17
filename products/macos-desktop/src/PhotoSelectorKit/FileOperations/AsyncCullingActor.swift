@@ -139,6 +139,9 @@ public actor AsyncCullingActor {
     }
 
     /// Reverses a previously executed culling operation.
+    /// Never overwrites or deletes pre-existing files at the restore destination:
+    /// if any original path in `originalDir` is now occupied, the restored bundle receives
+    /// a shared collision-free suffix (`-2`, `-3`, …).
     /// - Parameter record: The execution record to undo.
     /// - Returns: The list of restored URLs.
     public func undo(record: CullingExecutionRecord) async throws -> [URL] {
@@ -153,81 +156,66 @@ public actor AsyncCullingActor {
 
         var restoredURLs: [URL] = []
         let originalDir = record.originalPrimaryURL.deletingLastPathComponent()
+        let primaryStem = record.originalPrimaryURL.deletingPathExtension().lastPathComponent
 
         switch record.actionType {
         case .move:
-            // Move files back from Selection/ to original directory
-            for movedURL in record.affectedURLs {
-                let filename = movedURL.lastPathComponent
-                let destination = originalDir.appendingPathComponent(filename)
-
-                let canonicalMoved = movedURL.standardizedFileURL.resolvingSymlinksInPath()
-                let canonicalDest = destination.standardizedFileURL.resolvingSymlinksInPath()
-
-                // Guard against self-move: if movedURL already resides at destination,
-                // it was never moved away (e.g. in-flight cancellation or optimistic record)
-                guard movedURL.standardizedFileURL.path != destination.standardizedFileURL.path,
-                      canonicalMoved.path != canonicalDest.path else {
-                    continue
-                }
-
-                if fileManager.fileExists(atPath: movedURL.path) {
-                    if fileManager.fileExists(atPath: destination.path) {
-                        try? fileManager.removeItem(at: destination)
-                    }
-                    try fileManager.moveItem(at: movedURL, to: destination)
-                    restoredURLs.append(destination)
-                }
+            // Move files back from Selection/ to original directory without deleting occupied destinations
+            let items: [(sourceURL: URL, unsuffixedName: String)] = record.affectedURLs.map { movedURL in
+                let unsuffixedName = unsuffixedMoveRestoreFilename(
+                    for: movedURL.lastPathComponent,
+                    originalPrimaryURL: record.originalPrimaryURL,
+                    firstAffectedURL: record.affectedURLs.first
+                )
+                return (sourceURL: movedURL, unsuffixedName: unsuffixedName)
             }
+            restoredURLs = try restoreBundleToOriginalDirectory(
+                items: items,
+                originalDir: originalDir,
+                primaryStem: primaryStem
+            )
 
         case .copy:
-            // Remove copied files in Selection/
+            // Remove only the destination replicas in Selection/ created by the copy operation itself
+            let canonicalOriginal = record.originalPrimaryURL.standardizedFileURL.resolvingSymlinksInPath()
+            let canonicalOriginalDir = originalDir.standardizedFileURL.resolvingSymlinksInPath()
             for copiedURL in record.affectedURLs {
                 let canonicalCopied = copiedURL.standardizedFileURL.resolvingSymlinksInPath()
-                let canonicalOriginal = record.originalPrimaryURL.standardizedFileURL.resolvingSymlinksInPath()
+                let canonicalCopiedDir = copiedURL.deletingLastPathComponent().standardizedFileURL.resolvingSymlinksInPath()
 
-                // Strict guard: NEVER delete the original source file on disk!
+                // Strict guard: NEVER delete the original source file or files in the original source directory!
                 guard copiedURL.standardizedFileURL.path != record.originalPrimaryURL.standardizedFileURL.path,
-                      canonicalCopied.path != canonicalOriginal.path else {
+                      canonicalCopied.path != canonicalOriginal.path,
+                      canonicalCopiedDir.path != canonicalOriginalDir.path else {
                     continue
                 }
 
                 if fileManager.fileExists(atPath: copiedURL.path) {
+                    // Remove only the replica created in Selection/ by the copy operation itself (never the original source file)
                     try fileManager.removeItem(at: copiedURL)
                     restoredURLs.append(copiedURL)
                 }
             }
 
         case .trash:
-            // Move files back from Trash if they exist at their trashed location
-            for (index, trashedURL) in record.affectedURLs.enumerated() {
-                let destination: URL
+            // Move files back from Trash to original directory without deleting occupied destinations
+            let items: [(sourceURL: URL, unsuffixedName: String)] = record.affectedURLs.enumerated().map { index, trashedURL in
+                let unsuffixedName: String
                 if index == 0 {
-                    destination = record.originalPrimaryURL
+                    unsuffixedName = record.originalPrimaryURL.lastPathComponent
                 } else {
-                    let filename = cleanTrashedFilename(
+                    unsuffixedName = cleanTrashedFilename(
                         trashedURL.lastPathComponent,
                         originalPrimaryURL: record.originalPrimaryURL
                     )
-                    destination = originalDir.appendingPathComponent(filename)
                 }
-
-                let canonicalTrashed = trashedURL.standardizedFileURL.resolvingSymlinksInPath()
-                let canonicalDest = destination.standardizedFileURL.resolvingSymlinksInPath()
-
-                guard trashedURL.standardizedFileURL.path != destination.standardizedFileURL.path,
-                      canonicalTrashed.path != canonicalDest.path else {
-                    continue
-                }
-
-                if fileManager.fileExists(atPath: trashedURL.path) {
-                    if fileManager.fileExists(atPath: destination.path) {
-                        try? fileManager.removeItem(at: destination)
-                    }
-                    try fileManager.moveItem(at: trashedURL, to: destination)
-                    restoredURLs.append(destination)
-                }
+                return (sourceURL: trashedURL, unsuffixedName: unsuffixedName)
             }
+            restoredURLs = try restoreBundleToOriginalDirectory(
+                items: items,
+                originalDir: originalDir,
+                primaryStem: primaryStem
+            )
         }
 
         executedJobIDs.remove(record.jobID)
@@ -285,6 +273,109 @@ public actor AsyncCullingActor {
             previousStatus: .candidate,
             timestamp: Date()
         )
+    }
+
+    private func restoreBundleToOriginalDirectory(
+        items: [(sourceURL: URL, unsuffixedName: String)],
+        originalDir: URL,
+        primaryStem: String
+    ) throws -> [URL] {
+        var validItems: [(sourceURL: URL, unsuffixedName: String, unsuffixedDest: URL)] = []
+        var hasCollision = false
+
+        for item in items {
+            let unsuffixedDest = originalDir.appendingPathComponent(item.unsuffixedName)
+            let canonicalSource = item.sourceURL.standardizedFileURL.resolvingSymlinksInPath()
+            let canonicalDest = unsuffixedDest.standardizedFileURL.resolvingSymlinksInPath()
+
+            // Guard against self-move: if sourceURL already resides at destination,
+            // it was never moved away (e.g. in-flight cancellation or optimistic record)
+            guard item.sourceURL.standardizedFileURL.path != unsuffixedDest.standardizedFileURL.path,
+                  canonicalSource.path != canonicalDest.path else {
+                continue
+            }
+
+            guard fileManager.fileExists(atPath: item.sourceURL.path) else {
+                continue
+            }
+
+            if fileManager.fileExists(atPath: unsuffixedDest.path) {
+                hasCollision = true
+            }
+            validItems.append((sourceURL: item.sourceURL, unsuffixedName: item.unsuffixedName, unsuffixedDest: unsuffixedDest))
+        }
+
+        guard !validItems.isEmpty else {
+            return []
+        }
+
+        let resolvedDestinations: [(sourceURL: URL, destinationURL: URL)]
+        if !hasCollision {
+            resolvedDestinations = validItems.map { (sourceURL: $0.sourceURL, destinationURL: $0.unsuffixedDest) }
+        } else {
+            var suffix = 2
+            while true {
+                let allFree = validItems.allSatisfy { item in
+                    let suffixedName = FileCullingManager.suffixedCompanionFilename(
+                        item.unsuffixedName,
+                        primaryStem: primaryStem,
+                        suffix: suffix
+                    )
+                    let candidateDest = originalDir.appendingPathComponent(suffixedName)
+                    return !fileManager.fileExists(atPath: candidateDest.path)
+                }
+                if allFree {
+                    break
+                }
+                suffix += 1
+            }
+
+            resolvedDestinations = validItems.map { item in
+                let suffixedName = FileCullingManager.suffixedCompanionFilename(
+                    item.unsuffixedName,
+                    primaryStem: primaryStem,
+                    suffix: suffix
+                )
+                return (
+                    sourceURL: item.sourceURL,
+                    destinationURL: originalDir.appendingPathComponent(suffixedName)
+                )
+            }
+        }
+
+        var restoredURLs: [URL] = []
+        for entry in resolvedDestinations {
+            try fileManager.moveItem(at: entry.sourceURL, to: entry.destinationURL)
+            restoredURLs.append(entry.destinationURL)
+        }
+        return restoredURLs
+    }
+
+    private func unsuffixedMoveRestoreFilename(
+        for movedFilename: String,
+        originalPrimaryURL: URL,
+        firstAffectedURL: URL?
+    ) -> String {
+        let primaryStem = originalPrimaryURL.deletingPathExtension().lastPathComponent
+        guard !primaryStem.isEmpty,
+              let firstAffected = firstAffectedURL else {
+            return movedFilename
+        }
+        let firstMovedStem = firstAffected.deletingPathExtension().lastPathComponent
+        guard let stemRange = firstMovedStem.range(of: primaryStem, options: [.caseInsensitive, .anchored]) else {
+            return movedFilename
+        }
+        let suffixPart = String(firstMovedStem[stemRange.upperBound...])
+        guard suffixPart.range(of: #"^-\d+$"#, options: .regularExpression) != nil else {
+            return movedFilename
+        }
+        let suffixedPrefix = primaryStem + suffixPart
+        if let matchRange = movedFilename.range(of: suffixedPrefix, options: [.caseInsensitive, .anchored]) {
+            let originalStemPrefix = movedFilename.prefix(primaryStem.count)
+            let remainder = movedFilename[matchRange.upperBound...]
+            return "\(originalStemPrefix)\(remainder)"
+        }
+        return movedFilename
     }
 
     private func cleanTrashedFilename(_ trashedFilename: String, originalPrimaryURL: URL) -> String {
