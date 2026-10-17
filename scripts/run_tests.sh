@@ -514,13 +514,13 @@ if $run_linux; then
                     pyx pytest tests/ --tb=short -q
             elif py pytest --version &>/dev/null; then
                 gate "pytest --cov-fail-under=$LINUX_COV_FAIL_UNDER (products/linux-desktop)" "$linux_ci_ref" \
-                    pyx pytest tests/ --tb=short -q \
+                    pyx pytest tests/ --tb=short -q -o faulthandler_timeout=120 \
                         --cov=photo_selector_linux \
                         --cov-report=term-missing:skip-covered \
                         --cov-fail-under="$LINUX_COV_FAIL_UNDER"
             elif have pytest; then
                 gate "pytest --cov-fail-under=$LINUX_COV_FAIL_UNDER (products/linux-desktop)" "$linux_ci_ref" \
-                    pyx pytest tests/ --tb=short -q \
+                    pyx pytest tests/ --tb=short -q -o faulthandler_timeout=120 \
                         --cov=photo_selector_linux \
                         --cov-report=term-missing:skip-covered \
                         --cov-fail-under="$LINUX_COV_FAIL_UNDER"
