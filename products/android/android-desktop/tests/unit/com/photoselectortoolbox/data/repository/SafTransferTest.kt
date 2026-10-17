@@ -88,6 +88,25 @@ class SafTransferTest {
             @Volatile
             var reportedSizeOverride: ((File) -> Long?)? = null
 
+            /** When true, sub-folders get provider-opaque ids ("msf:N") instead of path-like ones. */
+            @Volatile
+            var opaqueFolderIds: Boolean = false
+            private val opaqueRegistry = java.util.concurrent.ConcurrentHashMap<String, File>()
+
+            /** The id the provider hands out for [file] (opaque for folders when [opaqueFolderIds]). */
+            fun documentIdFor(file: File): String {
+                val rel = file.relativeTo(rootDir).invariantSeparatorsPath
+                if (rel.isEmpty()) return ROOT_ID
+                if (opaqueFolderIds && file.isDirectory) {
+                    val id = "msf:" + rel.hashCode().toUInt()
+                    opaqueRegistry[id] = file
+                    return id
+                }
+                return "$ROOT_ID/$rel"
+            }
+
+            fun opaqueFileFor(id: String): File? = opaqueRegistry[id]
+
             val moveDocumentCalls = AtomicInteger(0)
             val childrenQueryCalls = AtomicInteger(0)
 
@@ -96,6 +115,8 @@ class SafTransferTest {
                 advertiseSupportsMove = false
                 failDeletes = false
                 failDeletesMatching = null
+                opaqueFolderIds = false
+                opaqueRegistry.clear()
                 autoRenameOnCreate = null
                 reportedSizeOverride = null
                 moveDocumentCalls.set(0)
@@ -112,6 +133,7 @@ class SafTransferTest {
         }
 
         private fun fileForDocId(documentId: String): File {
+            opaqueFileFor(documentId)?.let { return it }
             require(documentId == ROOT_ID || documentId.startsWith("$ROOT_ID/")) {
                 "Unexpected documentId: $documentId"
             }
@@ -122,10 +144,7 @@ class SafTransferTest {
             }
         }
 
-        private fun docIdForFile(file: File): String {
-            val rel = file.relativeTo(rootDir).invariantSeparatorsPath
-            return if (rel.isEmpty()) ROOT_ID else "$ROOT_ID/$rel"
-        }
+        private fun docIdForFile(file: File): String = documentIdFor(file)
 
         private fun mimeForFile(file: File): String = when {
             file.isDirectory -> Document.MIME_TYPE_DIR
@@ -338,6 +357,7 @@ class SafTransferTest {
         FakeSafDocumentsProvider.reset(rootDir)
         Robolectric.buildContentProvider(FakeSafDocumentsProvider::class.java)
             .create(FakeSafDocumentsProvider.AUTHORITY)
+        registerAsDocumentsProvider()
 
         val settingsRepository: SettingsRepository = mockk(relaxed = true) {
             every { selectionFolderName } returns selectionFolderNameFlow
@@ -354,6 +374,32 @@ class SafTransferTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    /**
+     * A real DocumentsProvider answers the `android.content.action.DOCUMENTS_PROVIDER` intent;
+     * without that, `DocumentsContract.isDocumentUri` is false and `DocumentFile.fromTreeUri`
+     * on a document URI silently resolves to the tree root instead of that document.
+     */
+    private fun registerAsDocumentsProvider() {
+        val component = android.content.ComponentName(
+            context.packageName,
+            FakeSafDocumentsProvider::class.java.name,
+        )
+        val info = android.content.pm.ProviderInfo().apply {
+            authority = FakeSafDocumentsProvider.AUTHORITY
+            name = component.className
+            packageName = component.packageName
+            exported = true
+            grantUriPermissions = true
+            applicationInfo = context.applicationInfo
+        }
+        val packageManager = org.robolectric.Shadows.shadowOf(context.packageManager)
+        packageManager.addOrUpdateProvider(info)
+        packageManager.addIntentFilterForProvider(
+            component,
+            android.content.IntentFilter("android.content.action.DOCUMENTS_PROVIDER"),
+        )
     }
 
     private fun documentUriFor(relativePath: String): Uri =
@@ -743,7 +789,7 @@ class SafTransferTest {
                     fileSize = srcXmp.length(),
                 ),
             ),
-            parentDocumentId = "sub/day1",
+            parentDocumentId = "root/sub/day1",
         )
 
         val moveResult = repository.moveBundle(
@@ -755,7 +801,7 @@ class SafTransferTest {
 
         assertTrue(moveResult.success)
         assertEquals(3, moveResult.destinationUris.size)
-        assertEquals("sub/day1", moveResult.parentDocumentId)
+        assertEquals("root/sub/day1", moveResult.parentDocumentId)
 
         // All 3 files moved out of sub/day1 into Selection/JPEG and Selection/RAW.
         assertFalse(srcJpg.exists())
@@ -890,7 +936,7 @@ class SafTransferTest {
                     fileName = "IMG_0020.CR3.xmp",
                 ),
             ),
-            parentDocumentId = "sub/day2",
+            parentDocumentId = "root/sub/day2",
         )
 
         val moveResult = repository.moveBundle(
@@ -956,7 +1002,7 @@ class SafTransferTest {
                     fileSize = cr3.length(),
                 ),
             ),
-            parentDocumentId = dir,
+            parentDocumentId = "root/$dir",
         )
     }
 
@@ -1049,5 +1095,65 @@ class SafTransferTest {
         assertEquals("jpeg-40", File(subDir, "IMG_0040.JPG").readText())
         assertEquals("raw-40", File(subDir, "IMG_0040.CR3").readText())
         assertEquals(listOf("IMG_0040.CR3", "IMG_0040.JPG"), subDir.list()!!.sorted())
+    }
+
+    // ── B-4 / D-4: restore-folder resolution with opaque document ids ────
+
+    private fun itemInOpaqueFolder(folder: File, stem: String): ImageItem {
+        val jpg = File(folder, "$stem.JPG")
+        val rel = jpg.relativeTo(rootDir).invariantSeparatorsPath
+        return ImageItem(
+            uri = documentUriFor(rel).toString(),
+            fileName = jpg.name,
+            fileSize = jpg.length(),
+            lastModified = jpg.lastModified(),
+            mimeType = "image/jpeg",
+            parentDocumentId = FakeSafDocumentsProvider.documentIdFor(folder), // "msf:N", not a path
+        )
+    }
+
+    // REQ-AND-PLATFORM.06
+    @Test
+    fun `undo restores into the original folder when the provider uses opaque document ids and creates no folder`() = runTest {
+        FakeSafDocumentsProvider.opaqueFolderIds = true
+        val folder = File(rootDir, "Download/trip").apply { mkdirs() }
+        File(folder, "IMG_0050.JPG").writeText("jpeg-50")
+        val item = itemInOpaqueFolder(folder, "IMG_0050")
+        assertTrue(item.parentDocumentId!!.startsWith("msf:"))
+        val before = rootDir.walkTopDown().filter { it.isDirectory }.map { it.relativeTo(rootDir).path }.toSet()
+
+        val moved = repository.moveBundle(context, item, treeUri, sorting = false)
+        assertTrue(moved.success)
+        assertFalse(File(folder, "IMG_0050.JPG").exists())
+
+        val undo = repository.undoMoveBundle(context, moved.destinationUris, treeUri, moved.parentDocumentId)
+
+        assertTrue(undo.success)
+        assertNull(undo.notice)
+        assertEquals("jpeg-50", File(folder, "IMG_0050.JPG").readText())
+        // No directory literally named after the opaque id (or anything else) appeared.
+        val after = rootDir.walkTopDown().filter { it.isDirectory }.map { it.relativeTo(rootDir).path }.toSet()
+        assertEquals(setOf("Selection"), after - before)
+        assertFalse(after.any { it.contains("msf:") })
+    }
+
+    // REQ-AND-PLATFORM.06
+    @Test
+    fun `undo restores to the opened folder and says so when the original folder is gone`() = runTest {
+        FakeSafDocumentsProvider.opaqueFolderIds = true
+        val folder = File(rootDir, "Download/gone").apply { mkdirs() }
+        File(folder, "IMG_0051.JPG").writeText("jpeg-51")
+        val item = itemInOpaqueFolder(folder, "IMG_0051")
+        val moved = repository.moveBundle(context, item, treeUri, sorting = false)
+        assertTrue(moved.success)
+        folder.deleteRecursively() // the user removed the folder meanwhile
+
+        val undo = repository.undoMoveBundle(context, moved.destinationUris, treeUri, moved.parentDocumentId)
+
+        assertTrue(undo.success)
+        assertEquals("jpeg-51", File(rootDir, "IMG_0051.JPG").readText())
+        assertNotNull(undo.notice)
+        assertFalse(File(rootDir, "Download/gone").exists())
+        assertFalse(rootDir.walkTopDown().any { it.name.contains("msf:") })
     }
 }

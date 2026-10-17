@@ -1474,6 +1474,9 @@ class SelectorViewModel @Inject constructor(
                         Log.e("SelectorViewModel", "Undo move failed", e)
                         null
                     }
+                    if (result?.success == true && result.notice != null) {
+                        _uiState.update { it.copy(snackbarMessage = result.notice, snackbarUndoAvailable = false) }
+                    }
                     if (result == null || !result.success) {
                         _uiState.update { current ->
                             val reapplied = OptimisticEdits.apply(

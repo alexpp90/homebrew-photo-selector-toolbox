@@ -514,12 +514,13 @@ class ImageRepositoryImpl @Inject constructor(
                         parentDocumentId = parentDocumentId,
                     )
                 }
-                val restoreFolder = resolveRestoreFolder(context, rootFolderUri, parentDocumentId)
+                val restore = resolveRestoreFolder(context, rootFolderUri, parentDocumentId)
                     ?: return@withContext FileOperationResult.failure(
                         sourceUri = primarySource,
                         error = "Could not resolve the original folder",
                         parentDocumentId = parentDocumentId,
                     )
+                val restoreFolder = restore.folder
                 val sourceUris = toRestore.map { Uri.parse(it) }
                 val results = executeBundleTransfer(
                     context = context,
@@ -531,11 +532,18 @@ class ImageRepositoryImpl @Inject constructor(
                     isMove = true,
                     parentDocumentId = parentDocumentId,
                 )
-                aggregateBundleResults(
+                val aggregated = aggregateBundleResults(
                     primarySourceUri = primarySource,
                     results = results,
                     parentDocumentId = parentDocumentId,
                 )
+                if (restore.fellBackToRoot && aggregated.success) {
+                    aggregated.copy(
+                        notice = "Restored to the opened folder — the original folder no longer exists",
+                    )
+                } else {
+                    aggregated
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -889,55 +897,44 @@ class ImageRepositoryImpl @Inject constructor(
         }
     }
 
+    /** The folder an undo restores into, and whether it had to fall back to the opened folder. */
+    internal data class RestoreFolder(val folder: DocumentFile, val fellBackToRoot: Boolean)
+
     /**
-     * Resolve the sub-folder [DocumentFile] within [rootFolderUri] identified by
-     * [parentDocumentId], falling back to the root of [rootFolderUri] when
-     * [parentDocumentId] is null or blank.
+     * Resolve the folder identified by [parentDocumentId] — the provider's own document id of
+     * the folder the photo came from — within [rootFolderUri].
+     *
+     * The id is never interpreted as a path: providers such as Downloads (`msf:…`), MTP and the
+     * cloud ones hand out opaque ids, so the id is passed to the provider as it is
+     * (`buildDocumentUriUsingTree`). Nothing is created during a restore. When the folder no
+     * longer exists, the opened folder (tree root) is used and [RestoreFolder.fellBackToRoot]
+     * lets the caller tell the user.
      */
     internal fun resolveRestoreFolder(
         context: Context,
         rootFolderUri: Uri,
         parentDocumentId: String?,
-    ): DocumentFile? {
+    ): RestoreFolder? {
         val rootDoc = DocumentFile.fromTreeUri(context, rootFolderUri) ?: return null
-        if (parentDocumentId.isNullOrBlank()) return rootDoc
+        if (parentDocumentId.isNullOrBlank()) return RestoreFolder(rootDoc, fellBackToRoot = false)
 
         val treeDocId = try {
             DocumentsContract.getTreeDocumentId(rootFolderUri)
         } catch (_: Exception) {
             null
         }
-        if (parentDocumentId == treeDocId) return rootDoc
+        if (parentDocumentId == treeDocId) return RestoreFolder(rootDoc, fellBackToRoot = false)
 
-        val relativePath = when {
-            treeDocId != null && parentDocumentId.startsWith("$treeDocId/") ->
-                parentDocumentId.removePrefix("$treeDocId/")
-            treeDocId != null && parentDocumentId.startsWith("$treeDocId:") ->
-                parentDocumentId.removePrefix("$treeDocId:")
-            else -> parentDocumentId
-        }.trim('/')
-
-        if (relativePath.isEmpty()) return rootDoc
-
-        var current: DocumentFile = rootDoc
-        var walkedAll = true
-        for (segment in relativePath.split('/').filter { it.isNotEmpty() }) {
-            val next = current.findFile(segment) ?: current.createDirectory(segment)
-            if (next == null) {
-                walkedAll = false
-                break
-            }
-            current = next
-        }
-        if (walkedAll) return current
-
-        return try {
+        val resolved = try {
             val subUri = DocumentsContract.buildDocumentUriUsingTree(rootFolderUri, parentDocumentId)
-            DocumentFile.fromTreeUri(context, subUri)?.takeIf { it.exists() }
-                ?: DocumentFile.fromSingleUri(context, subUri)?.takeIf { it.exists() }
-                ?: rootDoc
+            DocumentFile.fromTreeUri(context, subUri)?.takeIf { it.exists() && it.isDirectory }
         } catch (_: Exception) {
-            rootDoc
+            null
+        }
+        return if (resolved != null) {
+            RestoreFolder(resolved, fellBackToRoot = false)
+        } else {
+            RestoreFolder(rootDoc, fellBackToRoot = true)
         }
     }
 
