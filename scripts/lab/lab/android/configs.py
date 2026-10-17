@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +12,9 @@ import yaml
 
 from .adb import AdbClient
 
+
+ROTATION_POLLS = 10
+ROTATION_POLL_S = 0.5
 
 CONFIGS_PATH = Path(__file__).resolve().parent.parent.parent / "configs" / "android.yaml"
 
@@ -20,10 +25,21 @@ class ConfigNotRunError(RuntimeError):
 
 @dataclass
 class SavedDeviceState:
-    """Recorded initial device state to restore in `reset_config`."""
+    """Recorded initial device state to restore in `reset_config`.
+
+    Every setting `apply_config` or `AdbClient.ensure_ready` touches is recorded, so a run on a
+    personal device leaves the user's display size, font size, dark mode and stay-awake setting
+    as they were. `None` means "no override was set" and restores to the device default.
+    """
 
     user_rotation: int = 0
     accelerometer_rotation: int = 0
+    size_override: str | None = None
+    density_override: int | None = None
+    font_scale: str = "1.0"
+    night_mode: str = "no"
+    stay_on: str = "0"
+    dex: bool = False
 
 
 def load_android_configs(path: Path | None = None) -> dict[str, dict[str, Any]]:
@@ -44,21 +60,106 @@ def record_device_state(adb: AdbClient) -> SavedDeviceState:
         acc_rot = int(acc_out)
     except ValueError:
         acc_rot = 0
-    return SavedDeviceState(user_rotation=user_rot, accelerometer_rotation=acc_rot)
+    size_out = adb.run("shell", "wm", "size")
+    m_size = re.search(r"Override size:\s*(\d+x\d+)", size_out)
+    dens_out = adb.run("shell", "wm", "density")
+    m_dens = re.search(r"Override density:\s*(\d+)", dens_out)
+    font = adb.run("shell", "settings", "get", "system", "font_scale").strip()
+    night_out = adb.run("shell", "cmd", "uimode", "night").strip().lower()
+    night = "yes" if "night mode: yes" in night_out else ("auto" if "night mode: auto" in night_out else "no")
+    stay_on = adb.run("shell", "settings", "get", "global", "stay_on_while_plugged_in").strip()
+    return SavedDeviceState(
+        dex=dex_active(adb),
+        user_rotation=user_rot,
+        accelerometer_rotation=acc_rot,
+        size_override=m_size.group(1) if m_size else None,
+        density_override=int(m_dens.group(1)) if m_dens else None,
+        font_scale=font if re.fullmatch(r"\d+(\.\d+)?", font) else "1.0",
+        night_mode=night,
+        stay_on=stay_on if stay_on.isdigit() else "0",
+    )
+
+
+# Samsung DeX on the tablet's own screen is a launcher Quick Settings tile (One UI 8).
+DEX_TILE = "com.sec.android.app.launcher/com.honeyspace.dexservice.DesktopModeTile"
+DEX_POLLS = 20
+DEX_POLL_S = 1.0
+
+
+def dex_active(adb: AdbClient) -> bool:
+    """True while Samsung DeX runs on the default display (its windowing mode turns freeform)."""
+    out = adb.run("shell", "dumpsys", "window", "displays")
+    m = re.search(r"mWindowingMode=([a-z]+)", out)
+    return bool(m and m.group(1) == "freeform")
+
+
+def set_dex(adb: AdbClient, on: bool) -> None:
+    """Switch DeX on or off through its Quick Settings tile and verify the windowing mode.
+
+    Raises `ConfigNotRunError` when the switch does not take effect (tile missing, device
+    locked, a first-use confirmation dialog), so DeX configs are reported "not run" with the
+    reason instead of running in the wrong mode.
+    """
+    if dex_active(adb) == on:
+        return
+    adb.run("shell", "input", "keyevent", "KEYCODE_WAKEUP")
+    adb.run("shell", "cmd", "statusbar", "click-tile", DEX_TILE)
+    for _ in range(DEX_POLLS):
+        if DEX_POLL_S > 0:
+            time.sleep(DEX_POLL_S)
+        if dex_active(adb) == on:
+            # DeX restarts the launcher and re-lays out every task; let it settle.
+            if DEX_POLL_S > 0:
+                time.sleep(3 * DEX_POLL_S)
+            return
+    state = "on" if on else "off"
+    raise ConfigNotRunError(
+        f"could not switch Samsung DeX {state} automatically; switch it {state} on the device "
+        f"and re-run with --config <the DeX config>"
+    )
 
 
 def set_verified_rotation(adb: AdbClient, orientation: str) -> None:
-    """Set `portrait` or `landscape` and verify via `window_dp()`, flipping 0<->1 if needed."""
+    """Set `portrait` or `landscape` and verify via `window_dp()`, trying each rotation value.
+
+    Raises `ConfigNotRunError` when the display never changes orientation at all — a docked
+    Pixel Tablet ignores every rotation request — so the journey is reported "not run" with
+    the reason instead of as an error.
+    """
     adb.run("shell", "settings", "put", "system", "accelerometer_rotation", "0")
-    candidates = [1, 0] if orientation == "landscape" else [0, 1]
+    candidates = [1, 3, 0, 2] if orientation == "landscape" else [0, 2, 1, 3]
+    seen: set[tuple[int, int]] = set()
     for rot_val in candidates:
         adb.run("shell", "settings", "put", "system", "user_rotation", str(rot_val))
-        w, h = adb.window_dp()
-        if orientation == "landscape" and w > h:
-            return
-        if orientation == "portrait" and h >= w:
-            return
+        # The window manager applies a rotation (and a preceding `wm size`) asynchronously;
+        # an immediate readout still shows the old geometry, so poll before trying the next value.
+        for _ in range(ROTATION_POLLS):
+            w, h = adb.window_dp()
+            seen.add((w, h))
+            if orientation == "landscape" and w > h:
+                return
+            if orientation == "portrait" and h >= w:
+                return
+            if ROTATION_POLL_S > 0:
+                time.sleep(ROTATION_POLL_S)
+    if len(seen) == 1:
+        w, h = seen.pop()
+        raise ConfigNotRunError(f"display rotation is locked at {w}x{h} dp (docked?); cannot show {orientation}")
     raise RuntimeError(f"Could not achieve verified {orientation} rotation on {adb.serial}")
+
+
+def natural_size(adb: AdbClient, size: str) -> str:
+    """`size` (written landscape-first in the configs) in the device's natural orientation.
+
+    `wm size` takes the panel's natural orientation; a portrait-natural tablet (Pixel Tablet,
+    1600x2560) needs 1848x2960 to show the 2960x1848 reference geometry in landscape.
+    """
+    w, h = (int(x) for x in size.split("x"))
+    out = adb.run("shell", "wm", "size")
+    m = re.search(r"Physical size:\s*(\d+)x(\d+)", out)
+    if m and int(m.group(1)) < int(m.group(2)) and w > h:
+        w, h = h, w
+    return f"{w}x{h}"
 
 
 def apply_config(
@@ -77,8 +178,18 @@ def apply_config(
     if cfg.get("keyboard") and not is_avd_kbd:
         raise ConfigNotRunError("needs AVD with hw.keyboard=yes")
 
+    if cfg.get("dex"):
+        # Real DeX on the device screen: DeX owns size, density and rotation; only text and
+        # theme settings apply.
+        set_dex(adb, True)
+        adb.run("shell", "settings", "put", "system", "font_scale", f"{float(cfg.get('font_scale', 1.0))}")
+        adb.run("shell", "cmd", "uimode", "night", "yes" if cfg.get("night") else "no")
+        return
+    if dex_active(adb):
+        set_dex(adb, False)
+
     if "size" in cfg:
-        adb.run("shell", "wm", "size", str(cfg["size"]))
+        adb.run("shell", "wm", "size", natural_size(adb, str(cfg["size"])))
     else:
         adb.run("shell", "wm", "size", "reset")
 
@@ -102,12 +213,20 @@ def apply_config(
 
 
 def reset_config(adb: AdbClient, saved: SavedDeviceState | None = None) -> None:
-    """Reset display size, density, font scale, night mode, and rotation."""
-    adb.run("shell", "wm", "size", "reset")
-    adb.run("shell", "wm", "density", "reset")
-    adb.run("shell", "settings", "put", "system", "font_scale", "1.0")
-    adb.run("shell", "cmd", "uimode", "night", "no")
+    """Restore display size, density, font scale, night mode, stay-awake and rotation."""
+    saved_size = saved.size_override if saved else None
+    saved_dens = saved.density_override if saved else None
+    adb.run("shell", "wm", "size", saved_size or "reset")
+    adb.run("shell", "wm", "density", str(saved_dens) if saved_dens else "reset")
+    adb.run("shell", "settings", "put", "system", "font_scale", saved.font_scale if saved else "1.0")
+    adb.run("shell", "cmd", "uimode", "night", saved.night_mode if saved else "no")
     if saved is not None:
+        adb.run("shell", "settings", "put", "global", "stay_on_while_plugged_in", saved.stay_on)
+        if dex_active(adb) != saved.dex:
+            try:
+                set_dex(adb, saved.dex)
+            except ConfigNotRunError:
+                pass
         adb.run(
             "shell",
             "settings",

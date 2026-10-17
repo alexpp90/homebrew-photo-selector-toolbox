@@ -1,0 +1,52 @@
+# Lab: run by scripts/lab before every journey that does not start from a fresh install.
+# Grants /sdcard/PSTLab/work when there is no usable folder, resumes past the landing page,
+# and waits until the feed shows a photo.
+appId: com.phototok.lab
+---
+- extendedWaitUntil:
+    visible:
+      id: "landing_start_browsing_button"
+    timeout: 6000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "reselect_folder_button"
+    commands:
+      - tapOn:
+          id: "reselect_folder_button"
+      - runFlow: _pick_work_folder.yaml
+- runFlow:
+    when:
+      notVisible:
+        id: "landing_start_browsing_button"
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: "landing_custom_folder_card"
+          commands:
+            - tapOn:
+                id: "landing_custom_folder_card"
+            - runFlow: _pick_work_folder.yaml
+- extendedWaitUntil:
+    visible:
+      id: "landing_start_browsing_button"
+    timeout: 20000
+    optional: true
+- tapOn:
+    id: "landing_start_browsing_button"
+    optional: true
+# First feed visit after an install shows the controls guide over the photo.
+- extendedWaitUntil:
+    visible:
+      id: "controls_guide"
+    timeout: 5000
+    optional: true
+- tapOn:
+    id: "gesture_tutorial_got_it"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "viewer.photo"
+    timeout: 20000

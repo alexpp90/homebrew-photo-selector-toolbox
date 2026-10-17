@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -23,14 +25,66 @@ from .tree_android import parse_uiautomator_xml
 MaestroFn = Callable[[str | None, Path, Path], int]
 
 
+MAESTRO_TIMEOUT_S = 300
+REMOTE_WORK_DIR = "/sdcard/PSTLab/work"
+REMOTE_WORK_ROOT = "PSTLab/work"
+# Per-product flow (products/android/<product>/tests/e2e/) that makes sure the app has the
+# work folder open before a journey that does not start from a fresh install.
+ENSURE_FOLDER_FLOW = "_ensure_folder.yaml"
+PICKER_PACKAGES = ("com.google.android.documentsui", "com.android.documentsui")
+
+
+def maestro_binary() -> str:
+    """`maestro` from PATH, else the official installer's `~/.maestro/bin/maestro`.
+
+    The fallback matters for the systemd timer and other non-login shells, which do not read
+    the PATH line the installer appends to the shell rc file.
+    """
+    found = shutil.which("maestro")
+    if found:
+        return found
+    home_bin = Path.home() / ".maestro" / "bin" / "maestro"
+    return str(home_bin) if home_bin.is_file() else "maestro"
+
+
 def default_maestro_runner(serial: str | None, flow_file: Path, junit_out: Path) -> int:
-    """Run `maestro [--device <serial>] test <flow_file> --format junit --output <junit_out>`."""
-    cmd = ["maestro"]
+    """Run `maestro [--device <serial>] test <flow_file> --format junit --output <junit_out>`.
+
+    Maestro's console output goes to `<junit_out>.log` so a `flow-broken` result names the
+    failing command instead of just a return code.
+    """
+    cmd = [maestro_binary()]
     if serial:
         cmd.extend(["--device", serial])
     cmd.extend(["test", str(flow_file), "--format", "junit", "--output", str(junit_out)])
-    res = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    return res.returncode
+    env = dict(os.environ)
+    env.setdefault("MAESTRO_CLI_NO_ANALYTICS", "1")
+    env.setdefault("MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED", "true")
+    try:
+        res = subprocess.run(
+            cmd, capture_output=True, text=True, check=False, env=env, timeout=MAESTRO_TIMEOUT_S
+        )
+        rc, out, err = res.returncode, res.stdout, res.stderr
+    except subprocess.TimeoutExpired as exc:
+        rc = 124
+        out = exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        err = f"maestro timed out after {MAESTRO_TIMEOUT_S}s"
+    junit_out.with_suffix(".log").write_text(f"$ {' '.join(cmd)}\n{out}\n{err}", encoding="utf-8")
+    return rc
+
+
+def _maestro_failure_line(log_path: Path) -> str:
+    """The most telling line of a Maestro log: the first failure marker, else the last line."""
+    if not log_path.is_file():
+        return "no maestro log"
+    lines = [ln.strip() for ln in log_path.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
+    for ln in lines:
+        if ln.startswith("[Failed]"):
+            return ln[:240]
+    for ln in lines:
+        if "FAILED" in ln or "not found" in ln.lower() or "Exception" in ln or "Error" in ln:
+            return ln[:240]
+    return lines[-1][:240] if lines else "empty maestro log"
 
 
 def run_android_journey(
@@ -44,8 +98,13 @@ def run_android_journey(
     is_avd_kbd: bool = False,
     root: Path | None = None,
     staging_root: Path | None = None,
+    label: str | None = None,
 ) -> tuple[str, list[Finding]]:
-    """Run one `(journey, config)` pair on Android and return `(result, findings)`."""
+    """Run one `(journey, config)` pair on Android and return `(result, findings)`.
+
+    `label` names the run directory and the findings' `config` (default: `config_name`); the
+    orchestrator passes `<config>@<device>` so several devices can run the same config.
+    """
     r = root or repo_root()
     m_fn = maestro_fn or default_maestro_runner
     product = str(manifest["product"])
@@ -53,7 +112,8 @@ def run_android_journey(
     fixture_set = str(manifest["fixture"])
     app_id = "com.phototok.lab" if product == "phototok" else "com.photoselectortoolbox.lab"
 
-    out_dir = run_dir / product / config_name / journey_id
+    cfg_label = label or config_name
+    out_dir = run_dir / product / cfg_label / journey_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     saved_state = record_device_state(adb)
@@ -61,6 +121,7 @@ def run_android_journey(
     overlay_ids = {str(x) for x in rules.get("overlay_ids", [])}
     findings: list[Finding] = []
     result_status = "pass"
+    broken_reason: str | None = None
 
     try:
         try:
@@ -75,12 +136,19 @@ def run_android_journey(
         # Generate fixtures locally and push to /sdcard/PSTLab/<set>
         local_stage = (staging_root or (out_dir / "_fixture_stage")) / fixture_set
         generate_fixtures(fixture_set, local_stage, root=r)
-        remote_fixture = f"/sdcard/PSTLab/{fixture_set}"
+        # Every journey's fixture goes into the same folder, so the app's one persisted SAF
+        # grant (to PSTLab/work) stays valid across journeys; the app is stopped first so it
+        # re-reads the folder on launch instead of showing the previous journey's photos.
+        adb.force_stop(app_id)
+        # A flow that broke inside the system folder picker leaves it on top of the next journey.
+        for picker in PICKER_PACKAGES:
+            adb.force_stop(picker)
+        remote_fixture = REMOTE_WORK_DIR
         adb.rm_rf(remote_fixture)
         adb.push_dir(local_stage, remote_fixture)
 
         initial_files = adb.list_files(remote_fixture)
-        initial_fs = {"root": f"PSTLab/{fixture_set}", "files": initial_files, "trash": []}
+        initial_fs = {"root": REMOTE_WORK_ROOT, "files": initial_files, "trash": []}
         (out_dir / "00_initial.fs.json").write_text(
             json.dumps(initial_fs, indent=2), encoding="utf-8"
         )
@@ -88,6 +156,13 @@ def run_android_journey(
         if manifest.get("fresh_install"):
             adb.clear(app_id, user=user_id)
         adb.start(app_id)
+
+        ensure_flow = r / "products" / "android" / product / "tests" / "e2e" / ENSURE_FOLDER_FLOW
+        if not manifest.get("fresh_install") and ensure_flow.is_file():
+            junit_out = out_dir / "maestro_00_ensure_folder.xml"
+            if m_fn(adb.serial, ensure_flow, junit_out) != 0:
+                result_status = "flow-broken"
+                broken_reason = f"{ENSURE_FOLDER_FLOW}: {_maestro_failure_line(junit_out.with_suffix('.log'))}"
 
         start_ms = int(time.monotonic() * 1000)
         last_cp_ms = start_ms
@@ -119,11 +194,11 @@ def run_android_journey(
             tree_path.write_text(json.dumps(tree.to_dict(), indent=2), encoding="utf-8")
 
             cur_files = adb.list_files(remote_fixture)
-            fs_obj = {"root": f"PSTLab/{fixture_set}", "files": cur_files, "trash": []}
+            fs_obj = {"root": REMOTE_WORK_ROOT, "files": cur_files, "trash": []}
             fs_path.write_text(json.dumps(fs_obj, indent=2), encoding="utf-8")
             timing_path.write_text(json.dumps(timing_obj, indent=2), encoding="utf-8")
 
-            ev_rel = f"{product}/{config_name}/{journey_id}/{stem}.png"
+            ev_rel = f"{product}/{cfg_label}/{journey_id}/{stem}.png"
             l_expect = (manifest.get("layout_expect") or {}).get(cp_name)
             findings.extend(
                 lint(
@@ -131,7 +206,7 @@ def run_android_journey(
                     rules,
                     l_expect,
                     product=product,
-                    config=config_name,
+                    config=cfg_label,
                     journey=journey_id,
                     checkpoint=cp_name,
                     evidence=[ev_rel],
@@ -144,26 +219,26 @@ def run_android_journey(
                     f_expect,
                     initial_fs=initial_fs,
                     product=product,
-                    config=config_name,
+                    config=cfg_label,
                     journey=journey_id,
                     checkpoint=cp_name,
                     evidence=[ev_rel],
                 )
             )
-            prev_t = find_previous_timing(run_dir, product, config_name, journey_id, stem)
+            prev_t = find_previous_timing(run_dir, product, cfg_label, journey_id, stem)
             findings.extend(
                 evaluate_timing(
                     timing_obj,
                     prev_t,
                     product=product,
-                    config=config_name,
+                    config=cfg_label,
                     journey=journey_id,
                     checkpoint=cp_name,
                     evidence=[ev_rel],
                 )
             )
 
-        for step in manifest.get("steps", []):
+        for step in manifest.get("steps", []) if result_status == "pass" else []:
             if "maestro" in step:
                 seg_index += 1
                 flow_rel = Path(str(step["maestro"]))
@@ -172,6 +247,7 @@ def run_android_journey(
                 rc = m_fn(adb.serial, flow_path, junit_out)
                 if rc != 0:
                     result_status = "flow-broken"
+                    broken_reason = f"{flow_rel.name} rc={rc}: {_maestro_failure_line(junit_out.with_suffix('.log'))}"
                     capture_checkpoint("broken")
                     break
             elif "keys" in step:
@@ -197,6 +273,9 @@ def run_android_journey(
                 if w_ms > 0:
                     time.sleep(min(w_ms / 1000.0, 10.0))
 
+        if broken_reason and broken_reason.startswith(ENSURE_FOLDER_FLOW):
+            capture_checkpoint("broken")
+
         log_path = out_dir / "logcat.txt"
         adb.logcat_dump(log_path)
         log_text = log_path.read_text(encoding="utf-8", errors="replace")
@@ -205,20 +284,22 @@ def run_android_journey(
                 log_text,
                 app_id,
                 product=product,
-                config=config_name,
+                config=cfg_label,
                 journey=journey_id,
                 checkpoint="logs",
-                evidence=[f"{product}/{config_name}/{journey_id}/logcat.txt"],
+                evidence=[f"{product}/{cfg_label}/{journey_id}/logcat.txt"],
             )
         )
 
         if result_status == "pass" and any(f.severity in ("blocker", "major") for f in findings):
             result_status = "fail"
 
-        res_obj = {
+        res_obj: dict[str, Any] = {
             "status": result_status,
             "findings": len(findings),
         }
+        if broken_reason:
+            res_obj["reason"] = broken_reason
         (out_dir / "result.json").write_text(json.dumps(res_obj, indent=2), encoding="utf-8")
         return result_status, findings
     finally:

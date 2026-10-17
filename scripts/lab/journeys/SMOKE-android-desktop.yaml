@@ -2,7 +2,7 @@ id: SMOKE-android-desktop
 product: android-desktop
 title: Launch and verify sidebar
 fixture: smoke
-configs: [tab-landscape, tab-portrait]
+configs: [tab-landscape, tab-portrait, tab-native-landscape, tab-native-portrait, dex-on-device]
 fresh_install: false
 steps:
   - {maestro: products/android/android-desktop/tests/e2e/SMOKE/01_launch.yaml}

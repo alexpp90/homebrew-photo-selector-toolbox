@@ -47,7 +47,8 @@ class TestMacosLinuxAndOrchestrate(unittest.TestCase):
             {"steps": [{"keys": ["Right"]}, {"checkpoint": "opened"}]},
             Path("/tmp/pstlab"),
         )
-        self.assertTrue(any("lab-checkpoint" in c for c in cmds))
+        self.assertEqual(cmds[0], "key Right")
+        self.assertIn("checkpoint opened", cmds)
 
     def test_remote_mac_preflight(self) -> None:
         ok, reason = preflight_remote_mac(

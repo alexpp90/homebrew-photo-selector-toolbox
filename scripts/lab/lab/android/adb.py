@@ -83,6 +83,9 @@ class AdbClient:
     def clear(self, app_id: str, user: int = 0) -> str:
         return self.run("shell", "pm", "clear", "--user", str(user), app_id)
 
+    def force_stop(self, app_id: str) -> str:
+        return self.run("shell", "am", "force-stop", app_id)
+
     def start(self, app_id: str) -> str:
         return self.run(
             "shell",
@@ -173,11 +176,24 @@ class AdbClient:
         return self.density()
 
     def window_dp(self) -> tuple[int, int]:
+        """Current display size in dp, as rotated.
+
+        Read from the display (`cur=WxH` at the `base=… <dpi>dpi` density), not from the first
+        `w…dp h…dp` configuration in `dumpsys window`: that one belongs to the top app and keeps
+        its old orientation while the display rotates (seen on the Pixel Tablet).
+        """
+        out = self.run("shell", "dumpsys", "window", "displays")
+        # "init=1600x2560 320dpi [base=2960x1848 320dpi] cur=2960x1848"; base only with overrides.
+        m = re.search(r"init=\d+x\d+\s+(\d+)dpi(?:.*?base=\d+x\d+\s+(\d+)dpi)?.*?cur=(\d+)x(\d+)", out)
+        if m:
+            dpi = int(m.group(2) or m.group(1))
+            w_px, h_px = int(m.group(3)), int(m.group(4))
+            return round(w_px * 160 / dpi), round(h_px * 160 / dpi)
         out = self.run("shell", "dumpsys", "window")
         m = re.search(r"sw\d+dp\s+w(\d+)dp\s+h(\d+)dp", out)
         if m:
             return int(m.group(1)), int(m.group(2))
-        raise RuntimeError("Could not parse w<W>dp h<H>dp from dumpsys window")
+        raise RuntimeError("Could not parse the display size from dumpsys window")
 
     def key(self, code: str) -> str:
         norm = code if code.startswith("KEYCODE_") else f"KEYCODE_{code}"

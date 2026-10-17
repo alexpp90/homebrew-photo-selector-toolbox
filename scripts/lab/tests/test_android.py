@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import lab.android.configs as android_configs  # noqa: E402
 from lab.android.adb import AdbClient  # noqa: E402
 from lab.android.configs import ConfigNotRunError, apply_config, record_device_state, reset_config  # noqa: E402
 from lab.android.runner import run_android_journey  # noqa: E402
@@ -62,6 +63,9 @@ class TestAndroidLayer(unittest.TestCase):
         self.assertEqual(by_id["sidebar_open_folder"].role, "button")
 
     def test_adb_guards_paths_and_verifies_rotation(self) -> None:
+        # The fake applies rotations instantly; don't wait out the real-device settle polls.
+        self.addCleanup(setattr, android_configs, "ROTATION_POLL_S", android_configs.ROTATION_POLL_S)
+        android_configs.ROTATION_POLL_S = 0.0
         recorder = FakeAdbExec(landscape_on_rot=0)
         adb = AdbClient(serial="TEST1234", exec_fn=recorder)
 

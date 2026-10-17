@@ -2,7 +2,7 @@ id: J-AD-05
 product: android-desktop
 title: Window size breakpoint layout check
 fixture: smoke
-configs: [dex-960x600, dex-1280x800, tab-landscape, tab-large-text]
+configs: [dex-960x600, dex-1280x800, tab-landscape, tab-large-text, dex-on-device]
 fresh_install: false
 steps:
   - {maestro: products/android/android-desktop/tests/e2e/J-AD-05/01_assert_layout.yaml}

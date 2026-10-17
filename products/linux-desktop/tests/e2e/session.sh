@@ -57,7 +57,8 @@ export PST_LAB_ARTIFACTS="${ARTIFACTS_DIR}"
 if [[ "$USE_INSTALLED" -eq 1 ]]; then
   APP_CMD=(photo-selector-linux "$FIXTURE_DIR")
 else
-  APP_CMD=(python3 -m photo_selector_linux "$FIXTURE_DIR")
+  # PST_LAB_PYTHON: an interpreter with the distribution's PyGObject (the lab runner sets it).
+  APP_CMD=("${PST_LAB_PYTHON:-python3}" -m photo_selector_linux "$FIXTURE_DIR")
 fi
 
 dbus-run-session -- bash -c '

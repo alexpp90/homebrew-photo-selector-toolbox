@@ -1,14 +1,3 @@
 appId: com.photoselectortoolbox.lab
 ---
-- tapOn:
-    text: "PSTLab"
-    optional: true
-- tapOn:
-    text: "burst-raw-jpeg"
-    optional: true
-- tapOn:
-    text: "Use this folder"
-    optional: true
-- tapOn:
-    text: "Allow"
-    optional: true
+- runFlow: ../_pick_work_folder.yaml
