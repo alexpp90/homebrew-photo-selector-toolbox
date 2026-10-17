@@ -30,6 +30,9 @@ class SettingsRepositoryTest {
     @Before
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        kotlinx.coroutines.runBlocking {
+            context.dataStore.edit { it.clear() }
+        }
         repository = SettingsRepository(context)
     }
 
@@ -236,4 +239,44 @@ class SettingsRepositoryTest {
         assertFalse(hasRetiredPosition(uri))
         assertEquals(FolderScanInfo(0L, 0, null, 0), repository.getFolderScanInfo(uri))
     }
+
+    @Test
+    fun `evicted recent folder and changed target URI release only unreferenced SAF grants`() = runTest {
+        val released = mutableListOf<String>()
+        val persisted = mutableSetOf<String>()
+        val manager = FolderAccessManager(
+            object : SafGrantBackend {
+                override fun takePersistableGrant(uri: android.net.Uri, modeFlags: Int) {
+                    persisted += uri.toString()
+                }
+                override fun releasePersistableGrant(uri: android.net.Uri, modeFlags: Int) {
+                    persisted -= uri.toString()
+                    released += uri.toString()
+                }
+                override fun persistedGrantUris(): Set<String> = persisted.toSet()
+            }
+        )
+        val repoWithGrants = SettingsRepository(context, manager)
+
+        // Pin folder1 as the selection target so evicting it from recents must NOT release it
+        repoWithGrants.setPhoneCollectionUri("content://tree/folder1")
+        for (i in 1..11) {
+            val uri = "content://tree/folder$i"
+            persisted += uri
+            repoWithGrants.addRecentPath(uri, "Folder $i")
+        }
+
+        // folder1 was evicted from recents, but is still SELECTION_TARGET -> not released
+        assertFalse(released.contains("content://tree/folder1"))
+
+        // Adding folder12 evicts folder2, which has no other role -> released
+        persisted += "content://tree/folder12"
+        repoWithGrants.addRecentPath("content://tree/folder12", "Folder 12")
+        assertTrue(released.contains("content://tree/folder2"))
+
+        // Changing collection URI away from folder1 now releases folder1 (no longer in recents either)
+        repoWithGrants.setPhoneCollectionUri("content://tree/new_collection")
+        assertTrue(released.contains("content://tree/folder1"))
+    }
 }
+

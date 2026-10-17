@@ -13,6 +13,7 @@ would notice.
 |---|---|---|
 | [`ANDROID_PLATFORM.md`](ANDROID_PLATFORM.md) | Android Desktop + PhotoTok | The Android baseline both apps obey: tech stack, EXIF extraction contract, storage and file access, project structure |
 | [`FEATURE_PARITY.md`](FEATURE_PARITY.md) | All products | The feature sync policy, the permanent exclusions, and cross-product feature mapping |
+| [`FILE_OPERATIONS.md`](FILE_OPERATIONS.md) | All products | The non-destructive file operation contract: collision-free bundle naming, verified move before source removal, non-destructive undo, and partial failure reporting |
 | [`SUPPORTED_FORMATS.md`](SUPPORTED_FORMATS.md) | All products | The supported file-format contract, the real-camera test corpus, and how every product's format conformance tests keep it working |
 
 ## What is shared in code

@@ -18,6 +18,7 @@ class ScoreEntityTest {
         assertEquals(1700000000000L, entity.lastModified)
     }
 
+    // REQ-AND-FEATURE.02
     @Test
     fun `optional scores default to null`() {
         val entity = ScoreEntity("path", 100, 200)

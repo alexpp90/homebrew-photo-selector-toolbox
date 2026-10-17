@@ -42,7 +42,13 @@ means — and nothing else. The only shared implementation is `products/android/
 5. **Keep user-facing docs true.** When observable behaviour changes, update the product's
    `README.md` (and the root `README.md` product sections, canonical order: PhotoTok, Android
    Desktop, macOS Desktop, Linux Desktop, legacy Desktop) in the same commit.
-6. **Never commit maintainer-private material.** `private/`, `ai/`, `.claude/`, `.agents/`,
+6. **Every PR states where and how far it was tested.** After `./scripts/run_tests.sh`, run
+   `python3 scripts/verification_record.py pr` (or paste `… render`) so the PR description
+   shows the machine, toolchains and gate results, and fill in the template's *Who did the
+   work*, *Not tested locally* and *Manual testing* parts. An agent with limited tooling
+   (cloud, sandbox, no device) names itself and lists what it could not run — a gap stated is
+   fine, a gap hidden is not. See CONTRIBUTING.md, "Verification record".
+7. **Never commit maintainer-private material.** `private/`, `ai/`, `.claude/`, `.agents/`,
    `.gemini/`, requirement specifications and prompt files are ignored on purpose;
    `scripts/check_private_paths.py` fails CI if any of them is tracked.
 

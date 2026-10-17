@@ -76,10 +76,6 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri: Uri? ->
         uri?.let {
-            try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(it, takeFlags)
-            } catch (_: Exception) {}
             viewModel.updateCollectionUri(it.toString())
         }
     }
@@ -88,10 +84,6 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri: Uri? ->
         uri?.let {
-            try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(it, takeFlags)
-            } catch (_: Exception) {}
             viewModel.updateLeftSwipeUri(it.toString())
         }
     }

@@ -1,6 +1,7 @@
 package com.phototok.data.repository
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -30,8 +31,11 @@ internal val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
 
 @Singleton
 class SettingsRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val folderAccessManager: FolderAccessManager,
 ) {
+
+    constructor(context: Context) : this(context, FolderAccessManager(context))
 
     companion object {
         private const val TAG = "SettingsRepository"
@@ -116,9 +120,21 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setLastFolderUri(uri: String?) {
+        var previousUri: String? = null
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
+            previousUri = prefs[KEY_LAST_FOLDER_URI]
             if (uri != null) prefs[KEY_LAST_FOLDER_URI] = uri
             else prefs.remove(KEY_LAST_FOLDER_URI)
+            referencedAfter = referencedUrisByPurpose(prefs)
+        }
+        folderAccessManager.syncReferences(referencedAfter)
+        if (uri != null) {
+            folderAccessManager.takeGrant(Uri.parse(uri), FolderAccessPurpose.SOURCE)
+        }
+        val old = previousUri
+        if (old != null && old != uri) {
+            folderAccessManager.releaseIfUnreferenced(old, referencedAfter.values.flatten().toSet())
         }
     }
 
@@ -244,9 +260,21 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setPhoneCollectionUri(uri: String?) {
+        var previousUri: String? = null
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
+            previousUri = prefs[KEY_COLLECTION_URI]
             if (uri != null) prefs[KEY_COLLECTION_URI] = uri
             else prefs.remove(KEY_COLLECTION_URI)
+            referencedAfter = referencedUrisByPurpose(prefs)
+        }
+        folderAccessManager.syncReferences(referencedAfter)
+        if (uri != null) {
+            folderAccessManager.takeGrant(Uri.parse(uri), FolderAccessPurpose.SELECTION_TARGET)
+        }
+        val old = previousUri
+        if (old != null && old != uri) {
+            folderAccessManager.releaseIfUnreferenced(old, referencedAfter.values.flatten().toSet())
         }
     }
 
@@ -255,9 +283,21 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setPhoneLeftSwipeUri(uri: String?) {
+        var previousUri: String? = null
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
+            previousUri = prefs[KEY_LEFT_SWIPE_URI]
             if (uri != null) prefs[KEY_LEFT_SWIPE_URI] = uri
             else prefs.remove(KEY_LEFT_SWIPE_URI)
+            referencedAfter = referencedUrisByPurpose(prefs)
+        }
+        folderAccessManager.syncReferences(referencedAfter)
+        if (uri != null) {
+            folderAccessManager.takeGrant(Uri.parse(uri), FolderAccessPurpose.LEFT_SWIPE_TARGET)
+        }
+        val old = previousUri
+        if (old != null && old != uri) {
+            folderAccessManager.releaseIfUnreferenced(old, referencedAfter.values.flatten().toSet())
         }
     }
 
@@ -300,13 +340,17 @@ class SettingsRepository @Inject constructor(
     /**
      * Record a folder as recently used, moving it to the front and de-duplicating.
      * Folders evicted from the recents list also get their scan info (and any retired
-     * last-position key) removed so the preferences file does not grow without bound.
+     * last-position key) removed and their persisted SAF grant released if no other
+     * purpose still references the URI.
      */
     suspend fun addRecentPath(uri: String, name: String) {
+        var evictedUris: List<String> = emptyList()
+        var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
             val current = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
             val updated = RecentPathCodec.add(current, uri, name, MAX_STORED_RECENT_PATHS)
-            RecentPathCodec.evictedUris(current, updated).forEach { evictedUri ->
+            evictedUris = RecentPathCodec.evictedUris(current, updated)
+            evictedUris.forEach { evictedUri ->
                 prefs.remove(folderPositionKey(evictedUri))
                 prefs.remove(legacyFolderPositionKey(evictedUri))
                 prefs.remove(folderScanMaxTimeKey(evictedUri))
@@ -315,7 +359,37 @@ class SettingsRepository @Inject constructor(
                 prefs.remove(folderScanLastIndexKey(evictedUri))
             }
             prefs[KEY_RECENT_PATHS] = RecentPathCodec.encode(updated)
+            referencedAfter = referencedUrisByPurpose(prefs)
         }
+        folderAccessManager.syncReferences(referencedAfter)
+        folderAccessManager.recordReference(uri, FolderAccessPurpose.RECENT_FOLDER)
+        val allRemaining = referencedAfter.values.flatten().toSet()
+        for (evictedUri in evictedUris) {
+            folderAccessManager.releaseIfUnreferenced(evictedUri, allRemaining)
+        }
+    }
+
+    /**
+     * Reconcile OS persisted URI grants against the URIs currently referenced in
+     * DataStore, releasing any orphaned grants from earlier sessions.
+     */
+    suspend fun reconcilePersistedGrants(): Set<String> {
+        val prefs = context.dataStore.data.first()
+        return folderAccessManager.reconcilePersistedGrants(referencedUrisByPurpose(prefs))
+    }
+
+    internal fun referencedUrisByPurpose(prefs: Preferences): Map<FolderAccessPurpose, Set<String>> {
+        val source = prefs[KEY_LAST_FOLDER_URI]?.let(::setOf).orEmpty()
+        val selection = prefs[KEY_COLLECTION_URI]?.let(::setOf).orEmpty()
+        val leftSwipe = prefs[KEY_LEFT_SWIPE_URI]?.let(::setOf).orEmpty()
+        val recents = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
+            .mapTo(LinkedHashSet()) { it.uri }
+        return mapOf(
+            FolderAccessPurpose.SOURCE to source,
+            FolderAccessPurpose.SELECTION_TARGET to selection,
+            FolderAccessPurpose.LEFT_SWIPE_TARGET to leftSwipe,
+            FolderAccessPurpose.RECENT_FOLDER to recents,
+        )
     }
 
     // ── Legacy per-folder last position keys (cleaned up on eviction/clear) ──

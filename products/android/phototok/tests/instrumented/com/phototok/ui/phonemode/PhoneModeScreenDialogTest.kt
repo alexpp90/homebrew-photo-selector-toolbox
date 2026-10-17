@@ -23,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.phototok.domain.FirstRunHint
@@ -383,4 +384,33 @@ class PhoneModeScreenDialogTest {
         assertTrue("Continue Where I Left Off button must trigger callback", continuedWhereLeftOff)
         assertFalse("Start with Newest button must not be triggered", startedWithNewest)
     }
+
+    @Test
+    fun phoneModeLanding_missingGrantPrompt_displaysCardAndTriggersReselect() {
+        var pickFolderClicked = false
+
+        composeTestRule.setContent {
+            PhoneModeLanding(
+                sourceFolderUri = null,
+                sourceFolderName = "Not selected",
+                collectionFolderName = "Selection",
+                isLoading = false,
+                missingGrantPrompt = true,
+                onReselectFolder = { pickFolderClicked = true },
+                onSelectSource = {},
+                onSelectCollection = {},
+                onStart = {},
+            )
+        }
+
+        // The landing content is a vertically scrolling column; the card sits below the hero
+        // and mock cards, so on small emulators it is composed but off-screen until scrolled to.
+        composeTestRule.onNodeWithTag("missing_grant_prompt_card").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Folder Access Needed").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("reselect_folder_button").performScrollTo().assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("reselect_folder_button").performClick()
+        assertTrue("Re-select Folder button must trigger folder picker", pickFolderClicked)
+    }
 }
+

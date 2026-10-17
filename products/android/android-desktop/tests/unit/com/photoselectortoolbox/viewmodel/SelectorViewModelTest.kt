@@ -18,7 +18,6 @@ import com.photoselectortoolbox.data.repository.SettingsRepository
 import com.photoselectortoolbox.domain.curation.UndoableOperation
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
 import com.photoselectortoolbox.domain.interaction.FilingAction
-import com.photoselectortoolbox.domain.usecase.MoveToSelectionUseCase
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -142,7 +141,6 @@ class SelectorViewModelTest {
         val viewModel = SelectorViewModel(
             imageRepository = imageRepository,
             scanImagesUseCase = scanImagesUseCase,
-            moveToSelectionUseCase = mockk<MoveToSelectionUseCase>(relaxed = true),
             cacheRepository = mockk<CacheRepository>(relaxed = true),
             settingsRepository = settingsRepository,
             scoreDao = scoreDao,
@@ -311,6 +309,25 @@ class SelectorViewModelTest {
     }
 
     @Test
+    fun `a partial move keeps the frame in the list and surfaces the partial error`() = runTest {
+        coEvery { imageRepository.moveImage(any(), any(), any(), any()) } returns
+            FileOperationResult.partial(
+                sourceUri = "content://test/folder/b",
+                destinationUri = "content://test/sel/b",
+                error = "Copied to Selection — original could not be removed",
+            )
+
+        val viewModel = loadFolder(image("a"), image("b"), image("c"))
+        viewModel.navigateToImage(1)
+        viewModel.moveToSelection()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("a", "b", "c"), state.images.map { it.fileName })
+        assertEquals("Copied to Selection — original could not be removed", state.error)
+        assertNull(state.undoOperation)
+    }
+
+    @Test
     fun `a failed copy rewinds nothing, because the source never left`() = runTest {
         coEvery { imageRepository.copyImage(any(), any(), any(), any()) } returns
             FileOperationResult.failure("content://test/folder/a", "disk full")
@@ -453,7 +470,7 @@ class SelectorViewModelTest {
         val exif = ExifData(iso = 800, aperture = 4.0)
         coEvery { imageRepository.getExifData(any(), any()) } returns exif
         val progress = MutableSharedFlow<ScanProgress>(replay = 1)
-        every { scanImagesUseCase(any(), any()) } returns progress
+        every { scanImagesUseCase(any()) } returns progress
 
         val viewModel = loadFolder(image("a"))
         assertEquals(exif, viewModel.uiState.value.currentImage?.exifData)
@@ -477,4 +494,26 @@ class SelectorViewModelTest {
         assertEquals("the scan rolled EXIF back", exif, current?.exifData)
         assertEquals(70.0, current?.scanResult?.sharpnessScore!!, 0.01)
     }
+
+    // ── Persisted SAF grant lifecycle ────────────────────────────────────
+
+    @Test
+    fun `startup reconciles persisted SAF grants`() = runTest {
+        buildViewModel()
+        coVerify(exactly = 1) { settingsRepository.reconcilePersistedGrants() }
+    }
+
+    @Test
+    fun `revoked or missing folder grant sets missingGrantPrompt`() = runTest {
+        coEvery { imageRepository.openFolder(any(), any()) } returns null
+        val viewModel = buildViewModel()
+
+        viewModel.selectFolder(Uri.parse(FOLDER_URI))
+
+        val state = viewModel.uiState.value
+        assertTrue(state.missingGrantPrompt)
+        assertFalse(state.isLoading)
+        assertNotNull(state.snackbarMessage)
+    }
 }
+

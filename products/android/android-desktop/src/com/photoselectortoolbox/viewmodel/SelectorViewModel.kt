@@ -47,7 +47,6 @@ import com.photoselectortoolbox.domain.session.SelectorWork
 import com.photoselectortoolbox.domain.session.SelectorWorkQueue
 import com.photoselectortoolbox.domain.session.WorkDecision
 import com.photoselectortoolbox.domain.session.WorkQueueState
-import com.photoselectortoolbox.domain.usecase.MoveToSelectionUseCase
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -158,6 +157,8 @@ data class SelectorUiState(
     val sortingEnabled: Boolean = true,
     /** Active rating filter driving the filmstrip and navigation order. */
     val ratingFilter: RatingFilter = RatingFilter.All,
+    /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
+    val missingGrantPrompt: Boolean = false,
 ) {
     /** The active images adhering to the rating filter. */
     val filteredImages: List<ImageItem>
@@ -242,7 +243,6 @@ data class SelectorHintUi(
 class SelectorViewModel @Inject constructor(
     private val imageRepository: ImageRepository,
     private val scanImagesUseCase: ScanImagesUseCase,
-    private val moveToSelectionUseCase: MoveToSelectionUseCase,
     private val cacheRepository: CacheRepository,
     private val settingsRepository: SettingsRepository,
     private val scoreDao: ScoreDao,
@@ -259,6 +259,12 @@ class SelectorViewModel @Inject constructor(
 
     /** Dispatched to for Room / IO work; overridable in tests to keep virtual time intact. */
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+    /** Quiet period before coalesced rating changes are written back to disk; overridable in tests. */
+    internal var ratingWriteDebounceMs: Long = RATING_WRITE_DEBOUNCE_MILLIS
+
+    /** In-flight debounced disk write-back jobs keyed by photo URI, running on [appScope]. */
+    private val ratingWriteJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
 
     // ── Session state ────────────────────────────────────────────────────
     //
@@ -297,7 +303,6 @@ class SelectorViewModel @Inject constructor(
     private val prefetchRequests = mutableMapOf<String, Disposable>()
 
     private var workQueue = WorkQueueState()
-    private var pendingScanAesthetic = false
     private var pendingGroupingLevel: GroupingLevel = GroupingLevel.TIME_FILENAME
 
     private val imageGrouper = ImageGrouper(context)
@@ -392,6 +397,7 @@ class SelectorViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            settingsRepository.reconcilePersistedGrants()
             settingsRepository.lastFolderUri.collect { uri ->
                 if (uri != null && _uiState.value.folderUri == null) {
                     selectFolder(Uri.parse(uri))
@@ -429,7 +435,6 @@ class SelectorViewModel @Inject constructor(
         cancelAllPrefetch()
         loadedExifCache.clear()
         workQueue = SelectorWorkQueue.reset()
-        pendingScanAesthetic = false
         _ratingFilter.value = RatingFilter.All
         _uiState.update {
             it.copy(
@@ -445,6 +450,7 @@ class SelectorViewModel @Inject constructor(
                 undoOperation = null,
                 pendingDeletion = null,
                 ratingFilter = RatingFilter.All,
+                missingGrantPrompt = false,
             )
         }
     }
@@ -457,6 +463,7 @@ class SelectorViewModel @Inject constructor(
                     isLoading = true,
                     isEnumerating = true,
                     error = null,
+                    missingGrantPrompt = false,
                     folderUri = uri.toString()
                 )
             }
@@ -466,18 +473,35 @@ class SelectorViewModel @Inject constructor(
             // [ImageRepository.openFolder].
             val folderName = imageRepository.openFolder(context, uri)
             if (folderName == null) {
-                _uiState.update { it.copy(isLoading = false, isEnumerating = false) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isEnumerating = false,
+                        folderUri = null,
+                        folderName = "",
+                        missingGrantPrompt = true,
+                    )
+                }
                 reportError("Failed to load folder: permission revoked or directory deleted.")
                 settingsRepository.setLastFolderUri(null)
                 return@launch
             }
 
-            _uiState.update { it.copy(folderName = folderName) }
+            _uiState.update { it.copy(folderName = folderName, missingGrantPrompt = false) }
 
             settingsRepository.setLastFolderUri(uri.toString())
 
             collectDiscovery(uri, "images") { e ->
-                if (e is SecurityException) settingsRepository.setLastFolderUri(null)
+                if (e is SecurityException) {
+                    _uiState.update {
+                        it.copy(
+                            folderUri = null,
+                            folderName = "",
+                            missingGrantPrompt = true,
+                        )
+                    }
+                    settingsRepository.setLastFolderUri(null)
+                }
             }
         }
     }
@@ -631,8 +655,10 @@ class SelectorViewModel @Inject constructor(
      * Sets user star rating (1..5, -1 for reject, 0 for unrated).
      *
      * 1. Updates in-memory rating state immediately for reactive UI feedback.
-     * 2. Persists to Room via [CacheRepository.updateRating].
-     * 3. Asynchronously writes back to disk using [MetadataWriter].
+     * 2. Persists to Room (`user_ratings` + `scores_cache`) on [appScope] via [CacheRepository.updateRating].
+     * 3. Debounces per-URI disk write-back on [appScope] using [MetadataWriter] so rapid
+     *    key presses (`1 → 2 → 3 → 4 → 5`) coalesce into a single file write that survives
+     *    leaving the folder or clearing the ViewModel.
      */
     fun setRating(photo: ImageItem, rating: Int) {
         _uiState.update { state ->
@@ -642,16 +668,22 @@ class SelectorViewModel @Inject constructor(
             state.copy(images = updatedImages)
         }
 
-        viewModelScope.launch {
+        appScope.launch(ioDispatcher) {
             try {
                 cacheRepository.updateRating(photo.uri, rating)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("SelectorViewModel", "Failed to persist rating to Room for ${photo.uri}", e)
             }
         }
 
-        viewModelScope.launch(ioDispatcher) {
+        ratingWriteJobs.remove(photo.uri)?.cancel()
+        val writeJob = appScope.launch(ioDispatcher) {
             try {
+                if (ratingWriteDebounceMs > 0L) {
+                    delay(ratingWriteDebounceMs)
+                }
                 val uri = Uri.parse(photo.uri)
                 val file = when {
                     uri.scheme == "file" -> uri.path?.let { File(it) } ?: File(photo.uri)
@@ -663,9 +695,15 @@ class SelectorViewModel @Inject constructor(
                 if (res.isFailure && uri.scheme == "content") {
                     metadataWriter.writeRating(context, uri, rating)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("SelectorViewModel", "Failed to write rating metadata to disk for ${photo.uri}", e)
             }
+        }
+        ratingWriteJobs[photo.uri] = writeJob
+        writeJob.invokeOnCompletion {
+            ratingWriteJobs.remove(photo.uri, writeJob)
         }
     }
 
@@ -693,9 +731,8 @@ class SelectorViewModel @Inject constructor(
 
     // ── Scanning, grouping, and the queue between them ───────────────────
 
-    fun startScan(aestheticEnabled: Boolean = false) {
+    fun startScan() {
         if (_uiState.value.images.isEmpty()) return
-        pendingScanAesthetic = aestheticEnabled
         applyWorkDecision(SelectorWorkQueue.request(workQueue, SelectorWork.SCAN))
     }
 
@@ -709,7 +746,7 @@ class SelectorViewModel @Inject constructor(
         publishWorkState()
         when (val decision = outcome.second) {
             is WorkDecision.Start -> when (decision.work) {
-                SelectorWork.SCAN -> runScan(pendingScanAesthetic)
+                SelectorWork.SCAN -> runScan()
                 SelectorWork.GROUPING -> runGrouping(pendingGroupingLevel)
             }
             is WorkDecision.Queue, WorkDecision.Idle -> Unit
@@ -736,7 +773,7 @@ class SelectorViewModel @Inject constructor(
         applyWorkDecision(SelectorWorkQueue.finish(workQueue, work))
     }
 
-    private fun runScan(aestheticEnabled: Boolean) {
+    private fun runScan() {
         val images = _uiState.value.images
         if (images.isEmpty()) {
             finishWork(SelectorWork.SCAN)
@@ -755,7 +792,7 @@ class SelectorViewModel @Inject constructor(
 
             var analysed = 0
             try {
-                scanImagesUseCase(images, aestheticEnabled).collect { progress ->
+                scanImagesUseCase(images).collect { progress ->
                     val fraction = if (progress.total > 0) {
                         progress.processed.toFloat() / progress.total.toFloat()
                     } else {
@@ -1049,6 +1086,8 @@ class SelectorViewModel @Inject constructor(
                 } else {
                     imageRepository.moveImage(context, source, destination, sorting)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("SelectorViewModel", "${action.name} failed for $sourceUri", e)
                 null
@@ -1070,6 +1109,9 @@ class SelectorViewModel @Inject constructor(
                         current
                     }
                 }
+            } else if (result?.partial == true) {
+                rollbackFiling(edit.action, edit.slots)
+                reportError(result.error ?: "Copied to Selection — original could not be removed")
             } else {
                 rollbackFiling(edit.action, edit.slots)
                 val verb = if (action == CurationAction.COPY) "Copy" else "Move"
@@ -1533,48 +1575,86 @@ class SelectorViewModel @Inject constructor(
         val images = _uiState.value.images
         if (images.isEmpty()) return
 
-        val updatedImages = withContext(ioDispatcher) {
-            images.map { image ->
+        val (updatedImages, persistedRatings) = withContext(ioDispatcher) {
+            val uris = images.map { it.uri }
+            val userRatings = try {
+                val fromRepo = cacheRepository.getRatings(uris)
+                if (fromRepo.isNotEmpty()) {
+                    fromRepo
+                } else {
+                    buildMap {
+                        uris.chunked(900).forEach { chunk ->
+                            scoreDao.getUserRatings(chunk).forEach { entity ->
+                                put(entity.uri, entity.rating)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                emptyMap()
+            }
+
+            val mapped = images.map { image ->
+                val userRating = userRatings[image.uri]
                 val cached = try {
                     scoreDao.getScore(image.uri)
                 } catch (e: Exception) {
                     null
-                } ?: return@map image
-
-                // Validate cache entry matches current file
-                if (cached.fileSize != image.fileSize || cached.lastModified != image.lastModified) {
-                    return@map image
                 }
 
-                val currentRating = if (image.rating != 0) image.rating else cached.rating
+                // Validate scan cache entry matches current file
+                val validCache = cached != null &&
+                    cached.fileSize == image.fileSize &&
+                    cached.lastModified == image.lastModified
 
-                val scanResult = image.scanResult ?: ScanResult(
-                    filePath = image.uri,
-                    sharpnessScore = cached.sharpnessScore,
-                    noiseLevel = cached.noiseLevel,
-                    highlightClipping = cached.highlightClipping,
-                    shadowClipping = cached.shadowClipping,
-                    aestheticScore = cached.aestheticScore,
-                )
+                val currentRating = when {
+                    image.rating != 0 -> image.rating
+                    userRating != null -> userRating
+                    validCache -> cached.rating
+                    else -> 0
+                }
 
-                image.copy(
-                    rating = currentRating,
-                    scanResult = scanResult,
-                )
+                val scanResult = image.scanResult ?: if (validCache) {
+                    ScanResult(
+                        filePath = image.uri,
+                        sharpnessScore = cached.sharpnessScore,
+                        noiseLevel = cached.noiseLevel,
+                        highlightClipping = cached.highlightClipping,
+                        shadowClipping = cached.shadowClipping,
+                        aestheticScore = cached.aestheticScore,
+                    )
+                } else {
+                    null
+                }
+
+                if (currentRating == image.rating && scanResult == image.scanResult) {
+                    image
+                } else {
+                    image.copy(
+                        rating = currentRating,
+                        scanResult = scanResult,
+                    )
+                }
             }
+            mapped to userRatings
         }
 
         // Only the scores travel forward out of the snapshot. See [ScoreMerge]
         // for why merging the items themselves is a rollback rather than a merge.
         val restored = ScoreMerge.scoresOf(updatedImages)
+        val restoredRatingsByUri = updatedImages.associate { it.uri to it.rating }
         _uiState.update { state ->
             val withScores = ScoreMerge.apply(state.images, restored)
             val withRatings = withScores.map { img ->
-                val cachedItem = updatedImages.firstOrNull { it.uri == img.uri }
-                if (cachedItem != null && img.rating == 0 && cachedItem.rating != 0) {
-                    img.copy(rating = cachedItem.rating)
-                } else {
-                    img
+                val explicitUserRating = persistedRatings[img.uri]
+                val fallbackRating = restoredRatingsByUri[img.uri] ?: 0
+                when {
+                    explicitUserRating != null && (img.rating == 0 || img.rating == img.exifData?.rating) ->
+                        img.copy(rating = explicitUserRating)
+                    img.rating == 0 && fallbackRating != 0 ->
+                        img.copy(rating = fallbackRating)
+                    else ->
+                        img
                 }
             }
             state.copy(images = withRatings)
@@ -1605,6 +1685,9 @@ class SelectorViewModel @Inject constructor(
 
         /** Quiet period after the last discovery batch before scores are restored. */
         internal const val SCORE_RESTORE_DEBOUNCE_MILLIS = 400L
+
+        /** Quiet period before rapid per-URI rating changes are written back to disk. */
+        internal const val RATING_WRITE_DEBOUNCE_MILLIS = 500L
 
         /**
          * The size a prefetched frame is decoded at.

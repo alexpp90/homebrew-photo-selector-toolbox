@@ -24,13 +24,45 @@ public enum FileCullingError: Error, LocalizedError, Sendable {
     }
 }
 
+/// Abstraction for moving a file to the trash, enabling deterministic test injection without
+/// environment-variable branches in production code.
+public protocol TrashService: Sendable {
+    func trash(_ url: URL) throws -> URL
+}
+
+/// Production trash implementation backed by `FileManager.default.trashItem`.
+public struct SystemTrashService: TrashService {
+    public init() {}
+
+    public func trash(_ url: URL) throws -> URL {
+        var resultingURL: NSURL?
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
+        } catch {
+            throw FileCullingError.trashFailed(url: url, reason: error.localizedDescription)
+        }
+        guard let trashedURL = resultingURL as URL? else {
+            throw FileCullingError.trashFailed(
+                url: url,
+                reason: "System trash did not return a resulting item URL."
+            )
+        }
+        return trashedURL
+    }
+}
+
 /// Manages culling file actions (Selection folder move/copy, system trash) and companion file discovery.
 public final class FileCullingManager: @unchecked Sendable {
 
     private let fileManager: FileManager
+    public let trashService: any TrashService
 
-    public init(fileManager: FileManager = .default) {
+    public init(
+        fileManager: FileManager = .default,
+        trashService: any TrashService = SystemTrashService()
+    ) {
         self.fileManager = fileManager
+        self.trashService = trashService
     }
 
     // MARK: - Companion File Discovery
@@ -96,9 +128,112 @@ public final class FileCullingManager: @unchecked Sendable {
         return [photoURL] + others
     }
 
+    // MARK: - Collision-Free Bundle Naming
+
+    /// Applies a numeric collision suffix (`-2`, `-3`, …) to a primary or companion filename
+    /// while preserving companion pairing for standard files, double-extension `.xmp` sidecars,
+    /// and Lightroom/Capture One `-Edit` / `_Edit` derivatives.
+    ///
+    /// Examples for `primaryStem = "IMG_0001"`, `suffix = 2`:
+    /// - `"IMG_0001.CR3"` -> `"IMG_0001-2.CR3"`
+    /// - `"IMG_0001.JPG"` -> `"IMG_0001-2.JPG"`
+    /// - `"IMG_0001.xmp"` -> `"IMG_0001-2.xmp"`
+    /// - `"IMG_0001.CR3.xmp"` -> `"IMG_0001-2.CR3.xmp"`
+    /// - `"IMG_0001-Edit.tif"` -> `"IMG_0001-2-Edit.tif"`
+    /// - `"IMG_0001_Edit.tif"` -> `"IMG_0001-2_Edit.tif"`
+    /// - `"IMG_0001-Edit.xmp"` -> `"IMG_0001-2-Edit.xmp"`
+    public static func suffixedCompanionFilename(
+        _ filename: String,
+        primaryStem: String,
+        suffix: Int
+    ) -> String {
+        if !primaryStem.isEmpty,
+           let prefixRange = filename.range(of: primaryStem, options: [.caseInsensitive, .anchored]) {
+            let stemPart = filename[prefixRange]
+            let remainder = filename[prefixRange.upperBound...]
+            if remainder.isEmpty || remainder.first == "." || remainder.first == "-" || remainder.first == "_" {
+                return "\(stemPart)-\(suffix)\(remainder)"
+            }
+        }
+
+        let ext = (filename as NSString).pathExtension
+        let base = (filename as NSString).deletingPathExtension
+        return ext.isEmpty ? "\(filename)-\(suffix)" : "\(base)-\(suffix).\(ext)"
+    }
+
+    private func isSameCanonicalFile(_ a: URL, _ b: URL) -> Bool {
+        let canonicalA = a.standardizedFileURL.resolvingSymlinksInPath()
+        let canonicalB = b.standardizedFileURL.resolvingSymlinksInPath()
+        return (a.standardizedFileURL.path == b.standardizedFileURL.path)
+            || (canonicalA.path.caseInsensitiveCompare(canonicalB.path) == .orderedSame)
+    }
+
+    /// Resolves collision-free destination URLs in `selectionDir` for all existing files in `targets`.
+    /// If any non-self target collides at its unsuffixed destination name, the entire bundle receives
+    /// the lowest integer suffix `N >= 2` for which every member's destination path is free.
+    private func resolveBundleDestinations(
+        for targets: [URL],
+        primaryStem: String,
+        in selectionDir: URL
+    ) -> [(source: URL, destination: URL, isSelfTransfer: Bool)] {
+        let existingTargets = targets.filter { fileManager.fileExists(atPath: $0.path) }
+        guard !existingTargets.isEmpty else { return [] }
+
+        var initialItems: [(source: URL, unsuffixedDestination: URL, isSelfTransfer: Bool)] = []
+        var hasCollision = false
+
+        for target in existingTargets {
+            let unsuffixedDest = selectionDir.appendingPathComponent(target.lastPathComponent)
+            let isSelf = isSameCanonicalFile(target, unsuffixedDest)
+            if !isSelf && fileManager.fileExists(atPath: unsuffixedDest.path) {
+                hasCollision = true
+            }
+            initialItems.append((source: target, unsuffixedDestination: unsuffixedDest, isSelfTransfer: isSelf))
+        }
+
+        guard hasCollision else {
+            return initialItems.map {
+                (source: $0.source, destination: $0.unsuffixedDestination, isSelfTransfer: $0.isSelfTransfer)
+            }
+        }
+
+        var suffix = 2
+        while true {
+            let allFree = initialItems.allSatisfy { item in
+                if item.isSelfTransfer { return true }
+                let suffixedName = Self.suffixedCompanionFilename(
+                    item.source.lastPathComponent,
+                    primaryStem: primaryStem,
+                    suffix: suffix
+                )
+                let candidateDest = selectionDir.appendingPathComponent(suffixedName)
+                return !fileManager.fileExists(atPath: candidateDest.path)
+            }
+            if allFree {
+                break
+            }
+            suffix += 1
+        }
+
+        return initialItems.map { item in
+            if item.isSelfTransfer {
+                return (source: item.source, destination: item.unsuffixedDestination, isSelfTransfer: true)
+            }
+            let suffixedName = Self.suffixedCompanionFilename(
+                item.source.lastPathComponent,
+                primaryStem: primaryStem,
+                suffix: suffix
+            )
+            let dest = selectionDir.appendingPathComponent(suffixedName)
+            return (source: item.source, destination: dest, isSelfTransfer: false)
+        }
+    }
+
     // MARK: - Move to Selection
 
     /// Moves the primary photo and all associated companion files to `<rootURL>/Selection/`.
+    /// Never overwrites existing files: if any bundle member collides in `Selection/`, the entire
+    /// bundle receives a shared numeric suffix (`-2`, `-3`, …).
     /// - Parameters:
     ///   - photoURL: The primary photo URL to move.
     ///   - rootURL: The root album / SD card directory.
@@ -123,66 +258,40 @@ public final class FileCullingManager: @unchecked Sendable {
         }
 
         let targets = findCompanionFiles(for: photoURL)
+        let primaryStem = photoURL.deletingPathExtension().lastPathComponent
+        let resolvedPlan = resolveBundleDestinations(
+            for: targets,
+            primaryStem: primaryStem,
+            in: selectionDir
+        )
+
         var movedURLs: [URL] = []
-        var movedPairs: [(source: URL, destination: URL, backup: URL?)] = []
+        var movedPairs: [(source: URL, destination: URL)] = []
 
-        for target in targets {
-            guard fileManager.fileExists(atPath: target.path) else { continue }
-            let destination = selectionDir.appendingPathComponent(target.lastPathComponent)
-
-            // Guard against self-move: If target already resides at destination,
+        for item in resolvedPlan {
+            // Guard against self-move: if target already resides at destination,
             // preserve the file without deletion or redundant filesystem move.
-            let canonicalTarget = target.standardizedFileURL.resolvingSymlinksInPath()
-            let canonicalDestination = destination.standardizedFileURL.resolvingSymlinksInPath()
-            let isSameFile = (target.standardizedFileURL.path == destination.standardizedFileURL.path)
-                || (canonicalTarget.path.caseInsensitiveCompare(canonicalDestination.path) == .orderedSame)
-
-            if isSameFile {
-                movedURLs.append(destination)
+            if item.isSelfTransfer {
+                movedURLs.append(item.destination)
                 continue
             }
 
-            // Stage existing file at destination to a temporary backup rather than deleting before move
-            var backupURL: URL? = nil
-            if fileManager.fileExists(atPath: destination.path) {
-                let candidateBackup = selectionDir.appendingPathComponent(".\(destination.lastPathComponent).bak.\(UUID().uuidString)")
-                try? fileManager.moveItem(at: destination, to: candidateBackup)
-                if fileManager.fileExists(atPath: candidateBackup.path) {
-                    backupURL = candidateBackup
-                } else {
-                    try? fileManager.removeItem(at: destination)
-                }
-            }
-
             do {
-                try fileManager.moveItem(at: target, to: destination)
-                movedURLs.append(destination)
-                movedPairs.append((source: target, destination: destination, backup: backupURL))
+                try fileManager.moveItem(at: item.source, to: item.destination)
+                movedURLs.append(item.destination)
+                movedPairs.append((source: item.source, destination: item.destination))
             } catch {
-                // Restore current backup if present
-                if let bak = backupURL, fileManager.fileExists(atPath: bak.path) {
-                    try? fileManager.moveItem(at: bak, to: destination)
-                }
                 // Roll back all previously moved companion files in this transaction
                 for pair in movedPairs.reversed() {
                     if fileManager.fileExists(atPath: pair.destination.path) {
                         try? fileManager.moveItem(at: pair.destination, to: pair.source)
                     }
-                    if let bak = pair.backup, fileManager.fileExists(atPath: bak.path) {
-                        try? fileManager.moveItem(at: bak, to: pair.destination)
-                    }
                 }
                 throw FileCullingError.moveFailed(
-                    source: target,
-                    destination: destination,
+                    source: item.source,
+                    destination: item.destination,
                     reason: error.localizedDescription
                 )
-            }
-        }
-
-        for pair in movedPairs {
-            if let bak = pair.backup {
-                try? fileManager.removeItem(at: bak)
             }
         }
 
@@ -192,6 +301,8 @@ public final class FileCullingManager: @unchecked Sendable {
     // MARK: - Copy to Selection
 
     /// Copies the primary photo and all associated companion files to `<rootURL>/Selection/`.
+    /// Never overwrites existing files: if any bundle member collides in `Selection/`, the entire
+    /// bundle receives a shared numeric suffix (`-2`, `-3`, …).
     /// - Parameters:
     ///   - photoURL: The primary photo URL to copy.
     ///   - rootURL: The root album / SD card directory.
@@ -216,67 +327,44 @@ public final class FileCullingManager: @unchecked Sendable {
         }
 
         let targets = findCompanionFiles(for: photoURL)
+        let primaryStem = photoURL.deletingPathExtension().lastPathComponent
+        let resolvedPlan = resolveBundleDestinations(
+            for: targets,
+            primaryStem: primaryStem,
+            in: selectionDir
+        )
+
         var copiedURLs: [URL] = []
-        var copiedEntries: [(destination: URL, backup: URL?)] = []
+        var copiedDestinations: [URL] = []
 
-        for target in targets {
-            guard fileManager.fileExists(atPath: target.path) else { continue }
-            let destination = selectionDir.appendingPathComponent(target.lastPathComponent)
-
-            // Guard against self-copy: If target already resides at destination,
+        for item in resolvedPlan {
+            // Guard against self-copy: if target already resides at destination,
             // preserve the file without deletion or redundant filesystem copy.
-            let canonicalTarget = target.standardizedFileURL.resolvingSymlinksInPath()
-            let canonicalDestination = destination.standardizedFileURL.resolvingSymlinksInPath()
-            let isSameFile = (target.standardizedFileURL.path == destination.standardizedFileURL.path)
-                || (canonicalTarget.path.caseInsensitiveCompare(canonicalDestination.path) == .orderedSame)
-
-            if isSameFile {
-                copiedURLs.append(destination)
+            if item.isSelfTransfer {
+                copiedURLs.append(item.destination)
                 continue
             }
 
-            // Stage existing file at destination to a temporary backup before copy
-            var backupURL: URL? = nil
-            if fileManager.fileExists(atPath: destination.path) {
-                let candidateBackup = selectionDir.appendingPathComponent(".\(destination.lastPathComponent).bak.\(UUID().uuidString)")
-                try? fileManager.moveItem(at: destination, to: candidateBackup)
-                if fileManager.fileExists(atPath: candidateBackup.path) {
-                    backupURL = candidateBackup
-                } else {
-                    try? fileManager.removeItem(at: destination)
-                }
-            }
-
             do {
-                try fileManager.copyItem(at: target, to: destination)
-                copiedURLs.append(destination)
-                copiedEntries.append((destination: destination, backup: backupURL))
+                try fileManager.copyItem(at: item.source, to: item.destination)
+                copiedURLs.append(item.destination)
+                copiedDestinations.append(item.destination)
             } catch {
-                if fileManager.fileExists(atPath: destination.path) {
-                    try? fileManager.removeItem(at: destination)
+                if fileManager.fileExists(atPath: item.destination.path) {
+                    // Clean up partial destination file created by this failed copy operation itself
+                    try? fileManager.removeItem(at: item.destination)
                 }
-                if let bak = backupURL, fileManager.fileExists(atPath: bak.path) {
-                    try? fileManager.moveItem(at: bak, to: destination)
-                }
-                for entry in copiedEntries.reversed() {
-                    if fileManager.fileExists(atPath: entry.destination.path) {
-                        try? fileManager.removeItem(at: entry.destination)
-                    }
-                    if let bak = entry.backup, fileManager.fileExists(atPath: bak.path) {
-                        try? fileManager.moveItem(at: bak, to: entry.destination)
+                for createdDestination in copiedDestinations.reversed() {
+                    if fileManager.fileExists(atPath: createdDestination.path) {
+                        // Clean up companion replica created earlier in this failed copy transaction itself
+                        try? fileManager.removeItem(at: createdDestination)
                     }
                 }
                 throw FileCullingError.copyFailed(
-                    source: target,
-                    destination: destination,
+                    source: item.source,
+                    destination: item.destination,
                     reason: error.localizedDescription
                 )
-            }
-        }
-
-        for entry in copiedEntries {
-            if let bak = entry.backup {
-                try? fileManager.removeItem(at: bak)
             }
         }
 
@@ -295,39 +383,23 @@ public final class FileCullingManager: @unchecked Sendable {
 
         let targets = findCompanionFiles(for: photoURL)
         var trashedURLs: [URL] = []
-
-        // In headless CI environments (e.g. GitHub Actions), FileManager.trashItem blocks indefinitely
-        // waiting for an interactive desktop user session / Finder. Fall back to moving to a dedicated
-        // simulated trash directory so file operations and undo remain fully testable without hanging.
-        let isCI = ProcessInfo.processInfo.environment["CI"] != nil
-        if isCI {
-            let simulatedTrash = fileManager.temporaryDirectory.appendingPathComponent(".SimulatedTrash", isDirectory: true)
-            let batchDir = simulatedTrash.appendingPathComponent(UUID().uuidString, isDirectory: true)
-            try? fileManager.createDirectory(at: batchDir, withIntermediateDirectories: true)
-            for target in targets {
-                guard fileManager.fileExists(atPath: target.path) else { continue }
-                let destination = batchDir.appendingPathComponent(target.lastPathComponent)
-                do {
-                    try fileManager.moveItem(at: target, to: destination)
-                    trashedURLs.append(destination)
-                } catch {
-                    throw FileCullingError.trashFailed(url: target, reason: error.localizedDescription)
-                }
-            }
-            return trashedURLs
-        }
+        var trashedPairs: [(source: URL, trashed: URL)] = []
 
         for target in targets {
             guard fileManager.fileExists(atPath: target.path) else { continue }
-            var resultingURL: NSURL?
             do {
-                try fileManager.trashItem(at: target, resultingItemURL: &resultingURL)
-                if let res = resultingURL as URL? {
-                    trashedURLs.append(res)
-                } else {
-                    trashedURLs.append(target)
-                }
+                let res = try trashService.trash(target)
+                trashedURLs.append(res)
+                trashedPairs.append((source: target, trashed: res))
             } catch {
+                for pair in trashedPairs.reversed() {
+                    if fileManager.fileExists(atPath: pair.trashed.path) {
+                        try? fileManager.moveItem(at: pair.trashed, to: pair.source)
+                    }
+                }
+                if let cullingError = error as? FileCullingError {
+                    throw cullingError
+                }
                 throw FileCullingError.trashFailed(url: target, reason: error.localizedDescription)
             }
         }

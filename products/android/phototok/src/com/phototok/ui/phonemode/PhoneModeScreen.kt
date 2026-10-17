@@ -444,6 +444,7 @@ fun PhoneModeScreen(
                     collectionFolderName = uiState.collectionFolderName,
                     isLoading = uiState.isLoading,
                     emptyFolderMessage = uiState.emptyFolderMessage,
+                    missingGrantPrompt = uiState.missingGrantPrompt,
                     onSelectCamera = {
                         viewModel.selectCameraFolder { cameraUri ->
                             folderPickerLauncher.launch(cameraUri)

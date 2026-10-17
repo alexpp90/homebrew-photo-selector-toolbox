@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import androidx.exifinterface.media.ExifInterface
 import com.photoselector.core.Requirement
 import com.photoselector.core.reader.AndroidExifReader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -193,6 +195,53 @@ class MetadataWriterTest {
         val updated = XmpSidecarWriter.injectOrUpdateRating(xmpWithDecimal, 5)
         assertTrue("Must replace decimal rating with 5", updated.contains("<xmp:Rating>5</xmp:Rating>"))
         assertFalse("Must not contain old decimal 3.5", updated.contains("3.5"))
+    }
+
+    @Test
+    fun `jpeg write-back leaves original JPEG untouched and deletes temp file when bounds verification fails`() = runTest {
+        val jpegFile = createSampleJpeg("protected_photo.jpg", timestamp = "2026:10:17 09:00:00")
+        val originalBytes = jpegFile.readBytes()
+
+        val failingValidatorWriter = MetadataWriterImpl(validateJpegBounds = { false })
+        val result = failingValidatorWriter.writeRating(jpegFile, 5)
+        assertTrue(result.isSuccess)
+
+        // Original JPEG bytes must be 100% untouched because temp file failed verification
+        assertTrue(originalBytes.contentEquals(jpegFile.readBytes()))
+
+        // Fallback companion .xmp sidecar carries the rating instead
+        val sidecar = File(tempFolder.root, "protected_photo.jpg.xmp")
+        assertTrue(sidecar.exists())
+        assertTrue(sidecar.readText().contains("<xmp:Rating>5</xmp:Rating>"))
+
+        // No temporary files left behind
+        val leftoverTemps = tempFolder.root.listFiles()?.filter { it.name.contains(".tmp.") }.orEmpty()
+        assertTrue(leftoverTemps.isEmpty())
+    }
+
+    @Test
+    fun `concurrent jpeg writes on same file are serialized via per-URI mutex without corruption`() = runTest {
+        val jpegFile = createSampleJpeg("concurrent_jpeg.jpg", timestamp = "2026:10:17 10:00:00")
+
+        val jobs = (1..10).map { i ->
+            async(Dispatchers.IO) {
+                writer.writeRating(jpegFile, (i % 5) + 1)
+            }
+        }
+        val results = jobs.map { it.await() }
+        assertTrue(results.all { it.isSuccess })
+
+        // Verify resulting JPEG is still valid and decodable with intact capture timestamp
+        assertTrue(MetadataWriterImpl.defaultValidateJpegBounds(jpegFile))
+        val exifAfter = ExifInterface(jpegFile.absolutePath)
+        assertEquals("2026:10:17 10:00:00", exifAfter.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL))
+        val parsed = reader.readExif(jpegFile)
+        assertNotNull(parsed)
+        assertTrue(parsed!!.rating in 1..5)
+
+        // No temporary files left behind
+        val leftoverTemps = tempFolder.root.listFiles()?.filter { it.name.contains(".tmp.") }.orEmpty()
+        assertTrue(leftoverTemps.isEmpty())
     }
 
     private fun createSampleJpeg(filename: String, timestamp: String = "2026:10:11 10:00:00"): File {

@@ -11,11 +11,13 @@ Adheres to:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import errno
 import logging
 import os
 import shutil
+import threading
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote, unquote
 
 from photo_selector_linux.core.gvfs_names import (
@@ -32,6 +34,8 @@ from photo_selector_linux.core.models import (
 
 logger = logging.getLogger(__name__)
 
+_RENAME_LOCK = threading.Lock()
+
 _HAVE_GIO = False
 try:
     import gi
@@ -42,17 +46,176 @@ except Exception:
     _HAVE_GIO = False
 
 
-def _copy_file(src: Path, dst: Path) -> None:
-    """Copy content, then permissions and timestamps where the destination supports them.
+def _apply_bundle_suffix(name: str, base_stem: str, suffix_num: int) -> str:
+    """Insert ``-{suffix_num}`` into ``name`` at the bundle's primary stem boundary.
 
-    GVFS cloud mounts (Google Drive) reject ``utime``/``chmod`` with ENOTSUP, which made
-    ``shutil.copy2`` fail every copy and cross-mount move there after the bytes had landed.
+    Preserves companion pairing across primary/twin files (``IMG_0001-2.CR3``, ``IMG_0001-2.JPG``),
+    file- and stem-level sidecars (``IMG_0001-2.CR3.xmp``, ``IMG_0001-2.xmp``), and Lightroom
+    derivatives (``IMG_0001-2-Edit.tif``, ``IMG_0001-2_Edit.tif``, ``IMG_0001-2-Enhanced-NR.dng``).
     """
-    shutil.copyfile(src, dst)
+    if suffix_num < 2:
+        return name
+
+    if base_stem and name[: len(base_stem)].lower() == base_stem.lower():
+        remainder = name[len(base_stem):]
+        if not remainder or remainder[0] in (".", "-", "_"):
+            prefix = name[: len(base_stem)]
+            return f"{prefix}-{suffix_num}{remainder}"
+
+    lower = name.lower()
+    if lower.endswith(".xmp"):
+        inner = name[:-4]
+        outer_ext = name[-4:]
+        inner_path = Path(inner)
+        if inner_path.suffix:
+            return f"{inner_path.stem}-{suffix_num}{inner_path.suffix}{outer_ext}"
+        return f"{inner}-{suffix_num}{outer_ext}"
+
+    p = Path(name)
+    stem = p.stem
+    ext = p.suffix
+    stem_lower = stem.lower()
+    for marker in ("-edit", "_edit", "-enhanced-nr"):
+        idx = stem_lower.find(marker)
+        if idx > 0:
+            return f"{stem[:idx]}-{suffix_num}{stem[idx:]}{ext}"
+
+    return f"{stem}-{suffix_num}{ext}"
+
+
+def _resolve_bundle_destinations(
+    candidate: CandidatePhoto,
+    dest_dir: Path,
+    name_resolver: Optional[DisplayNameResolver] = None,
+) -> List[Tuple[Path, Path]]:
+    """Resolve collision-free ``(src, dst)`` pairs for all existing files in ``candidate``.
+
+    Checks both on-disk paths in ``dest_dir`` and GVFS display names reported by ``name_resolver``.
+    If any member collides with an existing destination file (and is not a self-move/copy), the
+    entire bundle receives the lowest integer suffix ``-N`` (``N >= 2``) for which every member
+    is collision-free.
+    """
+    existing_sources = [src for src in candidate.all_paths if src.exists()]
+    if not existing_sources:
+        return []
+
+    base_stem = candidate.stem
+    display_map = name_resolver.names_in(dest_dir) if name_resolver is not None else {}
+    existing_display_names = set(display_map.values())
+    display_to_ondisk = {
+        display: (dest_dir / on_disk).resolve()
+        for on_disk, display in display_map.items()
+    }
+
+    def _is_occupied(src: Path, target_name: str, allow_self: bool) -> bool:
+        dst = (dest_dir / target_name).resolve()
+        src_res = src.resolve()
+        if allow_self and src_res == dst:
+            return False
+        if allow_self and target_name in display_to_ondisk and display_to_ondisk[target_name] == src_res:
+            return False
+        if dst.exists() or dst.is_symlink():
+            return True
+        if target_name in existing_display_names:
+            return True
+        return False
+
+    has_collision = any(
+        _is_occupied(src, candidate.name_of(src), allow_self=True)
+        for src in existing_sources
+    )
+
+    if not has_collision:
+        return [
+            (src, (dest_dir / candidate.name_of(src)).resolve())
+            for src in existing_sources
+        ]
+
+    suffix_num = 2
+    while True:
+        suffixed_pairs = [
+            (src, _apply_bundle_suffix(candidate.name_of(src), base_stem, suffix_num))
+            for src in existing_sources
+        ]
+        if not any(
+            _is_occupied(src, suffixed_name, allow_self=False)
+            for src, suffixed_name in suffixed_pairs
+        ):
+            return [
+                (src, (dest_dir / suffixed_name).resolve())
+                for src, suffixed_name in suffixed_pairs
+            ]
+        suffix_num += 1
+
+
+def _copy_file(src: Path, dst: Path, fsync: bool = False) -> None:
+    """Copy content exclusively (never overwriting an existing file), then permissions and timestamps.
+
+    Opens ``dst`` with ``O_WRONLY | O_CREAT | O_EXCL`` so an existing file is never truncated.
+    When ``fsync=True``, flushes file data to disk before closing. GVFS cloud mounts (Google Drive)
+    reject ``utime``/``chmod`` with ENOTSUP, which is ignored so copies and cross-mount moves succeed.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd = os.open(dst, flags, 0o666)
+    try:
+        try:
+            fobj = os.fdopen(fd, "wb")
+        except BaseException:
+            os.close(fd)
+            raise
+        with fobj as fdst:
+            with open(src, "rb") as fsrc:
+                shutil.copyfileobj(fsrc, fdst, length=1024 * 1024)
+            fdst.flush()
+            if fsync:
+                try:
+                    os.fsync(fdst.fileno())
+                except OSError as e:
+                    if e.errno not in (errno.EINVAL, errno.ENOTSUP, errno.EOPNOTSUPP):
+                        raise
+    except BaseException:
+        if dst.exists() or dst.is_symlink():
+            try:
+                dst.unlink()
+            except OSError:
+                pass
+        raise
     try:
         shutil.copystat(src, dst)
     except OSError as e:
         logger.debug("Metadata not preserved for %s: %s", dst, e)
+
+
+def _move_no_overwrite(src: Path, dst: Path) -> None:
+    """Atomically move ``src`` to ``dst`` on the same filesystem without ever overwriting ``dst``.
+
+    Uses ``os.link`` + ``os.unlink`` on POSIX filesystems that support hardlinks (fails atomically
+    with ``FileExistsError`` if ``dst`` exists), falling back to an existence check + ``os.rename``
+    under ``_RENAME_LOCK`` for filesystems where hardlinks are unsupported (FAT/exFAT/GVFS) or symlinks.
+    """
+    with _RENAME_LOCK:
+        if dst.exists() or dst.is_symlink():
+            raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(dst))
+        if not src.is_symlink():
+            try:
+                os.link(src, dst)
+            except FileExistsError:
+                raise
+            except OSError:
+                pass
+            else:
+                try:
+                    os.unlink(src)
+                except BaseException:
+                    try:
+                        os.unlink(dst)
+                    except OSError:
+                        pass
+                    raise
+                return
+        if dst.exists() or dst.is_symlink():
+            raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(dst))
+        os.rename(src, dst)
 
 
 class FileCullingError(Exception):
@@ -77,6 +240,14 @@ class FileCullingManager:
         self.default_selection_folder = default_selection_folder
         self._trash_dir = trash_dir
         self.name_resolver: DisplayNameResolver = name_resolver or default_resolver()
+
+    def _resolve_bundle_destinations(
+        self,
+        candidate: CandidatePhoto,
+        dest_dir: Path,
+    ) -> List[Tuple[Path, Path]]:
+        """Resolve collision-free ``(src, dst)`` pairs in ``dest_dir`` for ``candidate``."""
+        return _resolve_bundle_destinations(candidate, dest_dir, self.name_resolver)
 
     def _get_trash_dir(self) -> Path:
         """Return the FreeDesktop.org Trash base directory ($XDG_DATA_HOME/Trash)."""
@@ -116,9 +287,9 @@ class FileCullingManager:
 
         try:
             if src_resolved.parent.stat().st_dev == files_dir.stat().st_dev:
-                os.replace(src_resolved, dst_file)
+                _move_no_overwrite(src_resolved, dst_file)
             else:
-                _copy_file(src_resolved, dst_file)
+                _copy_file(src_resolved, dst_file, fsync=True)
                 src_resolved.unlink()
         except Exception:
             if info_file.exists():
@@ -166,20 +337,26 @@ class FileCullingManager:
             return direct
         return None
 
-    def _restore_from_trash(self, src: Path, dst: Path) -> None:
-        """Restore a single file from FreeDesktop.org Trash back to src and remove its .trashinfo."""
+    def _restore_from_trash(
+        self,
+        src: Path,
+        dst: Path,
+        restore_target: Optional[Path] = None,
+    ) -> None:
+        """Restore a single file from FreeDesktop.org Trash back to ``restore_target`` (or ``src``)."""
         trash_file: Optional[Path] = None
         if not str(dst).startswith("trash://") and dst.exists():
             trash_file = dst
         else:
             trash_file = self._find_trashed_file(src)
 
+        target = restore_target if restore_target is not None else src
         if trash_file is not None and trash_file.exists():
-            src.parent.mkdir(parents=True, exist_ok=True)
-            if src.parent.stat().st_dev == trash_file.stat().st_dev:
-                os.replace(trash_file, src)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.parent.stat().st_dev == trash_file.stat().st_dev:
+                _move_no_overwrite(trash_file, target)
             else:
-                _copy_file(trash_file, src)
+                _copy_file(trash_file, target, fsync=True)
                 trash_file.unlink()
 
             info_file = trash_file.parent.parent / "info" / f"{trash_file.name}.trashinfo"
@@ -249,7 +426,8 @@ class FileCullingManager:
     ) -> CullingRecord:
         """Atomically move candidate photo and all bound companions to Selection/ (R-LINUX-CULL-03)."""
         sel_dir = self._get_selection_dir(root_dir, selection_folder)
-        targets = candidate.all_paths
+        planned_moves = self._resolve_bundle_destinations(candidate, sel_dir)
+        targets = [src for src, _ in planned_moves]
 
         # Pre-flight capacity check
         self._verify_destination_capacity(sel_dir, targets)
@@ -261,13 +439,10 @@ class FileCullingManager:
         affected: List[Tuple[Path, Path]] = []
 
         if not is_cross_mount:
-            # === Intra-Filesystem Fast Atomic Rename ===
+            # === Intra-Filesystem Collision-Free Atomic Move ===
             completed_moves: List[Tuple[Path, Path]] = []
             try:
-                for src in targets:
-                    if not src.exists():
-                        continue
-                    dst = (sel_dir / candidate.name_of(src)).resolve()
+                for src, dst in planned_moves:
                     src_res = src.resolve()
 
                     # Self-Move Guard: Idempotent no-op
@@ -275,14 +450,14 @@ class FileCullingManager:
                         completed_moves.append((src, dst))
                         continue
 
-                    os.replace(src, dst)
+                    _move_no_overwrite(src, dst)
                     completed_moves.append((src, dst))
             except Exception as e:
                 # Atomic Rollback: restore previously moved files to original paths
                 for moved_src, moved_dst in reversed(completed_moves):
                     if moved_src.resolve() != moved_dst.resolve() and moved_dst.exists():
                         try:
-                            os.replace(moved_dst, moved_src)
+                            _move_no_overwrite(moved_dst, moved_src)
                         except Exception:
                             pass
                 raise FileCullingError(f"Intra-filesystem move failed, rolled back: {e}") from e
@@ -295,10 +470,7 @@ class FileCullingManager:
 
             # --- Phase 1: Staging (replicate all companions to destination) ---
             try:
-                for src in targets:
-                    if not src.exists():
-                        continue
-                    dst = (sel_dir / candidate.name_of(src)).resolve()
+                for src, dst in planned_moves:
                     src_res = src.resolve()
 
                     # Self-Move Guard
@@ -307,7 +479,7 @@ class FileCullingManager:
                         continue
 
                     current_in_flight = (src, dst)
-                    _copy_file(src, dst)
+                    _copy_file(src, dst, fsync=True)
                     # Verify integrity
                     if dst.stat().st_size != src.stat().st_size:
                         raise IOError(f"Byte mismatch during cross-mount staging for {src.name}")
@@ -373,7 +545,8 @@ class FileCullingManager:
     ) -> CullingRecord:
         """Atomically copy candidate photo and all bound companions to Selection/ (R-LINUX-CULL-04)."""
         sel_dir = self._get_selection_dir(root_dir, selection_folder)
-        targets = candidate.all_paths
+        planned_copies = self._resolve_bundle_destinations(candidate, sel_dir)
+        targets = [src for src, _ in planned_copies]
 
         # Pre-flight capacity check
         self._verify_destination_capacity(sel_dir, targets)
@@ -381,10 +554,7 @@ class FileCullingManager:
         staged_copies: List[Tuple[Path, Path]] = []
         current_in_flight: Optional[Tuple[Path, Path]] = None
         try:
-            for src in targets:
-                if not src.exists():
-                    continue
-                dst = (sel_dir / candidate.name_of(src)).resolve()
+            for src, dst in planned_copies:
                 src_res = src.resolve()
 
                 # Self-Copy Guard: Idempotent no-op
@@ -465,6 +635,128 @@ class FileCullingManager:
             previous_status=PhotoStatus.CANDIDATE,
         )
 
+    def _resolve_undo_targets(
+        self,
+        record: CullingRecord,
+        candidate: Optional[CandidatePhoto] = None,
+    ) -> List[Tuple[Path, Path, Path]]:
+        """Resolve collision-free ``(orig_src, restore_target, current_dst)`` triples for undo.
+
+        If any original source path is now occupied by a file created after the operation, the
+        entire restored bundle is assigned a shared collision-free ``-N`` suffix (``N >= 2``)
+        in ``orig_src.parent`` so existing user files are never overwritten or deleted.
+        """
+        if not record.affected_paths:
+            return []
+
+        primary_name = (
+            candidate.name_of(record.original_primary_path)
+            if candidate is not None
+            else record.original_primary_path.name
+        )
+        base_stem = Path(primary_name).stem
+
+        display_by_parent: Dict[Path, Dict[str, str]] = {}
+
+        def _display_names_in(parent: Path) -> Dict[str, str]:
+            if parent not in display_by_parent:
+                display_by_parent[parent] = self.name_resolver.names_in(parent)
+            return display_by_parent[parent]
+
+        def _orig_name(orig_src: Path) -> str:
+            if candidate is not None:
+                return candidate.name_of(orig_src)
+            return orig_src.name
+
+        def _is_self_move(orig_src: Path, current_dst: Path) -> bool:
+            if record.action_type != CullingActionType.MOVE:
+                return False
+            if str(current_dst).startswith("trash://"):
+                return False
+            try:
+                return orig_src.resolve() == current_dst.resolve()
+            except OSError:
+                return False
+
+        def _target_occupied(parent: Path, name: str, current_dst: Path, allow_self: bool) -> bool:
+            target = parent / name
+            if allow_self and _is_self_move(target, current_dst):
+                return False
+            if target.exists() or target.is_symlink():
+                return True
+            if name in _display_names_in(parent).values():
+                return True
+            return False
+
+        has_collision = any(
+            not _is_self_move(orig_src, current_dst)
+            and (
+                orig_src.exists()
+                or orig_src.is_symlink()
+                or _target_occupied(orig_src.parent, _orig_name(orig_src), current_dst, allow_self=True)
+            )
+            for orig_src, current_dst in record.affected_paths
+        )
+
+        if not has_collision:
+            return [
+                (orig_src, orig_src, current_dst)
+                for orig_src, current_dst in record.affected_paths
+            ]
+
+        suffix_num = 2
+        while True:
+            candidate_triples: List[Tuple[Path, Path, Path]] = []
+            occupied = False
+            for orig_src, current_dst in record.affected_paths:
+                if _is_self_move(orig_src, current_dst):
+                    candidate_triples.append((orig_src, orig_src, current_dst))
+                    continue
+                suffixed_name = _apply_bundle_suffix(_orig_name(orig_src), base_stem, suffix_num)
+                if _target_occupied(orig_src.parent, suffixed_name, current_dst, allow_self=False):
+                    occupied = True
+                    break
+                candidate_triples.append((orig_src, orig_src.parent / suffixed_name, current_dst))
+            if not occupied:
+                return candidate_triples
+            suffix_num += 1
+
+    def _update_candidate_restored_paths(
+        self,
+        candidate: CandidatePhoto,
+        restored_pairs: List[Tuple[Path, Path]],
+    ) -> None:
+        """Update ``candidate`` paths when undo restores a bundle under a collision-free suffix."""
+        path_map: Dict[Path, Path] = {}
+        resolved_map: Dict[Path, Path] = {}
+        for orig_src, restore_target in restored_pairs:
+            path_map[orig_src] = restore_target
+            try:
+                resolved_map[orig_src.resolve()] = restore_target
+            except OSError:
+                pass
+
+        def _map_path(p: Path) -> Path:
+            if p in path_map:
+                return path_map[p]
+            try:
+                res = p.resolve()
+                if res in resolved_map:
+                    return resolved_map[res]
+            except OSError:
+                pass
+            return p
+
+        old_primary = candidate.primary_path
+        new_primary = _map_path(old_primary)
+        candidate.primary_path = new_primary
+        candidate.companion_paths = [_map_path(p) for p in candidate.companion_paths]
+
+        for orig_src, restore_target in restored_pairs:
+            if orig_src in candidate.display_names and restore_target != orig_src:
+                candidate.display_names.pop(orig_src, None)
+                candidate.display_names[restore_target] = restore_target.name
+
     def undo_culling(self, record: CullingRecord, candidate: Optional[CandidatePhoto] = None) -> bool:
         """Atomically reverse culling operation with absolute source preservation (R-LINUX-CULL-06/07)."""
         if record.action_type == CullingActionType.COPY:
@@ -484,31 +776,58 @@ class FileCullingManager:
             return True
 
         elif record.action_type == CullingActionType.MOVE:
-            # === Transactional Move Undo ===
-            # Restore files from Selection/ back to original source directory
-            for src, dst in record.affected_paths:
-                src_res = src.resolve()
-                dst_res = dst.resolve()
-                if dst_res != src_res and dst.exists():
-                    src.parent.mkdir(parents=True, exist_ok=True)
-                    if src.parent.stat().st_dev == dst.stat().st_dev:
-                        os.replace(dst, src)
-                    else:
-                        _copy_file(dst, src)
-                        dst.unlink()
+            # === Transactional Move Undo (R-LINUX-CULL-07) ===
+            # Restore files from Selection/ back to original source directory (with collision suffix if occupied)
+            undo_targets = self._resolve_undo_targets(record, candidate)
+            restored_pairs: List[Tuple[Path, Path]] = []
+            completed_moves: List[Tuple[Path, Path]] = []
+            try:
+                for orig_src, restore_target, dst in undo_targets:
+                    target_res = restore_target.resolve()
+                    dst_res = dst.resolve()
+                    if dst_res != target_res and dst.exists():
+                        restore_target.parent.mkdir(parents=True, exist_ok=True)
+                        if restore_target.parent.stat().st_dev == dst.stat().st_dev:
+                            _move_no_overwrite(dst, restore_target)
+                        else:
+                            _copy_file(dst, restore_target, fsync=True)
+                            if restore_target.stat().st_size != dst.stat().st_size:
+                                raise IOError(f"Byte mismatch restoring {dst.name}")
+                            dst.unlink()
+                        completed_moves.append((restore_target, dst))
+                    restored_pairs.append((orig_src, restore_target))
+            except Exception as e:
+                for moved_target, orig_dst in reversed(completed_moves):
+                    if moved_target.exists() and not orig_dst.exists():
+                        try:
+                            if orig_dst.parent.stat().st_dev == moved_target.stat().st_dev:
+                                _move_no_overwrite(moved_target, orig_dst)
+                            else:
+                                _copy_file(moved_target, orig_dst, fsync=True)
+                                moved_target.unlink()
+                        except Exception:
+                            pass
+                raise FileCullingError(f"Failed to restore moved file during undo: {e}") from e
+
             if candidate:
+                self._update_candidate_restored_paths(candidate, restored_pairs)
+                self._relink_restored(candidate)
                 candidate.status = record.previous_status
             return True
 
         elif record.action_type == CullingActionType.TRASH:
             # === Transactional Trash Undo (R-LINUX-CULL-07) ===
-            # Restore trashed primary image and all companions from FreeDesktop Trash back to original paths
-            for src, dst in record.affected_paths:
+            # Restore trashed primary image and all companions from FreeDesktop Trash
+            undo_targets = self._resolve_undo_targets(record, candidate)
+            restored_pairs = []
+            for orig_src, restore_target, dst in undo_targets:
                 try:
-                    self._restore_from_trash(src, dst)
+                    self._restore_from_trash(orig_src, dst, restore_target=restore_target)
+                    restored_pairs.append((orig_src, restore_target))
                 except Exception as e:
-                    raise FileCullingError(f"Failed to restore trashed file {src.name} during undo: {e}") from e
+                    raise FileCullingError(f"Failed to restore trashed file {orig_src.name} during undo: {e}") from e
             if candidate:
+                self._update_candidate_restored_paths(candidate, restored_pairs)
                 self._relink_restored(candidate)
                 candidate.status = record.previous_status
             return True

@@ -65,6 +65,8 @@ fun PhoneModeLanding(
     collectionFolderName: String,
     isLoading: Boolean,
     emptyFolderMessage: String? = null,
+    missingGrantPrompt: Boolean = false,
+    onReselectFolder: (() -> Unit)? = null,
     onSelectCamera: () -> Unit = {},
     onSelectSource: (Uri) -> Unit,
     onSelectCollection: (Uri) -> Unit,
@@ -228,7 +230,69 @@ fun PhoneModeLanding(
                     .testTag("landing_custom_folder_card"),
             )
 
-            if (emptyFolderMessage != null) {
+            if (missingGrantPrompt) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("missing_grant_prompt_card"),
+                    shape = RoundedCornerShape(12.dp),
+                    color = colors.errorContainer.copy(alpha = 0.85f),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = colors.onErrorContainer,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Folder Access Needed",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.onErrorContainer,
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Permission for this folder was revoked or the folder was moved. Re-select the folder to continue.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.onErrorContainer.copy(alpha = 0.9f),
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .clickable {
+                                    onReselectFolder?.invoke() ?: sourcePickerLauncher.launch(null)
+                                }
+                                .testTag("reselect_folder_button"),
+                            shape = RoundedCornerShape(8.dp),
+                            color = colors.onErrorContainer,
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "Re-select Folder",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = colors.errorContainer,
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (emptyFolderMessage != null) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Surface(
                     modifier = Modifier

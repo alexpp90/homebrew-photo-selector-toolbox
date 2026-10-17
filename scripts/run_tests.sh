@@ -23,11 +23,17 @@
 #   ./scripts/run_tests.sh --strict         # treat unrunnable SKIPPED gates as failures
 #   ./scripts/run_tests.sh --quick          # tests only, no lint/coverage (inner-loop use)
 #
+# Every run ends by saving a verification record (machine, toolchains, gates, tested tree) in
+# .git/pst-verification/; `python3 scripts/verification_record.py pr` puts it into the PR
+# description. PST_NO_RECORD=1 skips it; PST_EXECUTOR="<agent or person>" names who ran it.
+#
 # Exit codes: 0 all attempted gates passed; 1 a gate failed; 2 --strict and a gate was skipped.
 #
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RUN_ARGS="$*"
+RUN_STARTED="$(date +%s)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Inside a Flatpak sandbox (the VS Code Flatpak, and so Claude Code and the integrated
@@ -99,7 +105,7 @@ for arg in "$@"; do
             explicit_product=true
             ;;
         -h|--help)
-            sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -112,7 +118,7 @@ done
 # If no product was explicitly requested, mirror CI paths: filters via git change detection
 if ! $explicit_product; then
     CHANGED_FILES=()
-    if have git && [ -d "$ROOT_DIR/.git" ]; then
+    if have git && [ -e "$ROOT_DIR/.git" ]; then
         BASE_COMMIT=""
         if git rev-parse --verify origin/main &>/dev/null; then
             BASE_COMMIT="$(git merge-base HEAD origin/main 2>/dev/null || true)"
@@ -177,7 +183,9 @@ trap 'rm -f "$RESULTS_FILE"' EXIT
 # gate, whether it actually ran. A gate that silently did not run is the
 # failure mode this script exists to prevent.
 
-record() { printf '%s|%s|%s\n' "$1" "$2" "$3" >> "$RESULTS_FILE"; }
+# Line format: STATUS|name|detail|ci_ref|unrunnable — read by the summary below and by
+# scripts/verification_record.py. For PASS/FAIL/WARN the detail column repeats the ci_ref.
+record() { printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "${4:-$3}" "${5:-}" >> "$RESULTS_FILE"; }
 
 pass() { record PASS "$1" "$2"; echo -e "${GREEN}  ✔ $1${NC}"; }
 fail() { record FAIL "$1" "$2"; echo -e "${RED}  ✘ $1${NC}"; EXIT_CODE=1; }
@@ -187,7 +195,7 @@ skip() {
     local ci_ref="$2"
     local reason="$3"
     local unrunnable="${4:-true}"
-    record SKIP "$name" "$reason"
+    record SKIP "$name" "$reason" "$ci_ref" "$unrunnable"
     SKIPPED_ANY=true
     if [ "$unrunnable" = "true" ]; then
         SKIPPED_UNRUNNABLE=true
@@ -213,7 +221,17 @@ PY_RUNNER=()
 VENV_BIN=""
 if have poetry && [ -f "$ROOT_DIR/products/desktop/poetry.lock" ]; then
     PY_RUNNER=(poetry run)
-    VENV_BIN="$(poetry --directory "$ROOT_DIR/products/desktop" env info -p 2>/dev/null)/bin"
+    VENV_PATH="$(poetry --directory "$ROOT_DIR/products/desktop" env info -p 2>/dev/null || true)"
+    if [ ! -x "$VENV_PATH/bin/pytest" ] && have git; then
+        COMMON_GIT="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+        COMMON_ROOT="${COMMON_GIT%/.git}"
+        if [ -n "$COMMON_ROOT" ] && [ -f "$COMMON_ROOT/products/desktop/poetry.lock" ]; then
+            VENV_PATH="$(poetry --directory "$COMMON_ROOT/products/desktop" env info -p 2>/dev/null || true)"
+        fi
+    fi
+    if [ -x "$VENV_PATH/bin/pytest" ]; then
+        VENV_BIN="$VENV_PATH/bin"
+    fi
 fi
 PY_ARGV=()
 py_resolve() {
@@ -367,6 +385,12 @@ if $run_android; then
         section "Android instrumented-test compilation"
         gate "gradlew assembleDebugAndroidTest (:android-desktop, :phototok)" "android.yml:unit-tests" \
             ./gradlew :android-desktop:assembleDebugAndroidTest :phototok:assembleDebugAndroidTest --stacktrace
+
+        section "Android 16 KB ELF page alignment"
+        gate "check_native_alignment.py (merged_native_libs)" "android.yml:unit-tests" \
+            python3 "$ROOT_DIR/scripts/check_native_alignment.py" \
+                "$ROOT_DIR/products/android/android-desktop/build/intermediates/merged_native_libs/debug" \
+                "$ROOT_DIR/products/android/phototok/build/intermediates/merged_native_libs/debug"
 
         # ── Android lint (advisory) ───────────────────────────────
         # Deliberately non-blocking: the CI job is `continue-on-error: true`
@@ -555,6 +579,9 @@ if [ -d "$ROOT_DIR/private/.git" ] || [ -f "$ROOT_DIR/private/.git" ]; then
         if python3 -c "import pytest" &>/dev/null; then
             gate "framework & hook tests" "framework.yml:framework" \
                 python3 -m pytest -q -p no:cacheprovider private/tests/framework
+        elif [ -n "$VENV_BIN" ] && [ -x "$VENV_BIN/pytest" ]; then
+            gate "framework & hook tests" "framework.yml:framework" \
+                "$VENV_BIN/pytest" -q -p no:cacheprovider private/tests/framework
         else
             skip "framework & hook tests" "framework.yml:framework" "pytest not importable by python3"
         fi
@@ -569,7 +596,7 @@ fi
 # ── Summary ───────────────────────────────────────────────────────
 echo ""
 echo -e "${BLUE}━━━ Summary (gate → CI equivalent) ━━━${NC}"
-while IFS='|' read -r status name ci_ref; do
+while IFS='|' read -r status name ci_ref _ci _unrunnable; do
     [ -z "${status:-}" ] && continue
     case "$status" in
         PASS) printf "${GREEN}  ✔ %-52s${NC} ${DIM}%s${NC}\n" "$name" "$ci_ref" ;;
@@ -579,9 +606,26 @@ while IFS='|' read -r status name ci_ref; do
     esac
 done < "$RESULTS_FILE"
 
+# ── Verification record (CONTRIBUTING.md § Verification record) ──
+# Which machine ran which gates on exactly which tree, for the PR description. Written for
+# failed and partial runs too: a PR states how far it was tested, not only that it passed.
+write_verification_record() {
+    [ "${PST_NO_RECORD:-0}" = "1" ] && return 0
+    echo ""
+    if ! have python3; then
+        echo -e "${DIM}Verification record not written: python3 not found.${NC}"
+        return 0
+    fi
+    cd "$ROOT_DIR" || return 0
+    python3 "$ROOT_DIR/scripts/verification_record.py" --root "$ROOT_DIR" write \
+        --results "$RESULTS_FILE" --args="$RUN_ARGS" --exit-code "$1" --started "$RUN_STARTED" \
+        || echo -e "${YELLOW}Verification record not written (see the error above).${NC}"
+}
+
 echo ""
 if [ $EXIT_CODE -ne 0 ]; then
     echo -e "${RED}FAILED — one or more gates failed. CI will fail too.${NC}"
+    write_verification_record 1
     exit 1
 fi
 
@@ -590,10 +634,13 @@ if $SKIPPED_ANY; then
     echo -e "${DIM}Review the ⊘ lines above before assuming full verification.${NC}"
     if $strict && $SKIPPED_UNRUNNABLE; then
         echo -e "${RED}--strict: treating unrunnable skipped gates as failure.${NC}"
+        write_verification_record 2
         exit 2
     fi
+    write_verification_record 0
     exit 0
 fi
 
 echo -e "${GREEN}ALL GATES PASSED — this machine reproduced the full CI gate set.${NC}"
+write_verification_record 0
 exit 0

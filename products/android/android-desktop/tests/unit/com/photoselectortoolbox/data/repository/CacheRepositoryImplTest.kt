@@ -2,6 +2,7 @@ package com.photoselectortoolbox.data.repository
 
 import com.photoselectortoolbox.data.cache.ScoreDao
 import com.photoselectortoolbox.data.cache.ScoreEntity
+import com.photoselectortoolbox.data.cache.UserRatingEntity
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -93,12 +94,33 @@ class CacheRepositoryImplTest {
     }
 
     @Test
-    fun `updateRating delegates to DAO`() = runTest {
+    fun `updateRating upserts UserRatingEntity and updates scores_cache`() = runTest {
+        coEvery { dao.upsertUserRating(any()) } just Runs
         coEvery { dao.updateRating("path", 5) } just Runs
 
         repo.updateRating("path", 5)
 
+        coVerify { dao.upsertUserRating(match { it.uri == "path" && it.rating == 5 }) }
         coVerify { dao.updateRating("path", 5) }
+    }
+
+    @Test
+    fun `getRating returns user_ratings entry even when scores_cache row is absent`() = runTest {
+        coEvery { dao.getUserRating("unscanned") } returns UserRatingEntity("unscanned", 4, 100L)
+        coEvery { dao.getScore("unscanned") } returns null
+
+        assertEquals(4, repo.getRating("unscanned"))
+    }
+
+    @Test
+    fun `getRatings chunks queries and returns map of user ratings`() = runTest {
+        coEvery { dao.getUserRatings(listOf("a", "b")) } returns listOf(
+            UserRatingEntity("a", 5, 100L),
+            UserRatingEntity("b", -1, 101L)
+        )
+
+        val result = repo.getRatings(listOf("a", "b"))
+        assertEquals(mapOf("a" to 5, "b" to -1), result)
     }
 
     @Test
@@ -130,5 +152,41 @@ class CacheRepositoryImplTest {
 
         assertEquals(list, result)
         coVerify { dao.getScoresWithRating(5) }
+    }
+
+    // REQ-AND-CACHE.03, REQ-AND-CACHE.06
+    @Test
+    fun `getCachedScores updateAccessTimes and getRatings chunk 2500 URIs into 3 calls of at most 900`() = runTest {
+        val uris = (1..2500).map { "content://test/photo_$it.jpg" }
+        val scoreChunks = mutableListOf<List<String>>()
+        val accessChunks = mutableListOf<List<String>>()
+        val ratingChunks = mutableListOf<List<String>>()
+
+        coEvery { dao.getScores(any()) } answers {
+            val chunk = firstArg<List<String>>()
+            scoreChunks.add(chunk)
+            chunk.map { ScoreEntity(it, 100, 200, sharpnessScore = 50.0) }
+        }
+        coEvery { dao.updateAccessTimes(any(), any()) } answers {
+            accessChunks.add(firstArg())
+        }
+        coEvery { dao.getUserRatings(any()) } answers {
+            val chunk = firstArg<List<String>>()
+            ratingChunks.add(chunk)
+            chunk.map { UserRatingEntity(it, 4, 1000L) }
+        }
+
+        val scores = repo.getCachedScores(uris)
+        repo.updateAccessTimes(uris, 9999L)
+        val ratings = repo.getRatings(uris)
+
+        assertEquals(2500, scores.size)
+        assertEquals(2500, ratings.size)
+        assertEquals(listOf(900, 900, 700), scoreChunks.map { it.size })
+        assertEquals(listOf(900, 900, 700), accessChunks.map { it.size })
+        assertEquals(listOf(900, 900, 700), ratingChunks.map { it.size })
+        assertTrue(scoreChunks.all { it.size <= 900 })
+        assertTrue(accessChunks.all { it.size <= 900 })
+        assertTrue(ratingChunks.all { it.size <= 900 })
     }
 }

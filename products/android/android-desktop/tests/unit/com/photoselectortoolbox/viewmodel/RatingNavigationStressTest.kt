@@ -13,7 +13,6 @@ import com.photoselectortoolbox.data.repository.SettingsRepository
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
 import com.photoselectortoolbox.domain.interaction.FilingAction
 import com.photoselectortoolbox.domain.model.RatingFilter
-import com.photoselectortoolbox.domain.usecase.MoveToSelectionUseCase
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -115,7 +114,6 @@ class RatingNavigationStressTest {
         val viewModel = SelectorViewModel(
             imageRepository = imageRepository,
             scanImagesUseCase = scanImagesUseCase,
-            moveToSelectionUseCase = mockk<MoveToSelectionUseCase>(relaxed = true),
             cacheRepository = cacheRepository,
             settingsRepository = settingsRepository,
             scoreDao = scoreDao,
@@ -332,6 +330,7 @@ class RatingNavigationStressTest {
             viewModel.setRatingForCurrent(rating)
             assertEquals(rating, viewModel.uiState.value.currentImage?.rating)
             coVerify { cacheRepository.updateRating("content://test/folder/test.jpg", rating) }
+            testScheduler.advanceUntilIdle()
             coVerify { metadataWriter.writeRating(any(), rating) }
         }
     }
