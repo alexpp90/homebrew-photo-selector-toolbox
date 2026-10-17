@@ -47,7 +47,6 @@ import com.photoselectortoolbox.domain.session.SelectorWork
 import com.photoselectortoolbox.domain.session.SelectorWorkQueue
 import com.photoselectortoolbox.domain.session.WorkDecision
 import com.photoselectortoolbox.domain.session.WorkQueueState
-import com.photoselectortoolbox.domain.usecase.MoveToSelectionUseCase
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -242,7 +241,6 @@ data class SelectorHintUi(
 class SelectorViewModel @Inject constructor(
     private val imageRepository: ImageRepository,
     private val scanImagesUseCase: ScanImagesUseCase,
-    private val moveToSelectionUseCase: MoveToSelectionUseCase,
     private val cacheRepository: CacheRepository,
     private val settingsRepository: SettingsRepository,
     private val scoreDao: ScoreDao,
@@ -1049,6 +1047,8 @@ class SelectorViewModel @Inject constructor(
                 } else {
                     imageRepository.moveImage(context, source, destination, sorting)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("SelectorViewModel", "${action.name} failed for $sourceUri", e)
                 null
@@ -1070,6 +1070,9 @@ class SelectorViewModel @Inject constructor(
                         current
                     }
                 }
+            } else if (result?.partial == true) {
+                rollbackFiling(edit.action, edit.slots)
+                reportError(result.error ?: "Copied to Selection — original could not be removed")
             } else {
                 rollbackFiling(edit.action, edit.slots)
                 val verb = if (action == CurationAction.COPY) "Copy" else "Move"
