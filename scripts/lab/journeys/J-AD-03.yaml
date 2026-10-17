@@ -1,0 +1,24 @@
+id: J-AD-03
+product: android-desktop
+title: Quality score scan and burst grouping toggle
+fixture: burst-jpeg
+configs: [tab-landscape]
+fresh_install: false
+steps:
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-03/01_scan.yaml}
+  - {checkpoint: scored}
+  - {maestro: products/android/android-desktop/tests/e2e/J-AD-03/02_group.yaml}
+  - {checkpoint: grouped}
+fs_expect:
+  scored:
+    unchanged: true
+  grouped:
+    unchanged: true
+layout_expect:
+  scored:
+    required: [image_region, selector.frame.current, selector.frame.previous, selector.frame.next]
+  grouped:
+    required: [image_region, selector.frame.current, selector.frame.previous, selector.frame.next]
+timing_expect:
+  scored:
+    trend: true

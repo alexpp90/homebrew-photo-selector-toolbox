@@ -1,0 +1,17 @@
+[
+  {
+    "id": "112233aabbcc",
+    "source": "ai-review",
+    "severity": "major",
+    "confidence": "high",
+    "product": "android-desktop",
+    "config": "tab-landscape",
+    "journey": "J-AD-02",
+    "checkpoint": "after-keep",
+    "rule": "ai:legibility",
+    "summary": "Counter label contrast is low against dark background",
+    "region": [1320, 40, 120, 32],
+    "screenshot": "android-desktop/tab-landscape/J-AD-02/02_after-keep.png",
+    "new_since_last_run": true
+  }
+]

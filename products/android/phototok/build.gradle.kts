@@ -88,6 +88,13 @@ android {
         debug {
             isMinifyEnabled = false
         }
+        create("lab") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".lab"
+            versionNameSuffix = "-lab"
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
@@ -200,5 +207,6 @@ dependencies {
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4.accessibility)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

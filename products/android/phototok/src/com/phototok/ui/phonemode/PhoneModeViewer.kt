@@ -243,7 +243,9 @@ fun PhoneModeViewer(
     ) {
         VerticalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .androidx.compose.ui.platform.testTag("viewer.photo"),
             userScrollEnabled = !isZoomed,
             key = { images[it].uri },
             beyondViewportPageCount = 2,
@@ -935,7 +937,7 @@ private fun ExifOverlay(
     val colors = MaterialTheme.colorScheme
 
     Surface(
-        modifier = modifier,
+        modifier = modifier.androidx.compose.ui.platform.testTag("viewer.info"),
         shape = RoundedCornerShape(12.dp),
         color = colors.surfaceContainerLowest.copy(alpha = 0.5f),
         border = androidx.compose.foundation.BorderStroke(

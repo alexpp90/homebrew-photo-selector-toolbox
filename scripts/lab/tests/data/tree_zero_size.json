@@ -1,0 +1,30 @@
+{
+  "platform": "android",
+  "window": {"w": 1480, "h": 844, "unit": "dp", "scale": 2.0},
+  "nodes": [
+    {
+      "id": "image_region",
+      "parent": null,
+      "role": "container",
+      "name": "",
+      "bounds": [212, 0, 1056, 844],
+      "interactive": false,
+      "visible": true,
+      "overlay": false,
+      "text": "",
+      "clipped": null
+    },
+    {
+      "id": "coach_overlay_dismiss",
+      "parent": null,
+      "role": "button",
+      "name": "Got it",
+      "bounds": [680, 400, 0, 48],
+      "interactive": true,
+      "visible": false,
+      "overlay": true,
+      "text": "Got it",
+      "clipped": false
+    }
+  ]
+}

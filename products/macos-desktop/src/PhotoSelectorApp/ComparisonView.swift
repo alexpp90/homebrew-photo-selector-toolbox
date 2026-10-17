@@ -141,6 +141,7 @@ public struct ComparisonView: View {
                         title: "First Photograph",
                         subtitle: "No previous image in folder"
                     )
+                    .uiTestFrame("slot_previous")
                 }
             }
             .frame(width: layout.previous.width, height: layout.previous.height)
@@ -156,6 +157,7 @@ public struct ComparisonView: View {
                         title: "Last Photograph",
                         subtitle: "No next image in folder"
                     )
+                    .uiTestFrame("slot_next")
                 }
             }
             .frame(width: layout.next.width, height: layout.next.height)

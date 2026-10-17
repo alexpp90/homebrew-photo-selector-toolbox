@@ -1,0 +1,6 @@
+appId: com.phototok.lab
+---
+- tapOn:
+    id: "gesture_tutorial_got_it"
+- assertVisible:
+    id: "viewer.photo"

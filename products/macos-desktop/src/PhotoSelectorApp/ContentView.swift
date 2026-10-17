@@ -147,6 +147,7 @@ public struct ContentView: View {
                                 onSelectPhoto: { idx in viewModel.selectPhoto(at: idx) }
                             )
                             .frame(height: min(84, geometry.size.height * 0.12))
+                            .uiTestFrame("filmstrip")
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }

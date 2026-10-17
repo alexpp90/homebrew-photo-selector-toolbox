@@ -30,15 +30,22 @@ import com.phototok.ui.components.ViewerBottomBar
 import com.phototok.viewmodel.FirstRunHintUi
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 
 @RunWith(AndroidJUnit4::class)
 class PhoneModeScreenDialogTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Before
+    fun enableAccessibilityChecks() {
+        composeTestRule.enableAccessibilityChecks()
+    }
 
     @Test
     fun directDeleteDialog_showsWarningAndSettingsHint() {

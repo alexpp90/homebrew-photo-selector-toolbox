@@ -32,8 +32,8 @@ def _real_gtk_usable() -> bool:
 # Without a usable GTK, inject comprehensive test stubs
 if "gi" not in sys.modules and not _real_gtk_usable():
     def mock_require_version(namespace, version):
-        if namespace == "GExiv2":
-            raise ValueError("Namespace GExiv2 not available")
+        if namespace in ("GExiv2", "GdkPixbuf"):
+            raise ValueError(f"Namespace {namespace} not available")
         return None
 
     mock_gi = MagicMock()
@@ -45,6 +45,7 @@ if "gi" not in sys.modules and not _real_gtk_usable():
             self._css_classes = []
             self._children = []
             self._label = str(kwargs.get("label", ""))
+            self._name = ""
             self._sensitive = True
             self._fraction = 0.0
 
@@ -54,6 +55,12 @@ if "gi" not in sys.modules and not _real_gtk_usable():
 
         def connect(self, *args, **kwargs):
             pass
+
+        def set_name(self, name: str, *args, **kwargs):
+            self._name = str(name)
+
+        def get_name(self):
+            return getattr(self, "_name", "")
 
         def set_visible(self, visible: bool = True, *args, **kwargs):
             self._visible = bool(visible)

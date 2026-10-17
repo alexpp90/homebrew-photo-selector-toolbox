@@ -11,9 +11,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.photoselectortoolbox.MainActivity
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.compose.ui.test.junit4.accessibility.enableAccessibilityChecks
 
 /**
  * Smoke test: verifies the app launches without crashing and
@@ -28,6 +30,11 @@ class MainActivitySmokeTest {
 
     @get:Rule(order = 1)
     val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @Before
+    fun enableAccessibilityChecks() {
+        composeRule.enableAccessibilityChecks()
+    }
 
     @Test
     fun appLaunchesWithoutCrash() {

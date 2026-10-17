@@ -1,0 +1,17 @@
+appId: com.phototok.lab
+---
+- swipe:
+    start: "50%,70%"
+    end: "50%,20%"
+- swipe:
+    start: "50%,70%"
+    end: "50%,20%"
+- swipe:
+    start: "50%,70%"
+    end: "50%,20%"
+- swipe:
+    start: "50%,70%"
+    end: "50%,20%"
+- swipe:
+    start: "50%,70%"
+    end: "50%,20%"

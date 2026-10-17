@@ -1,0 +1,9 @@
+{
+  "id": "J-TOK-01",
+  "product": "phototok",
+  "config": "phone-portrait",
+  "status": "not-run",
+  "reason": "phone not attached",
+  "duration_s": 0.0,
+  "checkpoints": []
+}

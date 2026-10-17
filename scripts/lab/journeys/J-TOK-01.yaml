@@ -1,0 +1,34 @@
+id: J-TOK-01
+product: phototok
+title: First launch folder selection and controls tutorial
+fixture: smoke
+configs: [phone-portrait]
+fresh_install: true
+steps:
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-01/01_landing.yaml}
+  - {checkpoint: landing}
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-01/_picker_grant.yaml}
+  - {checkpoint: first-photo}
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-01/02_wait_coach.yaml}
+  - {checkpoint: coach}
+  - {maestro: products/android/phototok/tests/e2e/J-TOK-01/03_dismiss_coach.yaml}
+  - {checkpoint: feed}
+fs_expect:
+  landing:
+    unchanged: true
+  first-photo:
+    unchanged: true
+  coach:
+    unchanged: true
+  feed:
+    unchanged: true
+layout_expect:
+  landing:
+    required: [landing_phone_camera_card, landing_custom_folder_card]
+  coach:
+    required: [controls_guide]
+  feed:
+    required: [viewer.photo]
+timing_expect:
+  first-photo:
+    trend: true

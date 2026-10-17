@@ -1,0 +1,8 @@
+{
+  "id": "J-AD-02",
+  "product": "android-desktop",
+  "config": "tab-landscape",
+  "status": "completed",
+  "duration_s": 5.4,
+  "checkpoints": ["three-up", "after-keep"]
+}

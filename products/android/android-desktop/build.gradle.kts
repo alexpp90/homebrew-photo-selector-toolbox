@@ -90,6 +90,13 @@ android {
         debug {
             isMinifyEnabled = false
         }
+        create("lab") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".lab"
+            versionNameSuffix = "-lab"
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
@@ -240,6 +247,7 @@ dependencies {
     androidTestImplementation(libs.hilt.android.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4.accessibility)
     androidTestImplementation(libs.androidx.room.testing)
     kspAndroidTest(libs.hilt.android.compiler)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

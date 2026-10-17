@@ -1,0 +1,18 @@
+[
+  {
+    "id": "aabbccddeeff",
+    "source": "layout-lint",
+    "severity": "blocker",
+    "confidence": "high",
+    "product": "android-desktop",
+    "config": "tab-landscape",
+    "journey": "J-AD-02",
+    "checkpoint": "three-up",
+    "rule": "R1:overlap",
+    "summary": "sidebar overlaps current_frame by 1200 sq dp",
+    "element_id": "selector_sidebar",
+    "region": [0, 0, 88, 924],
+    "screenshot": "android-desktop/tab-landscape/J-AD-02/01_three-up.png",
+    "new_since_last_run": true
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "id": "smoke",
+  "window": {"width": 1440, "height": 900},
+  "steps": [
+    {"action": "waitLoaded"},
+    {"action": "checkpoint", "name": "loaded"},
+    {"action": "key", "key": "3"},
+    {"action": "wait", "ms": 300},
+    {"action": "checkpoint", "name": "triplet"}
+  ]
+}

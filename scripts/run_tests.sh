@@ -525,11 +525,14 @@ if have python3; then
         python3 scripts/fetch_format_corpus.py --validate
     gate "format corpus tooling tests" "repo-hygiene.yml:hygiene" \
         python3 -m unittest discover -s scripts/tests -q
+    gate "lab tooling tests" "local-only" \
+        python3 -m unittest discover -s scripts/lab/tests -q
 else
     skip "readme parity" "" "python3 not found"
     skip "no private-overlay material tracked" "" "python3 not found"
     skip "format contract manifest" "" "python3 not found"
     skip "format corpus tooling tests" "" "python3 not found"
+    skip "lab tooling tests" "" "python3 not found"
 fi
 
 # ── Private overlay gates (mirror: photo-selector-private framework.yml) ──

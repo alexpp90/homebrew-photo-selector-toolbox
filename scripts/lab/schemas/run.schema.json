@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lab Run Record",
+  "type": "object",
+  "required": ["started", "finished", "commit", "products", "tools", "journeys"],
+  "properties": {
+    "started": {"type": "string"},
+    "finished": {"type": "string"},
+    "commit": {"type": "string"},
+    "products": {"type": "object"},
+    "tools": {"type": "object"},
+    "journeys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["product", "config", "journey", "result", "dir"],
+        "properties": {
+          "product": {"type": "string"},
+          "config": {"type": "string"},
+          "journey": {"type": "string"},
+          "result": {
+            "type": "string",
+            "enum": ["pass", "fail", "flow-broken", "not-run"]
+          },
+          "dir": {"type": "string"}
+        }
+      }
+    }
+  }
+}

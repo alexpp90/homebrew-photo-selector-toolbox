@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         ForegroundActivation.ensureKeyboardCapable(NSApp)
-        if launchOptions.selfTestFolder != nil {
+        if launchOptions.selfTestFolder != nil || launchOptions.scenarioURL != nil {
             UITestFrameRegistry.shared.isEnabled = true
         }
     }
@@ -47,7 +47,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let isBackgroundTest = (launchOptions.selfTestFolder != nil || launchOptions.screenshotURL != nil)
+        let isBackgroundTest = (launchOptions.selfTestFolder != nil
+            || launchOptions.screenshotURL != nil
+            || launchOptions.scenarioURL != nil)
             && !Self.isGUIRequested
         if !isBackgroundTest {
             NSApp.activate(ignoringOtherApps: true)
@@ -69,6 +71,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 let passed = await runner.run()
                 NSApp.terminate(passed ? 0 : 1)
                 exit(passed ? 0 : 1)
+            }
+        } else if let scenarioURL = launchOptions.scenarioURL {
+            if let folder = launchOptions.openFolder {
+                viewModel.loadFolder(at: folder)
+            }
+            let artifactsDir = launchOptions.artifactsDir
+                ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+                    .appendingPathComponent("scenario-artifacts", isDirectory: true)
+            Task { @MainActor in
+                let code = await UIScenarioRunner.run(
+                    viewModel: viewModel,
+                    scenarioURL: scenarioURL,
+                    artifactsDir: artifactsDir
+                )
+                NSApp.terminate(nil)
+                exit(code)
             }
         } else if let screenshotURL = launchOptions.screenshotURL {
             if let folder = launchOptions.openFolder {
@@ -109,7 +127,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 ?? NSApp.windows.first(where: { $0.canBecomeKey && !$0.isSheet }) else { return }
         let isBackgroundTest = !Self.isGUIRequested
             && (ProcessInfo.processInfo.arguments.contains("--ui-self-test")
-                || ProcessInfo.processInfo.arguments.contains("--screenshot"))
+                || ProcessInfo.processInfo.arguments.contains("--screenshot")
+                || ProcessInfo.processInfo.arguments.contains("--ui-scenario"))
         if isBackgroundTest {
             window.alphaValue = 0.0
             window.setFrame(NSRect(x: -20000, y: -20000, width: 1280, height: 840), display: false)
@@ -125,10 +144,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 /// `--open <folder>` loads a folder at launch;
 /// `--screenshot <path>` snapshots the workspace after loading;
 /// `--ui-self-test <folder> [--report <json>] [--expect-count N] [--external-key-wait S]`
-/// runs the in-app UI self-test and exits 0 (pass) or 1 (fail).
+/// runs the in-app UI self-test and exits 0 (pass) or 1 (fail);
+/// `--ui-scenario <scenario.json> [--artifacts <dir>]` runs a declarative UI scenario.
 struct LaunchOptions {
     var openFolder: URL?
     var selfTestFolder: URL?
+    var scenarioURL: URL?
+    var artifactsDir: URL?
     var reportURL: URL?
     var expectedCount: Int?
     var externalKeyWait: TimeInterval = 0
@@ -144,6 +166,10 @@ struct LaunchOptions {
                 screenshotURL = iterator.next().map { URL(fileURLWithPath: $0) }
             case "--ui-self-test":
                 selfTestFolder = iterator.next().map { URL(fileURLWithPath: $0, isDirectory: true) }
+            case "--ui-scenario":
+                scenarioURL = iterator.next().map { URL(fileURLWithPath: $0) }
+            case "--artifacts":
+                artifactsDir = iterator.next().map { URL(fileURLWithPath: $0, isDirectory: true) }
             case "--report":
                 reportURL = iterator.next().map { URL(fileURLWithPath: $0) }
             case "--expect-count":

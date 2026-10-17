@@ -1,0 +1,5 @@
+fhd:        {size: 1920x1080, scale: 1}
+hidpi:      {size: 2560x1600, scale: 2}
+small:      {size: 1366x768,  scale: 1}
+dark:       {size: 1920x1080, scale: 1, color_scheme: prefer-dark}
+large-text: {size: 1920x1080, scale: 1, text_scaling: 1.25}

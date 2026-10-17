@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Journey Manifest",
+  "type": "object",
+  "required": ["id", "product", "title", "fixture", "configs", "steps"],
+  "properties": {
+    "id": {"type": "string"},
+    "product": {
+      "type": "string",
+      "enum": ["phototok", "android-desktop", "macos", "linux"]
+    },
+    "title": {"type": "string"},
+    "fixture": {"type": "string"},
+    "configs": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1
+    },
+    "fresh_install": {"type": "boolean"},
+    "steps": {
+      "type": "array",
+      "items": {"type": "object"},
+      "minItems": 1
+    },
+    "fs_expect": {"type": "object"},
+    "layout_expect": {"type": "object"},
+    "timing_expect": {"type": "object"}
+  }
+}

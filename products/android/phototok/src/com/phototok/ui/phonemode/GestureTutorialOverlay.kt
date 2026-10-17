@@ -183,7 +183,8 @@ fun GestureTutorialOverlay(
                         .fillMaxWidth()
                         .height(36.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { onDismiss() },
+                        .clickable { onDismiss() }
+                        .testTag("gesture_tutorial_got_it"),
                     shape = RoundedCornerShape(12.dp),
                     color = colors.primaryContainer,
                 ) {
