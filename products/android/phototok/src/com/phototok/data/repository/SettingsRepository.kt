@@ -588,7 +588,7 @@ class SettingsRepository @Inject constructor(
         var previousUri: String? = null
         var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
-            previousUri = prefs[KEY_COLLECTION_URI] ?: prefs[collectionUriKey(SourceKind.PHONE_LIBRARY)]
+            previousUri = prefs[KEY_COLLECTION_URI]
             if (uri != null) {
                 prefs[KEY_COLLECTION_URI] = uri
                 prefs[collectionUriKey(SourceKind.PHONE_LIBRARY)] = uri
@@ -619,7 +619,7 @@ class SettingsRepository @Inject constructor(
         var previousUri: String? = null
         var referencedAfter: Map<FolderAccessPurpose, Set<String>> = emptyMap()
         context.dataStore.edit { prefs ->
-            previousUri = prefs[KEY_LEFT_SWIPE_URI] ?: prefs[leftSwipeUriKey(SourceKind.PHONE_LIBRARY)]
+            previousUri = prefs[KEY_LEFT_SWIPE_URI]
             if (uri != null) {
                 prefs[KEY_LEFT_SWIPE_URI] = uri
                 prefs[leftSwipeUriKey(SourceKind.PHONE_LIBRARY)] = uri
@@ -725,10 +725,10 @@ class SettingsRepository @Inject constructor(
                 prefs.remove(legacyFolderPositionKey(evictedUri))
                 prefs.remove(folderScanMaxTimeKey(evictedUri))
                 prefs.remove(folderScanCountKey(evictedUri))
-                prefs.remove(folderSeenCountKey(evictedUri))
-                prefs.remove(folderTotalCountKey(evictedUri))
                 prefs.remove(folderScanLastUriKey(evictedUri))
                 prefs.remove(folderScanLastIndexKey(evictedUri))
+                prefs.remove(folderSeenCountKey(evictedUri))
+                prefs.remove(folderTotalCountKey(evictedUri))
             }
             prefs[KEY_RECENT_PATHS] = RecentPathCodec.encode(updated)
             referencedAfter = referencedUrisByPurpose(prefs)
@@ -752,14 +752,8 @@ class SettingsRepository @Inject constructor(
 
     internal fun referencedUrisByPurpose(prefs: Preferences): Map<FolderAccessPurpose, Set<String>> {
         val source = prefs[KEY_LAST_FOLDER_URI]?.let(::setOf).orEmpty()
-        val selection = buildSet {
-            prefs[KEY_COLLECTION_URI]?.let(::add)
-            SourceKind.entries.forEach { kind -> prefs[collectionUriKey(kind)]?.let(::add) }
-        }
-        val leftSwipe = buildSet {
-            prefs[KEY_LEFT_SWIPE_URI]?.let(::add)
-            SourceKind.entries.forEach { kind -> prefs[leftSwipeUriKey(kind)]?.let(::add) }
-        }
+        val selection = prefs[KEY_COLLECTION_URI]?.let(::setOf).orEmpty()
+        val leftSwipe = prefs[KEY_LEFT_SWIPE_URI]?.let(::setOf).orEmpty()
         val recents = RecentPathCodec.decode(prefs[KEY_RECENT_PATHS])
             .mapTo(LinkedHashSet()) { it.uri }
         return mapOf(
@@ -780,7 +774,7 @@ class SettingsRepository @Inject constructor(
     private fun legacyFolderPositionKey(folderUri: String) =
         intPreferencesKey("folder_pos_${folderUri.hashCode()}")
 
-    // ── Per-folder scan info, resume position & seen progress ────────────
+    // ── Per-folder scan info, resume position & seen progress ───────────
 
     private fun folderScanMaxTimeKey(folderUri: String) =
         longPreferencesKey("folder_scan_time_v1_$folderUri")
@@ -788,17 +782,17 @@ class SettingsRepository @Inject constructor(
     private fun folderScanCountKey(folderUri: String) =
         intPreferencesKey("folder_scan_count_v1_$folderUri")
 
-    private fun folderSeenCountKey(folderUri: String) =
-        intPreferencesKey("folder_seen_count_v1_$folderUri")
-
-    private fun folderTotalCountKey(folderUri: String) =
-        intPreferencesKey("folder_total_count_v1_$folderUri")
-
     private fun folderScanLastUriKey(folderUri: String) =
         stringPreferencesKey("folder_scan_last_uri_v1_$folderUri")
 
     private fun folderScanLastIndexKey(folderUri: String) =
         intPreferencesKey("folder_scan_last_idx_v1_$folderUri")
+
+    private fun folderSeenCountKey(folderUri: String) =
+        intPreferencesKey("folder_seen_count_v1_$folderUri")
+
+    private fun folderTotalCountKey(folderUri: String) =
+        intPreferencesKey("folder_total_count_v1_$folderUri")
 
     suspend fun setFolderScanInfo(folderUri: String, info: FolderScanInfo) {
         context.dataStore.edit { prefs ->
@@ -865,7 +859,7 @@ class SettingsRepository @Inject constructor(
         }
     }
 
-    /** Clear per-folder scan metadata, resume positions, and any retired last-position keys. */
+    /** Clear per-folder scan metadata, resume positions, seen progress, and any retired last-position keys. */
     suspend fun clearFolderPositions() {
         context.dataStore.edit { prefs ->
             val keysToRemove = prefs.asMap().keys.filter {

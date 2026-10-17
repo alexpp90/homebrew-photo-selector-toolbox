@@ -14,6 +14,7 @@ import java.io.FileInputStream
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Locale
 import kotlin.math.roundToInt
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -241,15 +242,17 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
     ): ExifData {
         fun int(tag: String): Int? = exif.getAttributeInt(tag, 0).takeIf { it > 0 }
         val latLong = exif.latLong
-        val gpsLat = latLong?.getOrNull(0)
+        val gpsLat = (latLong?.getOrNull(0)?.takeIf { it in -90.0..90.0 })
             ?: parseExifGpsCoordinate(
                 exif.getAttribute(ExifInterface.TAG_GPS_LATITUDE),
-                exif.getAttribute(ExifInterface.TAG_GPS_LATITUDE_REF)
+                exif.getAttribute(ExifInterface.TAG_GPS_LATITUDE_REF),
+                limit = 90.0
             )
-        val gpsLon = latLong?.getOrNull(1)
+        val gpsLon = (latLong?.getOrNull(1)?.takeIf { it in -180.0..180.0 })
             ?: parseExifGpsCoordinate(
                 exif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE),
-                exif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF)
+                exif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF),
+                limit = 180.0
             )
         val gpsUtc = parseExifGpsDateTimeUtc(
             exif.getAttribute(ExifInterface.TAG_GPS_DATESTAMP),
@@ -288,14 +291,15 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
         return buildExifData(values, extractRating(exif, file, pfd))
     }
 
-    private fun parseExifGpsCoordinate(dmsAttr: String?, refAttr: String?): Double? {
+    private fun parseExifGpsCoordinate(dmsAttr: String?, refAttr: String?, limit: Double): Double? {
         if (dmsAttr.isNullOrBlank()) return null
         val parts = dmsAttr.split(",").mapNotNull { parseRationalValue(it.trim()) }
         if (parts.size < 3) return null
         val abs = parts[0] + (parts[1] / 60.0) + (parts[2] / 3600.0)
         if (!abs.isFinite()) return null
         val sign = if (refAttr?.trim()?.uppercase() in setOf("S", "W")) -1.0 else 1.0
-        return abs * sign
+        val value = abs * sign
+        return value.takeIf { it in -limit..limit }
     }
 
     private fun parseExifGpsDateTimeUtc(dateStamp: String?, timeStamp: String?): String? {
@@ -308,7 +312,7 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
                 val h = parts[0].trim().toDoubleOrNull()?.toInt() ?: return null
                 val m = parts[1].trim().toDoubleOrNull()?.toInt() ?: return null
                 val s = parts[2].trim().toDoubleOrNull()?.toInt() ?: return null
-                return "%s %02d:%02d:%02d".format(cleanDate, h.coerceIn(0, 23), m.coerceIn(0, 59), s.coerceIn(0, 59))
+                return String.format(Locale.ROOT, "%s %02d:%02d:%02d", cleanDate, h.coerceIn(0, 23), m.coerceIn(0, 59), s.coerceIn(0, 59))
             }
         }
         val rationals = rawTime.split(",").mapNotNull { parseRationalValue(it.trim()) }
@@ -316,7 +320,7 @@ class AndroidExifReader @Inject constructor() : ExifReaderStrategy {
             val h = rationals[0].toInt().coerceIn(0, 23)
             val m = rationals[1].toInt().coerceIn(0, 59)
             val s = rationals[2].toInt().coerceIn(0, 59)
-            return "%s %02d:%02d:%02d".format(cleanDate, h, m, s)
+            return String.format(Locale.ROOT, "%s %02d:%02d:%02d", cleanDate, h, m, s)
         }
         return null
     }

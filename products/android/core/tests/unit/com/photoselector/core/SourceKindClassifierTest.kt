@@ -66,6 +66,24 @@ class SourceKindClassifierTest {
     }
 
     @Test
+    fun `classify the device media and downloads providers as PHONE_LIBRARY`() {
+        assertEquals(
+            SourceKind.PHONE_LIBRARY,
+            SourceKindClassifier.classify(
+                authority = SourceKindClassifier.MEDIA_DOCUMENTS_AUTHORITY,
+                documentId = "image:1"
+            )
+        )
+        assertEquals(
+            SourceKind.PHONE_LIBRARY,
+            SourceKindClassifier.classify(
+                authority = SourceKindClassifier.DOWNLOADS_DOCUMENTS_AUTHORITY,
+                documentId = "raw:/storage/emulated/0/Download"
+            )
+        )
+    }
+
+    @Test
     fun `classify cloud and unknown authorities as CLOUD_OTHER`() {
         val driveUri = Uri.parse(
             "content://com.google.android.apps.docs.storage/tree/acc%3D1%3Bdoc%3Dfolder"

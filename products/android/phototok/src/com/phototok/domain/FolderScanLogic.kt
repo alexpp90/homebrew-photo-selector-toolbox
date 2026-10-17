@@ -58,8 +58,8 @@ object FolderScanLogic {
     }
 
     /**
-     * Where the viewer lands once enumeration is complete and the folder is NOT being
-     * reloaded inside an active session:
+     * Where the viewer lands once enumeration is complete and the folder is a fresh folder
+     * without a prior session prompt.
      *
      * - The user already swiped: stay on [preservedUri] (fallback [currentIndex]).
      * - Randomized (`SHUFFLE`) feed (`U-16`): never jump to [findFirstNewImageIndex] —

@@ -72,16 +72,5 @@ class CopyMoveFeedbackTest {
                 partial = 1,
             ),
         )
-        assertEquals(
-            "Copied to folder — original could not be removed (1 failed)",
-            CopyMoveFeedback.message(
-                isCopy = false,
-                destinationNoun = "folder",
-                succeeded = 0,
-                failed = 1,
-                relatedCount = 1,
-                partial = 1,
-            ),
-        )
     }
 }

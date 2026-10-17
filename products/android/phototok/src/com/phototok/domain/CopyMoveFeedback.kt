@@ -1,31 +1,8 @@
 package com.phototok.domain
 
-/** Outcome of a single SAF file copy or move operation. */
-enum class TransferStatus {
-    /** Destination verified (or atomic move succeeded) and source removed (for move). */
-    SUCCESS,
-
-    /** Destination copy succeeded and verified, but source removal failed during a move. */
-    PARTIAL,
-
-    /** Transfer did not complete; any partial destination file was cleaned up and source is intact. */
-    FAILURE,
-}
-
-/** Detailed result of a file transfer operation. */
-data class TransferResult(
-    val status: TransferStatus,
-    val destinationUri: String? = null,
-    val error: String? = null,
-) {
-    val isSuccess: Boolean get() = status == TransferStatus.SUCCESS
-    val isPartial: Boolean get() = status == TransferStatus.PARTIAL
-}
-
 /**
  * Builds the user-facing feedback message for a copy/move action, including
- * partial-failure reporting when sibling (related) files are processed or when
- * a move copies the file but cannot remove the original.
+ * partial-failure reporting when sibling (related) files are processed.
  * Pure logic so it is unit-testable.
  */
 object CopyMoveFeedback {
@@ -33,11 +10,11 @@ object CopyMoveFeedback {
     /**
      * @param isCopy true for copy, false for move
      * @param destinationNoun e.g. "collection" or "folder"
-     * @param succeeded number of files processed completely
-     * @param failed number of files that failed completely
+     * @param succeeded number of files processed successfully
+     * @param failed number of files that failed
      * @param relatedCount number of sibling files included beyond the primary image
-     * @param partial number of move operations where the copy succeeded and verified,
-     *   but the original file could not be deleted (`FileOperationResult.partial`)
+     * @param partial number of move operations where the copy succeeded on disk
+     *   but removing the source failed (`FileOperationResult.partial`)
      */
     fun message(
         isCopy: Boolean,
@@ -47,13 +24,12 @@ object CopyMoveFeedback {
         relatedCount: Int,
         partial: Int = 0,
     ): String {
+        if (!isCopy && partial > 0 && failed == 0) {
+            return "Copied to $destinationNoun — original could not be removed"
+        }
         val verb = if (isCopy) "Copied" else "Moved"
         val totalFailed = failed + partial
         return when {
-            partial > 0 && failed == 0 && succeeded == 0 ->
-                "Copied to $destinationNoun — original could not be removed"
-            partial > 0 && failed > 0 && succeeded == 0 ->
-                "Copied to $destinationNoun — original could not be removed ($failed failed)"
             totalFailed == 0 -> {
                 val suffix = if (relatedCount > 0) " (+$relatedCount related)" else ""
                 "$verb to $destinationNoun$suffix"

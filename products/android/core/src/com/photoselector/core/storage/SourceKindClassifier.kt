@@ -24,6 +24,8 @@ enum class SourceKind {
  * - Authority `com.android.externalstorage.documents` + any other prefix (e.g. `1A2B-3C4D`)
  *   -> [SourceKind.REMOVABLE] whether or not the volume is currently mounted in `volumes`.
  * - Authority `com.android.mtp.documents` -> [SourceKind.CAMERA_MTP].
+ * - Authorities `com.android.providers.media.documents` and `com.android.providers.downloads.documents`
+ *   (the device's own media and Downloads) -> [SourceKind.PHONE_LIBRARY].
  * - Anything else -> [SourceKind.CLOUD_OTHER].
  */
 object SourceKindClassifier {
@@ -51,9 +53,7 @@ object SourceKindClassifier {
             EXTERNAL_STORAGE_AUTHORITY -> {
                 val prefix = extractVolumePrefix(documentId)
                 when {
-                    prefix == null -> {
-                        if (volumes.any { it.isRemovable }) SourceKind.PHONE_LIBRARY else SourceKind.PHONE_LIBRARY
-                    }
+                    prefix == null -> SourceKind.PHONE_LIBRARY
                     prefix.lowercase() in PHONE_PREFIXES -> SourceKind.PHONE_LIBRARY
                     else -> SourceKind.REMOVABLE
                 }

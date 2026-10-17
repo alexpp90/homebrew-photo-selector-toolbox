@@ -189,6 +189,8 @@ data class SelectorUiState(
     val sortingEnabled: Boolean = true,
     /** Active rating filter driving the filmstrip and navigation order. */
     val ratingFilter: RatingFilter = RatingFilter.All,
+    /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
+    val missingGrantPrompt: Boolean = false,
     /** Storage provider classification for the opened folder (`U-30`). */
     val sourceKind: SourceKind = SourceKind.PHONE_LIBRARY,
     /** Whether a full cloud scan confirmation prompt is pending (`U-30`). */
@@ -202,8 +204,6 @@ data class SelectorUiState(
     val sessionCopiedCount: Int = 0,
     val sessionDeletedCount: Int = 0,
     val sessionKeptFileNames: Set<String> = emptySet(),
-    /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
-    val missingGrantPrompt: Boolean = false,
 ) {
     /** Whether worst-first triage has reached or passed the configured sharpness stop-line (`U-34`). */
     val hasReachedSharpnessThreshold: Boolean
@@ -546,6 +546,7 @@ class SelectorViewModel @Inject constructor(
                 undoHistory = emptyList(),
                 snackbarUndoAvailable = false,
                 ratingFilter = RatingFilter.All,
+                missingGrantPrompt = false,
                 sourceKind = SourceKind.PHONE_LIBRARY,
                 showCloudScanConfirmation = false,
                 sortWorstFirst = false,
@@ -553,7 +554,6 @@ class SelectorViewModel @Inject constructor(
                 sessionCopiedCount = 0,
                 sessionDeletedCount = 0,
                 sessionKeptFileNames = emptySet(),
-                missingGrantPrompt = false,
             )
         }
     }
@@ -1201,15 +1201,34 @@ class SelectorViewModel @Inject constructor(
             )
         }
         appScope.launch {
+            val failures = mutableListOf<Pair<String, String?>>()
             prompt.uris.forEach { uri ->
                 try {
-                    imageRepository.deleteImage(context, Uri.parse(uri))
+                    if (!imageRepository.deleteImage(context, Uri.parse(uri))) {
+                        failures += recoveredName(uri) to null
+                    }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e("SelectorViewModel", "Recovery delete failed for $uri", e)
+                    failures += recoveredName(uri) to e.message
                 }
             }
+            // Drop only the recovered entries: the journal may already hold deletions of
+            // the current session, which a wholesale clear would erase (D-9).
             settingsRepository.removePendingDeletes(prompt.uris)
-            settingsRepository.clearPendingDeleteJournal()
+            if (failures.isNotEmpty()) {
+                val names = failures.joinToString { it.first }
+                val reason = failures.firstNotNullOfOrNull { it.second }
+                reportError(
+                    if (failures.size == prompt.uris.size && failures.size == 1) {
+                        "Could not delete $names" + (reason?.let { ": $it" } ?: "")
+                    } else {
+                        "Could not delete ${failures.size} of ${prompt.uris.size} recovered photos: $names" +
+                            (reason?.let { " ($it)" } ?: "")
+                    }
+                )
+            }
         }
     }
 
@@ -1222,9 +1241,12 @@ class SelectorViewModel @Inject constructor(
         _uiState.update { it.copy(uncompletedDeletionsPrompt = null) }
         appScope.launch {
             settingsRepository.removePendingDeletes(prompt.uris)
-            settingsRepository.clearPendingDeleteJournal()
         }
     }
+
+    /** File name shown for a recovered journal entry, from the last segment of its document id. */
+    private fun recoveredName(uri: String): String =
+        Uri.parse(uri).lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: uri
 
     // ── Filing (optimistic) ──────────────────────────────────────────────
 
@@ -1319,29 +1341,43 @@ class SelectorViewModel @Inject constructor(
                     destinationUris = result.destinationUris,
                     parentDocumentId = result.parentDocumentId ?: currentItem.parentDocumentId,
                 )
-                if (undo != null) {
-                    var evictedPendings: List<PendingDeletion> = emptyList()
-                    _uiState.update { current ->
-                        val pushResult = UndoPolicy.push(current.undoHistory, undo)
-                        evictedPendings = pushResult.evictedPendingDeletions
-                        current.copy(
-                            undoHistory = pushResult.history,
-                            snackbarUndoAvailable = current.snackbarMessage != null,
-                        )
-                    }
-                    evictedPendings.forEach { evicted ->
-                        commitPendingDeletion(evicted, folderUri)
-                    }
-                }
+                if (undo != null) pushFilingUndo(undo, folderUri, snackbarOffersUndo = true)
             } else if (result?.partial == true) {
                 rollbackFiling(edit.action, edit.slots)
                 val folder = FilingAction.selectionFolderOrDefault(_uiState.value.selectionFolderName)
                 reportError(result.error ?: "Copied to $folder — original could not be removed")
+                // The verified copies in the destination are the photographer's data now, so the
+                // partial move stays undoable (Ctrl+Z): undo deletes exactly those copies while
+                // their originals still exist. The list item was restored above, hence no slots.
+                UndoPolicy.forFiling(
+                    action = action,
+                    slots = emptyList(),
+                    sourceUri = sourceUri,
+                    destinationUri = result.destinationUri,
+                    destinationUris = result.destinationUris,
+                    parentDocumentId = result.parentDocumentId ?: currentItem.parentDocumentId,
+                    copiesOfSurvivingOriginals = result.copiesOfSurvivingOriginals,
+                )?.let { pushFilingUndo(it, folderUri, snackbarOffersUndo = false) }
             } else {
                 rollbackFiling(edit.action, edit.slots)
                 val verb = if (action == CurationAction.COPY) "Copy" else "Move"
                 reportError("$verb failed: ${result?.error ?: "the file could not be transferred"}")
             }
+        }
+    }
+
+    private fun pushFilingUndo(undo: UndoableOperation, folderUri: String?, snackbarOffersUndo: Boolean) {
+        var evictedPendings: List<PendingDeletion> = emptyList()
+        _uiState.update { current ->
+            val pushResult = UndoPolicy.push(current.undoHistory, undo)
+            evictedPendings = pushResult.evictedPendingDeletions
+            current.copy(
+                undoHistory = pushResult.history,
+                snackbarUndoAvailable = snackbarOffersUndo && current.snackbarMessage != null,
+            )
+        }
+        evictedPendings.forEach { evicted ->
+            commitPendingDeletion(evicted, folderUri)
         }
     }
 
@@ -1432,6 +1468,7 @@ class SelectorViewModel @Inject constructor(
                             destinationUris = operation.destinationUris,
                             rootFolderUri = Uri.parse(folderUri),
                             parentDocumentId = operation.parentDocumentId,
+                            copiesOfSurvivingOriginals = operation.copiesOfSurvivingOriginals,
                         )
                     } catch (e: Exception) {
                         Log.e("SelectorViewModel", "Undo move failed", e)

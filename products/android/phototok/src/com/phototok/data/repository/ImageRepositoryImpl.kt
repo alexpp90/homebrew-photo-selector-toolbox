@@ -4,10 +4,9 @@ import android.net.Uri
 import android.util.Log
 import com.photoselector.core.model.ExifData
 import com.phototok.data.model.ImageItem
+import com.phototok.data.source.FileOperationResult
 import com.phototok.data.source.ImageSourceResolver
 import com.phototok.data.source.SelectionListing
-import com.phototok.domain.TransferResult
-import com.phototok.domain.TransferStatus
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -82,14 +81,13 @@ class ImageRepositoryImpl @Inject constructor(
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
-        desiredFileName: String?,
-    ): TransferResult {
+    ): FileOperationResult {
         if (!resolver.sameSource(sourceUri, destFolderUri)) {
             Log.w(TAG, "Cross-source move is not supported: $sourceUri -> $destFolderUri")
-            return TransferResult(TransferStatus.FAILURE, error = "Cross-source move is not supported")
+            return FileOperationResult.failure(sourceUri.toString(), "Cross-source move is not supported")
         }
         return resolver.sourceFor(sourceUri)
-            .moveImageDetailed(sourceUri, destFolderUri, sorting, subfolderName, desiredFileName)
+            .moveImageDetailed(sourceUri, destFolderUri, sorting, subfolderName)
     }
 
     override suspend fun copyImageDetailed(
@@ -97,14 +95,13 @@ class ImageRepositoryImpl @Inject constructor(
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
-        desiredFileName: String?,
-    ): TransferResult {
+    ): FileOperationResult {
         if (!resolver.sameSource(sourceUri, destFolderUri)) {
             Log.w(TAG, "Cross-source copy is not supported: $sourceUri -> $destFolderUri")
-            return TransferResult(TransferStatus.FAILURE, error = "Cross-source copy is not supported")
+            return FileOperationResult.failure(sourceUri.toString(), "Cross-source copy is not supported")
         }
         return resolver.sourceFor(sourceUri)
-            .copyImageDetailed(sourceUri, destFolderUri, sorting, subfolderName, desiredFileName)
+            .copyImageDetailed(sourceUri, destFolderUri, sorting, subfolderName)
     }
 
     override suspend fun getImageDimensions(uri: Uri): Pair<Int, Int> =

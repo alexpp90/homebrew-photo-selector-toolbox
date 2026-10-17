@@ -18,11 +18,8 @@ import com.phototok.data.model.ImageItem
 import com.phototok.data.repository.FolderAccessManager
 import com.phototok.data.repository.FolderAccessPurpose
 import com.phototok.domain.PhotoExtensions
-import com.phototok.domain.TransferResult
-import com.phototok.domain.TransferStatus
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.FileInputStream
-import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.coroutineContext
@@ -137,13 +134,13 @@ class LocalImageSourceImpl @Inject constructor(
         private const val TAG = "LocalImageSource"
         private const val RAW_SUBFOLDER = "RAW"
         private const val JPEG_SUBFOLDER = "JPEG"
-        private const val EDIT_SUFFIX = "-Edit"
-        private const val EDIT_UNDERSCORE_SUFFIX = "_Edit"
-        const val SELECTION_MARKER_FILE = ".photoselector-selection"
         private const val SINGLE_FOLDER_KEY = "TARGET"
         internal const val MAX_CONCURRENT_TRANSFERS = 2
 
         private val DERIVATIVE_SUFFIXES = listOf("-Edit", "_Edit", "-Enhanced-NR", "_Enhanced-NR")
+
+        /** Dropped into every Selection folder so scans skip it and a card is recognised as culled. */
+        const val SELECTION_MARKER_FILE = ".photoselector-selection"
 
         internal val EXCLUDED_FOLDER_NAMES = setOf(
             "selection",
@@ -177,14 +174,6 @@ class LocalImageSourceImpl @Inject constructor(
             DocumentsContract.Document.COLUMN_MIME_TYPE,
             DocumentsContract.Document.COLUMN_SIZE,
             DocumentsContract.Document.COLUMN_LAST_MODIFIED,
-        )
-
-        private val DISPLAY_NAME_PROJECTION = arrayOf(
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-        )
-
-        private val FLAGS_PROJECTION = arrayOf(
-            DocumentsContract.Document.COLUMN_FLAGS,
         )
 
         /**
@@ -236,8 +225,6 @@ class LocalImageSourceImpl @Inject constructor(
             return withoutExt
         }
 
-        internal fun baseStemOf(fileName: String): String = extractPrimaryStem(fileName)
-
         /**
          * Insert `-[suffixNumber]` into [fileName] after [primaryStem] so that:
          * - `IMG_0001.CR3` → `IMG_0001-2.CR3`
@@ -252,7 +239,6 @@ class LocalImageSourceImpl @Inject constructor(
             suffixNumber: Int,
             primaryStem: String = extractPrimaryStem(fileName),
         ): String {
-            if (suffixNumber <= 1) return fileName
             val name = fileName.substringAfterLast('/')
             val stemLen = if (
                 primaryStem.isNotEmpty() &&
@@ -266,12 +252,6 @@ class LocalImageSourceImpl @Inject constructor(
             return name.substring(0, stemLen) + "-$suffixNumber" + name.substring(stemLen)
         }
 
-        internal fun applyCollisionSuffix(
-            fileName: String,
-            primaryStem: String = baseStemOf(fileName),
-            suffixNumber: Int,
-        ): String = suffixFileName(fileName, suffixNumber, primaryStem)
-
         /**
          * Compute bundle-wide collision-free destination filenames (`-2`, `-3`, …).
          *
@@ -284,9 +264,7 @@ class LocalImageSourceImpl @Inject constructor(
             fileNames: List<String>,
             primaryStem: String = fileNames.firstOrNull()?.let(::extractPrimaryStem).orEmpty(),
             existingNamesByFolder: Map<String, Set<String>>,
-            folderForFile: (String) -> String = { name ->
-                if ("" in existingNamesByFolder) "" else selectionSubfolder(name).name
-            },
+            folderForFile: (String) -> String = { selectionSubfolder(it).name },
         ): Map<String, String> {
             if (fileNames.isEmpty()) return emptyMap()
 
@@ -323,35 +301,10 @@ class LocalImageSourceImpl @Inject constructor(
         }
     }
 
-    /** 2-permit semaphore bounding concurrent SAF file transfers. */
-    internal val transferSemaphore = Semaphore(MAX_CONCURRENT_TRANSFERS)
-
-    /** Observability counters for verifying concurrency bounds in unit tests. */
-    internal val activeTransfers = AtomicInteger(0)
-    internal val maxObservedConcurrentTransfers = AtomicInteger(0)
-
-    /** Optional test hook invoked inside the semaphore permit during a transfer. */
-    internal var onTransferInsidePermit: (suspend () -> Unit)? = null
+    private val transferSemaphore = Semaphore(MAX_CONCURRENT_TRANSFERS)
 
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     internal var documentMover: SafDocumentMover = DefaultSafDocumentMover
-
-    /** Overridable DocumentFile and DocumentsContract collaborators for unit tests. */
-    internal var documentFileFromSingleUri: (Uri) -> DocumentFile? = { uri ->
-        DocumentFile.fromSingleUri(context, uri)
-    }
-    internal var documentFileFromTreeUri: (Uri) -> DocumentFile? = { uri ->
-        DocumentFile.fromTreeUri(context, uri)
-    }
-    internal var documentFlagsQuery: (Uri) -> Int = { uri ->
-        queryDocumentFlags(uri)
-    }
-    internal var sourceParentResolver: (Uri, Uri) -> Uri? = { src, tree ->
-        defaultSourceParentUri(src, tree)
-    }
-    internal var moveDocumentInvoker: (Uri, Uri, Uri) -> Uri? = { src, srcParent, targetParent ->
-        DocumentsContract.moveDocument(context.contentResolver, src, srcParent, targetParent)
-    }
 
     private sealed class CopyStepResult {
         data class Success(val destinationUri: String) : CopyStepResult()
@@ -424,9 +377,7 @@ class LocalImageSourceImpl @Inject constructor(
                 fallbackContext = context,
             )
             val folderDoc = try {
-                documentFileFromTreeUri(folderUri)?.takeIf { it.exists() }
-            } catch (e: CancellationException) {
-                throw e
+                DocumentFile.fromTreeUri(context, folderUri)?.takeIf { it.exists() }
             } catch (e: SecurityException) {
                 null
             }
@@ -436,7 +387,7 @@ class LocalImageSourceImpl @Inject constructor(
     override suspend fun resolveFolderName(folderUri: Uri): String? =
         withContext(ioDispatcher) {
             try {
-                documentFileFromTreeUri(folderUri)?.name
+                DocumentFile.fromTreeUri(context, folderUri)?.name
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -455,7 +406,7 @@ class LocalImageSourceImpl @Inject constructor(
 
     override suspend fun deleteImage(uri: Uri): Boolean = withContext(ioDispatcher) {
         try {
-            val docFile = documentFileFromSingleUri(uri)
+            val docFile = DocumentFile.fromSingleUri(context, uri)
             docFile?.delete() ?: false
         } catch (e: CancellationException) {
             throw e
@@ -484,55 +435,37 @@ class LocalImageSourceImpl @Inject constructor(
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
-        desiredFileName: String?,
-    ): TransferResult = withTransferPermit {
-        try {
-            copyImageInternal(sourceUri, destFolderUri, sorting, subfolderName, desiredFileName)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to copy image: $sourceUri", e)
-            TransferResult(TransferStatus.FAILURE, error = e.message)
-        }
-    }
+    ): FileOperationResult = copyImageWithResult(sourceUri, destFolderUri, sorting, subfolderName)
 
     override suspend fun moveImageDetailed(
         sourceUri: Uri,
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
-        desiredFileName: String?,
-    ): TransferResult = withTransferPermit {
-        try {
-            moveImageInternal(sourceUri, destFolderUri, sorting, subfolderName, desiredFileName)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to move image: $sourceUri", e)
-            TransferResult(TransferStatus.FAILURE, error = e.message)
-        }
-    }
+    ): FileOperationResult = moveImageWithResult(sourceUri, destFolderUri, sorting, subfolderName)
 
     internal suspend fun copyImageWithResult(
         sourceUri: Uri,
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
-    ): FileOperationResult = withTransferPermit {
-        val source = sourceUri.toString()
-        try {
-            moveOrCopySingle(
-                sourceUri = sourceUri,
-                destFolderUri = destFolderUri,
-                sorting = sorting,
-                subfolderName = subfolderName,
-                isMove = false,
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to copy image: $sourceUri", e)
-            FileOperationResult.failure(source, e.message)
+    ): FileOperationResult = transferSemaphore.withPermit {
+        withContext(ioDispatcher) {
+            val source = sourceUri.toString()
+            try {
+                moveOrCopySingle(
+                    sourceUri = sourceUri,
+                    destFolderUri = destFolderUri,
+                    sorting = sorting,
+                    subfolderName = subfolderName,
+                    isMove = false,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to copy image: $sourceUri", e)
+                FileOperationResult.failure(source, e.message)
+            }
         }
     }
 
@@ -541,21 +474,23 @@ class LocalImageSourceImpl @Inject constructor(
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
-    ): FileOperationResult = withTransferPermit {
-        val source = sourceUri.toString()
-        try {
-            moveOrCopySingle(
-                sourceUri = sourceUri,
-                destFolderUri = destFolderUri,
-                sorting = sorting,
-                subfolderName = subfolderName,
-                isMove = true,
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to move image: $sourceUri", e)
-            FileOperationResult.failure(source, e.message)
+    ): FileOperationResult = transferSemaphore.withPermit {
+        withContext(ioDispatcher) {
+            val source = sourceUri.toString()
+            try {
+                moveOrCopySingle(
+                    sourceUri = sourceUri,
+                    destFolderUri = destFolderUri,
+                    sorting = sorting,
+                    subfolderName = subfolderName,
+                    isMove = true,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to move image: $sourceUri", e)
+                FileOperationResult.failure(source, e.message)
+            }
         }
     }
 
@@ -571,86 +506,89 @@ class LocalImageSourceImpl @Inject constructor(
         sorting: Boolean,
         subfolderName: String,
         isMove: Boolean,
-    ): List<FileOperationResult> = withTransferPermit {
-        if (sourceUris.isEmpty()) return@withTransferPermit emptyList()
-        val folderName = subfolderName.trim().ifEmpty { "Selection" }
+    ): List<FileOperationResult> = transferSemaphore.withPermit {
+        withContext(ioDispatcher) {
+            if (sourceUris.isEmpty()) return@withContext emptyList()
+            val folderName = subfolderName.trim().ifEmpty { "Selection" }
 
-        val destFolder = documentFileFromTreeUri(destFolderUri)
-            ?: return@withTransferPermit sourceUris.map { uri ->
-                FileOperationResult.failure(uri.toString(), "Could not write to the $folderName folder")
-            }
-
-        val selectionDir = if (sorting) {
-            destFolder.findFile(folderName)
-                ?: destFolder.createDirectory(folderName)
-                ?: return@withTransferPermit sourceUris.map { uri ->
+            val destFolder = DocumentFile.fromTreeUri(context, destFolderUri)
+                ?: return@withContext sourceUris.map { uri ->
                     FileOperationResult.failure(uri.toString(), "Could not write to the $folderName folder")
                 }
-        } else {
-            destFolder
-        }
 
-        data class ResolvedSource(
-            val uri: Uri,
-            val doc: DocumentFile?,
-            val fileName: String?,
-            val folderKey: String,
-            val targetFolder: DocumentFile?,
-        )
-
-        val targetFoldersByKey = LinkedHashMap<String, DocumentFile>()
-        val resolvedSources = sourceUris.map { uri ->
-            val doc = documentFileFromSingleUri(uri)
-            val name = doc?.name
-            if (name == null) {
-                ResolvedSource(uri, doc, null, SINGLE_FOLDER_KEY, null)
-            } else if (sorting) {
-                val key = selectionSubfolder(name).name
-                val target = targetFoldersByKey.getOrPut(key) {
-                    determineTargetFolder(name, selectionDir)
-                }
-                ResolvedSource(uri, doc, name, key, target)
+            val selectionDir = if (sorting) {
+                destFolder.findFile(folderName)
+                    ?: destFolder.createDirectory(folderName)
+                    ?: return@withContext sourceUris.map { uri ->
+                        FileOperationResult.failure(uri.toString(), "Could not write to the $folderName folder")
+                    }
             } else {
-                targetFoldersByKey.getOrPut(SINGLE_FOLDER_KEY) { destFolder }
-                ResolvedSource(uri, doc, name, SINGLE_FOLDER_KEY, destFolder)
+                destFolder
             }
-        }
+            ensureSelectionMarker(selectionDir)
 
-        val existingNamesByFolder = targetFoldersByKey.mapValues { (_, folder) ->
-            queryExistingDisplayNames(folder)
-        }
-        val validNames = resolvedSources.mapNotNull { it.fileName }
-        val primaryStem = validNames.firstOrNull()?.let(::extractPrimaryStem).orEmpty()
-        val folderKeyByName = resolvedSources
-            .filter { it.fileName != null }
-            .associate { it.fileName!! to it.folderKey }
+            data class ResolvedSource(
+                val uri: Uri,
+                val doc: DocumentFile?,
+                val fileName: String?,
+                val folderKey: String,
+                val targetFolder: DocumentFile?,
+            )
 
-        val desiredNames = resolveCollisionFreeBundleNames(
-            fileNames = validNames,
-            primaryStem = primaryStem,
-            existingNamesByFolder = existingNamesByFolder,
-            folderForFile = { folderKeyByName[it] ?: SINGLE_FOLDER_KEY },
-        )
+            val targetFoldersByKey = LinkedHashMap<String, DocumentFile>()
+            val resolvedSources = sourceUris.map { uri ->
+                val doc = DocumentFile.fromSingleUri(context, uri)
+                val name = doc?.name
+                if (name == null) {
+                    ResolvedSource(uri, doc, null, SINGLE_FOLDER_KEY, null)
+                } else if (sorting) {
+                    val key = selectionSubfolder(name).name
+                    val target = targetFoldersByKey.getOrPut(key) {
+                        determineTargetFolder(name, selectionDir)
+                    }
+                    ResolvedSource(uri, doc, name, key, target)
+                } else {
+                    targetFoldersByKey.getOrPut(SINGLE_FOLDER_KEY) { destFolder }
+                    ResolvedSource(uri, doc, name, SINGLE_FOLDER_KEY, destFolder)
+                }
+            }
 
-        resolvedSources.map { src ->
-            val sourceStr = src.uri.toString()
-            val doc = src.doc
-            val name = src.fileName
-            val targetFolder = src.targetFolder
-            if (doc == null || name == null || targetFolder == null) {
-                FileOperationResult.failure(sourceStr, "Could not write to the $folderName folder")
-            } else {
-                val desiredName = desiredNames[name] ?: name
-                executeSingleTransfer(
-                    sourceUri = src.uri,
-                    sourceDoc = doc,
-                    fileName = name,
-                    desiredName = desiredName,
-                    destFolderUri = destFolderUri,
-                    targetFolder = targetFolder,
-                    selectionFolderName = folderName,
-                    isMove = isMove,
-                )
+            val existingNamesByFolder = targetFoldersByKey.mapValues { (_, folder) ->
+                queryExistingDisplayNames(folder)
+            }
+            val validNames = resolvedSources.mapNotNull { it.fileName }
+            val primaryStem = validNames.firstOrNull()?.let(::extractPrimaryStem).orEmpty()
+            val folderKeyByName = resolvedSources
+                .filter { it.fileName != null }
+                .associate { it.fileName!! to it.folderKey }
+
+            val desiredNames = resolveCollisionFreeBundleNames(
+                fileNames = validNames,
+                primaryStem = primaryStem,
+                existingNamesByFolder = existingNamesByFolder,
+                folderForFile = { folderKeyByName[it] ?: SINGLE_FOLDER_KEY },
+            )
+
+            resolvedSources.map { src ->
+                val sourceStr = src.uri.toString()
+                val doc = src.doc
+                val name = src.fileName
+                val targetFolder = src.targetFolder
+                if (doc == null || name == null || targetFolder == null) {
+                    FileOperationResult.failure(sourceStr, "Could not write to the $folderName folder")
+                } else {
+                    val desiredName = desiredNames[name] ?: name
+                    executeSingleTransfer(
+                        sourceUri = src.uri,
+                        sourceDoc = doc,
+                        fileName = name,
+                        desiredName = desiredName,
+                        destFolderUri = destFolderUri,
+                        targetFolder = targetFolder,
+                        selectionFolderName = folderName,
+                        isMove = isMove,
+                    )
+                }
             }
         }
     }
@@ -660,7 +598,7 @@ class LocalImageSourceImpl @Inject constructor(
         subfolderName: String,
     ): SelectionListing = withContext(ioDispatcher) {
         val selectionDir = try {
-            documentFileFromTreeUri(folderUri)?.findFile(subfolderName)
+            DocumentFile.fromTreeUri(context, folderUri)?.findFile(subfolderName)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -838,6 +776,7 @@ class LocalImageSourceImpl @Inject constructor(
                 }
             }
 
+            // A folder that holds the Selection marker is an output folder, not a source.
             if (skipSelectionMarkerDirs && hasSelectionMarker && parentId != startDocumentId) {
                 Log.d(TAG, "Skipping directory containing $SELECTION_MARKER_FILE: $parentId")
                 continue
@@ -855,6 +794,17 @@ class LocalImageSourceImpl @Inject constructor(
                 firstDirectoryDone = true
                 onFirstDirectoryComplete?.invoke()
             }
+        }
+    }
+
+    /** Drop the Selection marker into [selectionDir] (best effort; never fails a transfer). */
+    internal fun ensureSelectionMarker(selectionDir: DocumentFile) {
+        try {
+            if (selectionDir.findFile(SELECTION_MARKER_FILE) == null) {
+                selectionDir.createFile("application/octet-stream", SELECTION_MARKER_FILE)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Could not create $SELECTION_MARKER_FILE in ${selectionDir.uri}: ${e.message}")
         }
     }
 
@@ -882,325 +832,6 @@ class LocalImageSourceImpl @Inject constructor(
     private fun Cursor.getLongOrZero(index: Int): Long =
         if (isNull(index)) 0L else getLong(index)
 
-    private suspend fun <T> withTransferPermit(block: suspend () -> T): T =
-        transferSemaphore.withPermit {
-            val current = activeTransfers.incrementAndGet()
-            maxObservedConcurrentTransfers.updateAndGet { prev -> maxOf(prev, current) }
-            try {
-                onTransferInsidePermit?.invoke()
-                withContext(ioDispatcher) {
-                    block()
-                }
-            } finally {
-                activeTransfers.decrementAndGet()
-            }
-        }
-
-    internal fun resolveTargetFolder(
-        fileName: String,
-        destFolderUri: Uri,
-        sorting: Boolean,
-        subfolderName: String,
-    ): DocumentFile? {
-        val destFolder = documentFileFromTreeUri(destFolderUri) ?: return null
-        val selectionDir = if (
-            subfolderName.isBlank() ||
-            destFolder.name.equals(subfolderName, ignoreCase = true)
-        ) {
-            destFolder
-        } else {
-            val found = destFolder.findFile(subfolderName)
-            val created = if (found == null) destFolder.createDirectory(subfolderName) else null
-            val candidate = found ?: created ?: return null
-            val hasRealSubfolder = !candidate.name.isNullOrBlank() || !candidate.uri.scheme.isNullOrBlank()
-            if (hasRealSubfolder || sorting) {
-                candidate
-            } else {
-                destFolder
-            }
-        }
-        ensureSelectionMarker(selectionDir)
-        return if (sorting) {
-            determineTargetFolder(fileName, selectionDir)
-        } else {
-            selectionDir
-        }
-    }
-
-    internal fun ensureSelectionMarker(selectionDir: DocumentFile) {
-        try {
-            if (selectionDir.findFile(SELECTION_MARKER_FILE) == null) {
-                selectionDir.createFile("application/octet-stream", SELECTION_MARKER_FILE)
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Could not create $SELECTION_MARKER_FILE in ${selectionDir.uri}: ${e.message}")
-        }
-    }
-
-    /**
-     * List existing child display names in [targetFolder] using a single cursor
-     * query projecting [DocumentsContract.Document.COLUMN_DISPLAY_NAME], falling
-     * back to [DocumentFile.listFiles] only when [treeUri] / [targetFolder] is
-     * not backed by a tree document URI (e.g. unit-test mocks).
-     */
-    internal fun listExistingFileNames(treeUri: Uri, targetFolder: DocumentFile): Set<String> {
-        val targetUri = try {
-            targetFolder.uri
-        } catch (_: Exception) {
-            null
-        }
-        val parentDocId = targetUri?.let { documentIdOf(it) ?: treeDocumentIdOf(it) }
-        val treeDocId = treeDocumentIdOf(treeUri)
-        if (parentDocId != null && treeDocId != null) {
-            val childrenUri = try {
-                DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
-            } catch (_: Exception) {
-                null
-            }
-            if (childrenUri != null) {
-                try {
-                    val cursor = context.contentResolver.query(
-                        childrenUri,
-                        DISPLAY_NAME_PROJECTION,
-                        null,
-                        null,
-                        null,
-                    )
-                    if (cursor != null) {
-                        cursor.use { c ->
-                            val nameIdx = c.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-                            if (nameIdx >= 0) {
-                                val names = mutableSetOf<String>()
-                                while (c.moveToNext()) {
-                                    c.getStringOrNull(nameIdx)?.let { names.add(it) }
-                                }
-                                return names
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Cursor listing failed for $targetUri; falling back to listFiles()", e)
-                }
-            }
-        }
-        return try {
-            targetFolder.listFiles().mapNotNull { it.name }.toSet()
-        } catch (_: Exception) {
-            emptySet()
-        }
-    }
-
-    private fun queryDocumentFlags(uri: Uri): Int = try {
-        context.contentResolver.query(uri, FLAGS_PROJECTION, null, null, null)?.use { c ->
-            val idx = c.getColumnIndex(DocumentsContract.Document.COLUMN_FLAGS)
-            if (idx >= 0 && c.moveToFirst() && !c.isNull(idx)) c.getInt(idx) else 0
-        } ?: 0
-    } catch (_: Exception) {
-        0
-    }
-
-    private fun defaultSourceParentUri(sourceUri: Uri, fallbackTreeUri: Uri): Uri? {
-        val treeId = treeDocumentIdOf(sourceUri) ?: treeDocumentIdOf(fallbackTreeUri) ?: return null
-        val docId = documentIdOf(sourceUri)
-        val parentDocId = if (docId != null && '/' in docId) {
-            docId.substringBeforeLast('/')
-        } else {
-            treeId
-        }
-        return try {
-            DocumentsContract.buildDocumentUriUsingTree(sourceUri, parentDocId)
-        } catch (_: Exception) {
-            try {
-                DocumentsContract.buildDocumentUriUsingTree(fallbackTreeUri, parentDocId)
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
-
-    private fun copyImageInternal(
-        sourceUri: Uri,
-        destFolderUri: Uri,
-        sorting: Boolean,
-        subfolderName: String,
-        desiredFileName: String? = null,
-    ): TransferResult {
-        val sourceDoc = documentFileFromSingleUri(sourceUri)
-            ?: return TransferResult(TransferStatus.FAILURE, error = "Source document not found")
-        val fileName = sourceDoc.name
-            ?: return TransferResult(TransferStatus.FAILURE, error = "Source filename missing")
-        val mimeType = sourceDoc.type ?: "application/octet-stream"
-
-        val targetFolder = resolveTargetFolder(fileName, destFolderUri, sorting, subfolderName)
-            ?: return TransferResult(TransferStatus.FAILURE, error = "Target folder unavailable")
-
-        val resolvedFileName = desiredFileName ?: run {
-            val existing = listExistingFileNames(destFolderUri, targetFolder)
-            resolveCollisionFreeBundleNames(
-                fileNames = listOf(fileName),
-                primaryStem = baseStemOf(fileName),
-                existingNamesByFolder = mapOf("" to existing),
-            ).getValue(fileName)
-        }
-
-        val copiedFile = copyFileVerified(
-            sourceUri = sourceUri,
-            sourceDoc = sourceDoc,
-            targetFolder = targetFolder,
-            mimeType = mimeType,
-            desiredName = resolvedFileName,
-        ) ?: return TransferResult(TransferStatus.FAILURE, error = "Copy or verification failed")
-
-        return TransferResult(
-            status = TransferStatus.SUCCESS,
-            destinationUri = copiedFile.uri.toString(),
-        )
-    }
-
-    private suspend fun moveImageInternal(
-        sourceUri: Uri,
-        destFolderUri: Uri,
-        sorting: Boolean,
-        subfolderName: String,
-        desiredFileName: String? = null,
-    ): TransferResult {
-        val sourceDoc = documentFileFromSingleUri(sourceUri)
-            ?: return TransferResult(TransferStatus.FAILURE, error = "Source document not found")
-        val fileName = sourceDoc.name
-            ?: return TransferResult(TransferStatus.FAILURE, error = "Source filename missing")
-        val mimeType = sourceDoc.type ?: "application/octet-stream"
-
-        val targetFolder = resolveTargetFolder(fileName, destFolderUri, sorting, subfolderName)
-            ?: return TransferResult(TransferStatus.FAILURE, error = "Target folder unavailable")
-
-        val resolvedFileName = desiredFileName ?: run {
-            val existing = listExistingFileNames(destFolderUri, targetFolder)
-            resolveCollisionFreeBundleNames(
-                fileNames = listOf(fileName),
-                primaryStem = baseStemOf(fileName),
-                existingNamesByFolder = mapOf("" to existing),
-            ).getValue(fileName)
-        }
-
-        // Fast path: atomic DocumentsContract.moveDocument when same authority,
-        // no rename is needed, and the document advertises FLAG_SUPPORTS_MOVE.
-        val targetFolderUri = try { targetFolder.uri } catch (_: Exception) { null }
-        if (
-            resolvedFileName.equals(fileName, ignoreCase = true) &&
-            sourceUri.authority != null &&
-            sourceUri.authority == targetFolderUri?.authority
-        ) {
-            val flags = documentFlagsQuery(sourceUri)
-            if ((flags and DocumentsContract.Document.FLAG_SUPPORTS_MOVE) != 0) {
-                val sourceParentUri = sourceParentResolver(sourceUri, destFolderUri)
-                if (sourceParentUri != null && targetFolderUri != null) {
-                    val movedUri = try {
-                        moveDocumentInvoker(sourceUri, sourceParentUri, targetFolderUri)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.w(TAG, "DocumentsContract.moveDocument failed for $sourceUri; falling back to copy+delete", e)
-                        null
-                    }
-                    if (movedUri != null) {
-                        return TransferResult(
-                            status = TransferStatus.SUCCESS,
-                            destinationUri = movedUri.toString(),
-                        )
-                    }
-                }
-            }
-        }
-
-        // Fallback path: stream-copy + byte-size & display-name verification, then delete source.
-        val copiedFile = copyFileVerified(
-            sourceUri = sourceUri,
-            sourceDoc = sourceDoc,
-            targetFolder = targetFolder,
-            mimeType = mimeType,
-            desiredName = resolvedFileName,
-        ) ?: return TransferResult(TransferStatus.FAILURE, error = "Copy or verification failed")
-
-        val deleted = deleteImage(sourceUri)
-        return if (deleted) {
-            TransferResult(
-                status = TransferStatus.SUCCESS,
-                destinationUri = copiedFile.uri.toString(),
-            )
-        } else {
-            TransferResult(
-                status = TransferStatus.PARTIAL,
-                destinationUri = copiedFile.uri.toString(),
-                error = "Copied, original could not be removed",
-            )
-        }
-    }
-
-    private fun copyFileVerified(
-        sourceUri: Uri,
-        sourceDoc: DocumentFile,
-        targetFolder: DocumentFile,
-        mimeType: String,
-        desiredName: String,
-    ): DocumentFile? {
-        val destFile = targetFolder.createFile(mimeType, desiredName) ?: return null
-
-        val actualName = destFile.name
-        if (actualName != null && !actualName.equals(desiredName, ignoreCase = true)) {
-            Log.w(TAG, "Provider renamed created file from $desiredName to $actualName; cleaning up")
-            cleanUpFailedCopy(destFile)
-            return null
-        }
-
-        var bytesCopied = -1L
-        try {
-            context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                context.contentResolver.openOutputStream(destFile.uri)?.use { output ->
-                    bytesCopied = input.copyTo(output)
-                    output.flush()
-                }
-            }
-            if (bytesCopied >= 0L && SourceKindClassifier.classify(destFile.uri) == SourceKind.REMOVABLE) {
-                try {
-                    context.contentResolver.openFileDescriptor(destFile.uri, "rw")?.use { pfd ->
-                        pfd.fileDescriptor.sync()
-                    }
-                } catch (_: Exception) {
-                    // Best-effort fsync when destination provider supports file descriptor sync.
-                }
-            }
-        } catch (e: CancellationException) {
-            cleanUpFailedCopy(destFile)
-            throw e
-        } catch (e: Exception) {
-            cleanUpFailedCopy(destFile)
-            throw e
-        }
-
-        if (bytesCopied < 0L) {
-            cleanUpFailedCopy(destFile)
-            return null
-        }
-
-        val sourceLength = sourceDoc.length()
-        val destLength = destFile.length()
-        val expectedLength = if (sourceLength > 0L) sourceLength else bytesCopied
-        val sizeMatches = bytesCopied == expectedLength &&
-            (destLength <= 0L || destLength == expectedLength) &&
-            (sourceLength <= 0L || destLength <= 0L || destLength == sourceLength)
-
-        if (!sizeMatches) {
-            Log.w(
-                TAG,
-                "Size mismatch after copy for $desiredName: source=$sourceLength, copied=$bytesCopied, dest=$destLength",
-            )
-            cleanUpFailedCopy(destFile)
-            return null
-        }
-
-        return destFile
-    }
-
     private suspend fun moveOrCopySingle(
         sourceUri: Uri,
         destFolderUri: Uri,
@@ -1210,18 +841,19 @@ class LocalImageSourceImpl @Inject constructor(
     ): FileOperationResult {
         val source = sourceUri.toString()
         val folderName = subfolderName.trim().ifEmpty { "Selection" }
-        val sourceDoc = documentFileFromSingleUri(sourceUri)
+        val sourceDoc = DocumentFile.fromSingleUri(context, sourceUri)
             ?: return FileOperationResult.failure(source, if (isMove) "Copy step failed" else "Could not write to the $folderName folder")
         val fileName = sourceDoc.name
             ?: return FileOperationResult.failure(source, if (isMove) "Copy step failed" else "Could not write to the $folderName folder")
 
-        val destFolder = documentFileFromTreeUri(destFolderUri)
+        val destFolder = DocumentFile.fromTreeUri(context, destFolderUri)
             ?: return FileOperationResult.failure(source, if (isMove) "Copy step failed" else "Could not write to the $folderName folder")
 
         val targetFolder = if (sorting) {
             val selectionDir = destFolder.findFile(folderName)
                 ?: destFolder.createDirectory(folderName)
                 ?: return FileOperationResult.failure(source, if (isMove) "Copy step failed" else "Could not write to the $folderName folder")
+            ensureSelectionMarker(selectionDir)
             determineTargetFolder(fileName, selectionDir)
         } else {
             destFolder
@@ -1299,7 +931,7 @@ class LocalImageSourceImpl @Inject constructor(
                     FileOperationResult.success(source, copyResult.destinationUri)
                 } else {
                     val deleted = try {
-                        documentFileFromSingleUri(sourceUri)?.delete() ?: false
+                        deleteImage(sourceUri)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -1358,10 +990,20 @@ class LocalImageSourceImpl @Inject constructor(
                     output.flush()
                 }
             }
+            if (bytesCopied >= 0L && SourceKindClassifier.classify(destFile.uri) == SourceKind.REMOVABLE) {
+                try {
+                    context.contentResolver.openFileDescriptor(destFile.uri, "rw")?.use { pfd ->
+                        pfd.fileDescriptor.sync()
+                    }
+                } catch (_: Exception) {
+                    // Best-effort fsync when the destination provider supports file descriptor sync.
+                }
+            }
         } catch (e: CancellationException) {
             cleanUpFailedCopy(destFile)
             throw e
         } catch (e: Exception) {
+            // Don't leave a partially written file behind.
             cleanUpFailedCopy(destFile)
             throw e
         }

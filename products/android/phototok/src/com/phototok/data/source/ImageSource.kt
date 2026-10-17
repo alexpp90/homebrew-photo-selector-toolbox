@@ -3,8 +3,6 @@ package com.phototok.data.source
 import android.net.Uri
 import com.photoselector.core.model.ExifData
 import com.phototok.data.model.ImageItem
-import com.phototok.domain.TransferResult
-import com.phototok.domain.TransferStatus
 import kotlinx.coroutines.flow.Flow
 
 /** Result of listing the app-managed selection subfolder of a source folder. */
@@ -72,39 +70,37 @@ interface ImageSource {
     ): Boolean
 
     /**
-     * Detailed copy returning [TransferResult] (including destination URI or error).
-     * Optional [desiredFileName] allows bundle-wide collision-free naming.
+     * Copy returning the full [FileOperationResult] (destination URI or error).
+     * The default implementation only knows success or failure; sources that can
+     * tell more override it.
      */
     suspend fun copyImageDetailed(
         sourceUri: Uri,
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
-        desiredFileName: String? = null,
-    ): TransferResult =
+    ): FileOperationResult =
         if (copyImage(sourceUri, destFolderUri, sorting, subfolderName)) {
-            TransferResult(TransferStatus.SUCCESS)
+            FileOperationResult.success(sourceUri.toString(), null)
         } else {
-            TransferResult(TransferStatus.FAILURE)
+            FileOperationResult.failure(sourceUri.toString(), null)
         }
 
     /**
-     * Detailed move returning [TransferResult] so callers can distinguish
-     * full success ([TransferStatus.SUCCESS]), partial success where the copy
-     * was verified but source deletion failed ([TransferStatus.PARTIAL]), and
-     * failure ([TransferStatus.FAILURE]).
+     * Move returning the full [FileOperationResult], so callers can tell a complete
+     * move from a [FileOperationResult.partial] one (copy verified, original could
+     * not be removed) and from a failure.
      */
     suspend fun moveImageDetailed(
         sourceUri: Uri,
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String,
-        desiredFileName: String? = null,
-    ): TransferResult =
+    ): FileOperationResult =
         if (moveImage(sourceUri, destFolderUri, sorting, subfolderName)) {
-            TransferResult(TransferStatus.SUCCESS)
+            FileOperationResult.success(sourceUri.toString(), null)
         } else {
-            TransferResult(TransferStatus.FAILURE)
+            FileOperationResult.failure(sourceUri.toString(), null)
         }
 
     /** List images inside the [subfolderName] child of [folderUri]. */

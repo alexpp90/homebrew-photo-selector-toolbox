@@ -468,6 +468,18 @@ class CullingWorkspaceViewModel:
                 if partial_record is not None and action.generation == self._folder_generation:
                     self.undo_stack.append((partial_record, action.photo, action.orig_idx))
 
+                if (
+                    action.kind == "move"
+                    and partial_record is not None
+                    and partial_record.unremoved_sources
+                ):
+                    # Verified copy in Selection/, original not removable (FILE_OPERATIONS.md §4).
+                    self._notify(
+                        f"Copied {action.photo.filename} to {action.selection_folder}/ "
+                        f"— original could not be removed"
+                    )
+                    return
+
                 if action.kind == "move":
                     prefix = f"Could not move {action.photo.filename}"
                 elif action.kind == "copy":

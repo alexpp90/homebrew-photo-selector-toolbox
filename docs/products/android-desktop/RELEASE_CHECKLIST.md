@@ -6,9 +6,9 @@ This checklist is the **single source of truth** for Google Play release readine
 
 ## 1. Architecture & Privacy Invariants (Repo-Side)
 
-- [x] **100% Local On-Device SAF Architecture:** Photo Selector Toolbox accesses user photos exclusively via Android Storage Access Framework (`Intent.ACTION_OPEN_DOCUMENT_TREE`). All sharpness, noise, exposure, subject/composition/technique detection (OpenCV), and duplicate analyses execute locally on-device with 16 KB native page alignment preserved (`useLegacyPackaging = false`).
+- [x] **100% Local On-Device SAF Architecture:** Photo Selector Toolbox accesses user photos exclusively via Android Storage Access Framework (`Intent.ACTION_OPEN_DOCUMENT_TREE`). All sharpness, noise, exposure, subject, composition and technique (OpenCV), and duplicate analyses execute locally on-device.
 - [x] **Zero Runtime Permissions:** `products/android/android-desktop/AndroidManifest.xml` declares zero `<uses-permission>` entries.
-- [x] **Cloud Auto-Backup Hardened:** `AndroidManifest.xml` configures `android:allowBackup="false"`, `android:dataExtractionRules="@xml/data_extraction_rules"`, and `android:fullBackupContent="@xml/backup_rules"` so the local Room database (`photo_selector_database`: `scores_cache`, `user_ratings`, `technique_facts`) and persisted SAF URI grants are never uploaded to cloud backup.
+- [x] **Cloud Auto-Backup Hardened:** `AndroidManifest.xml` configures `android:allowBackup="false"`, `android:dataExtractionRules="@xml/data_extraction_rules"` and `android:fullBackupContent="@xml/backup_rules"` so the local Room score cache (`photo_selector_database`) and persisted SAF URI grants are never uploaded to cloud backup.
 - [x] **Target SDK & 16 KB Page-Size Compliance:** `targetSdk = 36` (meets Google Play August 31, 2026 API 36 requirement) and `compileSdk = 37` in `products/android/android-desktop/build.gradle.kts`; every 64-bit native `.so` (`lib/{arm64-v8a,x86_64}/*.so`) is verified for `PT_LOAD` `p_align >= 16384` (16 KB) by `scripts/check_native_alignment.py` in CI and `scripts/run_tests.sh --android`.
 - [x] **Hosted Legal Documents Present in Repo:**
   - `docs/products/android-desktop/privacy-policy.html` (bilingual EN/DE GDPR/DSGVO Art. 13 policy)

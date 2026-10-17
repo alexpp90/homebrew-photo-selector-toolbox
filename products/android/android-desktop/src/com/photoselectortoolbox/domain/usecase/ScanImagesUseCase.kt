@@ -51,24 +51,9 @@ class ScanImagesUseCase @Inject constructor(
     private val scoreDao: ScoreDao,
     private val settingsRepository: SettingsRepository,
     private val bitmapDecoder: PhotoBitmapDecoder,
-    private val techniqueFactDetector: com.photoselectortoolbox.domain.learn.TechniqueFactDetector,
-) {
-    constructor(
-        sharpnessAnalyzer: SharpnessAnalyzer,
-        noiseAnalyzer: NoiseAnalyzer,
-        clippingAnalyzer: ClippingAnalyzer,
-        scoreDao: ScoreDao,
-        settingsRepository: SettingsRepository,
-        bitmapDecoder: PhotoBitmapDecoder,
-    ) : this(
-        sharpnessAnalyzer,
-        noiseAnalyzer,
-        clippingAnalyzer,
-        scoreDao,
-        settingsRepository,
-        bitmapDecoder,
+    private val techniqueFactDetector: com.photoselectortoolbox.domain.learn.TechniqueFactDetector =
         com.photoselectortoolbox.domain.learn.TechniqueFactDetector(),
-    )
+) {
 
     /**
      * Scan a list of images, emitting progress updates as a Flow.
@@ -228,6 +213,7 @@ class ScanImagesUseCase @Inject constructor(
 
             val clippingResult = clippingDeferred.await()
             val sharpness = sharpnessDeferred.await()
+
             val noise = noiseDeferred.await()
 
             try {

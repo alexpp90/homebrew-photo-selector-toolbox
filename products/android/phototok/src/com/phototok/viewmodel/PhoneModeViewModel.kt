@@ -40,7 +40,6 @@ import com.phototok.domain.ShareIntentBuilder
 import com.phototok.domain.SwipeAction
 import com.phototok.domain.SwipeRightVerb
 import com.phototok.domain.SystemFavouriteSync
-import com.phototok.domain.TransferStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.math.abs
@@ -112,6 +111,10 @@ data class PhoneModeUiState(
     val reloadPrompt: ReloadPrompt? = null,
     /** Friendly explanation when a selected folder contains 0 supported photos. */
     val emptyFolderMessage: String? = null,
+    /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
+    val missingGrantPrompt: Boolean = false,
+    /** When true, Selection folder is stored inside each scanned folder. */
+    val selectionUseSourceRoot: Boolean = false,
     /** In-place favourited photo URIs (`U-17`). */
     val favouritedUris: Set<String> = emptySet(),
     /** Count of seen photos in the active folder (`U-15`). */
@@ -133,10 +136,6 @@ data class PhoneModeUiState(
     val cardClearComplete: Boolean = false,
     /** Optional API 30+ batch MediaStore request (`U-17`, `U-18`). */
     val pendingIntentSenderRequest: SystemFavouriteSync.BatchIntentRequest? = null,
-    /** True when the folder's persisted SAF grant was revoked or the folder was moved/deleted. */
-    val missingGrantPrompt: Boolean = false,
-    /** When true, Selection folder is stored inside each scanned folder. */
-    val selectionUseSourceRoot: Boolean = false,
 )
 
 data class ReloadPrompt(
@@ -558,6 +557,8 @@ class PhoneModeViewModel @Inject constructor(
         dimensionsJob?.cancel()
         publishedUris.clear()
         dimensionsResolved.clear()
+        _uiState.update { it.copy(emptyFolderMessage = null, missingGrantPrompt = false) }
+
         val kind = classifyUri(uri, _uiState.value.mountedVolumes)
         val volUuid = SourceKindClassifier.extractRemovableUuid(uri)
         val isCloud = kind == SourceKind.CLOUD_OTHER
@@ -1205,8 +1206,8 @@ class PhoneModeViewModel @Inject constructor(
                             subfolderName = subfolderName,
                         )
                     }
-                    when (result.status) {
-                        TransferStatus.SUCCESS -> {
+                    when {
+                        result.success -> {
                             succeededUris.add(img.uri)
                             if (state.sourceKind == SourceKind.REMOVABLE ||
                                 state.sourceKind == SourceKind.CAMERA_MTP
@@ -1219,14 +1220,14 @@ class PhoneModeViewModel @Inject constructor(
                                 )
                             }
                         }
-                        TransferStatus.PARTIAL -> partial++
-                        TransferStatus.FAILURE -> failed++
+                        result.partial -> partial++
+                        else -> failed++
                     }
                 }
 
                 if (!isCopy && (failed > 0 || partial > 0)) {
-                    // The optimistic removal was wrong for files that remain in source.
-                    restoreToFeed(slots.filter { it.image.uri !in succeededUris })
+                    // The optimistic removal was wrong for files that are still in the source.
+                    restoreToFeed(OptimisticFeed.slotsLeftBehind(slots, goneUris = succeededUris))
                 }
 
                 val message = CopyMoveFeedback.message(
@@ -1331,10 +1332,10 @@ class PhoneModeViewModel @Inject constructor(
                 pendingDelete = pushResult.updatedStack.lastOrNull(),
             )
         }
+        persistCurrentFolderPosition()
         viewModelScope.launch {
             settingsRepository.setPersistedPendingDeleteUris(allQueuedUris.toSet())
         }
-        persistCurrentFolderPosition()
         loadExifForCurrent()
     }
 
@@ -1400,26 +1401,7 @@ class PhoneModeViewModel @Inject constructor(
                 }
 
                 if (failedForEntry.isNotEmpty() && _uiState.value.sourceFolderUri == folderAtDelete) {
-                    val failedUris = failedForEntry.map { it.first.uri }.toSet()
-                    val succeededSlots = pending.slots.filter { it.image.uri in succeededUris }
-                    val failedSlots = pending.slots
-                        .filter { it.image.uri in failedUris }
-                        .map { slot ->
-                            val succeededBefore = if (slot.index >= 0) {
-                                succeededSlots.count { it.index in 0 until slot.index }
-                            } else {
-                                0
-                            }
-                            val succeededAllBefore = if (slot.allImagesIndex >= 0) {
-                                succeededSlots.count { it.allImagesIndex in 0 until slot.allImagesIndex }
-                            } else {
-                                0
-                            }
-                            slot.copy(
-                                index = if (slot.index >= 0) slot.index - succeededBefore else -1,
-                                allImagesIndex = if (slot.allImagesIndex >= 0) slot.allImagesIndex - succeededAllBefore else -1,
-                            )
-                        }
+                    val failedSlots = OptimisticFeed.slotsLeftBehind(pending.slots, goneUris = succeededUris)
                     restoreToFeed(failedSlots)
                     loadExifForCurrent()
                 }
@@ -1498,10 +1480,10 @@ class PhoneModeViewModel @Inject constructor(
                 pendingDelete = popResult.remainingStack.lastOrNull(),
             )
         }
+        persistCurrentFolderPosition()
         viewModelScope.launch {
             settingsRepository.setPersistedPendingDeleteUris(remainingUris.toSet())
         }
-        persistCurrentFolderPosition()
         loadExifForCurrent()
     }
 

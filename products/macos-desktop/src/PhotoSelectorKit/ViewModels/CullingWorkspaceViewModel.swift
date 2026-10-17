@@ -828,9 +828,40 @@ public final class CullingWorkspaceViewModel: ObservableObject {
                     self?.inFlightJobIDs.remove(job.id)
                 }
             } catch let error as FileCullingError {
+                let partialMoveRecord: CullingExecutionRecord?
+                if case .partialMove = error {
+                    partialMoveRecord = await cullingActor.completedRecord(for: job.id)
+                } else {
+                    partialMoveRecord = nil
+                }
                 await MainActor.run {
                     self?.inFlightJobIDs.remove(job.id)
-                    if case .partialTrashRollbackFailed(_, _, let remainingPairs) = error, !remainingPairs.isEmpty {
+                    if case .partialMove = error, let partialMoveRecord {
+                        // Verified copy in the destination, original still where it was: keep the
+                        // record so Undo can delete the copy, put the photo back in the queue and say so.
+                        if let idx = self?.undoStack.firstIndex(where: { $0.jobID == job.id }) {
+                            let preservedPreviousStatus = self?.undoStack[idx].previousStatus ?? previousStatus
+                            self?.undoStack[idx] = CullingExecutionRecord(
+                                jobID: partialMoveRecord.jobID,
+                                photoID: partialMoveRecord.photoID,
+                                actionType: partialMoveRecord.actionType,
+                                originalPrimaryURL: partialMoveRecord.originalPrimaryURL,
+                                affectedURLs: partialMoveRecord.affectedURLs,
+                                unremovedSourceURLs: partialMoveRecord.unremovedSourceURLs,
+                                previousStatus: preservedPreviousStatus,
+                                timestamp: partialMoveRecord.timestamp
+                            )
+                        }
+                        if let self, self.photos.indices.contains(targetIndex) {
+                            self.photos[targetIndex].status = previousStatus
+                            self.showToast(
+                                icon: "exclamationmark.triangle.fill",
+                                title: "Copied to \(destinationFolder) — original could not be removed",
+                                subtitle: photo.filename
+                            )
+                            NSSound.beep()
+                        }
+                    } else if case .partialTrashRollbackFailed(_, _, let remainingPairs) = error, !remainingPairs.isEmpty {
                         if let idx = self?.undoStack.firstIndex(where: { $0.jobID == job.id }) {
                             let preservedPreviousStatus = self?.undoStack[idx].previousStatus ?? previousStatus
                             self?.undoStack[idx] = CullingExecutionRecord(

@@ -533,7 +533,63 @@ class SelectorViewModelTest {
         assertEquals(70.0, current?.scanResult?.sharpnessScore!!, 0.01)
     }
 
+    // ── Persisted SAF grant lifecycle ────────────────────────────────────
+
+    @Test
+    fun `startup reconciles persisted SAF grants`() = runTest {
+        buildViewModel()
+        coVerify(exactly = 1) { settingsRepository.reconcilePersistedGrants() }
+    }
+
+    @Test
+    fun `revoked or missing folder grant sets missingGrantPrompt`() = runTest {
+        coEvery { imageRepository.openFolder(any(), any()) } returns null
+        val viewModel = buildViewModel()
+
+        viewModel.selectFolder(Uri.parse(FOLDER_URI))
+
+        val state = viewModel.uiState.value
+        assertTrue(state.missingGrantPrompt)
+        assertFalse(state.isLoading)
+        assertNotNull(state.snackbarMessage)
+    }
+
     // ── U-04b: Bundle filing, undo to parentDocumentId, and bundle delete ─
+
+    @Test
+    fun `a partial move keeps the photo, reports it and stays undoable so undo deletes only the surviving-original copies`() = runTest {
+        val item = image("a")
+        val copy = "content://test/folder/Selection/JPEG/a.jpg"
+        val copies = mapOf(copy to item.uri)
+        coEvery { imageRepository.moveBundle(any(), item, any(), any()) } returns
+            FileOperationResult.partial(
+                sourceUri = item.uri,
+                destinationUri = copy,
+                error = "Copied to Selection — original could not be removed",
+                copiesOfSurvivingOriginals = copies,
+            )
+        coEvery {
+            imageRepository.undoMoveBundle(any(), listOf(copy), Uri.parse(FOLDER_URI), any(), copies)
+        } returns FileOperationResult.success(copy, null, emptyList())
+
+        val viewModel = loadFolder(item, image("b"))
+        viewModel.moveToSelection()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.images.any { it.uri == item.uri })
+        assertEquals("Copied to Selection — original could not be removed", state.snackbarMessage)
+        val undoOp = state.undoHistory.single() as UndoableOperation.ReverseMove
+        assertEquals(copies, undoOp.copiesOfSurvivingOriginals)
+        assertTrue(undoOp.slots.isEmpty())
+
+        viewModel.undoLastOperation()
+
+        coVerify(exactly = 1) {
+            imageRepository.undoMoveBundle(any(), listOf(copy), Uri.parse(FOLDER_URI), any(), copies)
+        }
+        assertTrue(viewModel.uiState.value.undoHistory.isEmpty())
+        assertTrue(viewModel.uiState.value.images.any { it.uri == item.uri })
+    }
 
     @Test
     fun `moving a bundle records all destinationUris and parentDocumentId and undoLastOperation passes them to undoMoveBundle`() = runTest {
@@ -742,9 +798,11 @@ class SelectorViewModelTest {
         vmConfirm.confirmUncompletedDeletions()
         assertNull(vmConfirm.uiState.value.uncompletedDeletionsPrompt)
         coVerify(exactly = 1) { imageRepository.deleteImage(any(), Uri.parse(orphanUri)) }
-        coVerify(atLeast = 1) { settingsRepository.clearPendingDeleteJournal() }
+        // Only the recovered entries leave the journal; it is never wiped wholesale (D-9).
+        coVerify(exactly = 1) { settingsRepository.removePendingDeletes(listOf(orphanUri)) }
+        coVerify(exactly = 0) { settingsRepository.clearPendingDeleteJournal() }
 
-        // Case 2: Keeping clears the journal without calling deleteImage.
+        // Case 2: Keeping drops the recovered entries without calling deleteImage.
         val keepUri = "content://test/folder/keep.jpg"
         pendingDeleteJournalFlow.value = setOf(keepUri)
         val vmKeep = buildViewModel()
@@ -753,6 +811,38 @@ class SelectorViewModelTest {
         vmKeep.keepUncompletedDeletions()
         assertNull(vmKeep.uiState.value.uncompletedDeletionsPrompt)
         coVerify(exactly = 0) { imageRepository.deleteImage(any(), Uri.parse(keepUri)) }
+        coVerify(exactly = 1) { settingsRepository.removePendingDeletes(listOf(keepUri)) }
+        coVerify(exactly = 0) { settingsRepository.clearPendingDeleteJournal() }
+    }
+
+    @Test
+    fun `a failed recovery delete is reported to the user and the other entries are still processed`() = runTest {
+        val bad = "content://test/folder/bad.jpg"
+        val good = "content://test/folder/good.jpg"
+        pendingDeleteJournalFlow.value = setOf(bad, good)
+        coEvery { imageRepository.deleteImage(any(), Uri.parse(bad)) } returns false
+
+        val viewModel = buildViewModel()
+        viewModel.confirmUncompletedDeletions()
+
+        coVerify(exactly = 1) { imageRepository.deleteImage(any(), Uri.parse(good)) }
+        val state = viewModel.uiState.value
+        assertTrue(state.snackbarMessage?.contains("1 of 2") == true)
+        assertTrue(state.snackbarMessage?.contains("bad.jpg") == true)
+    }
+
+    @Test
+    fun `a throwing recovery delete is reported to the user`() = runTest {
+        val bad = "content://test/folder/bad.jpg"
+        pendingDeleteJournalFlow.value = setOf(bad)
+        coEvery { imageRepository.deleteImage(any(), Uri.parse(bad)) } throws SecurityException("read-only card")
+
+        val viewModel = buildViewModel()
+        viewModel.confirmUncompletedDeletions()
+
+        val message = viewModel.uiState.value.snackbarMessage
+        assertTrue(message?.contains("bad.jpg") == true)
+        assertTrue(message?.contains("read-only card") == true)
     }
 
     @Test
@@ -795,25 +885,5 @@ class SelectorViewModelTest {
         assertEquals(listOf("a", "b"), viewModel.uiState.value.images.map { it.fileName })
         assertTrue(viewModel.uiState.value.undoHistory.isEmpty())
     }
-
-    // ── Persisted SAF grant lifecycle ────────────────────────────────────
-
-    @Test
-    fun `startup reconciles persisted SAF grants`() = runTest {
-        buildViewModel()
-        coVerify(exactly = 1) { settingsRepository.reconcilePersistedGrants() }
-    }
-
-    @Test
-    fun `revoked or missing folder grant sets missingGrantPrompt`() = runTest {
-        coEvery { imageRepository.openFolder(any(), any()) } returns null
-        val viewModel = buildViewModel()
-
-        viewModel.selectFolder(Uri.parse(FOLDER_URI))
-
-        val state = viewModel.uiState.value
-        assertTrue(state.missingGrantPrompt)
-        assertFalse(state.isLoading)
-        assertNotNull(state.snackbarMessage)
-    }
 }
+

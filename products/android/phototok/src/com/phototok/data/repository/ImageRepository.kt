@@ -3,10 +3,9 @@ package com.phototok.data.repository
 import android.net.Uri
 import com.photoselector.core.model.ExifData
 import com.phototok.data.model.ImageItem
+import com.phototok.data.source.FileOperationResult
 import com.phototok.data.source.SelectionListing
 import com.phototok.domain.PhotoFolders
-import com.phototok.domain.TransferResult
-import com.phototok.domain.TransferStatus
 import kotlinx.coroutines.flow.Flow
 
 interface ImageRepository {
@@ -43,31 +42,21 @@ interface ImageRepository {
         subfolderName: String = PhotoFolders.SELECTION,
     ): Boolean
 
+    /** Like [moveImage], but reports a verified copy whose original could not be removed as partial. */
     suspend fun moveImageDetailed(
         sourceUri: Uri,
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String = PhotoFolders.SELECTION,
-        desiredFileName: String? = null,
-    ): TransferResult =
-        if (moveImage(sourceUri, destFolderUri, sorting, subfolderName)) {
-            TransferResult(TransferStatus.SUCCESS)
-        } else {
-            TransferResult(TransferStatus.FAILURE)
-        }
+    ): FileOperationResult
 
+    /** Like [copyImage], with the destination or the error in the result. */
     suspend fun copyImageDetailed(
         sourceUri: Uri,
         destFolderUri: Uri,
         sorting: Boolean,
         subfolderName: String = PhotoFolders.SELECTION,
-        desiredFileName: String? = null,
-    ): TransferResult =
-        if (copyImage(sourceUri, destFolderUri, sorting, subfolderName)) {
-            TransferResult(TransferStatus.SUCCESS)
-        } else {
-            TransferResult(TransferStatus.FAILURE)
-        }
+    ): FileOperationResult
 
     suspend fun getImageDimensions(uri: Uri): Pair<Int, Int>
 

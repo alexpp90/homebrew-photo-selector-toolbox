@@ -245,7 +245,6 @@ internal object Tags {
 
     const val EXPOSURE_TIME = 0x829A
     const val F_NUMBER = 0x829D
-    const val GPS_IFD = 0x8825
     const val PHOTOGRAPHIC_SENSITIVITY = 0x8827
     const val SENSITIVITY_TYPE = 0x8830
     const val STANDARD_OUTPUT_SENSITIVITY = 0x8831
@@ -270,4 +269,3 @@ internal object Tags {
     const val GPS_TIME_STAMP = 0x0007
     const val GPS_DATE_STAMP = 0x001D
 }
-
