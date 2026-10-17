@@ -809,6 +809,19 @@ public final class CullingWorkspaceViewModel: ObservableObject {
                 }
                 await MainActor.run {
                     self?.inFlightJobIDs.remove(job.id)
+                    if let title = CullingFeedback.transferTitle(
+                        action: action,
+                        destinationFolder: destinationFolder,
+                        originalPrimaryURL: record.originalPrimaryURL,
+                        destinationURLs: record.affectedURLs
+                    ) {
+                        self?.showToast(
+                            icon: action == .move ? "checkmark.circle.fill" : "doc.on.doc.fill",
+                            title: title,
+                            subtitle: photo.filename,
+                            actionType: action
+                        )
+                    }
                     if let idx = self?.undoStack.firstIndex(where: { $0.jobID == record.jobID }) {
                         let preservedPreviousStatus = self?.undoStack[idx].previousStatus ?? previousStatus
                         self?.undoStack[idx] = CullingExecutionRecord(
@@ -938,7 +951,19 @@ public final class CullingWorkspaceViewModel: ObservableObject {
         // 2. Background Reversal and in-flight cancellation on Actor
         Task { [weak self, cullingActor] in
             do {
-                _ = try await cullingActor.cancelOrUndo(jobID: record.jobID, fallbackRecord: record)
+                let restored = try await cullingActor.cancelOrUndo(jobID: record.jobID, fallbackRecord: record)
+                if let title = CullingFeedback.restoredTitle(
+                    originalPrimaryURL: record.originalPrimaryURL,
+                    restoredURLs: restored
+                ) {
+                    await MainActor.run {
+                        self?.showToast(
+                            icon: "arrow.uturn.backward.circle.fill",
+                            title: title,
+                            subtitle: record.originalPrimaryURL.lastPathComponent
+                        )
+                    }
+                }
             } catch {
                 let remainingRecord = await cullingActor.completedRecord(for: record.jobID)
                 await MainActor.run {
