@@ -6,8 +6,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [ScoreEntity::class],
-    version = 3,
+    entities = [ScoreEntity::class, UserRatingEntity::class],
+    version = 4,
     exportSchema = true
 )
 abstract class ScoresDatabase : RoomDatabase() {
@@ -36,6 +36,23 @@ abstract class ScoresDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        /**
+         * v3 → v4: create the dedicated `user_ratings` table so user ratings
+         * are stored as durable user data (surviving cache clear / MRU pruning
+         * and working on unscanned photos), and migrate existing non-zero
+         * ratings from `scores_cache`.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `user_ratings` (`uri` TEXT NOT NULL, `rating` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`uri`))"
+                )
+                db.execSQL(
+                    "INSERT OR REPLACE INTO `user_ratings` (`uri`, `rating`, `updatedAt`) SELECT `filePath`, `rating`, `lastAccessTime` FROM `scores_cache` WHERE `rating` != 0"
+                )
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
     }
 }

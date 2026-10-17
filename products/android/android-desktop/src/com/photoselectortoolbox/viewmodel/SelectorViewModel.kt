@@ -258,6 +258,12 @@ class SelectorViewModel @Inject constructor(
     /** Dispatched to for Room / IO work; overridable in tests to keep virtual time intact. */
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
+    /** Quiet period before coalesced rating changes are written back to disk; overridable in tests. */
+    internal var ratingWriteDebounceMs: Long = RATING_WRITE_DEBOUNCE_MILLIS
+
+    /** In-flight debounced disk write-back jobs keyed by photo URI, running on [appScope]. */
+    private val ratingWriteJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+
     // ── Session state ────────────────────────────────────────────────────
     //
     // Everything below belongs to "the folder currently open" and is cleared in
@@ -629,8 +635,10 @@ class SelectorViewModel @Inject constructor(
      * Sets user star rating (1..5, -1 for reject, 0 for unrated).
      *
      * 1. Updates in-memory rating state immediately for reactive UI feedback.
-     * 2. Persists to Room via [CacheRepository.updateRating].
-     * 3. Asynchronously writes back to disk using [MetadataWriter].
+     * 2. Persists to Room (`user_ratings` + `scores_cache`) on [appScope] via [CacheRepository.updateRating].
+     * 3. Debounces per-URI disk write-back on [appScope] using [MetadataWriter] so rapid
+     *    key presses (`1 → 2 → 3 → 4 → 5`) coalesce into a single file write that survives
+     *    leaving the folder or clearing the ViewModel.
      */
     fun setRating(photo: ImageItem, rating: Int) {
         _uiState.update { state ->
@@ -640,16 +648,22 @@ class SelectorViewModel @Inject constructor(
             state.copy(images = updatedImages)
         }
 
-        viewModelScope.launch {
+        appScope.launch(ioDispatcher) {
             try {
                 cacheRepository.updateRating(photo.uri, rating)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("SelectorViewModel", "Failed to persist rating to Room for ${photo.uri}", e)
             }
         }
 
-        viewModelScope.launch(ioDispatcher) {
+        ratingWriteJobs.remove(photo.uri)?.cancel()
+        val writeJob = appScope.launch(ioDispatcher) {
             try {
+                if (ratingWriteDebounceMs > 0L) {
+                    delay(ratingWriteDebounceMs)
+                }
                 val uri = Uri.parse(photo.uri)
                 val file = when {
                     uri.scheme == "file" -> uri.path?.let { File(it) } ?: File(photo.uri)
@@ -661,9 +675,15 @@ class SelectorViewModel @Inject constructor(
                 if (res.isFailure && uri.scheme == "content") {
                     metadataWriter.writeRating(context, uri, rating)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("SelectorViewModel", "Failed to write rating metadata to disk for ${photo.uri}", e)
             }
+        }
+        ratingWriteJobs[photo.uri] = writeJob
+        writeJob.invokeOnCompletion {
+            ratingWriteJobs.remove(photo.uri, writeJob)
         }
     }
 
@@ -1536,48 +1556,86 @@ class SelectorViewModel @Inject constructor(
         val images = _uiState.value.images
         if (images.isEmpty()) return
 
-        val updatedImages = withContext(ioDispatcher) {
-            images.map { image ->
+        val (updatedImages, persistedRatings) = withContext(ioDispatcher) {
+            val uris = images.map { it.uri }
+            val userRatings = try {
+                val fromRepo = cacheRepository.getRatings(uris)
+                if (fromRepo.isNotEmpty()) {
+                    fromRepo
+                } else {
+                    buildMap {
+                        uris.chunked(900).forEach { chunk ->
+                            scoreDao.getUserRatings(chunk).forEach { entity ->
+                                put(entity.uri, entity.rating)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                emptyMap()
+            }
+
+            val mapped = images.map { image ->
+                val userRating = userRatings[image.uri]
                 val cached = try {
                     scoreDao.getScore(image.uri)
                 } catch (e: Exception) {
                     null
-                } ?: return@map image
-
-                // Validate cache entry matches current file
-                if (cached.fileSize != image.fileSize || cached.lastModified != image.lastModified) {
-                    return@map image
                 }
 
-                val currentRating = if (image.rating != 0) image.rating else cached.rating
+                // Validate scan cache entry matches current file
+                val validCache = cached != null &&
+                    cached.fileSize == image.fileSize &&
+                    cached.lastModified == image.lastModified
 
-                val scanResult = image.scanResult ?: ScanResult(
-                    filePath = image.uri,
-                    sharpnessScore = cached.sharpnessScore,
-                    noiseLevel = cached.noiseLevel,
-                    highlightClipping = cached.highlightClipping,
-                    shadowClipping = cached.shadowClipping,
-                    aestheticScore = cached.aestheticScore,
-                )
+                val currentRating = when {
+                    image.rating != 0 -> image.rating
+                    userRating != null -> userRating
+                    validCache -> cached.rating
+                    else -> 0
+                }
 
-                image.copy(
-                    rating = currentRating,
-                    scanResult = scanResult,
-                )
+                val scanResult = image.scanResult ?: if (validCache) {
+                    ScanResult(
+                        filePath = image.uri,
+                        sharpnessScore = cached.sharpnessScore,
+                        noiseLevel = cached.noiseLevel,
+                        highlightClipping = cached.highlightClipping,
+                        shadowClipping = cached.shadowClipping,
+                        aestheticScore = cached.aestheticScore,
+                    )
+                } else {
+                    null
+                }
+
+                if (currentRating == image.rating && scanResult == image.scanResult) {
+                    image
+                } else {
+                    image.copy(
+                        rating = currentRating,
+                        scanResult = scanResult,
+                    )
+                }
             }
+            mapped to userRatings
         }
 
         // Only the scores travel forward out of the snapshot. See [ScoreMerge]
         // for why merging the items themselves is a rollback rather than a merge.
         val restored = ScoreMerge.scoresOf(updatedImages)
+        val restoredRatingsByUri = updatedImages.associate { it.uri to it.rating }
         _uiState.update { state ->
             val withScores = ScoreMerge.apply(state.images, restored)
             val withRatings = withScores.map { img ->
-                val cachedItem = updatedImages.firstOrNull { it.uri == img.uri }
-                if (cachedItem != null && img.rating == 0 && cachedItem.rating != 0) {
-                    img.copy(rating = cachedItem.rating)
-                } else {
-                    img
+                val explicitUserRating = persistedRatings[img.uri]
+                val fallbackRating = restoredRatingsByUri[img.uri] ?: 0
+                when {
+                    explicitUserRating != null && (img.rating == 0 || img.rating == img.exifData?.rating) ->
+                        img.copy(rating = explicitUserRating)
+                    img.rating == 0 && fallbackRating != 0 ->
+                        img.copy(rating = fallbackRating)
+                    else ->
+                        img
                 }
             }
             state.copy(images = withRatings)
@@ -1608,6 +1666,9 @@ class SelectorViewModel @Inject constructor(
 
         /** Quiet period after the last discovery batch before scores are restored. */
         internal const val SCORE_RESTORE_DEBOUNCE_MILLIS = 400L
+
+        /** Quiet period before rapid per-URI rating changes are written back to disk. */
+        internal const val RATING_WRITE_DEBOUNCE_MILLIS = 500L
 
         /**
          * The size a prefetched frame is decoded at.

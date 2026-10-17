@@ -277,7 +277,8 @@ class ScanImagesUseCase @Inject constructor(
                     noiseLevel = result.noiseLevel,
                     highlightClipping = result.highlightClipping,
                     shadowClipping = result.shadowClipping,
-                    aestheticScore = result.aestheticScore
+                    aestheticScore = result.aestheticScore,
+                    rating = image.rating
                 )
             )
         } catch (e: Exception) {
