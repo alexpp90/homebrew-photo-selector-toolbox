@@ -73,8 +73,9 @@ BLUE='\033[0;34m'
 DIM='\033[2m'
 NC='\033[0m'
 
-# Keep in sync with `--cov-fail-under` in .github/workflows/desktop.yml.
+# Keep in sync with `--cov-fail-under` in .github/workflows/desktop.yml and linux.yml.
 COV_FAIL_UNDER=60
+LINUX_COV_FAIL_UNDER=70
 
 have() { command -v "$1" &>/dev/null; }
 
@@ -221,7 +222,17 @@ PY_RUNNER=()
 VENV_BIN=""
 if have poetry && [ -f "$ROOT_DIR/products/desktop/poetry.lock" ]; then
     PY_RUNNER=(poetry run)
-    VENV_BIN="$(poetry --directory "$ROOT_DIR/products/desktop" env info -p 2>/dev/null)/bin"
+    VENV_PATH="$(poetry --directory "$ROOT_DIR/products/desktop" env info -p 2>/dev/null || true)"
+    if [ -z "$VENV_PATH" ] || [ ! -d "$VENV_PATH/bin" ]; then
+        COMMON_GIT_DIR="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+        MAIN_ROOT="${COMMON_GIT_DIR%/.git}"
+        if [ -n "$MAIN_ROOT" ] && [ -d "$MAIN_ROOT/products/desktop" ]; then
+            VENV_PATH="$(poetry --directory "$MAIN_ROOT/products/desktop" env info -p 2>/dev/null || true)"
+        fi
+    fi
+    if [ -n "$VENV_PATH" ] && [ -d "$VENV_PATH/bin" ]; then
+        VENV_BIN="$VENV_PATH/bin"
+    fi
 fi
 PY_ARGV=()
 py_resolve() {
@@ -492,12 +503,21 @@ if $run_linux; then
             fi
             if ! have pytest && ! have poetry; then
                 skip "pytest (linux-desktop)" "linux.yml:test" "neither poetry nor pytest found"
+            elif $quick; then
+                gate "pytest (products/linux-desktop, quick)" "$linux_ci_ref" \
+                    pyx pytest tests/ --tb=short -q
             elif py pytest --version &>/dev/null; then
-                gate "pytest (products/linux-desktop)" "$linux_ci_ref" \
-                    pyx pytest tests/ --tb=short -q
+                gate "pytest --cov-fail-under=$LINUX_COV_FAIL_UNDER (products/linux-desktop)" "$linux_ci_ref" \
+                    pyx pytest tests/ --tb=short -q \
+                        --cov=photo_selector_linux \
+                        --cov-report=term-missing:skip-covered \
+                        --cov-fail-under="$LINUX_COV_FAIL_UNDER"
             elif have pytest; then
-                gate "pytest (products/linux-desktop)" "$linux_ci_ref" \
-                    pyx pytest tests/ --tb=short -q
+                gate "pytest --cov-fail-under=$LINUX_COV_FAIL_UNDER (products/linux-desktop)" "$linux_ci_ref" \
+                    pyx pytest tests/ --tb=short -q \
+                        --cov=photo_selector_linux \
+                        --cov-report=term-missing:skip-covered \
+                        --cov-fail-under="$LINUX_COV_FAIL_UNDER"
             else
                 skip "pytest (linux-desktop)" "linux.yml:test" "pytest runner not found"
             fi

@@ -19,7 +19,11 @@ except (ImportError, ValueError):
     HAS_GI = False
     GLib = None
 
-from photo_selector_linux.viewmodels.culling_workspace import Job, JobDone
+from photo_selector_linux.viewmodels.culling_workspace import (  # noqa: F401
+    Job,
+    JobDone,
+    run_inline,
+)
 
 
 class FileOperationWorker:
@@ -45,5 +49,5 @@ class FileOperationWorker:
         return False
 
     def shutdown(self) -> None:
-        """Let a running operation finish (never abandon a half-moved bundle); drop queued ones."""
-        self._pool.shutdown(wait=True, cancel_futures=True)
+        """Drain running and queued operations cleanly without abandoning pending culls (R-LINUX-UI-10)."""
+        self._pool.shutdown(wait=True, cancel_futures=False)

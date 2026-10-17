@@ -35,6 +35,7 @@ from photo_selector_linux.core.models import (
 logger = logging.getLogger(__name__)
 
 _RENAME_LOCK = threading.Lock()
+SELECTION_MARKER_FILENAME: str = ".photoselector-selection"
 
 _HAVE_GIO = False
 try:
@@ -512,6 +513,8 @@ class FileCullingManager:
             if new.name != name:
                 candidate.display_names[new] = name
 
+    SELECTION_MARKER_FILENAME: str = ".photoselector-selection"
+
     def _get_selection_dir(self, root_dir: Path, custom_folder: Optional[str] = None) -> Path:
         folder_name = custom_folder or self.default_selection_folder
         folder_name = str(folder_name).strip().rstrip("/\\").strip() or "Selection"
@@ -522,6 +525,12 @@ class FileCullingManager:
                 return (root_dir / on_disk).resolve()
         sel_dir = (root_dir / folder_name).resolve()
         sel_dir.mkdir(parents=True, exist_ok=True)
+        marker = sel_dir / self.SELECTION_MARKER_FILENAME
+        if not marker.exists():
+            try:
+                marker.write_bytes(b"")
+            except OSError:
+                pass
         return sel_dir
 
     def _verify_destination_capacity(self, sel_dir: Path, files: List[Path]) -> None:
@@ -545,9 +554,10 @@ class FileCullingManager:
         candidate: CandidatePhoto,
         root_dir: Path,
         selection_folder: Optional[str] = None,
+        selection_folder_name: Optional[str] = None,
     ) -> CullingRecord:
         """Atomically move candidate photo and all bound companions to Selection/ (R-LINUX-CULL-03)."""
-        sel_dir = self._get_selection_dir(root_dir, selection_folder)
+        sel_dir = self._get_selection_dir(root_dir, selection_folder_name or selection_folder)
         planned_moves = self._resolve_bundle_destinations(candidate, sel_dir)
         targets = [src for src, _ in planned_moves]
 
@@ -664,9 +674,10 @@ class FileCullingManager:
         candidate: CandidatePhoto,
         root_dir: Path,
         selection_folder: Optional[str] = None,
+        selection_folder_name: Optional[str] = None,
     ) -> CullingRecord:
         """Atomically copy candidate photo and all bound companions to Selection/ (R-LINUX-CULL-04)."""
-        sel_dir = self._get_selection_dir(root_dir, selection_folder)
+        sel_dir = self._get_selection_dir(root_dir, selection_folder_name or selection_folder)
         planned_copies = self._resolve_bundle_destinations(candidate, sel_dir)
         targets = [src for src, _ in planned_copies]
 

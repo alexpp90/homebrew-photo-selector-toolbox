@@ -17,15 +17,28 @@ except (ImportError, ValueError):
     HAS_GI = False
     Gtk = Adw = GLib = None
 
-from photo_selector_linux.core.duplicate_finder import find_duplicates
-from photo_selector_linux.core.statistics import calculate_library_statistics
+from typing import Callable, List, Optional
+
+from photo_selector_linux.core.duplicate_finder import DuplicateCluster, find_duplicates
+from photo_selector_linux.core.statistics import LibraryStatistics, calculate_library_statistics
+from photo_selector_linux.ui.file_worker import run_inline
 
 
 class DuplicateFinderDialog(Adw.Window if HAS_GI else object):
     """Dialog for cryptographic duplicate detection and safe file deduplication."""
 
-    def __init__(self, transient_for=None, viewmodel=None):
+    def __init__(
+        self,
+        transient_for=None,
+        viewmodel=None,
+        dispatcher: Optional[Callable] = None,
+    ):
         self.viewmodel = viewmodel
+        self._dispatcher = dispatcher or run_inline
+        self.clusters: List[DuplicateCluster] = []
+        self.status_text: str = "Ready to scan loaded library."
+        self.awaiting_remote_confirmation: bool = False
+        self.remote_confirmed: bool = False
         if HAS_GI:
             super().__init__()
             self.set_title("Duplicate Finder")
@@ -33,6 +46,14 @@ class DuplicateFinderDialog(Adw.Window if HAS_GI else object):
             if transient_for:
                 self.set_transient_for(transient_for)
             self._build_ui()
+
+    @property
+    def needs_remote_confirmation(self) -> bool:
+        return bool(
+            self.viewmodel
+            and getattr(self.viewmodel, "is_remote_folder", False)
+            and not self.remote_confirmed
+        )
 
     def _build_ui(self) -> None:
         if not HAS_GI:
@@ -48,7 +69,7 @@ class DuplicateFinderDialog(Adw.Window if HAS_GI else object):
         header.add_css_class("title-2")
         box.append(header)
 
-        self.lbl_status = Gtk.Label(label="Ready to scan loaded library.")
+        self.lbl_status = Gtk.Label(label=self.status_text)
         self.lbl_status.add_css_class("dim-label")
         box.append(self.lbl_status)
 
@@ -67,27 +88,62 @@ class DuplicateFinderDialog(Adw.Window if HAS_GI else object):
 
         self.set_content(box)
 
+    def _set_status(self, text: str) -> None:
+        self.status_text = text
+        if HAS_GI and hasattr(self, "lbl_status"):
+            self.lbl_status.set_label(text)
+
+    def confirm_remote_scan(self) -> None:
+        """Confirm full-folder duplicate pass over a remote/cloud mount (U-31)."""
+        self.remote_confirmed = True
+        self.awaiting_remote_confirmation = False
+        self._on_scan_clicked(None)
+
     def _on_scan_clicked(self, btn) -> None:
         if not self.viewmodel or not self.viewmodel.candidates:
-            self.lbl_status.set_label("No photographs loaded to scan.")
+            self._set_status("No photographs loaded to scan.")
             return
 
-        self.lbl_status.set_label("Scanning files...")
-        clusters = find_duplicates(self.viewmodel.candidates)
+        if self.needs_remote_confirmation:
+            self.awaiting_remote_confirmation = True
+            self._set_status(
+                "Remote / Cloud folder detected. Confirm before scanning all files."
+            )
+            return
 
-        # Clear existing
-        while child := self.results_box.get_first_child():
-            self.results_box.remove(child)
+        self.awaiting_remote_confirmation = False
+        self._set_status("Scanning files...")
+        candidates_snapshot = list(self.viewmodel.candidates)
+
+        def job():
+            return find_duplicates(candidates_snapshot)
+
+        def done(clusters, error):
+            if error is not None:
+                self._set_status(f"Error scanning files: {error}")
+                return
+            self._render_clusters(clusters or [])
+
+        self._dispatcher(job, done)
+
+    def _render_clusters(self, clusters: List[DuplicateCluster]) -> None:
+        self.clusters = list(clusters)
+        if HAS_GI and hasattr(self, "results_box"):
+            while child := self.results_box.get_first_child():
+                self.results_box.remove(child)
 
         if not clusters:
-            self.lbl_status.set_label("No duplicate photographs detected.")
+            self._set_status("No duplicate photographs detected.")
             return
 
         total_wasted = sum(c.wasted_bytes for c in clusters)
         mb_wasted = total_wasted / (1024 * 1024)
-        self.lbl_status.set_label(
+        self._set_status(
             f"Found {len(clusters)} duplicate clusters ({mb_wasted:.1f} MB potential space savings)."
         )
+
+        if not HAS_GI or not hasattr(self, "results_box"):
+            return
 
         for c in clusters:
             row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -110,8 +166,16 @@ class DuplicateFinderDialog(Adw.Window if HAS_GI else object):
 class LibraryStatisticsDialog(Adw.Window if HAS_GI else object):
     """Dialog rendering optical EXIF and culling statistics distributions."""
 
-    def __init__(self, transient_for=None, viewmodel=None):
+    def __init__(
+        self,
+        transient_for=None,
+        viewmodel=None,
+        confirm_remote: bool = False,
+    ):
         self.viewmodel = viewmodel
+        self.remote_confirmed: bool = confirm_remote
+        self.awaiting_remote_confirmation: bool = False
+        self.stats: Optional[LibraryStatistics] = None
         if HAS_GI:
             super().__init__()
             self.set_title("Library Statistics")
@@ -120,7 +184,27 @@ class LibraryStatisticsDialog(Adw.Window if HAS_GI else object):
                 self.set_transient_for(transient_for)
             self._build_ui()
 
+    @property
+    def needs_remote_confirmation(self) -> bool:
+        return bool(
+            self.viewmodel
+            and getattr(self.viewmodel, "is_remote_folder", False)
+            and not self.remote_confirmed
+        )
+
+    def confirm_remote_scan(self) -> None:
+        self.remote_confirmed = True
+        self.awaiting_remote_confirmation = False
+        self._build_ui()
+
     def _build_ui(self) -> None:
+        if self.needs_remote_confirmation:
+            self.awaiting_remote_confirmation = True
+            return
+
+        photos = self.viewmodel.candidates if self.viewmodel else []
+        self.stats = calculate_library_statistics(photos)
+
         if not HAS_GI:
             return
 
@@ -132,8 +216,7 @@ class LibraryStatisticsDialog(Adw.Window if HAS_GI else object):
         box.set_margin_end(16)
         scrolled.set_child(box)
 
-        photos = self.viewmodel.candidates if self.viewmodel else []
-        stats = calculate_library_statistics(photos)
+        stats = self.stats
 
         # 1. Summary Card
         summary_group = Adw.PreferencesGroup()
@@ -172,10 +255,38 @@ class LibraryStatisticsDialog(Adw.Window if HAS_GI else object):
         fl_group.set_title("Focal Length Distribution")
         for bucket, count in stats.focal_length_histogram.items():
             if count > 0:
+                mean_sharp = stats.sharpness_by_focal_length.get(bucket)
+                subtitle = f"{count} photos"
+                if mean_sharp is not None:
+                    subtitle += f" · Avg sharpness {mean_sharp:.1f}"
                 row = Adw.ActionRow()
                 row.set_title(bucket)
-                row.set_subtitle(f"{count} photos")
+                row.set_subtitle(subtitle)
                 fl_group.add(row)
         box.append(fl_group)
+
+        # 4. Sharpness by Aperture Group (U-35)
+        if stats.sharpness_by_aperture:
+            ap_group = Adw.PreferencesGroup()
+            ap_group.set_title("Sharpness by Aperture")
+            for bucket, mean_sharp in stats.sharpness_by_aperture.items():
+                count = stats.aperture_histogram.get(bucket, 0)
+                row = Adw.ActionRow()
+                row.set_title(bucket)
+                row.set_subtitle(f"{count} photos · Avg sharpness {mean_sharp:.1f}")
+                ap_group.add(row)
+            box.append(ap_group)
+
+        # 5. Sharpness by Shutter Speed Group (U-35)
+        if stats.sharpness_by_shutter_speed:
+            ss_group = Adw.PreferencesGroup()
+            ss_group.set_title("Sharpness by Shutter Speed")
+            for bucket, mean_sharp in stats.sharpness_by_shutter_speed.items():
+                count = stats.shutter_speed_histogram.get(bucket, 0)
+                row = Adw.ActionRow()
+                row.set_title(bucket)
+                row.set_subtitle(f"{count} photos · Avg sharpness {mean_sharp:.1f}")
+                ss_group.add(row)
+            box.append(ss_group)
 
         self.set_content(scrolled)

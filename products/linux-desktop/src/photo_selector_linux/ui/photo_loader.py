@@ -117,27 +117,71 @@ def pixbuf_to_rgb_array(pixbuf):
     return np.ascontiguousarray(rows.reshape(height, width, channels)[:, :, :3])
 
 
-def score_pixbuf(pixbuf):
+def score_pixbuf(pixbuf, blurry_threshold: float = 35.0, sharp_threshold: float = 70.0):
     """Focus and clipping scores of a decoded photo, or None."""
     w, h = fit_size(pixbuf.get_width(), pixbuf.get_height(), SCORE_MAX_EDGE)
     if (w, h) != (pixbuf.get_width(), pixbuf.get_height()):
         pixbuf = pixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
-    return compute_quality_scores(pixbuf_to_rgb_array(pixbuf))
+    return compute_quality_scores(
+        pixbuf_to_rgb_array(pixbuf),
+        blurry_threshold=blurry_threshold,
+        sharp_threshold=sharp_threshold,
+    )
 
 
 class PhotoTextureLoader:
     """Loads candidate photos as textures off the main loop; callbacks run on the main loop."""
 
-    def __init__(self, max_mb: float = 384, workers: int = 2) -> None:
+    def __init__(
+        self,
+        max_mb: float = 512,
+        workers: int = 2,
+        blurry_threshold: float = 35.0,
+        sharp_threshold: float = 70.0,
+    ) -> None:
         self._cache = ThumbnailCache(max_mb=max_mb)
         self._pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="photo-decode")
         self._pending: Dict[Tuple[Path, Optional[int]], List[TextureCallback]] = {}
         self._lock = threading.Lock()
+        self.blurry_threshold: float = float(blurry_threshold)
+        self.sharp_threshold: float = float(sharp_threshold)
+
+    @property
+    def cache(self) -> ThumbnailCache:
+        return self._cache
+
+    @staticmethod
+    def _cache_key(candidate, full_size: bool = False) -> Tuple[Path, Optional[int]]:
+        max_edge = None if full_size else FIT_MAX_EDGE
+        path = candidate.primary_path if hasattr(candidate, "primary_path") else Path(candidate)
+        return (path, max_edge)
+
+    def set_limit_mb(self, max_mb: float) -> int:
+        """Update cache ceiling in MB and evict excess entries immediately (R-LINUX-CACHE-01)."""
+        return self._cache.set_limit_mb(max_mb)
+
+    def evict_outside_window(self, keep_paths) -> int:
+        """Evict cached entries whose path is outside keep_paths (R-LINUX-CACHE-03)."""
+        paths = {
+            p.primary_path if hasattr(p, "primary_path") else Path(p)
+            for p in keep_paths
+        }
+        return self._cache.evict_outside_window(paths)
+
+    def evict_full_resolution(self, keep_paths=None, keep_photos=None) -> int:
+        """Evict full-resolution 1:1 textures outside keep_paths/keep_photos (R-LINUX-CACHE-03)."""
+        items = keep_photos if keep_photos is not None else keep_paths
+        if items is None:
+            return self._cache.evict_full_resolution(None)
+        paths = {
+            p.primary_path if hasattr(p, "primary_path") else Path(p)
+            for p in items
+        }
+        return self._cache.evict_full_resolution(paths)
 
     def request(self, candidate, callback: TextureCallback, full_size: bool = False) -> None:
         """Deliver the candidate's texture (or ``None`` if undecodable) to ``callback``."""
-        max_edge = None if full_size else FIT_MAX_EDGE
-        key = (candidate.primary_path, max_edge)
+        key = self._cache_key(candidate, full_size=full_size)
         cached = self._cache.get(key)
         if cached is not None:
             callback(cached)
@@ -150,7 +194,10 @@ class PhotoTextureLoader:
         self._pool.submit(self._work, key, candidate)
 
     def prefetch(self, candidates) -> None:
-        """Warm the cache for neighbouring candidates."""
+        """Warm the cache for a single candidate or an iterable of neighbouring candidates."""
+        if hasattr(candidates, "primary_path"):
+            self.request(candidates, lambda _texture: None)
+            return
         for candidate in candidates:
             self.request(candidate, lambda _texture: None)
 
@@ -176,7 +223,11 @@ class PhotoTextureLoader:
             if source is not None:
                 pixbuf = decode_pixbuf(source, max_edge)
             if pixbuf is not None and candidate.scores is None:
-                candidate.scores = score_pixbuf(pixbuf)
+                candidate.scores = score_pixbuf(
+                    pixbuf,
+                    blurry_threshold=self.blurry_threshold,
+                    sharp_threshold=self.sharp_threshold,
+                )
         except Exception:
             pixbuf = None
         GLib.idle_add(self._deliver, key, pixbuf)

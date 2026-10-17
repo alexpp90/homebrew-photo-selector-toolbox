@@ -11,7 +11,7 @@ Adheres to:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import gi
@@ -24,6 +24,11 @@ except (ImportError, ValueError):
 
 from photo_selector_linux.ui.boundary_slot import BoundarySlotPane
 from photo_selector_linux.ui.info_hud import InfoHUD
+from photo_selector_linux.ui.layout import (
+    Rect,
+    can_fit_1to1_development,
+    three_up_geometry,
+)
 from photo_selector_linux.ui.photo_loader import PhotoTextureLoader
 from photo_selector_linux.ui.styling import (
     APP_BRAND_NAME,
@@ -37,13 +42,36 @@ from photo_selector_linux.ui.styling import (
 class CanvasView(Gtk.Box if HAS_GI else object):
     """Responsive culling canvas managing image viewports and comparison modes."""
 
-    def __init__(self, viewmodel):
+    def __init__(self, viewmodel, loader=None):
         self.viewmodel = viewmodel
         self.is_1to1_zoom: bool = False
         self.hud_enabled: bool = True
         self.rendered_slots: List[Dict[str, Any]] = []
+        self.viewport_width: int = 1440
+        self.viewport_height: int = 810
+        self.last_three_up_geometry: Optional[Tuple[Rect, Rect, Rect]] = None
+        self.three_up_layout_rects: Dict[str, Rect] = {}
+        self.linked_pan: Tuple[float, float] = (0.5, 0.5)
+        self._neighbour_1to1_offset: Optional[int] = None
+        self._last_index: int = getattr(viewmodel, "current_index", 0)
+        self._last_mode: int = getattr(viewmodel, "comparison_mode", 1)
+        self.last_prefetch_indices: List[int] = []
         self.hud = InfoHUD(viewmodel=self.viewmodel)
-        self.loader = PhotoTextureLoader() if HAS_GI else None
+        initial_max_mb = getattr(viewmodel, "cache_limit_mb", 512.0)
+        initial_blurry = getattr(viewmodel, "blurry_threshold", 35.0)
+        initial_sharp = getattr(viewmodel, "sharp_threshold", 70.0)
+        if loader is not None:
+            self.loader = loader
+        else:
+            self.loader = (
+                PhotoTextureLoader(
+                    max_mb=initial_max_mb,
+                    blurry_threshold=initial_blurry,
+                    sharp_threshold=initial_sharp,
+                )
+                if HAS_GI
+                else None
+            )
         self._loaded_folder = None
 
         if HAS_GI:
@@ -69,19 +97,85 @@ class CanvasView(Gtk.Box if HAS_GI else object):
 
         self.viewmodel.connect("state-changed", self._on_state_changed)
         self._render_view()
+        self._prefetch_neighbours()
+
+    @property
+    def pan_offset(self) -> Tuple[float, float]:
+        return self.linked_pan
 
     def toggle_zoom(self) -> None:
-        """Toggle 100% 1:1 pixel zoom in 1-Up mode (Space) (R-LINUX-UI-08)."""
-        if self.viewmodel.comparison_mode != 1:
-            return
+        """Toggle 100% 1:1 pixel zoom across 1-Up, 2-Up, and 3-Up modes (Space) (R-LINUX-UI-08)."""
         self.is_1to1_zoom = not self.is_1to1_zoom
+        if not self.is_1to1_zoom:
+            self._neighbour_1to1_offset = None
+            self.linked_pan = (0.5, 0.5)
+            if self.loader is not None:
+                self.loader.evict_full_resolution()
         self._render_view()
 
     def reset_zoom(self) -> None:
-        """Reset zoom back to fit-to-window (Escape)."""
+        """Reset zoom back to fit-to-window and reclaim full-res buffers (Escape) (R-LINUX-CACHE-03)."""
         if self.is_1to1_zoom:
             self.is_1to1_zoom = False
+            self._neighbour_1to1_offset = None
+            self.linked_pan = (0.5, 0.5)
+            if self.loader is not None:
+                self.loader.evict_full_resolution()
             self._render_view()
+
+    def set_linked_pan(self, pan_x: float, pan_y: float) -> None:
+        """Synchronize normalized (0.0..1.0) pan offsets across panes in 1:1 mode (U-07b)."""
+        cx = max(0.0, min(1.0, float(pan_x)))
+        cy = max(0.0, min(1.0, float(pan_y)))
+        self.linked_pan = (cx, cy)
+        for slot in self.rendered_slots:
+            if slot.get("type") == "photo":
+                slot["pan_offset"] = self.linked_pan
+
+    def request_neighbour_1to1(
+        self,
+        slot_offset: int,
+        width: int = 6000,
+        height: int = 4000,
+    ) -> bool:
+        """Develop a 3-Up neighbour (-1 or +1) at 1:1 on demand within memory budget (U-07b).
+
+        Ensures at most two full-resolution 1:1 panes (active top + one neighbour) are held at once.
+        """
+        if not self.is_1to1_zoom or slot_offset not in (-1, 1):
+            return False
+        candidates = self.viewmodel.candidates
+        idx = self.viewmodel.current_index
+        target_idx = idx + slot_offset
+        if not (0 <= target_idx < len(candidates)):
+            return False
+
+        cache_max_bytes = (
+            self.loader.cache.max_bytes
+            if self.loader is not None
+            else int(getattr(self.viewmodel, "cache_limit_mb", 512.0) * 1024 * 1024)
+        )
+        # Active top pane occupies 1 slot; if another neighbour had 1:1, evict it first so active_1to1_count == 1.
+        if self._neighbour_1to1_offset is not None and self._neighbour_1to1_offset != slot_offset:
+            self._neighbour_1to1_offset = None
+            if self.loader is not None and 0 <= idx < len(candidates):
+                self.loader.evict_full_resolution({candidates[idx].primary_path})
+
+        active_count = 1 if self._neighbour_1to1_offset is None else 2
+        if self._neighbour_1to1_offset != slot_offset and not can_fit_1to1_development(
+            width=width,
+            height=height,
+            cache_max_bytes=cache_max_bytes,
+            active_1to1_count=active_count,
+        ):
+            return False
+
+        self._neighbour_1to1_offset = slot_offset
+        if self.loader is not None and 0 <= idx < len(candidates):
+            keep = {candidates[idx].primary_path, candidates[target_idx].primary_path}
+            self.loader.evict_full_resolution(keep)
+        self._render_view()
+        return True
 
     def toggle_hud(self) -> None:
         """Toggle floating Info HUD visibility (I) (R-LINUX-UI-09)."""
@@ -90,22 +184,57 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             self.hud.set_hud_enabled(self.hud_enabled)
 
     def _on_state_changed(self, vm) -> None:
-        if vm.comparison_mode != 1 and self.is_1to1_zoom:
-            self.is_1to1_zoom = False
-        if self.loader is not None and vm.current_folder != self._loaded_folder:
+        if self.loader is not None:
+            self.loader.set_limit_mb(getattr(vm, "cache_limit_mb", 512.0))
+            self.loader.blurry_threshold = float(getattr(vm, "blurry_threshold", 35.0))
+            self.loader.sharp_threshold = float(getattr(vm, "sharp_threshold", 70.0))
+
+        if vm.current_folder != self._loaded_folder:
             # A new folder invalidates every decoded texture of the previous one.
             self._loaded_folder = vm.current_folder
-            self.loader.clear()
+            self._last_index = 0
+            self._neighbour_1to1_offset = None
+            if self.loader is not None:
+                self.loader.clear()
+        elif vm.comparison_mode != self._last_mode or vm.current_index != self._last_index:
+            self._neighbour_1to1_offset = None
+            if self.loader is not None:
+                if self.is_1to1_zoom and vm.current_photo is not None:
+                    self.loader.evict_full_resolution({vm.current_photo.primary_path})
+                else:
+                    self.loader.evict_full_resolution()
+
+        self._last_mode = vm.comparison_mode
         self._render_view()
         self._prefetch_neighbours()
 
     def _prefetch_neighbours(self) -> None:
-        if self.loader is None:
-            return
+        """Prefetch asymmetric sliding window: [i-2..i+3] forward, [i-3..i+2] backward (R-LINUX-CACHE-02)."""
         candidates = self.viewmodel.candidates
-        idx = self.viewmodel.current_index
-        window = range(max(0, idx - 1), min(len(candidates), idx + 3))
-        self.loader.prefetch(candidates[i] for i in window)
+        count = len(candidates)
+        if count == 0:
+            self.last_prefetch_indices = []
+            self._last_index = 0
+            return
+
+        idx = max(0, min(count - 1, self.viewmodel.current_index))
+        moving_forward = idx >= self._last_index
+        if moving_forward:
+            start = max(0, idx - 2)
+            stop = min(count, idx + 4)
+        else:
+            start = max(0, idx - 3)
+            stop = min(count, idx + 3)
+
+        self.last_prefetch_indices = list(range(start, stop))
+        self._last_index = idx
+
+        if self.loader is not None:
+            keep_paths = [candidates[i].primary_path for i in self.last_prefetch_indices]
+            self.loader.evict_outside_window(keep_paths)
+            for i in self.last_prefetch_indices:
+                if i != idx:
+                    self.loader.prefetch(candidates[i])
 
     def _build_slot_descriptor(
         self,
@@ -113,6 +242,8 @@ class CanvasView(Gtk.Box if HAS_GI else object):
         is_active: bool,
         slot_offset: int,
         allow_1to1: bool = False,
+        position: Optional[str] = None,
+        rect: Optional[Rect] = None,
     ) -> Dict[str, Any]:
         role = get_slot_role_label(
             self.viewmodel.comparison_mode,
@@ -120,7 +251,7 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             is_active=is_active,
         )
         badges = get_candidate_companion_badges(candidate)
-        return {
+        desc: Dict[str, Any] = {
             "type": "photo",
             "role": role,
             "is_active": is_active,
@@ -128,8 +259,14 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             "filename": candidate.filename,
             "badges": badges,
             "zoom_1to1": allow_1to1,
+            "pan_offset": self.linked_pan,
             "css_classes": ["card-pane", "accent-border"] if is_active else ["card-pane", "card-pane-inactive"],
         }
+        if position is not None:
+            desc["position"] = position
+        if rect is not None:
+            desc["rect"] = rect
+        return desc
 
     def _render_view(self) -> None:
         mode = self.viewmodel.comparison_mode
@@ -139,13 +276,17 @@ class CanvasView(Gtk.Box if HAS_GI else object):
         self.rendered_slots = []
 
         if count == 0:
+            self.hud.update_photo(None)
             if HAS_GI:
                 while child := self.slots_box.get_first_child():
                     self.slots_box.remove(child)
                 self.slots_box.append(self._create_empty_state())
             return
 
+        self.hud.update_photo(candidates[idx])
+
         if mode == 1:
+            self.slots_box.set_homogeneous(True) if HAS_GI else None
             desc = self._build_slot_descriptor(
                 candidates[idx],
                 is_active=True,
@@ -154,30 +295,73 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             )
             self.rendered_slots.append(desc)
         elif mode == 2:
+            self.slots_box.set_homogeneous(True) if HAS_GI else None
             self.rendered_slots.append(
-                self._build_slot_descriptor(candidates[idx], is_active=True, slot_offset=0)
+                self._build_slot_descriptor(
+                    candidates[idx],
+                    is_active=True,
+                    slot_offset=0,
+                    allow_1to1=self.is_1to1_zoom,
+                )
             )
             if idx + 1 < count:
                 self.rendered_slots.append(
-                    self._build_slot_descriptor(candidates[idx + 1], is_active=False, slot_offset=1)
+                    self._build_slot_descriptor(
+                        candidates[idx + 1],
+                        is_active=False,
+                        slot_offset=1,
+                        allow_1to1=self.is_1to1_zoom and self._neighbour_1to1_offset == 1,
+                    )
                 )
             else:
                 self.rendered_slots.append({"type": "boundary", "slot_type": "last"})
         elif mode == 3:
+            top_rect, bl_rect, br_rect = three_up_geometry(
+                self.viewport_width,
+                self.viewport_height,
+            )
+            self.last_three_up_geometry = (top_rect, bl_rect, br_rect)
+            self.three_up_layout_rects = {
+                "top": top_rect,
+                "bottom_left": bl_rect,
+                "bottom_right": br_rect,
+            }
+
             if idx > 0:
                 self.rendered_slots.append(
-                    self._build_slot_descriptor(candidates[idx - 1], is_active=False, slot_offset=-1)
+                    self._build_slot_descriptor(
+                        candidates[idx - 1],
+                        is_active=False,
+                        slot_offset=-1,
+                        allow_1to1=self.is_1to1_zoom and self._neighbour_1to1_offset == -1,
+                        position="bottom-left",
+                        rect=bl_rect,
+                    )
                 )
             else:
                 self.rendered_slots.append({"type": "boundary", "slot_type": "first"})
 
             self.rendered_slots.append(
-                self._build_slot_descriptor(candidates[idx], is_active=True, slot_offset=0)
+                self._build_slot_descriptor(
+                    candidates[idx],
+                    is_active=True,
+                    slot_offset=0,
+                    allow_1to1=self.is_1to1_zoom,
+                    position="top",
+                    rect=top_rect,
+                )
             )
 
             if idx < count - 1:
                 self.rendered_slots.append(
-                    self._build_slot_descriptor(candidates[idx + 1], is_active=False, slot_offset=1)
+                    self._build_slot_descriptor(
+                        candidates[idx + 1],
+                        is_active=False,
+                        slot_offset=1,
+                        allow_1to1=self.is_1to1_zoom and self._neighbour_1to1_offset == 1,
+                        position="bottom-right",
+                        rect=br_rect,
+                    )
                 )
             else:
                 self.rendered_slots.append({"type": "boundary", "slot_type": "last"})
@@ -199,7 +383,12 @@ class CanvasView(Gtk.Box if HAS_GI else object):
             self.slots_box.append(slot)
 
         elif mode == 2:
-            champ_slot = self._create_photo_slot(candidates[idx], is_active=True, slot_offset=0)
+            champ_slot = self._create_photo_slot(
+                candidates[idx],
+                is_active=True,
+                slot_offset=0,
+                allow_1to1=self.is_1to1_zoom,
+            )
             self.slots_box.append(champ_slot)
 
             if idx + 1 < count:
@@ -207,38 +396,59 @@ class CanvasView(Gtk.Box if HAS_GI else object):
                     candidates[idx + 1],
                     is_active=False,
                     slot_offset=1,
+                    allow_1to1=self.is_1to1_zoom and self._neighbour_1to1_offset == 1,
                 )
                 self.slots_box.append(challenger_slot)
             else:
                 self.slots_box.append(BoundarySlotPane(slot_type="last"))
 
         elif mode == 3:
+            # One-over-two layout (UD-4): active photo on top, previous & next on bottom row
+            three_up_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            three_up_box.set_hexpand(True)
+            three_up_box.set_vexpand(True)
+
+            top_slot = self._create_photo_slot(
+                candidates[idx],
+                is_active=True,
+                slot_offset=0,
+                allow_1to1=self.is_1to1_zoom,
+            )
+            top_slot.set_size_request(
+                self.three_up_layout_rects["top"].width,
+                self.three_up_layout_rects["top"].height,
+            )
+            three_up_box.append(top_slot)
+
+            bottom_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            bottom_row.set_homogeneous(True)
+            bottom_row.set_hexpand(True)
+            bottom_row.set_vexpand(True)
+
             if idx > 0:
                 left_slot = self._create_photo_slot(
                     candidates[idx - 1],
                     is_active=False,
                     slot_offset=-1,
+                    allow_1to1=self.is_1to1_zoom and self._neighbour_1to1_offset == -1,
                 )
-                self.slots_box.append(left_slot)
             else:
-                self.slots_box.append(BoundarySlotPane(slot_type="first"))
-
-            center_slot = self._create_photo_slot(
-                candidates[idx],
-                is_active=True,
-                slot_offset=0,
-            )
-            self.slots_box.append(center_slot)
+                left_slot = BoundarySlotPane(slot_type="first")
+            bottom_row.append(left_slot)
 
             if idx < count - 1:
                 right_slot = self._create_photo_slot(
                     candidates[idx + 1],
                     is_active=False,
                     slot_offset=1,
+                    allow_1to1=self.is_1to1_zoom and self._neighbour_1to1_offset == 1,
                 )
-                self.slots_box.append(right_slot)
             else:
-                self.slots_box.append(BoundarySlotPane(slot_type="last"))
+                right_slot = BoundarySlotPane(slot_type="last")
+            bottom_row.append(right_slot)
+
+            three_up_box.append(bottom_row)
+            self.slots_box.append(three_up_box)
 
     def _create_empty_state(self):
         hero = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)

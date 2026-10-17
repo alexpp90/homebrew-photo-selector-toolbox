@@ -19,6 +19,7 @@ except (ImportError, ValueError):
     HAS_GI = False
     Gtk = Gdk = Adw = Gio = GLib = None
 
+from photo_selector_linux.core.settings import SettingsStore
 from photo_selector_linux.ui.action_bar import ActionBarView
 from photo_selector_linux.ui.canvas import CanvasView
 from photo_selector_linux.ui.file_worker import FileOperationWorker
@@ -30,9 +31,10 @@ from photo_selector_linux.viewmodels.culling_workspace import CullingWorkspaceVi
 class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
     """Main window housing the HeaderBar, Multi-View Canvas, and Bottom ActionBar."""
 
-    def __init__(self, application=None, **kwargs):
+    def __init__(self, application=None, settings: SettingsStore | None = None, **kwargs):
         self.window_title: str = APP_BRAND_NAME
         self.icon_name: str = APP_ICON_NAME
+        self.settings: SettingsStore = settings or SettingsStore()
         if HAS_GI:
             super().__init__(application=application, **kwargs)
             self.set_default_size(1440, 900)
@@ -41,14 +43,26 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
             self.add_css_class("studio-dark-surface")
 
         # File operations run on a worker so a cloud upload does not freeze the window.
-        self.viewmodel = CullingWorkspaceViewModel(dispatcher=FileOperationWorker() if HAS_GI else None)
+        self.file_worker = FileOperationWorker() if HAS_GI else None
+        self.viewmodel = CullingWorkspaceViewModel(
+            dispatcher=self.file_worker,
+            settings=self.settings,
+        )
         if HAS_GI:
             self._build_ui()
             self._attach_keyboard_router()
             self._bind_viewmodel()
+            self.connect("close-request", self._on_close_request)
         else:
             self.canvas_view = CanvasView(viewmodel=self.viewmodel)
             self.action_bar = ActionBarView(viewmodel=self.viewmodel)
+
+    def _on_close_request(self, *_args) -> bool:
+        if self.file_worker is not None:
+            self.file_worker.shutdown()
+        if getattr(self.canvas_view, "loader", None) is not None:
+            self.canvas_view.loader.shutdown()
+        return False
 
     def _build_ui(self) -> None:
         self.toolbar_view = Adw.ToolbarView()
@@ -83,6 +97,12 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
         self.lbl_path.add_css_class("dim-label")
         self.header_bar.pack_start(self.lbl_path)
 
+        # Remote / Cloud filesystem badge (U-31)
+        self.lbl_remote_badge = Gtk.Label(label="")
+        self.lbl_remote_badge.add_css_class("status-counter-badge")
+        self.lbl_remote_badge.set_visible(False)
+        self.header_bar.pack_start(self.lbl_remote_badge)
+
         # Title widget: Mode Switcher & Counter Box
         title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
 
@@ -106,6 +126,12 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
         self.lbl_counter = Gtk.Label(label="Photo 0 of 0")
         self.lbl_counter.add_css_class("photo-counter-pill")
         title_box.append(self.lbl_counter)
+
+        # Queue status pill (U-08)
+        self.lbl_queue = Gtk.Label(label="")
+        self.lbl_queue.add_css_class("photo-counter-pill")
+        self.lbl_queue.set_visible(False)
+        title_box.append(self.lbl_queue)
 
         self.header_bar.set_title_widget(title_box)
 
@@ -150,6 +176,14 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
         else:
             self.lbl_path.set_label("No folder loaded")
 
+        remote_label = getattr(vm, "remote_badge_label", None)
+        self.lbl_remote_badge.set_label(remote_label or "")
+        self.lbl_remote_badge.set_visible(bool(remote_label))
+
+        queue_label = getattr(vm, "queue_status_label", None)
+        self.lbl_queue.set_label(queue_label or "")
+        self.lbl_queue.set_visible(bool(queue_label))
+
         mode = vm.comparison_mode
         self.btn_mode_1.set_css_classes(["suggested-action"] if mode == 1 else [])
         self.btn_mode_2.set_css_classes(["suggested-action"] if mode == 2 else [])
@@ -193,7 +227,11 @@ class MainWindow(Adw.ApplicationWindow if HAS_GI else object):
 
     def show_preferences(self) -> None:
         from photo_selector_linux.ui.preferences import PreferencesDialog
-        prefs = PreferencesDialog(transient_for=self)
+        prefs = PreferencesDialog(
+            settings=self.settings,
+            viewmodel=self.viewmodel,
+            transient_for=self,
+        )
         prefs.present()
 
     def show_shortcuts_guide(self) -> None:

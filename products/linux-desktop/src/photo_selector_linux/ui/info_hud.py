@@ -162,7 +162,22 @@ class InfoHUD(Gtk.Box if HAS_GI else object):
         # Metric Omission Rule (R-LINUX-SCORE-05): Strictly omit if not yet computed
         if photo.scores is not None:
             self.score_visible = True
-            category = photo.scores.focus_category.value
+            if (
+                photo.scores.category_override is None
+                and self.viewmodel is not None
+                and hasattr(self.viewmodel, "blurry_threshold")
+                and hasattr(self.viewmodel, "sharp_threshold")
+                and (photo.scores.blurry_threshold == 35.0 and photo.scores.sharp_threshold == 70.0)
+            ):
+                from photo_selector_linux.core.models import SharpnessCategory
+
+                category = SharpnessCategory.from_score(
+                    photo.scores.sharpness,
+                    blurry_threshold=self.viewmodel.blurry_threshold,
+                    sharp_threshold=self.viewmodel.sharp_threshold,
+                ).value
+            else:
+                category = photo.scores.focus_category.value
             self.score_badge_text = f"Focus: {photo.scores.formatted_sharpness} ({category.capitalize()})"
             self.score_css_class = f"score-badge-{category}"
             self.meter_css_class = f"sharpness-meter-{category}"
