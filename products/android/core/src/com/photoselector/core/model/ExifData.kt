@@ -18,4 +18,12 @@ data class ExifData(
     val rating: Int = 0,
     val make: String? = null,
     val model: String? = null,
+    val gpsLatitude: Double? = null,
+    val gpsLongitude: Double? = null,
+    val gpsDateTimeUtc: String? = null,
+    val dateTimeOriginal: String? = null,
+    val offsetTimeOriginal: String? = null,
+    val focalPlaneXResolution: Double? = null,
+    val focalPlaneResolutionUnit: Int? = null,
 )
+
