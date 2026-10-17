@@ -18,7 +18,6 @@ import com.photoselectortoolbox.data.repository.SettingsRepository
 import com.photoselectortoolbox.domain.curation.UndoableOperation
 import com.photoselectortoolbox.domain.grouping.GroupingLevel
 import com.photoselectortoolbox.domain.interaction.FilingAction
-import com.photoselectortoolbox.domain.usecase.MoveToSelectionUseCase
 import com.photoselectortoolbox.domain.usecase.ScanImagesUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -142,7 +141,6 @@ class SelectorViewModelTest {
         val viewModel = SelectorViewModel(
             imageRepository = imageRepository,
             scanImagesUseCase = scanImagesUseCase,
-            moveToSelectionUseCase = mockk<MoveToSelectionUseCase>(relaxed = true),
             cacheRepository = mockk<CacheRepository>(relaxed = true),
             settingsRepository = settingsRepository,
             scoreDao = scoreDao,
@@ -307,6 +305,25 @@ class SelectorViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(listOf("a", "b", "c"), state.images.map { it.fileName })
         assertNotNull(state.error)
+        assertNull(state.undoOperation)
+    }
+
+    @Test
+    fun `a partial move keeps the frame in the list and surfaces the partial error`() = runTest {
+        coEvery { imageRepository.moveImage(any(), any(), any(), any()) } returns
+            FileOperationResult.partial(
+                sourceUri = "content://test/folder/b",
+                destinationUri = "content://test/sel/b",
+                error = "Copied to Selection — original could not be removed",
+            )
+
+        val viewModel = loadFolder(image("a"), image("b"), image("c"))
+        viewModel.navigateToImage(1)
+        viewModel.moveToSelection()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("a", "b", "c"), state.images.map { it.fileName })
+        assertEquals("Copied to Selection — original could not be removed", state.error)
         assertNull(state.undoOperation)
     }
 
