@@ -330,6 +330,7 @@ class RatingNavigationStressTest {
             viewModel.setRatingForCurrent(rating)
             assertEquals(rating, viewModel.uiState.value.currentImage?.rating)
             coVerify { cacheRepository.updateRating("content://test/folder/test.jpg", rating) }
+            testScheduler.advanceUntilIdle()
             coVerify { metadataWriter.writeRating(any(), rating) }
         }
     }

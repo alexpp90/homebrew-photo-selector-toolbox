@@ -1,26 +1,37 @@
 package com.photoselectortoolbox.data.metadata
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import com.photoselectortoolbox.domain.format.ImageFormats
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Non-destructive metadata write-back engine for ratings.
  *
- * - JPEG Files: In-place embedded XMP update via [ExifInterface] setting [ExifInterface.TAG_XMP],
- *   leaving image pixel bytes and EXIF capture timestamps ([ExifInterface.TAG_DATETIME_ORIGINAL]) untouched.
+ * - JPEG Files: Updates embedded XMP via [ExifInterface] on a temporary copy, verifies the
+ *   modified file is non-empty and its image bounds decode cleanly via [BitmapFactory], and
+ *   only then atomically replaces the target file — leaving image pixel bytes and EXIF capture
+ *   timestamps ([ExifInterface.TAG_DATETIME_ORIGINAL]) untouched and guaranteeing the original
+ *   photo is never corrupted if write-back fails.
  * - RAW & DNG Files (CR2, CR3, NEF, ARW, ORF, RAF, DNG, etc.): Creates or updates companion `<filename>.xmp`
  *   sidecar files formatted with ISO 16684-1 standard `<xmp:Rating>`.
- * - Non-destructive fallback: If in-place write fails (read-only or unsupported header), falls back gracefully
- *   to companion `.xmp` sidecar.
+ * - Non-destructive fallback: If in-place write fails (read-only, unsupported header, or failed
+ *   post-write verification), falls back gracefully to a companion `.xmp` sidecar.
+ * - Per-URI serialization: Concurrent writes to the same file or URI are serialized via a per-key [Mutex].
  */
 interface MetadataWriter {
     suspend fun writeRating(imageFile: File, rating: Int): Result<Unit>
@@ -37,11 +48,28 @@ interface MetadataWriter {
 }
 
 @Singleton
-class MetadataWriterImpl @Inject constructor() : MetadataWriter {
+class MetadataWriterImpl internal constructor(
+    private val validateJpegBounds: (File) -> Boolean
+) : MetadataWriter {
+
+    @Inject
+    constructor() : this(Companion::defaultValidateJpegBounds)
 
     companion object {
         private const val TAG = "MetadataWriter"
+
+        internal fun defaultValidateJpegBounds(file: File): Boolean {
+            if (!file.exists() || file.length() <= 0L) return false
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, opts)
+            return opts.outWidth > 0 && opts.outHeight > 0
+        }
     }
+
+    private val uriMutexes = ConcurrentHashMap<String, Mutex>()
+
+    private fun mutexFor(key: String): Mutex =
+        uriMutexes.computeIfAbsent(key) { Mutex() }
 
     override suspend fun writeRating(context: Context, imageUri: Uri, rating: Int): Result<Unit> =
         withContext(Dispatchers.IO) {
@@ -54,60 +82,117 @@ class MetadataWriterImpl @Inject constructor() : MetadataWriter {
                 return@withContext writeRating(directFile, rating)
             }
 
-            try {
-                context.contentResolver.openFileDescriptor(imageUri, "rw")?.use { pfd ->
-                    val exif = ExifInterface(pfd.fileDescriptor)
+            mutexFor(imageUri.toString()).withLock {
+                var tempFile: File? = null
+                try {
+                    val cacheDir = context.cacheDir ?: throw IOException("Cache directory unavailable")
+                    val createdTemp = File.createTempFile("saf_rating_", ".tmp", cacheDir)
+                    tempFile = createdTemp
+
+                    val inputStream = context.contentResolver.openInputStream(imageUri)
+                        ?: return@withLock Result.failure(
+                            IOException("Unable to open input stream for $imageUri")
+                        )
+                    inputStream.use { input ->
+                        createdTemp.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+
+                    val exif = ExifInterface(createdTemp.absolutePath)
                     val currentXmp = exif.getAttribute(ExifInterface.TAG_XMP)
                     val updatedXmp = XmpSidecarWriter.injectOrUpdateRating(currentXmp, rating)
                     exif.setAttribute(ExifInterface.TAG_XMP, updatedXmp)
                     exif.saveAttributes()
-                    return@withContext Result.success(Unit)
+
+                    if (!validateJpegBounds(createdTemp)) {
+                        return@withLock Result.failure(
+                            IOException("Modified SAF image failed bounds verification for $imageUri")
+                        )
+                    }
+
+                    val outputStream = try {
+                        context.contentResolver.openOutputStream(imageUri, "wt")
+                    } catch (_: Exception) {
+                        context.contentResolver.openOutputStream(imageUri, "w")
+                    } ?: return@withLock Result.failure(
+                        IOException("Unable to open output stream for $imageUri")
+                    )
+
+                    outputStream.use { output ->
+                        createdTemp.inputStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Log.w(TAG, "SAF rating write skipped/failed for $imageUri", e)
+                    Result.failure(e)
+                } finally {
+                    tempFile?.delete()
                 }
-                Result.failure(IOException("Unable to open read-write descriptor for $imageUri"))
-            } catch (e: Exception) {
-                Log.w(TAG, "SAF descriptor rating write skipped/failed for $imageUri", e)
-                Result.failure(e)
             }
         }
 
     override suspend fun writeRating(imageFile: File, rating: Int): Result<Unit> =
         withContext(Dispatchers.IO) {
-            try {
-                if (!imageFile.exists()) {
-                    return@withContext Result.failure(
-                        IOException("Image file does not exist: ${imageFile.absolutePath}")
-                    )
-                }
+            mutexFor(imageFile.absolutePath).withLock {
+                try {
+                    if (!imageFile.exists()) {
+                        return@withLock Result.failure(
+                            IOException("Image file does not exist: ${imageFile.absolutePath}")
+                        )
+                    }
 
-                // RAW (and TIFF, via the final branch) get a sidecar; only JPEG is
-                // edited in place. Classification comes from ImageFormats.
-                if (ImageFormats.isRaw(imageFile.name)) {
-                    writeSidecarRating(imageFile, rating)
-                } else if (ImageFormats.isJpeg(imageFile.name)) {
-                    try {
-                        writeJpegRating(imageFile, rating)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "In-place JPEG write failed for ${imageFile.name}; falling back to sidecar", e)
+                    // RAW (and TIFF, via the final branch) get a sidecar; only JPEG is
+                    // edited in place via a verified temporary copy.
+                    if (ImageFormats.isRaw(imageFile.name)) {
+                        writeSidecarRating(imageFile, rating)
+                    } else if (ImageFormats.isJpeg(imageFile.name)) {
+                        try {
+                            writeJpegRating(imageFile, rating)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Verified JPEG write failed for ${imageFile.name}; falling back to sidecar", e)
+                            writeSidecarRating(imageFile, rating)
+                        }
+                    } else {
+                        // For any other format, use sidecar non-destructively
                         writeSidecarRating(imageFile, rating)
                     }
-                } else {
-                    // For any other format, use sidecar non-destructively
-                    writeSidecarRating(imageFile, rating)
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to write rating to ${imageFile.absolutePath}", e)
+                    Result.failure(e)
                 }
-                Result.success(Unit)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to write rating to ${imageFile.absolutePath}", e)
-                Result.failure(e)
             }
         }
 
     private fun writeJpegRating(imageFile: File, rating: Int) {
-        val exif = ExifInterface(imageFile.absolutePath)
-        val currentXmp = exif.getAttribute(ExifInterface.TAG_XMP)
-        val updatedXmp = XmpSidecarWriter.injectOrUpdateRating(currentXmp, rating)
+        if (!imageFile.canWrite()) {
+            throw IOException("JPEG file is not writable: ${imageFile.absolutePath}")
+        }
+        val parent = imageFile.parentFile ?: File(".")
+        val tempFile = File(parent, ".${imageFile.name}.rating.tmp.${System.nanoTime()}")
+        try {
+            imageFile.copyTo(tempFile, overwrite = true)
 
-        exif.setAttribute(ExifInterface.TAG_XMP, updatedXmp)
-        exif.saveAttributes()
+            val exif = ExifInterface(tempFile.absolutePath)
+            val currentXmp = exif.getAttribute(ExifInterface.TAG_XMP)
+            val updatedXmp = XmpSidecarWriter.injectOrUpdateRating(currentXmp, rating)
+
+            exif.setAttribute(ExifInterface.TAG_XMP, updatedXmp)
+            exif.saveAttributes()
+
+            if (!validateJpegBounds(tempFile)) {
+                throw IOException("Modified temp JPEG failed bounds validation: ${imageFile.name}")
+            }
+
+            atomicReplace(tempFile, imageFile)
+        } finally {
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
+        }
     }
 
     private fun writeSidecarRating(imageFile: File, rating: Int) {
@@ -130,7 +215,32 @@ class MetadataWriterImpl @Inject constructor() : MetadataWriter {
         }
 
         val updatedContent = XmpSidecarWriter.injectOrUpdateRating(existingContent, rating)
-        targetSidecar.writeText(updatedContent)
+        val tempSidecar = File(parent, ".${targetSidecar.name}.tmp.${System.nanoTime()}")
+        try {
+            tempSidecar.writeText(updatedContent)
+            atomicReplace(tempSidecar, targetSidecar)
+        } finally {
+            if (tempSidecar.exists()) {
+                tempSidecar.delete()
+            }
+        }
+    }
+
+    private fun atomicReplace(sourceTemp: File, target: File) {
+        try {
+            Files.move(
+                sourceTemp.toPath(),
+                target.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(
+                sourceTemp.toPath(),
+                target.toPath(),
+                StandardCopyOption.REPLACE_EXISTING
+            )
+        }
     }
 }
 
