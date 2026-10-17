@@ -39,12 +39,6 @@ interface ScoreDao {
     @Query("UPDATE scores_cache SET compositionAnalysis = :analysis WHERE filePath = :filePath")
     suspend fun updateCompositionAnalysis(filePath: String, analysis: String?)
 
-    @Query("SELECT * FROM scores_cache WHERE rating >= :minRating")
-    suspend fun getScoresWithMinRating(minRating: Int): List<ScoreEntity>
-
-    @Query("SELECT * FROM scores_cache WHERE rating = :rating")
-    suspend fun getScoresWithRating(rating: Int): List<ScoreEntity>
-
     @Query("SELECT COUNT(*) FROM scores_cache")
     suspend fun getCount(): Int
 
