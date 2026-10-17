@@ -1105,15 +1105,34 @@ class SelectorViewModel @Inject constructor(
             )
         }
         appScope.launch {
+            val failures = mutableListOf<Pair<String, String?>>()
             prompt.uris.forEach { uri ->
                 try {
-                    imageRepository.deleteImage(context, Uri.parse(uri))
+                    if (!imageRepository.deleteImage(context, Uri.parse(uri))) {
+                        failures += recoveredName(uri) to null
+                    }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e("SelectorViewModel", "Recovery delete failed for $uri", e)
+                    failures += recoveredName(uri) to e.message
                 }
             }
+            // Drop only the recovered entries: the journal may already hold deletions of
+            // the current session, which a wholesale clear would erase (D-9).
             settingsRepository.removePendingDeletes(prompt.uris)
-            settingsRepository.clearPendingDeleteJournal()
+            if (failures.isNotEmpty()) {
+                val names = failures.joinToString { it.first }
+                val reason = failures.firstNotNullOfOrNull { it.second }
+                reportError(
+                    if (failures.size == prompt.uris.size && failures.size == 1) {
+                        "Could not delete $names" + (reason?.let { ": $it" } ?: "")
+                    } else {
+                        "Could not delete ${failures.size} of ${prompt.uris.size} recovered photos: $names" +
+                            (reason?.let { " ($it)" } ?: "")
+                    }
+                )
+            }
         }
     }
 
@@ -1126,9 +1145,12 @@ class SelectorViewModel @Inject constructor(
         _uiState.update { it.copy(uncompletedDeletionsPrompt = null) }
         appScope.launch {
             settingsRepository.removePendingDeletes(prompt.uris)
-            settingsRepository.clearPendingDeleteJournal()
         }
     }
+
+    /** File name shown for a recovered journal entry, from the last segment of its document id. */
+    private fun recoveredName(uri: String): String =
+        Uri.parse(uri).lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: uri
 
     // ── Filing (optimistic) ──────────────────────────────────────────────
 

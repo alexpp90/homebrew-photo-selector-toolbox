@@ -763,9 +763,11 @@ class SelectorViewModelTest {
         vmConfirm.confirmUncompletedDeletions()
         assertNull(vmConfirm.uiState.value.uncompletedDeletionsPrompt)
         coVerify(exactly = 1) { imageRepository.deleteImage(any(), Uri.parse(orphanUri)) }
-        coVerify(atLeast = 1) { settingsRepository.clearPendingDeleteJournal() }
+        // Only the recovered entries leave the journal; it is never wiped wholesale (D-9).
+        coVerify(exactly = 1) { settingsRepository.removePendingDeletes(listOf(orphanUri)) }
+        coVerify(exactly = 0) { settingsRepository.clearPendingDeleteJournal() }
 
-        // Case 2: Keeping clears the journal without calling deleteImage.
+        // Case 2: Keeping drops the recovered entries without calling deleteImage.
         val keepUri = "content://test/folder/keep.jpg"
         pendingDeleteJournalFlow.value = setOf(keepUri)
         val vmKeep = buildViewModel()
@@ -774,6 +776,38 @@ class SelectorViewModelTest {
         vmKeep.keepUncompletedDeletions()
         assertNull(vmKeep.uiState.value.uncompletedDeletionsPrompt)
         coVerify(exactly = 0) { imageRepository.deleteImage(any(), Uri.parse(keepUri)) }
+        coVerify(exactly = 1) { settingsRepository.removePendingDeletes(listOf(keepUri)) }
+        coVerify(exactly = 0) { settingsRepository.clearPendingDeleteJournal() }
+    }
+
+    @Test
+    fun `a failed recovery delete is reported to the user and the other entries are still processed`() = runTest {
+        val bad = "content://test/folder/bad.jpg"
+        val good = "content://test/folder/good.jpg"
+        pendingDeleteJournalFlow.value = setOf(bad, good)
+        coEvery { imageRepository.deleteImage(any(), Uri.parse(bad)) } returns false
+
+        val viewModel = buildViewModel()
+        viewModel.confirmUncompletedDeletions()
+
+        coVerify(exactly = 1) { imageRepository.deleteImage(any(), Uri.parse(good)) }
+        val state = viewModel.uiState.value
+        assertTrue(state.snackbarMessage?.contains("1 of 2") == true)
+        assertTrue(state.snackbarMessage?.contains("bad.jpg") == true)
+    }
+
+    @Test
+    fun `a throwing recovery delete is reported to the user`() = runTest {
+        val bad = "content://test/folder/bad.jpg"
+        pendingDeleteJournalFlow.value = setOf(bad)
+        coEvery { imageRepository.deleteImage(any(), Uri.parse(bad)) } throws SecurityException("read-only card")
+
+        val viewModel = buildViewModel()
+        viewModel.confirmUncompletedDeletions()
+
+        val message = viewModel.uiState.value.snackbarMessage
+        assertTrue(message?.contains("bad.jpg") == true)
+        assertTrue(message?.contains("read-only card") == true)
     }
 
     @Test
