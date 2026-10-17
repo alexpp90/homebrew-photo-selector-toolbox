@@ -30,7 +30,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
@@ -302,6 +304,15 @@ class LocalImageSourceImpl @Inject constructor(
     }
 
     private val transferSemaphore = Semaphore(MAX_CONCURRENT_TRANSFERS)
+    private val destinationLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+
+    /**
+     * Two transfers into the same destination must not interleave "pick a free name -> create the
+     * file" or "find the folder -> create it": the loser would overwrite the winner's file or leave
+     * a second "Selection (1)" folder (finding D-5). One lock per destination folder.
+     */
+    private suspend fun <T> withDestinationLock(destFolderUri: Uri, block: suspend () -> T): T =
+        destinationLocks.getOrPut(destFolderUri.toString()) { Mutex() }.withLock { block() }
 
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     internal var documentMover: SafDocumentMover = DefaultSafDocumentMover
@@ -450,6 +461,7 @@ class LocalImageSourceImpl @Inject constructor(
         sorting: Boolean,
         subfolderName: String,
     ): FileOperationResult = transferSemaphore.withPermit {
+        withDestinationLock(destFolderUri) {
         withContext(ioDispatcher) {
             val source = sourceUri.toString()
             try {
@@ -467,6 +479,7 @@ class LocalImageSourceImpl @Inject constructor(
                 FileOperationResult.failure(source, e.message)
             }
         }
+        }
     }
 
     internal suspend fun moveImageWithResult(
@@ -475,6 +488,7 @@ class LocalImageSourceImpl @Inject constructor(
         sorting: Boolean,
         subfolderName: String,
     ): FileOperationResult = transferSemaphore.withPermit {
+        withDestinationLock(destFolderUri) {
         withContext(ioDispatcher) {
             val source = sourceUri.toString()
             try {
@@ -492,6 +506,7 @@ class LocalImageSourceImpl @Inject constructor(
                 FileOperationResult.failure(source, e.message)
             }
         }
+        }
     }
 
     /**
@@ -507,6 +522,7 @@ class LocalImageSourceImpl @Inject constructor(
         subfolderName: String,
         isMove: Boolean,
     ): List<FileOperationResult> = transferSemaphore.withPermit {
+        withDestinationLock(destFolderUri) {
         withContext(ioDispatcher) {
             if (sourceUris.isEmpty()) return@withContext emptyList()
             val folderName = subfolderName.trim().ifEmpty { "Selection" }
@@ -590,6 +606,7 @@ class LocalImageSourceImpl @Inject constructor(
                     )
                 }
             }
+        }
         }
     }
 
