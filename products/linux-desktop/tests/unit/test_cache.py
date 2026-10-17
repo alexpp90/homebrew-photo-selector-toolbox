@@ -105,7 +105,7 @@ def test_sliding_prefetch_window():
     }
 
 
-def test_cache_teardown_reclamation():
+def test_cache_teardown_reclamation(monkeypatch):
     """Verify full-res and out-of-window buffers are reclaimed on zoom reset and teardown (R-LINUX-CACHE-03)."""
     loader = PhotoTextureLoader(max_mb=512.0)
     p1 = _make_photo("IMG_0001.ARW")
@@ -123,6 +123,10 @@ def test_cache_teardown_reclamation():
     assert evicted == 1
     assert loader.cache.get(loader._cache_key(p2, True)) is None
     assert loader.cache.get(loader._cache_key(p1, True)) == "full-1"
+
+    # The cache holds string stand-ins for textures; a real Gtk.Picture rejects them, and rendering
+    # is not what this test is about (it checks buffer reclamation).
+    monkeypatch.setattr(CanvasView, "_on_texture_ready", lambda *args, **kwargs: None)
 
     # Resetting 1:1 zoom on CanvasView reclaims all full-resolution buffers
     vm = CullingWorkspaceViewModel()
