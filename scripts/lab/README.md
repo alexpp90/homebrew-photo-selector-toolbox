@@ -57,13 +57,25 @@ install.
   reported *not run*.
 - **DeX.** `dex-on-device` runs only on devices with `supports: [dex]` and switches Samsung DeX
   on through its Quick Settings tile; every other config switches it off. If the switch does
-  not take, the config is reported *not run*.
+  not take, the config is reported *not run*; switch DeX on by hand and re-run with
+  `--config dex-on-device`.
+- **Chromebook (ChromeOS ARC).** Enable Settings → Developers → Linux development environment →
+  Develop Android apps → ADB debugging, approve the prompt once; the lab finds it as
+  `_adb._tcp` on port 5555. Only the `chromebook-*` configs run there (devices with
+  `supports: [arc]`).
+- **Window sizes.** Freeform windows (ChromeOS, DeX) are resized with `am task resize`:
+  `window: <W>x<H>` (dp) or `max` in a config applies right after launch
+  (`chromebook-large/medium/small`), and a `{resize: <W>x<H>}` journey step does it mid-session
+  (J-AD-06 drags the window across the layout breakpoints).
 
 ## macOS (remote, `pst-lab` account)
 
 The hub triggers the Mac over SSH; a LaunchAgent in the `pst-lab` user's GUI session builds the
-app and runs the macOS journeys, and the hub syncs the results back. One-time setup on the Mac,
-as `pst-lab`: `scripts/lab/macos/setup_pst_lab.sh` (its header lists the prerequisites).
+app and runs the macOS journeys, and the hub syncs the results back. `pst-lab` only has to be
+logged in (fast user switching, in the background); the maintainer keeps working in their own
+account. One-time setup on the Mac, as `pst-lab`: `scripts/lab/macos/setup_pst_lab.sh` (its
+header lists the prerequisites: Remote Login allowed for `pst-lab`, the hub's public key in its
+`~/.ssh/authorized_keys`, the Command Line Tools, at least 4 GB free).
 
 ## Weekly timer (Linux hub)
 
