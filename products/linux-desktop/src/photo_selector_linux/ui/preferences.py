@@ -32,6 +32,9 @@ class PreferencesDialog(Adw.PreferencesWindow if HAS_GI else object):
         **kwargs,
     ):
         self.viewmodel = viewmodel
+        # True while a setter writes the (sanitised) value back into its widget: the widget's
+        # change signal must not call the setter again (a feedback loop that hung GTK).
+        self._syncing = False
         if settings is not None:
             self.settings = settings
         elif viewmodel is not None and getattr(viewmodel, "settings", None) is not None:
@@ -183,29 +186,49 @@ class PreferencesDialog(Adw.PreferencesWindow if HAS_GI else object):
         self.add(page_cache)
 
     def _on_selection_folder_changed(self, row, *_args) -> None:
+        if self._syncing:
+            return
         self.set_selection_folder_name(row.get_text())
 
     def _on_auto_advance_changed(self, row, *_args) -> None:
+        if self._syncing:
+            return
         self.set_auto_advance(bool(row.get_active()))
 
     def _on_blurry_changed(self, scale, *_args) -> None:
+        if self._syncing:
+            return
         self.set_blurry_threshold(float(scale.get_value()))
 
     def _on_sharp_changed(self, scale, *_args) -> None:
+        if self._syncing:
+            return
         self.set_sharp_threshold(float(scale.get_value()))
 
     def _on_cache_changed(self, scale, *_args) -> None:
+        if self._syncing:
+            return
         self.set_cache_limit_mb(float(scale.get_value()))
+
+    def _write_back(self, write) -> None:
+        """Run ``write`` (a widget setter) with this dialog's change handlers muted."""
+        self._syncing = True
+        try:
+            write()
+        finally:
+            self._syncing = False
 
     def set_selection_folder_name(self, name: str) -> None:
         self.settings.update(selection_folder_name=name)
         if HAS_GI and self.row_folder_name is not None:
-            self.row_folder_name.set_text(self.settings.selection_folder_name)
+            if self.row_folder_name.get_text() != self.settings.selection_folder_name:
+                self._write_back(lambda: self.row_folder_name.set_text(self.settings.selection_folder_name))
 
     def set_auto_advance(self, active: bool) -> None:
         self.settings.update(auto_advance=bool(active))
         if HAS_GI and self.row_auto_advance is not None:
-            self.row_auto_advance.set_active(self.settings.auto_advance)
+            if self.row_auto_advance.get_active() != self.settings.auto_advance:
+                self._write_back(lambda: self.row_auto_advance.set_active(self.settings.auto_advance))
 
     def set_blurry_threshold(self, value: float) -> None:
         self.settings.update(blurry_threshold=float(value))
@@ -224,4 +247,5 @@ class PreferencesDialog(Adw.PreferencesWindow if HAS_GI else object):
     def set_cache_limit_mb(self, value: float) -> None:
         self.settings.update(cache_limit_mb=float(value))
         if HAS_GI and self.scale_cache is not None:
-            self.scale_cache.set_value(self.settings.cache_limit_mb)
+            if self.scale_cache.get_value() != self.settings.cache_limit_mb:
+                self._write_back(lambda: self.scale_cache.set_value(self.settings.cache_limit_mb))
